@@ -64,6 +64,44 @@ These come from the 1.12 client and cannot be worked around by an addon:
 
 If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
+## Changes
+
+Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v1.2, 2026-10-13
+
+**Survivor UI**
+- The chat is a flat, dark panel: no scroll buttons, no tab art, plain text with a soft shadow. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
+- The micro buttons stay hidden until the mouse reaches the bottom right corner.
+- Shamans wear their modern blue. The 1.12 client paints them in the paladin's pink.
+
+### v1.1, 2026-10-12
+
+**Survivor Plates**
+- Only elites, guardians and bosses carry a plate. `/splates all` puts one on every enemy.
+- The elite list now comes from the game's own tables: three per zone, 27 in all.
+- Plates sit where the client puts them again. The addon's own stacking and smoothing made a crowd of plates drift and bounce, so it was removed along with the `stack`, `smooth` and `spread` commands.
+
+**Survivor UI**
+- An enemy's unit frame shows its health as a percentage only. The numbers are on its nameplate.
+
+### v1.0, 2026-10-12
+
+First release.
+
+**Survivor Plates**
+- Flat health bars with the name above and the unit's health on the bar.
+- An execute marker at 30% health.
+- Larger plates in their own colors for elites, guardians and bosses.
+- Debuffs and their stacks on the target's plate.
+
+**Survivor UI**
+- Player and target frames, action buttons 1 to 6 and the `=` button, in one centered row under the hero.
+- The hero's buffs and debuffs above the player frame, with time left and stacks.
+- Cooldown numbers on the action buttons.
+- A square minimap, zoomed with the mouse wheel.
+- The experience bar as a thin strip under the row.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
