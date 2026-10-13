@@ -1,5 +1,7 @@
 # Survivor UI and Survivor Plates
 
+[![Latest release](https://img.shields.io/github/v/release/morderous/survivor-ui?label=download&color=2ea44f)](https://github.com/morderous/survivor-ui/releases/latest) [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/morderous)
+
 Two interface addons for Azeroth Survivors, the Vampire Survivors-style game that runs on [benilla](https://github.com/samwhosung/benilla), a World of Warcraft 1.12.1 client. They are independent: use either one or both.
 
 These are fan-made and not affiliated with the game or its author.
@@ -134,8 +136,10 @@ First release.
 - A square minimap, zoomed with the mouse wheel.
 - The experience bar as a thin strip under the row.
 
+## Support
+
+The addons are free and open source, and will stay that way. If they made your runs nicer and you want to say thanks, you can [buy me a coffee on Ko-fi](https://ko-fi.com/morderous). Bug reports and ideas help just as much: open an [issue](https://github.com/morderous/survivor-ui/issues).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-Free, and staying that way. If the addons made your runs nicer, there is a [Ko-fi](https://ko-fi.com/morderous).
