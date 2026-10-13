@@ -1,0 +1,4 @@
+## Interface: 11200
+## Title: Survivor UI
+## Notes: Flat, dark unit frames and a compact action bar (buttons 1 to 6 and the = button) for Azeroth Survivors.
+SurvivorUI.lua
