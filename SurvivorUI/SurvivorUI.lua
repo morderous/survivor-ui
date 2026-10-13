@@ -42,6 +42,18 @@ local HEALTH_HEIGHT = BUTTON_SIZE - POWER_HEIGHT - 1
 
 local ENEMY = { 0.80, 0.22, 0.22 }
 
+local CHAT_SIZE = 12                            -- default; /sui chat N changes it
+
+-- Saved between sessions; the /sui command at the end of the file changes them.
+local function Settings()
+	SurvivorUIDB = SurvivorUIDB or {}
+	if SurvivorUIDB.damageText == nil then
+		SurvivorUIDB.damageText = true
+	end
+	SurvivorUIDB.chatSize = SurvivorUIDB.chatSize or CHAT_SIZE
+	return SurvivorUIDB
+end
+
 -- 1.12 paints shamans in the paladin's pink; they wear their modern blue here.
 local CLASS_OVERRIDES = {
 	SHAMAN = { r = 0.00, g = 0.44, b = 0.87 },
@@ -688,8 +700,7 @@ local function StyleChat()
 			Hide(name.."BottomButton")
 
 			-- Plain text with a soft shadow in place of the stock look.
-			local _, size = chat:GetFont()
-			chat:SetFont(FONT, size or 13)
+			chat:SetFont(FONT, Settings().chatSize)
 			chat:SetShadowColor(0, 0, 0, 1)
 			chat:SetShadowOffset(1, -1)
 
@@ -746,17 +757,6 @@ local function StyleChat()
 			edit.survivorBack:SetPoint("BOTTOMRIGHT", edit, "BOTTOMRIGHT", -4, 5)
 		end
 	end
-end
-
-------------------------------------------------------------------------------
--- Settings and the /sui command.
-
-local function Settings()
-	SurvivorUIDB = SurvivorUIDB or {}
-	if SurvivorUIDB.damageText == nil then
-		SurvivorUIDB.damageText = true
-	end
-	return SurvivorUIDB
 end
 
 ------------------------------------------------------------------------------
@@ -872,6 +872,9 @@ end
 local DAMAGE_LIFE = 0.55        -- seconds on screen
 local DAMAGE_RISE = 62          -- how far a number climbs
 local DAMAGE_MAX = 48           -- numbers alive at once
+local CRIT_SIZE = 22            -- a critical strike's number; a normal one is 14
+local CRIT_POP_SIZE = 30        -- its size for the first instant
+local CRIT_POP_TIME = 0.09
 
 local damageLayer = CreateFrame("Frame", "SurvivorUIDamage", UIParent)
 damageLayer:SetAllPoints(UIParent)
@@ -957,8 +960,9 @@ local function SpawnDamage(target, amount, crit, periodic)
 	end
 
 	if crit then
-		text:SetFont(FONT, 19, "OUTLINE")
-		text:SetTextColor(1, 0.80, 0.15)
+		-- Lands oversized, then settles: see the update below.
+		text:SetFont(FONT, CRIT_POP_SIZE, "THICKOUTLINE")
+		text:SetTextColor(1, 0.76, 0.08)
 	elseif periodic then
 		text:SetFont(FONT, 12, "OUTLINE")
 		text:SetTextColor(0.80, 0.80, 0.80)
@@ -969,11 +973,14 @@ local function SpawnDamage(target, amount, crit, periodic)
 	text:SetText(amount)
 
 	text.live = true
+	text.crit = crit
+	text.popped = nil
+	text.life = crit and DAMAGE_LIFE * 1.3 or DAMAGE_LIFE
 	text.age = 0
 	text.x = x + (math.random() - 0.5) * 24
 	text.y = y
 	text.drift = (math.random() - 0.5) * 30
-	text.rise = crit and DAMAGE_RISE * 1.25 or DAMAGE_RISE
+	text.rise = crit and DAMAGE_RISE * 1.3 or DAMAGE_RISE
 	text:SetAlpha(1)
 	text:Show()
 	damageLive = damageLive + 1
@@ -988,7 +995,11 @@ damageLayer:SetScript("OnUpdate", function()
 		local text = damageTexts[index]
 		if text.live then
 			text.age = text.age + arg1
-			local t = text.age / DAMAGE_LIFE
+			local t = text.age / text.life
+			if text.crit and not text.popped and text.age >= CRIT_POP_TIME then
+				text.popped = true
+				text:SetFont(FONT, CRIT_SIZE, "THICKOUTLINE")
+			end
 			if t >= 1 then
 				text.live = nil
 				text:Hide()
@@ -1060,13 +1071,20 @@ end
 
 SLASH_SURVIVORUI1 = "/sui"
 SlashCmdList["SURVIVORUI"] = function(msg)
-	if msg == "damage" then
+	local _, _, command, argument = string.find(msg or "", "^(%S*)%s*(.*)$")
+	if command == "chat" and tonumber(argument) then
+		local settings = Settings()
+		settings.chatSize = math.max(8, math.min(18, tonumber(argument)))
+		StyleChat()
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: chat text size "..settings.chatSize..".")
+	elseif msg == "damage" then
 		local settings = Settings()
 		settings.damageText = not settings.damageText
 		ApplyDamageText()
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.damageText and "quick damage numbers." or "the game's own damage numbers."))
 	else
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between the quick damage numbers and the game's own")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 12  sets the chat text size, 8 to 18")
 	end
 end
 

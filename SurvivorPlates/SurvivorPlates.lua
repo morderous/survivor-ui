@@ -12,12 +12,12 @@
 -- The bars sit exactly where the client seats its plates: position and
 -- stacking are the client's own.
 --
--- Only elites, guardians and bosses carry a plate by default; the rank and
--- file would bury the screen. The current target always shows its own.
+-- By default every enemy carries a plate, and only elites, guardians and
+-- bosses carry a name on it.
 --
 -- Slash commands:
---   /splates all        plates on every enemy, or only on elites, guardians and bosses
---   /splates names      names on every plate, or only on elites and bosses
+--   /splates all        plates on every enemy (default), or only on elites, guardians and bosses
+--   /splates names      names only on elites, guardians and bosses (default), or on every plate
 --   /splates scale N    plate size, 0.6 to 2 (default 1)
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
@@ -92,11 +92,12 @@ end
 local function Settings()
 	SurvivorPlatesDB = SurvivorPlatesDB or {}
 	local db = SurvivorPlatesDB
-	if db.names == nil then
-		db.names = true
-	end
-	if db.important == nil then
-		db.important = true
+	-- The defaults: a plate on every enemy, a name only on elites, guardians and
+	-- bosses. Settings saved under the earlier defaults start over once.
+	if db.defaults ~= 2 then
+		db.defaults = 2
+		db.important = false
+		db.names = false
 	end
 	db.scale = db.scale or 1
 	return db

@@ -10,9 +10,9 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 
 Nameplates.
 
-> **Want a plate on every enemy?** Type `/splates all` in chat.
+> **Too many plates?** Type `/splates all` in chat to keep them only on elites, guardians and bosses. Type it again to bring them all back.
 >
-> Out of the box only elites, guardians and bosses carry a plate, because a run puts over a hundred enemies on screen. `/splates all` shows them on everything; type it again to go back. The choice is remembered.
+> Out of the box every enemy carries a plate, and only elites, guardians and bosses carry a name on it. `/splates names` puts a name on every plate. Both choices are remembered.
 
 - A flat health bar with a thin border, the name above it and the unit's health on it.
 - A marker at 30% health, where execute effects start. Below it the bar turns yellow.
@@ -23,8 +23,8 @@ Commands:
 
 | Command | What it does |
 |---|---|
-| `/splates all` | Switches between plates on every enemy and plates only on elites, guardians and bosses (the default) |
-| `/splates names` | Names on every plate, or only on elites, guardians and bosses |
+| `/splates all` | Switches between plates on every enemy (the default) and plates only on elites, guardians and bosses |
+| `/splates names` | Switches between names only on elites, guardians and bosses (the default) and names on every plate |
 | `/splates scale 1.3` | Plate size, 0.6 to 2 |
 
 ## Survivor UI
@@ -41,12 +41,19 @@ Unit frames and the action bar, in one centered row under the hero:
 - The experience bar as a thin strip under the row.
 - A square minimap, zoomed with the mouse wheel.
 - The micro buttons in the bottom right corner, hidden until the mouse reaches them.
-- A flat, dark chat panel without the scroll buttons. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
+- A flat, dark chat panel without the scroll buttons, in 12 point text. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
 - A flat, dark tooltip with smaller type.
 - Friz Quadrata on every piece of interface text.
-- Quick damage numbers over the enemies, in place of the game's own. `/sui damage` switches between the two.
+- Quick damage numbers over the enemies, in place of the game's own.
 
 Left click a frame to target it, right click for its menu. Alt-drag either frame to move the whole row.
+
+Commands:
+
+| Command | What it does |
+|---|---|
+| `/sui damage` | Switches between the quick damage numbers (the default) and the game's own |
+| `/sui chat 12` | Chat text size, 8 to 18 (default 12) |
 
 ## Install
 
@@ -76,10 +83,12 @@ Newest first. The version is also in each addon's `.toc`, so it shows in the gam
 **Survivor UI**
 - Friz Quadrata on every piece of interface text, chat and numbers included.
 - A flat tooltip: dark box, hairline border, smaller type, a slim health bar along the bottom edge.
-- Quick damage numbers: small, over the enemy, up and gone in half a second, with critical strikes larger and gold. They replace the game's own; `/sui damage` switches back.
+- Quick damage numbers: small, over the enemy, up and gone in half a second. A critical strike lands oversized in gold with a heavy outline, then settles. They replace the game's own; `/sui damage` switches back.
+- Chat text is 12 point. `/sui chat N` changes it.
 - Slightly smaller text on the unit frames.
 
 **Survivor Plates**
+- New defaults: a plate on every enemy, and a name only on elites, guardians and bosses. `/splates all` and `/splates names` change either. Settings saved under the old defaults are reset once.
 - Shares its list of plates with Survivor UI, which places the damage numbers by it.
 
 ### v1.2, 2026-10-13
