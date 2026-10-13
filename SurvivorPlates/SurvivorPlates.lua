@@ -114,6 +114,10 @@ end
 
 local overlays = {}
 
+-- Other addons find the plates here: the art a plate is recognized by is
+-- blanked once it is skinned. Each entry has .plate and .stock.name.
+SurvivorPlatesRegistry = overlays
+
 local function ApplyKind(overlay, kind)
 	local style = KINDS[kind]
 	local settings = Settings()

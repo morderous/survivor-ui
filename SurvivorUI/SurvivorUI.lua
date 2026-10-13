@@ -19,6 +19,9 @@
 --   chat panel scrolled with the mouse wheel, and the micro buttons in the
 --   bottom right corner, shown when the mouse reaches them.
 --
+--   Friz Quadrata on every piece of interface text, a flat tooltip, and small
+--   quick damage numbers in place of the engine's (/sui damage switches back).
+--
 -- The row sits a little under the hero, who stands in the middle of the screen.
 --
 -- Left click a frame to target it, right click for its menu. Alt-drag either
@@ -177,13 +180,13 @@ local function UnitFrame(unit, name, side, dropdown)
 	frame.power = FlatBar(frame, FRAME_WIDTH, POWER_HEIGHT)
 	frame.power:SetPoint("TOP", frame.health, "BOTTOM", 0, -1)
 
-	frame.name = Text(frame.health, 11, "LEFT", 5, 0)
+	frame.name = Text(frame.health, 10, "LEFT", 5, 0)
 	frame.name:SetWidth(FRAME_WIDTH - 82)
 	frame.name:SetHeight(12)
 	frame.name:SetJustifyH("LEFT")
 	frame.name:SetTextColor(1, 1, 1)
 
-	frame.value = Text(frame.health, 11, "RIGHT", -5, 0)
+	frame.value = Text(frame.health, 10, "RIGHT", -5, 0)
 	frame.value:SetTextColor(1, 1, 1)
 
 	-- Left click targets, right click opens the stock menu, Alt-drag moves the row.
@@ -746,6 +749,328 @@ local function StyleChat()
 end
 
 ------------------------------------------------------------------------------
+-- Settings and the /sui command.
+
+local function Settings()
+	SurvivorUIDB = SurvivorUIDB or {}
+	if SurvivorUIDB.damageText == nil then
+		SurvivorUIDB.damageText = true
+	end
+	return SurvivorUIDB
+end
+
+------------------------------------------------------------------------------
+-- One face everywhere: Friz Quadrata. The stock interface already uses it for
+-- most things; chat, numbers, quest and mail text use other faces.
+
+-- Read by the engine when the world loads, for the text it draws itself.
+STANDARD_TEXT_FONT = FONT
+UNIT_NAME_FONT = FONT
+NAMEPLATE_FONT = FONT
+DAMAGE_TEXT_FONT = FONT
+
+local FONT_OBJECTS = {
+	"GameFontNormal", "GameFontHighlight", "GameFontDisable", "GameFontGreen", "GameFontRed", "GameFontBlack", "GameFontWhite",
+	"GameFontNormalSmall", "GameFontHighlightSmall", "GameFontHighlightSmallOutline", "GameFontDisableSmall",
+	"GameFontDarkGraySmall", "GameFontGreenSmall", "GameFontRedSmall",
+	"GameFontNormalLarge", "GameFontHighlightLarge", "GameFontDisableLarge", "GameFontGreenLarge", "GameFontRedLarge",
+	"GameFontNormalHuge",
+	"NumberFontNormal", "NumberFontNormalYellow", "NumberFontNormalSmall", "NumberFontNormalSmallGray",
+	"NumberFontNormalLarge", "NumberFontNormalHuge",
+	"ChatFontNormal", "ChatFontSmall", "CombatLogFont",
+	"QuestTitleFont", "QuestFont", "QuestFontNormalSmall", "QuestFontHighlight",
+	"ItemTextFontNormal", "MailTextFontNormal", "InvoiceTextFontNormal", "InvoiceTextFontSmall",
+	"SubSpellFont", "DialogButtonNormalText", "DialogButtonHighlightText",
+	"ZoneTextFont", "SubZoneTextFont", "PVPInfoTextFont", "ErrorFont", "WorldMapTextFont",
+	"TextStatusBarText", "TextStatusBarTextSmall",
+	"GameTooltipText", "GameTooltipTextSmall", "GameTooltipHeaderText",
+}
+
+local function ApplyFonts()
+	for _, name in pairs(FONT_OBJECTS) do
+		local object = getglobal(name)
+		if object and object.GetFont and object.SetFont then
+			local _, size, flags = object:GetFont()
+			if size and size > 0 then
+				object:SetFont(FONT, size, flags)
+			end
+		end
+	end
+end
+
+------------------------------------------------------------------------------
+-- Tooltip: a flat dark box with a hairline border, a slim health bar along its
+-- bottom edge, and smaller type.
+
+local TOOLTIPS = { "GameTooltip", "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "WorldMapTooltip" }
+
+local TOOLTIP_BACKDROP = {
+	bgFile = FLAT, edgeFile = FLAT,
+	tile = false, edgeSize = 1,
+	insets = { left = 1, right = 1, top = 1, bottom = 1 },
+}
+
+local function PaintTooltip(tooltip)
+	tooltip:SetBackdropColor(0.05, 0.05, 0.07, 0.95)
+	tooltip:SetBackdropBorderColor(0, 0, 0, 1)
+end
+
+local function StyleTooltips()
+	-- The stock code repaints a tooltip from these two.
+	TOOLTIP_DEFAULT_COLOR = { r = 0, g = 0, b = 0 }
+	TOOLTIP_DEFAULT_BACKGROUND_COLOR = { r = 0.05, g = 0.05, b = 0.07 }
+
+	for _, name in pairs(TOOLTIPS) do
+		local tooltip = getglobal(name)
+		if tooltip and not tooltip.survivorStyled then
+			tooltip.survivorStyled = true
+			tooltip:SetBackdrop(TOOLTIP_BACKDROP)
+			PaintTooltip(tooltip)
+
+			local stockShow = tooltip:GetScript("OnShow")
+			tooltip:SetScript("OnShow", function()
+				if stockShow then
+					stockShow()
+				end
+				PaintTooltip(this)
+			end)
+		end
+	end
+
+	local header = getglobal("GameTooltipHeaderText")
+	if header then
+		header:SetFont(FONT, 13)
+	end
+	local body = getglobal("GameTooltipText")
+	if body then
+		body:SetFont(FONT, 11)
+	end
+	local small = getglobal("GameTooltipTextSmall")
+	if small then
+		small:SetFont(FONT, 10)
+	end
+
+	local bar = getglobal("GameTooltipStatusBar")
+	if bar and GameTooltip then
+		bar:SetStatusBarTexture(FLAT)
+		bar:SetHeight(4)
+		bar:ClearAllPoints()
+		bar:SetPoint("BOTTOMLEFT", GameTooltip, "BOTTOMLEFT", 1, 1)
+		bar:SetPoint("BOTTOMRIGHT", GameTooltip, "BOTTOMRIGHT", -1, 1)
+	end
+end
+
+------------------------------------------------------------------------------
+-- Damage numbers: small, quick, and gone. A number pops over the enemy it hit,
+-- shoots up and fades within half a second; a critical strike is larger and
+-- gold. They replace the engine's own floating numbers while switched on
+-- (/sui damage switches back and forth).
+--
+-- The addon reads hits from the combat log, which names the enemy but not
+-- which one of several with that name. The number goes over one of them.
+
+local DAMAGE_LIFE = 0.55        -- seconds on screen
+local DAMAGE_RISE = 62          -- how far a number climbs
+local DAMAGE_MAX = 48           -- numbers alive at once
+
+local damageLayer = CreateFrame("Frame", "SurvivorUIDamage", UIParent)
+damageLayer:SetAllPoints(UIParent)
+damageLayer:SetFrameStrata("HIGH")
+
+local damageTexts = {}
+local damageLive = 0
+
+local function DamageText()
+	for index = 1, table.getn(damageTexts) do
+		if not damageTexts[index].live then
+			return damageTexts[index]
+		end
+	end
+	if table.getn(damageTexts) >= DAMAGE_MAX then
+		return nil
+	end
+	local text = damageLayer:CreateFontString(nil, "OVERLAY")
+	table.insert(damageTexts, text)
+	return text
+end
+
+-- Every nameplate on screen showing this name. Survivor Plates blanks the art
+-- a plate is recognized by, so its own list is used when it is installed.
+local function PlatesNamed(name)
+	local found = {}
+	if SurvivorPlatesRegistry then
+		for index = 1, table.getn(SurvivorPlatesRegistry) do
+			local overlay = SurvivorPlatesRegistry[index]
+			if overlay.plate:IsVisible() and overlay.stock.name:GetText() == name then
+				table.insert(found, overlay.plate)
+			end
+		end
+		return found
+	end
+
+	local children = { WorldFrame:GetChildren() }
+	for index = 1, table.getn(children) do
+		local plate = children[index]
+		local border = plate:GetRegions()
+		if plate:IsVisible() and border and border.GetTexture and border:GetObjectType() == "Texture"
+			and border:GetTexture() == "Interface\\Tooltips\\Nameplate-Border" then
+			local regions = { plate:GetRegions() }
+			for region = 1, table.getn(regions) do
+				if regions[region]:GetObjectType() == "FontString" then
+					if regions[region]:GetText() == name then
+						table.insert(found, plate)
+					end
+					break
+				end
+			end
+		end
+	end
+	return found
+end
+
+local function SpawnDamage(target, amount, crit, periodic)
+	local text = DamageText()
+	if not text then
+		return
+	end
+
+	-- Over one of the enemies with that name, else in a ring around the hero.
+	local x, y
+	local plates = PlatesNamed(target)
+	local count = table.getn(plates)
+	if count > 0 then
+		local plate = plates[math.random(1, count)]
+		local px, py = plate:GetCenter()
+		if px and py then
+			local ratio = 1
+			if plate.GetEffectiveScale and UIParent.GetEffectiveScale then
+				ratio = plate:GetEffectiveScale() / UIParent:GetEffectiveScale()
+			end
+			x, y = px * ratio, py * ratio - 10
+		end
+	end
+	if not x then
+		local angle = math.random() * 6.2832
+		local reach = 90 + math.random() * 70
+		x = UIParent:GetWidth() / 2 + math.cos(angle) * reach
+		y = UIParent:GetHeight() / 2 + 30 + math.sin(angle) * reach * 0.6
+	end
+
+	if crit then
+		text:SetFont(FONT, 19, "OUTLINE")
+		text:SetTextColor(1, 0.80, 0.15)
+	elseif periodic then
+		text:SetFont(FONT, 12, "OUTLINE")
+		text:SetTextColor(0.80, 0.80, 0.80)
+	else
+		text:SetFont(FONT, 14, "OUTLINE")
+		text:SetTextColor(1, 1, 1)
+	end
+	text:SetText(amount)
+
+	text.live = true
+	text.age = 0
+	text.x = x + (math.random() - 0.5) * 24
+	text.y = y
+	text.drift = (math.random() - 0.5) * 30
+	text.rise = crit and DAMAGE_RISE * 1.25 or DAMAGE_RISE
+	text:SetAlpha(1)
+	text:Show()
+	damageLive = damageLive + 1
+end
+
+damageLayer:SetScript("OnUpdate", function()
+	if damageLive == 0 then
+		return
+	end
+
+	for index = 1, table.getn(damageTexts) do
+		local text = damageTexts[index]
+		if text.live then
+			text.age = text.age + arg1
+			local t = text.age / DAMAGE_LIFE
+			if t >= 1 then
+				text.live = nil
+				text:Hide()
+				damageLive = damageLive - 1
+			else
+				-- Fast at first, slowing as it tops out; fading over the last third.
+				local eased = 1 - (1 - t) * (1 - t)
+				text:ClearAllPoints()
+				text:SetPoint("CENTER", UIParent, "BOTTOMLEFT", text.x + text.drift * eased, text.y + text.rise * eased)
+				text:SetAlpha(t > 0.66 and (1 - t) / 0.34 or 1)
+			end
+		end
+	end
+end)
+
+local function ParseDamage(message)
+	local _, _, target, amount = string.find(message, " crits (.+) for (%d+)")
+	if target then
+		return target, amount, true
+	end
+	_, _, target, amount = string.find(message, " crit (.+) for (%d+)")
+	if target then
+		return target, amount, true
+	end
+	_, _, target, amount = string.find(message, " hits (.+) for (%d+)")
+	if target then
+		return target, amount
+	end
+	_, _, target, amount = string.find(message, " hit (.+) for (%d+)")
+	if target then
+		return target, amount
+	end
+	-- "Kobold Vermin suffers 12 Fire damage from your Flame Shock."
+	_, _, target, amount = string.find(message, "^(.+) suffers (%d+) .+ from your ")
+	if target then
+		return target, amount, false, true
+	end
+end
+
+local damageEvents = CreateFrame("Frame")
+damageEvents:SetScript("OnEvent", function()
+	if not Settings().damageText then
+		return
+	end
+	local target, amount, crit, periodic = ParseDamage(arg1 or "")
+	if target then
+		SpawnDamage(target, amount, crit, periodic)
+	end
+end)
+
+local DAMAGE_EVENTS = {
+	"CHAT_MSG_COMBAT_SELF_HITS", "CHAT_MSG_SPELL_SELF_DAMAGE",
+	"CHAT_MSG_COMBAT_PET_HITS", "CHAT_MSG_SPELL_PET_DAMAGE",
+	"CHAT_MSG_SPELL_PERIODIC_CREATURE_DAMAGE",
+}
+
+-- The engine's numbers are on when the addon's are off, and the other way round.
+local function ApplyDamageText()
+	local on = Settings().damageText
+	for _, event in pairs(DAMAGE_EVENTS) do
+		if on then
+			damageEvents:RegisterEvent(event)
+		else
+			damageEvents:UnregisterEvent(event)
+		end
+	end
+	SetCVar("CombatDamage", on and "0" or "1")
+end
+
+SLASH_SURVIVORUI1 = "/sui"
+SlashCmdList["SURVIVORUI"] = function(msg)
+	if msg == "damage" then
+		local settings = Settings()
+		settings.damageText = not settings.damageText
+		ApplyDamageText()
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.damageText and "quick damage numbers." or "the game's own damage numbers."))
+	else
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between the quick damage numbers and the game's own")
+	end
+end
+
+------------------------------------------------------------------------------
 
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -759,7 +1084,10 @@ loader:SetScript("OnEvent", function()
 		SquareMinimap()
 		MoveMicroButtons()
 		HideMicroButtons()
+		ApplyFonts()
 		StyleChat()
+		StyleTooltips()
+		ApplyDamageText()
 		UpdatePortrait(player)
 	elseif event == "PLAYER_TARGET_CHANGED" then
 		UpdatePortrait(target)

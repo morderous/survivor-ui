@@ -42,6 +42,9 @@ Unit frames and the action bar, in one centered row under the hero:
 - A square minimap, zoomed with the mouse wheel.
 - The micro buttons in the bottom right corner, hidden until the mouse reaches them.
 - A flat, dark chat panel without the scroll buttons. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
+- A flat, dark tooltip with smaller type.
+- Friz Quadrata on every piece of interface text.
+- Quick damage numbers over the enemies, in place of the game's own. `/sui damage` switches between the two.
 
 Left click a frame to target it, right click for its menu. Alt-drag either frame to move the whole row.
 
@@ -67,6 +70,17 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v1.3, 2026-10-13
+
+**Survivor UI**
+- Friz Quadrata on every piece of interface text, chat and numbers included.
+- A flat tooltip: dark box, hairline border, smaller type, a slim health bar along the bottom edge.
+- Quick damage numbers: small, over the enemy, up and gone in half a second, with critical strikes larger and gold. They replace the game's own; `/sui damage` switches back.
+- Slightly smaller text on the unit frames.
+
+**Survivor Plates**
+- Shares its list of plates with Survivor UI, which places the damage numbers by it.
 
 ### v1.2, 2026-10-13
 
