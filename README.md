@@ -47,8 +47,8 @@ Left click a frame to target it, right click for its menu. Alt-drag either frame
 
 ## Install
 
-1. Download this repository (Code, then Download ZIP) and unzip it.
-2. Copy the `SurvivorPlates` and `SurvivorUI` folders into the game's addon folder, `benilla-config\AddOns\`.
+1. Download `SurvivorUI-vX.Y.zip` from the [latest release](https://github.com/morderous/survivor-ui/releases/latest).
+2. Unzip it into the game's addon folder, `benilla-config\AddOns\`. You should end up with `AddOns\SurvivorPlates` and `AddOns\SurvivorUI`. Keep only the one you want, or both.
 3. Restart the game.
 
 To remove an addon, delete its folder.
