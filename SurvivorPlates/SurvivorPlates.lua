@@ -12,7 +12,11 @@
 -- The bars sit exactly where the client seats its plates: position and
 -- stacking are the client's own.
 --
+-- Only elites, guardians and bosses carry a plate by default; the rank and
+-- file would bury the screen. The current target always shows its own.
+--
 -- Slash commands:
+--   /splates all        plates on every enemy, or only on elites, guardians and bosses
 --   /splates names      names on every plate, or only on elites and bosses
 --   /splates scale N    plate size, 0.6 to 2 (default 1)
 
@@ -52,7 +56,8 @@ local BOSSES = {
 	"Kurinnaxx", "General Rajaxx", "Princess Huhuran", "Ossirian the Unscarred", "C'Thun",
 }
 
--- The elites of each zone's horde.
+-- The elites of each zone's horde: the three enemies the game's own tables
+-- flag as elite in every zone.
 local ELITES = {
 	"Kobold Taskmaster", "Gruff Swiftbite", "Bellygrub",
 	"Nightbane Worgen Alpha", "Carrion Recluse", "Flesh Eating Abomination",
@@ -90,6 +95,9 @@ local function Settings()
 	if db.names == nil then
 		db.names = true
 	end
+	if db.important == nil then
+		db.important = true
+	end
 	db.scale = db.scale or 1
 	return db
 end
@@ -120,7 +128,7 @@ local function ApplyKind(overlay, kind)
 	overlay.health:SetFont(FONT, math.max(8, (style.height - 1) * scale), "OUTLINE")
 
 	overlay.named = settings.names or kind ~= "normal"
-	if overlay.named then
+	if overlay.named and not overlay.put then
 		overlay.name:Show()
 	else
 		overlay.name:Hide()
@@ -198,6 +206,25 @@ local function UpdatePlate()
 		ApplyKind(overlay, Classify(name))
 	end
 
+	-- The client dims every plate but the target's.
+	local isTarget = UnitExists("target") and overlay.plate:GetAlpha() == 1
+
+	-- The rank and file go without a plate, unless one of them is the target.
+	if overlay.kind == "normal" and Settings().important and not isTarget then
+		if not overlay.put then
+			overlay.put = true
+			overlay.bar:Hide()
+			overlay.name:Hide()
+		end
+		return
+	elseif overlay.put then
+		overlay.put = nil
+		overlay.bar:Show()
+		if overlay.named then
+			overlay.name:Show()
+		end
+	end
+
 	local low, high = stock.health:GetMinMaxValues()
 	local value = stock.health:GetValue()
 	local share = high > low and (value - low) / (high - low) or 0
@@ -223,8 +250,6 @@ local function UpdatePlate()
 	end
 	overlay.bar:SetStatusBarColor(color[1], color[2], color[3], 1)
 
-	-- The client dims every plate but the target's.
-	local isTarget = UnitExists("target") and overlay.plate:GetAlpha() == 1
 	if isTarget then
 		overlay.border:SetVertexColor(1, 1, 1, 1)
 	else
@@ -356,14 +381,17 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 	local _, _, command, argument = string.find(msg or "", "^(%S*)%s*(.*)$")
 	local number = tonumber(argument)
 
-	if command == "names" then
+	if command == "all" then
+		settings.important = not settings.important
+		Say(settings.important and "plates on elites, guardians and bosses only." or "plates on every enemy.")
+	elseif command == "names" then
 		settings.names = not settings.names
 		Say("names on "..(settings.names and "every plate" or "elites, guardians and bosses only")..".")
 	elseif command == "scale" and number then
 		settings.scale = math.max(0.6, math.min(2, number))
 		Say("scale "..settings.scale..".")
 	else
-		Say("/splates names | scale 0.6-2")
+		Say("/splates all | names | scale 0.6-2")
 		return
 	end
 	Restyle()

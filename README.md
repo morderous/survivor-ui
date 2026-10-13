@@ -10,6 +10,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 
 Nameplates.
 
+- Only elites, guardians and bosses carry a plate, so the horde does not bury the screen. The current target always shows its own.
 - A flat health bar with a thin border, the name above it and the unit's health on it.
 - A marker at 30% health, where execute effects start. Below it the bar turns yellow.
 - Elites, guardians and bosses get larger plates in their own colors.
@@ -19,6 +20,7 @@ Commands:
 
 | Command | What it does |
 |---|---|
+| `/splates all` | Plates on every enemy, or only on elites, guardians and bosses |
 | `/splates names` | Names on every plate, or only on elites, guardians and bosses |
 | `/splates scale 1.3` | Plate size, 0.6 to 2 |
 
