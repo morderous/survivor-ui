@@ -137,3 +137,5 @@ First release.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Free, and staying that way. If the addons made your runs nicer, there is a [Ko-fi](https://ko-fi.com/morderous).
