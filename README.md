@@ -42,6 +42,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - A square minimap, zoomed with the mouse wheel.
 - The micro buttons in the bottom right corner, hidden until the mouse reaches them.
 - A flat, dark chat panel without the scroll buttons, in 12 point text. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
+- A flat character pane: the hero and the item slots on the left, the run's numbers in titled sections on the right.
 - A flat, dark tooltip with smaller type.
 - Friz Quadrata on every piece of interface text.
 - Quick damage numbers over the enemies, in place of the game's own.
@@ -77,6 +78,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v1.4, 2026-10-13
+
+**Survivor UI**
+- A new character pane: one flat dark panel with the hero and the item slots on the left and the run's numbers on the right, in titled sections (Offense, Reach, Defense, Utility, Damage over time, Bonus damage). It replaces the stock stat rows and the separate Run Stats box, and shows the same 29 numbers.
+- Item slots are square, with a border in the item's quality color.
+- Drag the hero to turn it; the rotate buttons are gone.
+- The list sizes itself to fit without scrolling.
 
 ### v1.3, 2026-10-13
 
