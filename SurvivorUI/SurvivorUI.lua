@@ -15,8 +15,9 @@
 --   art are put away. The experience bar becomes a thin strip under the row.
 --
 --   Also: the hero's buffs and debuffs above the player frame with time left
---   and stacks, cooldown numbers on the buttons, a square minimap, and the
---   micro buttons in the bottom right corner.
+--   and stacks, cooldown numbers on the buttons, a square minimap, a flat
+--   chat panel scrolled with the mouse wheel, and the micro buttons in the
+--   bottom right corner, shown when the mouse reaches them.
 --
 -- The row sits a little under the hero, who stands in the middle of the screen.
 --
@@ -608,6 +609,143 @@ local function MoveMicroButtons()
 end
 
 ------------------------------------------------------------------------------
+-- The micro buttons stay out of sight until the mouse reaches their corner.
+
+local MICRO_BUTTONS = {
+	"CharacterMicroButton", "SpellbookMicroButton", "TalentMicroButton", "QuestLogMicroButton",
+	"SocialsMicroButton", "WorldMapMicroButton", "MainMenuMicroButton", "HelpMicroButton",
+}
+
+local microZone = CreateFrame("Frame", "SurvivorUIMicroZone", UIParent)
+microZone:SetWidth(170)
+microZone:SetHeight(60)
+microZone:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
+
+local microAlpha = 0
+microZone:SetScript("OnUpdate", function()
+	local want = MouseIsOver(this) and 1 or 0
+	if microAlpha == want then
+		return
+	end
+
+	-- A quick fade either way.
+	local step = arg1 * 6
+	if want > microAlpha then
+		microAlpha = math.min(1, microAlpha + step)
+	else
+		microAlpha = math.max(0, microAlpha - step)
+	end
+	for _, name in pairs(MICRO_BUTTONS) do
+		local button = getglobal(name)
+		if button then
+			button:SetAlpha(microAlpha)
+		end
+	end
+end)
+
+local function HideMicroButtons()
+	microAlpha = 0
+	for _, name in pairs(MICRO_BUTTONS) do
+		local button = getglobal(name)
+		if button then
+			button:SetAlpha(0)
+		end
+	end
+end
+
+------------------------------------------------------------------------------
+-- Chat: a flat dark panel, no scroll buttons, no tab art. The mouse wheel
+-- scrolls; with Shift held it jumps to the top or the bottom.
+
+local function ChatWheel()
+	if arg1 > 0 then
+		if IsShiftKeyDown() then
+			this:ScrollToTop()
+		else
+			this:ScrollUp()
+		end
+	else
+		if IsShiftKeyDown() then
+			this:ScrollToBottom()
+		else
+			this:ScrollDown()
+		end
+	end
+end
+
+local function StyleChat()
+	Hide("ChatFrameMenuButton")
+
+	for index = 1, 7 do
+		local name = "ChatFrame"..index
+		local chat = getglobal(name)
+		if chat then
+			Hide(name.."UpButton")
+			Hide(name.."DownButton")
+			Hide(name.."BottomButton")
+
+			-- Plain text with a soft shadow in place of the stock look.
+			local _, size = chat:GetFont()
+			chat:SetFont(FONT, size or 13)
+			chat:SetShadowColor(0, 0, 0, 1)
+			chat:SetShadowOffset(1, -1)
+
+			chat:EnableMouseWheel(true)
+			chat:SetScript("OnMouseWheel", ChatWheel)
+
+			if not chat.survivorPanel then
+				local panel = CreateFrame("Frame", nil, chat)
+				panel:SetPoint("TOPLEFT", chat, "TOPLEFT", -6, 6)
+				panel:SetPoint("BOTTOMRIGHT", chat, "BOTTOMRIGHT", 6, -6)
+				panel:SetFrameLevel(math.max(0, chat:GetFrameLevel() - 1))
+				local fill = panel:CreateTexture(nil, "BACKGROUND")
+				fill:SetTexture(FLAT)
+				fill:SetVertexColor(0.04, 0.04, 0.06, 0.55)
+				fill:SetAllPoints(panel)
+				-- An accent line down the left edge.
+				local accent = panel:CreateTexture(nil, "BORDER")
+				accent:SetTexture(FLAT)
+				accent:SetVertexColor(1, 0.82, 0, 0.8)
+				accent:SetWidth(2)
+				accent:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+				accent:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 0)
+				chat.survivorPanel = panel
+			end
+
+			-- The tab keeps its text and loses its art.
+			for _, piece in pairs({ "Left", "Middle", "Right" }) do
+				local art = getglobal(name.."Tab"..piece)
+				if art then
+					art:SetTexture("")
+				end
+			end
+			local tabText = getglobal(name.."TabText")
+			if tabText then
+				tabText:SetFont(FONT, 11, "OUTLINE")
+			end
+		end
+	end
+
+	-- The edit box: a flat field under the chat.
+	local edit = getglobal("ChatFrameEditBox")
+	if edit then
+		for _, piece in pairs({ "Left", "Mid", "Right" }) do
+			local art = getglobal("ChatFrameEditBox"..piece)
+			if art then
+				art:SetTexture("")
+			end
+		end
+		if not edit.survivorBack then
+			edit.survivorBack = edit:CreateTexture(nil, "BACKGROUND")
+			edit.survivorBack:SetTexture(FLAT)
+			edit.survivorBack:SetVertexColor(0.04, 0.04, 0.06, 0.8)
+			edit.survivorBack:SetPoint("TOPLEFT", edit, "TOPLEFT", 4, -5)
+			edit.survivorBack:SetPoint("BOTTOMRIGHT", edit, "BOTTOMRIGHT", -4, 5)
+		end
+	end
+end
+
+------------------------------------------------------------------------------
 
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -620,6 +758,8 @@ loader:SetScript("OnEvent", function()
 		LayoutBar()
 		SquareMinimap()
 		MoveMicroButtons()
+		HideMicroButtons()
+		StyleChat()
 		UpdatePortrait(player)
 	elseif event == "PLAYER_TARGET_CHANGED" then
 		UpdatePortrait(target)

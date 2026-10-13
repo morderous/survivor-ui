@@ -40,7 +40,8 @@ Unit frames and the action bar, in one centered row under the hero:
 - Action buttons 1 to 6 and the last button of the bar (the `=` key), with cooldown numbers. The rest of the bar and its art are put away.
 - The experience bar as a thin strip under the row.
 - A square minimap, zoomed with the mouse wheel.
-- The micro buttons in the bottom right corner.
+- The micro buttons in the bottom right corner, hidden until the mouse reaches them.
+- A flat, dark chat panel without the scroll buttons. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
 
 Left click a frame to target it, right click for its menu. Alt-drag either frame to move the whole row.
 
