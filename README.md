@@ -13,7 +13,6 @@ Nameplates.
 - A flat health bar with a thin border, the name above it and the unit's health on it.
 - A marker at 30% health, where execute effects start. Below it the bar turns yellow.
 - Elites, guardians and bosses get larger plates in their own colors.
-- Bars follow their unit with a little lag instead of shaking, and bars that would overlap are stacked.
 - The target's plate shows its debuffs and their stacks.
 
 Commands:
@@ -22,9 +21,6 @@ Commands:
 |---|---|
 | `/splates names` | Names on every plate, or only on elites, guardians and bosses |
 | `/splates scale 1.3` | Plate size, 0.6 to 2 |
-| `/splates stack` | Stacking and smoothing on or off |
-| `/splates smooth 5` | How closely a bar follows its unit, 2 (calm) to 30 (tight) |
-| `/splates spread 1.5` | Room between stacked bars, 0.8 to 3 |
 
 ## Survivor UI
 

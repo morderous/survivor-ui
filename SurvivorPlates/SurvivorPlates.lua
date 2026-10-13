@@ -9,24 +9,18 @@
 -- values. The client recycles a plate for another unit, so the overlay
 -- re-reads the name every frame.
 --
--- The client seats a plate on its unit's head every frame, unsmoothed, so a
--- crowd of plates shakes and overlaps. The bars here are laid out by the addon
--- instead: each one follows its plate with a little lag, and bars that would
--- overlap are stacked upward.
+-- The bars sit exactly where the client seats its plates: position and
+-- stacking are the client's own.
 --
 -- Slash commands:
 --   /splates names      names on every plate, or only on elites and bosses
 --   /splates scale N    plate size, 0.6 to 2 (default 1)
---   /splates stack      stacking and smoothing on or off
---   /splates smooth N   how closely a bar follows its unit, 2 (calm) to 30 (tight), default 9
---   /splates spread N   room between stacked bars, 0.8 to 3 (default 1.2)
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BORDER_TEXTURE = "Interface\\Tooltips\\Nameplate-Border"
 
 local EXECUTE_RANGE = 0.30      -- the game's execute effects start below this share of health
-local DEADZONE = 1.5            -- a unit's plate may drift this far before its bar follows
 
 local KINDS = {
 	normal   = { width = 100, height = 9,  nameSize = 9,  color = { 0.84, 0.20, 0.20 } },
@@ -96,12 +90,7 @@ local function Settings()
 	if db.names == nil then
 		db.names = true
 	end
-	if db.stack == nil then
-		db.stack = true
-	end
 	db.scale = db.scale or 1
-	db.smooth = db.smooth or 9
-	db.spread = db.spread or 1.2
 	return db
 end
 
@@ -137,9 +126,6 @@ local function ApplyKind(overlay, kind)
 		overlay.name:Hide()
 	end
 
-	-- The room the bar and its name take, for stacking.
-	overlay.boxWidth = style.width * scale + 8
-	overlay.boxHeight = style.height * scale + 4 + (overlay.named and (style.nameSize * scale + 3) or 0)
 end
 
 -- Debuffs on the target's plate, with their stacks. The 1.12 client only tells
@@ -327,99 +313,7 @@ local function SkinPlate(plate)
 
 	ApplyKind(overlay, "normal")
 	overlay:SetScript("OnUpdate", UpdatePlate)
-	-- A recycled plate starts where its new unit is, not where the last one was.
-	overlay:SetScript("OnShow", function() this.x = nil end)
 	table.insert(overlays, overlay)
-end
-
-------------------------------------------------------------------------------
--- Layout: every visible bar follows its plate with a little lag, and bars that
--- would overlap are stacked upward, nearest the bottom of the screen first.
-
-local visible = {}
-
-local function ByHeight(a, b)
-	if a.wantY ~= b.wantY then
-		return a.wantY < b.wantY
-	end
-	return a.wantX < b.wantX
-end
-
-local function Layout(elapsed)
-	local settings = Settings()
-
-	local count = 0
-	for index = 1, table.getn(overlays) do
-		local overlay = overlays[index]
-		if overlay:IsVisible() then
-			local x, y = overlay.plate:GetCenter()
-			if x and y then
-				-- Small drifts are ignored: a walking unit's head bobs every frame.
-				if not overlay.wantX or math.abs(x - overlay.wantX) > DEADZONE or math.abs(y - overlay.wantY) > DEADZONE then
-					overlay.wantX, overlay.wantY = x, y
-				end
-				count = count + 1
-				visible[count] = overlay
-			end
-		end
-	end
-	for index = count + 1, table.getn(visible) do
-		visible[index] = nil
-	end
-	if count == 0 then
-		return
-	end
-
-	table.sort(visible, ByHeight)
-
-	-- Each bar takes the lowest spot at or above its unit that clears the bars already placed.
-	for index = 1, count do
-		local overlay = visible[index]
-		local x, y = overlay.wantX, overlay.wantY
-		local moved = true
-		local guard = 0
-		while moved and guard < 12 do
-			moved = false
-			guard = guard + 1
-			for other = 1, index - 1 do
-				local placed = visible[other]
-				local reachX = (overlay.boxWidth + placed.boxWidth) / 2
-				local reachY = (overlay.boxHeight + placed.boxHeight) / 2 * settings.spread
-				if math.abs(x - placed.placeX) < reachX and math.abs(y - placed.placeY) < reachY then
-					y = placed.placeY + reachY
-					moved = true
-				end
-			end
-		end
-		overlay.placeX, overlay.placeY = x, y
-	end
-
-	local follow = math.min(1, elapsed * settings.smooth)
-	for index = 1, count do
-		local overlay = visible[index]
-		if not overlay.x then
-			overlay.x, overlay.y = overlay.placeX, overlay.placeY
-		else
-			overlay.x = overlay.x + (overlay.placeX - overlay.x) * follow
-			overlay.y = overlay.y + (overlay.placeY - overlay.y) * follow
-		end
-		overlay.bar:ClearAllPoints()
-		overlay.bar:SetPoint("CENTER", UIParent, "BOTTOMLEFT", overlay.x, overlay.y - 4)
-		overlay.laidOut = true
-	end
-end
-
--- Back to the client's seat, for when the layout is switched off.
-local function Unlayout()
-	for index = 1, table.getn(overlays) do
-		local overlay = overlays[index]
-		if overlay.laidOut then
-			overlay.laidOut = nil
-			overlay.x = nil
-			overlay.bar:ClearAllPoints()
-			overlay.bar:SetPoint("CENTER", overlay, "CENTER", 0, -4)
-		end
-	end
 end
 
 -- New plates only ever get appended to WorldFrame's children.
@@ -436,10 +330,6 @@ scanner:SetScript("OnUpdate", function()
 			end
 		end
 		scanned = count
-	end
-
-	if Settings().stack then
-		Layout(arg1)
 	end
 end)
 
@@ -472,20 +362,8 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 	elseif command == "scale" and number then
 		settings.scale = math.max(0.6, math.min(2, number))
 		Say("scale "..settings.scale..".")
-	elseif command == "stack" then
-		settings.stack = not settings.stack
-		if not settings.stack then
-			Unlayout()
-		end
-		Say("stacking and smoothing "..(settings.stack and "on" or "off")..".")
-	elseif command == "smooth" and number then
-		settings.smooth = math.max(2, math.min(30, number))
-		Say("smooth "..settings.smooth.." (lower is calmer).")
-	elseif command == "spread" and number then
-		settings.spread = math.max(0.8, math.min(3, number))
-		Say("spread "..settings.spread..".")
 	else
-		Say("/splates names | scale 0.6-2 | stack | smooth 2-30 | spread 0.8-3")
+		Say("/splates names | scale 0.6-2")
 		return
 	end
 	Restyle()
