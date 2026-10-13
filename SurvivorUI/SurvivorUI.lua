@@ -38,6 +38,11 @@ local HEALTH_HEIGHT = BUTTON_SIZE - POWER_HEIGHT - 1
 
 local ENEMY = { 0.80, 0.22, 0.22 }
 
+-- 1.12 paints shamans in the paladin's pink; they wear their modern blue here.
+local CLASS_OVERRIDES = {
+	SHAMAN = { r = 0.00, g = 0.44, b = 0.87 },
+}
+
 local POWER_COLORS = {
 	[0] = { 0.25, 0.50, 1.00 },   -- mana
 	[1] = { 0.85, 0.20, 0.20 },   -- rage
@@ -130,7 +135,7 @@ local function HealthColor(unit)
 	-- Players wear their class color; everything else on the field is an enemy.
 	if UnitIsPlayer(unit) then
 		local _, class = UnitClass(unit)
-		local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+		local color = class and (CLASS_OVERRIDES[class] or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]))
 		if color then
 			return color.r, color.g, color.b
 		end
