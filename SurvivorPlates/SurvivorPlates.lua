@@ -1,8 +1,12 @@
 -- Survivor Plates: nameplates in the manner of Plater, for Azeroth Survivors.
 -- A flat health bar on a dark backing with a thin black border, the name above
 -- it, the unit's health on it, an execute-range marker, and a highlighted
--- target with its debuffs. Elites and bosses get larger plates in their own colors;
--- a lair guardian is an elite to the client, under its elite's name, and wears the elite's.
+-- target with its debuffs. Elites and bosses get larger plates in their own colors.
+-- A lair guardian is an elite to the client, under its elite's name; the game
+-- tells addons which one it is only for the target, whose plate turns blue.
+--
+-- Where the game shares its run (its addon API: AZS_UNITS, AZS_UnitKind), the
+-- elites and bosses it lists are told apart by that too, beyond the lists below.
 --
 -- The 1.12 client owns the nameplate frames: they are unnamed children of
 -- WorldFrame, recognized by their border texture. Each one is skinned once,
@@ -30,6 +34,7 @@ local EXECUTE_RANGE = 0.30      -- the game's execute effects start below this s
 local KINDS = {
 	normal   = { width = 100, height = 9,  nameSize = 9,  color = { 0.84, 0.20, 0.20 } },
 	elite    = { width = 130, height = 11, nameSize = 11, color = { 1.00, 0.55, 0.10 } },
+	guardian = { width = 150, height = 12, nameSize = 12, color = { 0.20, 0.75, 0.95 } },
 	boss     = { width = 170, height = 14, nameSize = 13, color = { 0.72, 0.32, 1.00 } },
 }
 local EXECUTE_COLOR = { 1.00, 0.86, 0.25 }
@@ -78,11 +83,52 @@ for index = 1, table.getn(BOSSES) do
 	kindByName[BOSSES[index]] = "boss"
 end
 
+-- The elites and bosses the game lists right now, by name, rebuilt when the
+-- list changes. kindsVersion tells the plates to look again.
+local liveKind = {}
+local liveUpdated
+local kindsVersion = 0
+
+local function Field(entry, name, index)
+	if entry[name] ~= nil then
+		return entry[name]
+	end
+	return entry[index]
+end
+
+local function RefreshLiveKinds()
+	if not AZS_UNITS or AZS_UNITS_UPDATED == liveUpdated then
+		return
+	end
+	liveUpdated = AZS_UNITS_UPDATED
+	local changed = false
+	for index = 1, table.getn(AZS_UNITS) do
+		local unit = AZS_UNITS[index]
+		local name = Field(unit, "name", 3)
+		local kind = Field(unit, "kind", 1)
+		kind = (kind == "final" or kind == "boss") and "boss" or "elite"
+		if name and not kindByName[name] and liveKind[name] ~= kind then
+			liveKind[name] = kind
+			changed = true
+		end
+	end
+	if changed then
+		kindsVersion = kindsVersion + 1
+	end
+end
+
 local function Classify(name)
 	if not name then
 		return "normal"
 	end
-	return kindByName[name] or "normal"
+	return kindByName[name] or liveKind[name] or "normal"
+end
+
+-- The target's kind as the game has it, "guardian" included; nil without the API.
+local function TargetKind()
+	if AZS_UnitKind and UnitExists("target") then
+		return AZS_UnitKind("target")
+	end
 end
 
 local function Settings()
@@ -200,15 +246,25 @@ local function UpdatePlate()
 	local overlay = this
 	local stock = overlay.stock
 
-	local name = stock.name:GetText()
-	if name ~= overlay.lastName then
-		overlay.lastName = name
-		overlay.name:SetText(name)
-		ApplyKind(overlay, Classify(name))
-	end
-
 	-- The client dims every plate but the target's.
 	local isTarget = UnitExists("target") and overlay.plate:GetAlpha() == 1
+
+	local name = stock.name:GetText()
+	if name ~= overlay.lastName or overlay.kindsVersion ~= kindsVersion then
+		overlay.lastName = name
+		overlay.kindsVersion = kindsVersion
+		overlay.name:SetText(name)
+		overlay.baseKind = Classify(name)
+	end
+	-- Only the target can be told apart as a guardian; it goes back to an elite
+	-- when it is no longer the target.
+	local kind = overlay.baseKind
+	if isTarget and overlay.targetKind == "guardian" then
+		kind = "guardian"
+	end
+	if kind ~= overlay.kind then
+		ApplyKind(overlay, kind)
+	end
 
 	-- The rank and file go without a plate, unless one of them is the target.
 	if overlay.kind == "normal" and Settings().important and not isTarget then
@@ -346,6 +402,13 @@ end
 local scanned = 0
 local scanner = CreateFrame("Frame")
 scanner:SetScript("OnUpdate", function()
+	RefreshLiveKinds()
+	-- The target's kind, asked once a frame for every plate to read.
+	local targetKind = TargetKind()
+	for index = 1, table.getn(overlays) do
+		overlays[index].targetKind = targetKind
+	end
+
 	local count = WorldFrame:GetNumChildren()
 	if count ~= scanned then
 		local children = { WorldFrame:GetChildren() }

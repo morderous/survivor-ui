@@ -8,7 +8,7 @@
 -- AZS_STATS table, fed by the server. This file only reads that table.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = "Fonts\\FRIZQT__.TTF"
+local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 
 if not PaperDollFrame or not CharacterFrame then
 	return

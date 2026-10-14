@@ -5,18 +5,23 @@
 --   Biggest Crits   every ability that has crit, with its biggest critical
 --                   strike; hover one for its last, average and smallest.
 --
--- The addon cannot see the game's own tally, so it keeps its own from what the
--- client tells it: the hero's level, and the combat log for kills and damage.
--- The clock starts, like the game's, at the hero's first step. Two limits: it
--- keeps running while a card choice has the game paused, and damage is what the combat log reported, which can differ a
--- little from the game's total. Gold and caches are not in the log at all.
+-- Where the game shares its run with addons (its API: AZS_RUN, AZS_GetRunTime,
+-- AZS_GetMeter, AZS_TAKEN), the panel shows the game's own numbers: its clock,
+-- which stops on a pause or a card choice, kills, elites, guardians and bosses
+-- apart, damage, gold, caches and the next boss. Hover a row for more.
 --
--- Alt-drag either title to move the panel. /sui run hides it.
+-- An older game without the API gets the panel's own count instead, from the
+-- combat log: a clock of its own, elites and guardians together, no gold.
+--
+-- The boss timeline is the run tracker's, under the minimap (Tracker.lua).
+--
+-- Under the run tracker by default, in the right column with the damage meter.
+-- Hold Alt to move it; the place is kept. /sui run hides it.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = "Fonts\\FRIZQT__.TTF"
+local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 
-local WIDTH = 190
+local WIDTH = 220
 local ROW_HEIGHT = 18
 local TITLE_HEIGHT = 24
 local CRIT_ROWS = 10
@@ -147,6 +152,54 @@ local function WatchPause()
 	end
 end
 
+-- The game's run, while one is on: AZS_RUN and the phase. nil without the API,
+-- or before the run starts.
+local function Game()
+	if AZS_GetPhase and AZS_RUN then
+		local phase = AZS_GetPhase()
+		if phase and phase ~= "ready" then
+			return AZS_RUN, phase
+		end
+	end
+end
+
+local function Num(value)
+	return tonumber(value) or 0
+end
+
+-- A list entry's field, by name or by place.
+local function Field(entry, name, index)
+	if entry[name] ~= nil then
+		return entry[name]
+	end
+	return entry[index]
+end
+
+local function Clock(seconds)
+	seconds = math.max(0, math.floor(seconds))
+	return string.format("%d:%02d", math.floor(seconds / 60), math.mod(seconds, 60))
+end
+
+-- The game's meter line for an ability, by the name the combat log gave it.
+local MELEE_NAMES = { "Melee", "Attack", "Auto Attack" }
+local function MeterLine(ability)
+	if not AZS_GetMeter then
+		return nil
+	end
+	local lines, total = AZS_GetMeter()
+	if not lines then
+		return nil
+	end
+	local names = ability == "Melee" and MELEE_NAMES or { ability }
+	for index = 1, table.getn(lines) do
+		for n = 1, table.getn(names) do
+			if lines[index].name == names[n] then
+				return lines[index], total
+			end
+		end
+	end
+end
+
 -- 950, 1k, 1.2k, 3.4m
 local function Short(value)
 	local short, suffix
@@ -165,30 +218,55 @@ end
 ------------------------------------------------------------------------------
 -- The panel.
 
+-- api: only with the game's API.
 local RUN_ROWS = {
 	{ key = "time",      label = "Survived",        color = { 1.00, 0.82, 0.00 } },
 	{ key = "level",     label = "Level",           color = { 0.40, 1.00, 0.40 } },
 	{ key = "kills",     label = "Kills",           color = { 0.92, 0.92, 0.92 } },
-	{ key = "elites",    label = "Elites & guardians slain", color = { 1.00, 0.55, 0.10 } },
+	{ key = "elites",    label = "Elites slain",    color = { 1.00, 0.55, 0.10 }, plain = "Elites & guardians slain" },
+	{ key = "guardians", label = "Guardians slain", color = { 0.20, 0.75, 0.95 }, api = true },
 	{ key = "bosses",    label = "Bosses slain",    color = { 0.72, 0.32, 1.00 } },
 	{ key = "dealt",     label = "Damage dealt",    color = { 1.00, 0.76, 0.08 } },
 	{ key = "dps",       label = "Damage / sec",    color = { 0.95, 0.60, 0.20 } },
 	{ key = "taken",     label = "Damage taken",    color = { 0.90, 0.25, 0.25 } },
+	{ key = "gold",      label = "Gold earned",     color = { 1.00, 0.86, 0.35 }, api = true },
+	{ key = "caches",    label = "Caches opened",   color = { 0.55, 0.85, 0.55 }, api = true },
 }
 
 local panel = CreateFrame("Frame", "SurvivorUIRun", UIParent)
 panel:SetWidth(WIDTH + 16)
 panel:SetHeight(TITLE_HEIGHT + 8)
--- Above the chat, growing upward as rows join.
-if ChatFrame1 then
-	panel:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", -6, 30)
+-- In the right column, under the run tracker (placed once the tracker is, see
+-- the placer below); until then, under the minimap.
+if Minimap then
+	panel:SetPoint("TOPRIGHT", Minimap, "BOTTOMRIGHT", 8, -230)
 else
-	panel:SetPoint("LEFT", UIParent, "LEFT", 30, 60)
+	panel:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -12, -420)
 end
 panel:SetBackdrop({ bgFile = FLAT })
-panel:SetBackdropColor(0.04, 0.04, 0.07, 0.88)
+-- The right column's one shade: the tracker and the meter wear it too.
+panel:SetBackdropColor(0.04, 0.04, 0.07, 0.55)
 panel:SetMovable(true)
 panel:Hide()
+
+-- A place the player chose is kept, by the panel's top left corner.
+local function SavePanel()
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.runLeft = math.floor(panel:GetLeft() + 0.5)
+	SurvivorUIDB.runTop = math.floor(panel:GetTop() + 0.5)
+end
+
+-- The saved place, or under the run tracker, right edges together.
+local function RestorePanel()
+	panel:ClearAllPoints()
+	if SurvivorUIDB and SurvivorUIDB.runLeft and SurvivorUIDB.runTop then
+		panel:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", SurvivorUIDB.runLeft, SurvivorUIDB.runTop)
+	elseif SurvivorUITracker then
+		panel:SetPoint("TOPRIGHT", SurvivorUITracker, "BOTTOMRIGHT", 8, -14)
+	elseif Minimap then
+		panel:SetPoint("TOPRIGHT", Minimap, "BOTTOMRIGHT", 8, -230)
+	end
+end
 
 -- A section title. It says how to move the panel, and is a handle for doing it.
 local function Title(text, tip)
@@ -198,12 +276,12 @@ local function Title(text, tip)
 	handle:EnableMouse(true)
 	handle:RegisterForDrag("LeftButton")
 	handle:SetScript("OnDragStart", function() if IsAltKeyDown() then panel:StartMoving() end end)
-	handle:SetScript("OnDragStop", function() panel:StopMovingOrSizing() end)
+	handle:SetScript("OnDragStop", function() panel:StopMovingOrSizing() SavePanel() end)
 	handle:SetScript("OnEnter", function()
 		GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
 		GameTooltip:SetText(text, 1, 0.82, 0)
 		GameTooltip:AddLine("Hold Alt and drag to move.", 1, 1, 1)
-		GameTooltip:AddLine(tip, 0.7, 0.7, 0.7, 1)
+		GameTooltip:AddLine(this.tip, 0.7, 0.7, 0.7, 1)
 		GameTooltip:Show()
 	end)
 	handle:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -213,10 +291,13 @@ local function Title(text, tip)
 	handle.text:SetPoint("LEFT", handle, "LEFT", 4, 0)
 	handle.text:SetTextColor(1, 0.82, 0)
 	handle.text:SetText(text)
+	handle.tip = tip
 	return handle
 end
 
-local runTitle = Title("This Run", "Counted by the addon from the combat log. A new run starts it over.")
+local RUN_TIP_GAME = "The game's own numbers. Hover a row for more."
+local RUN_TIP_OWN = "Counted by the addon from the combat log. A new run starts it over."
+local runTitle = Title("This Run", RUN_TIP_OWN)
 local critTitle = Title("Biggest Crits", "Each ability's biggest critical strike this run. Hover an ability for more.")
 
 local reset = CreateFrame("Button", nil, panel)
@@ -293,6 +374,18 @@ runRows.time:EnableMouse(true)
 runRows.time:SetScript("OnEnter", function()
 	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
 	GameTooltip:SetText("Survived", 1, 0.82, 0)
+	local game = Game()
+	if game then
+		GameTooltip:AddLine("The game's own clock. It stops while you pause or choose a card.", 1, 1, 1, 1)
+		if Num(game.left) >= 0 and Num(game.endl) == 0 then
+			GameTooltip:AddDoubleLine("Final boss in", Clock(Num(game.left)), 0.7, 0.7, 0.7, 1, 1, 1)
+		elseif Num(game.endl) == 1 then
+			GameTooltip:AddLine("Endless mode.", 0.85, 0.5, 1)
+		end
+		GameTooltip:AddDoubleLine("Bosses so far", Num(game.bs).." / "..Num(game.bt), 0.7, 0.7, 0.7, 1, 1, 1)
+		GameTooltip:Show()
+		return
+	end
 	GameTooltip:AddLine("An estimate. The game does not share its clock with addons, so this one can drift from it.", 1, 1, 1, 1)
 	GameTooltip:AddLine("Starts at your first step, or your first blow if the step was missed.", 0.7, 0.7, 0.7, 1)
 	GameTooltip:AddLine("Pauses after 1.5 seconds with no movement and no combat, which is how it sees Escape and the level-up cards.", 0.7, 0.7, 0.7, 1)
@@ -302,6 +395,93 @@ runRows.time:SetScript("OnEnter", function()
 end)
 runRows.time:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+-- More from the game, on the rows that have it.
+local MUTED = { 0.7, 0.7, 0.7 }
+
+local function Pair(label, value, r, g, b)
+	GameTooltip:AddDoubleLine(label, value, r or MUTED[1], g or MUTED[2], b or MUTED[3], 1, 1, 1)
+end
+
+local function Percent(part, whole)
+	if whole <= 0 then
+		return "0%"
+	end
+	return math.floor(part / whole * 100 + 0.5).."%"
+end
+
+local function RowTip(key, fill)
+	local row = runRows[key]
+	row:EnableMouse(true)
+	row:SetScript("OnEnter", function()
+		local game = Game()
+		if not game then
+			return
+		end
+		GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
+		fill(game)
+		GameTooltip:Show()
+	end)
+	row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
+RowTip("kills", function(game)
+	GameTooltip:SetText("Kills", 0.92, 0.92, 0.92)
+	Pair("Enemies alive", Num(game.en))
+	Pair("Elites alive", Num(game.el))
+	Pair("Guardians awake", Num(game.ga).." / "..Num(game.gu))
+end)
+
+-- The game's damage meter: every source, the most damage first.
+local function MeterTip()
+	GameTooltip:SetText("Damage dealt", 1, 0.76, 0.08)
+	local lines, total, dps = nil, 0, 0
+	if AZS_GetMeter then
+		lines, total, dps = AZS_GetMeter()
+	end
+	if not lines or table.getn(lines) == 0 then
+		GameTooltip:AddLine("Nothing yet.", MUTED[1], MUTED[2], MUTED[3])
+		return
+	end
+	Pair("Total", Short(Num(total)).."  ("..Short(Num(dps)).." / sec)")
+	for index = 1, math.min(10, table.getn(lines)) do
+		local line = lines[index]
+		-- A talent's or amulet's own damage is blue, as in the game's meter.
+		local r, g, b = 0.85, 0.85, 0.85
+		if Num(line.proc) == 1 then
+			r, g, b = 0.44, 0.84, 1.00
+		end
+		Pair(line.name or "?", Short(Num(line.dmg)).."  "..math.floor(Num(line.share) * 100 + 0.5).."%", r, g, b)
+	end
+end
+RowTip("dealt", MeterTip)
+RowTip("dps", MeterTip)
+
+RowTip("taken", function(game)
+	GameTooltip:SetText("Damage taken", 0.90, 0.25, 0.25)
+	local list = AZS_TAKEN
+	if not list or table.getn(list) == 0 then
+		GameTooltip:AddLine("Nothing yet.", MUTED[1], MUTED[2], MUTED[3])
+		return
+	end
+	local total = Num(game.taken)
+	for index = 1, table.getn(list) do
+		local source = Field(list[index], "source", 1) or "?"
+		local dmg = Num(Field(list[index], "dmg", 2))
+		Pair(string.upper(string.sub(source, 1, 1))..string.sub(source, 2), Short(dmg).."  "..Percent(dmg, total))
+	end
+end)
+
+local function GoldTip(game)
+	GameTooltip:SetText("Gold", 1, 0.86, 0.35)
+	Pair("Gold now", Num(game.gold))
+	Pair("Earned this run", Num(game.ge))
+	Pair("Next cache costs", Num(game.chest))
+	Pair("Caches opened", Num(game.ck))
+	Pair("Rerolls left", Num(game.rr))
+	Pair("Extra lives", Num(game.lives))
+end
+RowTip("gold", GoldTip)
+RowTip("caches", GoldTip)
 -- An ability's other numbers, in a card of the panel's own: each line over a
 -- rule in the ability's color, and the normal hits set apart under a heavier
 -- one.
@@ -310,6 +490,9 @@ local TIP_ROW = 16
 
 local critTip = CreateFrame("Frame", "SurvivorUICritTip", UIParent)
 critTip:SetFrameStrata("TOOLTIP")
+if critTip.SetClampedToScreen then
+	critTip:SetClampedToScreen(true)
+end
 critTip:SetWidth(TIP_WIDTH + 16)
 critTip:Hide()
 
@@ -371,12 +554,15 @@ local critHovered = nil
 local function CritTooltip(row)
 	local ability = row.ability
 	local stats = ability and critStats[ability]
-	if not stats then
+	local hits = ability and hitStats[ability]
+	-- Its line in the game's damage meter, where the game shares it.
+	local meter = ability and MeterLine(ability)
+	if not (stats or hits or meter) then
 		critTip:Hide()
 		return
 	end
-	local color = critColor[ability]
-	local hits = hitStats[ability]
+	-- The row's own color (the damage meter's), else the crit's.
+	local color = row.color or critColor[ability] or { 0.8, 0.8, 0.8 }
 
 	critTip.edge:SetVertexColor(color[1], color[2], color[3], 0.8)
 	critTip.title:SetText(ability)
@@ -388,17 +574,29 @@ local function CritTooltip(row)
 		TipLine(count, kind, label, value, color)
 	end
 
-	Add("head", "Critical strikes", stats.count)
-	Add("row", "Biggest", Short(critBest[ability]))
-	Add("row", "Last", Short(stats.last))
-	Add("row", "Average", Short(stats.sum / stats.count))
-	Add("row", "Smallest", Short(stats.least))
+	if meter then
+		Add("head", "Damage done", Short(Num(meter.dmg)))
+		Add("row", "Share of all", math.floor(Num(meter.share) * 100 + 0.5).."%")
+		Add("row", "Per second", Short(Num(meter.dps)))
+		if Num(meter.proc) == 1 then
+			Add("row", "A talent's or amulet's own", "proc")
+		end
+	end
+	Add("head", "Critical strikes", stats and stats.count or 0)
+	if stats then
+		Add("row", "Biggest", Short(critBest[ability]))
+		Add("row", "Last", Short(stats.last))
+		Add("row", "Average", Short(stats.sum / stats.count))
+		Add("row", "Smallest", Short(stats.least))
+	else
+		Add("row", "None seen", "")
+	end
 	Add("head", "Normal hits", hits and hits.count or 0)
 	if hits then
 		Add("row", "Average", Short(hits.sum / hits.count))
 		Add("row", "Last", Short(hits.last))
 	else
-		Add("row", "None yet", "")
+		Add("row", "None seen", "")
 	end
 
 	for index = count + 1, table.getn(critTip.lines) do
@@ -406,15 +604,35 @@ local function CritTooltip(row)
 	end
 
 	critTip:SetHeight(26 + count * TIP_ROW + 8)
+	-- Beside the whole window the row belongs to, top edges together, on its
+	-- left: the right column sits at the screen's edge.
 	critTip:ClearAllPoints()
-	critTip:SetPoint("BOTTOMLEFT", row, "BOTTOMRIGHT", 14, -4)
+	critTip:SetPoint("TOPRIGHT", row.cardFrame or row, "TOPLEFT", -6, 0)
 	critTip:Show()
+end
+
+-- The card, for the damage meter's lines (Meter.lua). frame.ability is the
+-- source's name; frame.color and frame.cardFrame (the window to sit beside)
+-- are optional.
+function SurvivorUI_CritCardShow(frame)
+	critHovered = frame
+	CritTooltip(frame)
+end
+
+function SurvivorUI_CritCardHide()
+	critHovered = nil
+	critTip:Hide()
+end
+
+function SurvivorUI_CritBest(ability)
+	return critBest[ability]
 end
 
 local critRows = {}
 for index = 1, CRIT_ROWS do
 	local row = MakeRow(14, "THICKOUTLINE")
 	row.label:SetFont(FONT, 9, "OUTLINE")
+	row.cardFrame = panel
 	row:EnableMouse(true)
 	row:SetScript("OnEnter", function()
 		critHovered = this
@@ -436,36 +654,63 @@ end
 local function Draw()
 	local y = -4
 
-	local running = run.started ~= nil
+	local game, phase = Game()
+	local running = game ~= nil or run.started ~= nil
 	if running then
 		runTitle:ClearAllPoints()
 		runTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, y)
 		runTitle:Show()
+		runTitle.tip = game and RUN_TIP_GAME or RUN_TIP_OWN
 		y = y - TITLE_HEIGHT
 
-		local seconds = Seconds()
-		local clock = string.format("%d:%02d", math.floor(seconds / 60), math.mod(math.floor(seconds), 60))
-		if run.pausedAt then
-			runRows.time.label:SetText("Survived (paused)")
+		local seconds, paused
+		if game then
+			seconds = AZS_GetRunTime and AZS_GetRunTime() or Num(game.t)
+			paused = phase == "paused" or phase == "choosing"
+		else
+			seconds = Seconds()
+			paused = run.pausedAt
+		end
+		seconds = seconds or 0
+		if paused then
+			runRows.time.label:SetText(phase == "choosing" and "Survived (choosing)" or "Survived (paused)")
 			runRows.time.value:SetTextColor(0.6, 0.6, 0.6)
 		else
 			runRows.time.label:SetText("Survived")
 			runRows.time.value:SetTextColor(1, 0.82, 0)
 		end
-		runRows.time.value:SetText(clock)
-		runRows.level.value:SetText(UnitLevel("player") or 1)
-		runRows.kills.value:SetText(run.kills)
-		runRows.elites.value:SetText(run.elites)
-		runRows.bosses.value:SetText(run.bosses)
-		runRows.dealt.value:SetText(Short(run.dealt))
-		runRows.dps.value:SetText(seconds > 0 and Short(run.dealt / seconds) or 0)
-		runRows.taken.value:SetText(Short(run.taken))
+		runRows.time.value:SetText(Clock(seconds))
+		runRows.elites.label:SetText(game and "Elites slain" or "Elites & guardians slain")
+
+		local dealt
+		if game then
+			dealt = Num(game.dealt)
+			runRows.level.value:SetText(Num(game.lvl))
+			runRows.kills.value:SetText(Num(game.kills))
+			runRows.elites.value:SetText(Num(game.ek))
+			runRows.guardians.value:SetText(Num(game.gk))
+			runRows.bosses.value:SetText(Num(game.bk))
+			runRows.taken.value:SetText(Short(Num(game.taken)))
+			runRows.gold.value:SetText(Short(Num(game.ge)))
+			runRows.caches.value:SetText(Num(game.ck))
+
+		else
+			dealt = run.dealt
+			runRows.level.value:SetText(UnitLevel("player") or 1)
+			runRows.kills.value:SetText(run.kills)
+			runRows.elites.value:SetText(run.elites)
+			runRows.bosses.value:SetText(run.bosses)
+			runRows.taken.value:SetText(Short(run.taken))
+		end
+		runRows.dealt.value:SetText(Short(dealt))
+		runRows.dps.value:SetText(seconds > 0 and Short(dealt / seconds) or 0)
 	else
 		runTitle:Hide()
 	end
 	for index = 1, table.getn(RUN_ROWS) do
 		local row = runRows[index]
-		if running then
+		local info = RUN_ROWS[index]
+		if running and (game or not info.api) then
 			row:ClearAllPoints()
 			row:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, y)
 			row:Show()
@@ -475,9 +720,13 @@ local function Draw()
 		end
 	end
 
+	-- With the damage meter on, the crits live in its lines' cards instead.
 	local sorted = {}
+	local meterOn = SurvivorUI_MeterActive and SurvivorUI_MeterActive()
 	for ability in pairs(critBest) do
-		table.insert(sorted, ability)
+		if not meterOn then
+			table.insert(sorted, ability)
+		end
 	end
 	table.sort(sorted, function(a, b) return critBest[a] > critBest[b] end)
 
@@ -537,8 +786,19 @@ end
 -- On screen from the start of a run; it stays after the run so its last
 -- numbers can be read, until the next one starts.
 local elapsed = 0
+local lastGameT                  -- the game's clock last seen, to notice a new run
 local ticker = CreateFrame("Frame")
 ticker:SetScript("OnUpdate", function()
+	-- The game's clock going back means a new run: a clean slate.
+	local game = Game()
+	if game then
+		local now = Num(game.t)
+		if lastGameT and now + 3 < lastGameT then
+			ResetRun()
+		end
+		lastGameT = now
+	end
+
 	if run.armed and not run.started then
 		WatchFirstStep()
 	end
@@ -565,6 +825,16 @@ ticker:SetScript("OnUpdate", function()
 		panel:Hide()
 	end
 end)
+
+local placer = CreateFrame("Frame")
+placer:RegisterEvent("PLAYER_ENTERING_WORLD")
+placer:SetScript("OnEvent", function()
+	RestorePanel()
+end)
+
+if SurvivorUI_RegisterMover then
+	SurvivorUI_RegisterMover(panel, "This Run", SavePanel, nil, RestorePanel)
+end
 
 function SurvivorUI_ToggleRun()
 	SurvivorUIDB = SurvivorUIDB or {}

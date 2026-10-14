@@ -8,6 +8,28 @@ These are fan-made and not affiliated with the game or its author.
 
 Both are flat and dark, in the manner of EllesmereUI and Plater. They are written from scratch for the 1.12 addon API and share no code with those addons.
 
+## Commands at a glance
+
+**Hold Alt** to see everything that can be moved, outlined with its name, and drag it. Every piece keeps its place.
+
+| Command | What it does |
+|---|---|
+| `/sui` | Lists every command in the chat |
+| `/sui layout` | Puts every piece back in its first place |
+| `/sui center` | Puts the middle block (frames and buttons) back under the hero |
+| `/sui tracker` | Run tracker under the minimap: on or off |
+| `/sui run` | Run panel: on or off |
+| `/sui run reset` | Clears the crits |
+| `/sui meter` | The addon's damage meter, or the game's own (for healing and boss damage) |
+| `/sui bosses` | Boss bars: on or off |
+| `/sui bosses elites` | Adds every elite to the boss bars |
+| `/sui tally` | Kills and gold line under the bar, or the game's own box |
+| `/sui damage` | Quick damage numbers, or the game's own |
+| `/sui chat 12` | Chat text size, 8 to 18 |
+| `/splates all` | Plates on every enemy, or only on elites, guardians and bosses |
+| `/splates names` | Names only on elites, guardians and bosses, or on every plate |
+| `/splates scale 1.3` | Plate size, 0.6 to 2 |
+
 ## Survivor Plates
 
 Nameplates.
@@ -18,7 +40,7 @@ Nameplates.
 
 - A flat health bar with a thin border, the name above it and the unit's health on it.
 - A marker at 30% health, where execute effects start. Below it the bar turns yellow.
-- Elites and bosses get larger plates in their own colors. A lair guardian wears its elite's plate.
+- Elites and bosses get larger plates in their own colors. A lair guardian wears its elite's plate, except as your target: then it turns blue.
 - The target's plate shows its debuffs and their stacks.
 
 Commands:
@@ -48,9 +70,13 @@ Unit frames and the action bar, in one centered row under the hero:
 - A flat, dark tooltip with smaller type. An ability's tooltip is laid out again.
 - Friz Quadrata on every piece of interface text.
 - Quick damage numbers over the enemies, and the hits the hero takes in red, falling over the hero, in place of the game's own.
-- A run panel above the chat: the run so far (time survived, level, kills, elites and guardians slain, bosses slain, damage dealt, damage per second, damage taken) and the biggest critical strike of each ability, live.
+- A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the game's own clock.
+- A run panel under the run tracker: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
+- A damage meter in the bottom right corner, in place of the game's own: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits.
+- Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health, at any distance. Click one to target it.
+- Kills, gold and the next cache's price on a line under the experience bar, in place of the game's own box.
 
-Left click a frame to target it, right click for its menu. Alt-drag either frame to move the whole row.
+Left click a frame to target it, right click for its menu. Hold Alt to outline the whole middle block (frames, buttons, experience bar, kills and gold, buffs) and drag it anywhere; the place is kept. `/sui center` puts it back.
 
 Commands:
 
@@ -59,7 +85,25 @@ Commands:
 | `/sui damage` | Switches between the quick damage numbers (the default) and the game's own |
 | `/sui chat 12` | Chat text size, 8 to 18 (default 12) |
 | `/sui run` | Shows or hides the run panel |
-| `/sui run reset` | Clears the biggest crits; the run's numbers stay |
+| `/sui tracker` | Shows or hides the run tracker under the minimap |
+| `/sui meter` | Switches between the addon's damage meter (the default) and the game's own |
+| `/sui center` | Puts the middle block back under the hero |
+| `/sui layout` | Puts every piece back in its first place |
+| `/sui run reset` | Clears the crits; the run's numbers stay |
+| `/sui bosses` | Switches the boss bars on (the default) or off |
+| `/sui bosses elites` | Lists every elite in the boss bars too |
+| `/sui tally` | Switches between the kills and gold line (the default) and the game's own box |
+
+### Healing and boss damage
+
+The addon's damage meter shows the run's damage by source, the same numbers as the game's meter, with each ability's crits on mouseover. The game's own meter also has views for **healing** and **damage to bosses**, which the game does not share with addons yet.
+
+To see them, type `/sui meter`: the addon's meter steps aside and the game's comes back, with its buttons. Type `/sui meter` again to return. Hovering the meter's title says the same.
+### The game's addon API
+
+Azeroth Survivors shares its run with addons: its clock, phase, kills, bosses, guardians, damage meter and more. Survivor UI reads them where the game offers them, and falls back to its own count on a version of the game that does not.
+
+The run tracker, the damage meter, the boss bars and the kills and gold line put the game's own clock, meter, boss bars and box away while they are on. That is a game setting, saved by the game: `/sui tracker`, `/sui meter`, `/sui bosses` and `/sui tally` bring them back, and so do the "Show ..." checkboxes in the game's Options, Interface. Do that before removing the addon, or the game's own will stay hidden.
 
 ## Install
 
@@ -76,9 +120,9 @@ These come from the 1.12 client and cannot be worked around by an addon:
 - Nameplates only exist within 20 yards of the hero.
 - Debuffs can only be read from the current target, so only the target's plate shows them.
 - A debuff's time left is only known for the hero's own buffs and debuffs.
-- The game's own panels (the clock, kills, gold, the damage window) are drawn by the game, not by its addon interface, and cannot be moved from here.
-- A lair guardian is an elite to the client, under its elite's name, so its plate is an elite's and the run panel counts elites and guardians together.
-- The game does not share its clock or its pauses with addons. The run panel's time is the addon's own count and can drift from the game's; hover it for the rules it follows.
+- The game's spells and jewelry rows are drawn by the game and cannot be moved from here: the game shares no jewelry data to draw them again.
+- A lair guardian is the same creature as its elite, so only your target can be told apart as one. Its plate is an elite's otherwise; the run panel and the boss bars know them all from the game.
+- On a version of the game without its addon API, the run panel keeps its own count: its own clock (hover it for the rules), elites and guardians together, and no gold, caches or bosses to come.
 
 If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
@@ -86,6 +130,27 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v2.0, 2026-10-14
+
+Built on the game's new addon API. On a version of the game without it, Survivor UI works as before.
+
+**Survivor UI: new**
+- **Run tracker** under the minimap, after a Mythic+ timer: the zone, the time gone against the zone's full length from the game's own clock (it stops when you pause or choose a card; the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive with its health, green slain), lives left and the level's progress. One size all run. It stands in for the game's own clock. Hover it for the time to the final boss and the run's settings. `/sui tracker`
+- **Damage meter** in place of the game's: one bar per source with its damage and share, a talent's or amulet's own damage in blue. Hover a line for its card: damage per second from the game, and critical strikes (biggest, last, average, smallest) and normal hits from the combat log. One size all run; its cards open on its left. For healing and boss damage, `/sui meter` switches to the game's own meter and back.
+- **Boss bars** at the top of the screen: every boss alive, the final boss on top, and every awake lair guardian, at any distance, with the name and the health left. An enraged boss's name turns red. Click a bar to target it. `/sui bosses`, `/sui bosses elites`
+- **Kills, gold and cache** on a line under the experience bar, in place of the game's own box, so they move with the middle block. `/sui tally`
+- **Hold Alt** and every piece that can move shows outlined with its name: the middle block, the chat, the minimap, the run tracker, the run panel, the damage meter and the boss bars. Drag any of them; each keeps its place. `/sui layout` puts everything back, `/sui center` only the middle block.
+
+**Survivor UI: changed**
+- The run panel reads the game's own numbers, the same as its victory screen: time, level, kills, elites, guardians on a row of their own again, bosses, damage dealt and taken, damage per second, gold earned and caches opened. Hover a row for more: enemies alive, the damage meter by source, damage taken by source, gold, rerolls and lives.
+- The right column stacks the run tracker, the run panel and the damage meter, all the same width and in one lighter shade. The crits live in the meter's cards now; the run panel's Biggest Crits list comes back with `/sui meter`.
+- The game's tooltip for enemies opens beside the damage meter instead of on top of it.
+- No more "Health Low" in big letters over the fight.
+- Updating puts every piece back in its first place once, since the layout changed.
+
+**Survivor Plates**
+- Your target's plate turns blue when it is a lair guardian.
+- Elites and bosses are also recognized by the names the game sends.
 ### v1.8.1, 2026-10-14
 
 **Survivor Plates**

@@ -1,9 +1,14 @@
 ## Interface: 11200
 ## Title: Survivor UI
-## Version: 1.8.1
+## Version: 2.0
 ## Notes: Flat, dark unit frames and a compact action bar (buttons 1 to 6 and the = button) for Azeroth Survivors.
 ## SavedVariables: SurvivorUIDB
 SurvivorUI.lua
+Mover.lua
+Tally.lua
 CharacterPane.lua
 RunPanel.lua
+Meter.lua
+Tracker.lua
 AbilityTooltip.lua
+BossBars.lua

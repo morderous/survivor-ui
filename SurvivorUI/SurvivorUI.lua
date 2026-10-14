@@ -28,7 +28,10 @@
 -- frame to move the whole row.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = "Fonts\\FRIZQT__.TTF"
+-- The interface's face, shared with the addon's other files: Friz Quadrata,
+-- the game's own.
+SurvivorUI_FONT = "Fonts\\FRIZQT__.TTF"
+local FONT = SurvivorUI_FONT
 
 local BAR_BUTTONS = { 1, 2, 3, 4, 5, 6, 12 }     -- 12 is the = key
 local BUTTON_SIZE = 36
@@ -760,8 +763,8 @@ local function StyleChat()
 end
 
 ------------------------------------------------------------------------------
--- One face everywhere: Friz Quadrata. The stock interface already uses it for
--- most things; chat, numbers, quest and mail text use other faces.
+-- One face everywhere (SurvivorUI_FONT). The stock interface mixes several:
+-- Friz Quadrata for most things, others for chat, numbers, quest and mail text.
 
 -- Read by the engine when the world loads, for the text it draws itself.
 STANDARD_TEXT_FONT = FONT
@@ -1086,6 +1089,16 @@ local function ApplyTakenText()
 	if not COMBAT_TEXT_TYPE_INFO then
 		return
 	end
+	-- "Health Low" in big letters over the fight says what the player frame
+	-- already shows. Tied to a setting no one sets, so the stock refresh keeps
+	-- it off.
+	for _, kind in pairs({ "HEALTH_LOW", "MANA_LOW" }) do
+		local info = COMBAT_TEXT_TYPE_INFO[kind]
+		if info then
+			info.var = "SURVIVORUI_NEVER"
+			info.show = nil
+		end
+	end
 	local on = Settings().damageText
 	for kind in pairs(TAKEN_TYPES) do
 		local info = COMBAT_TEXT_TYPE_INFO[kind]
@@ -1133,6 +1146,30 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ResetRun then
 			SurvivorUI_ResetRun()
 		end
+	elseif msg == "bosses" or msg == "bosses elites" then
+		if SurvivorUI_BossBars then
+			SurvivorUI_BossBars(argument)
+		end
+	elseif msg == "tracker" then
+		if SurvivorUI_ToggleTracker then
+			SurvivorUI_ToggleTracker()
+		end
+	elseif msg == "tally" then
+		if SurvivorUI_Tally then
+			SurvivorUI_Tally()
+		end
+	elseif msg == "meter" then
+		if SurvivorUI_ToggleMeter then
+			SurvivorUI_ToggleMeter()
+		end
+	elseif msg == "layout" then
+		if SurvivorUI_ResetLayout then
+			SurvivorUI_ResetLayout()
+		end
+	elseif msg == "center" then
+		if SurvivorUI_CenterRow then
+			SurvivorUI_CenterRow()
+		end
 	elseif msg == "damage" then
 		local settings = Settings()
 		settings.damageText = not settings.damageText
@@ -1141,7 +1178,12 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 	else
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between the quick damage numbers and the game's own")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 12  sets the chat text size, 8 to 18")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui bosses  switches the boss bars on or off; /sui bosses elites  lists elites too")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the bar and the game's own box")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui run  shows or hides the run panel (the run's numbers and biggest crits); /sui run reset clears the crits")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tracker  shows or hides the run tracker under the minimap (the clock and the bosses)")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui meter  switches between the addon's damage meter, with the crits, and the game's own")
 	end
 end
 
