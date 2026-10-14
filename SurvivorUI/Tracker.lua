@@ -14,6 +14,7 @@
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
+local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WIDTH = 220
 local BOSS_SLOTS = 5             -- lines kept for bosses, more if the zone has more
@@ -109,7 +110,7 @@ head:SetScript("OnDragStop", function() head:StopMovingOrSizing() SavePlace() en
 
 local function HeadText(size, flags, justify)
 	local text = head:CreateFontString(nil, "OVERLAY")
-	text:SetFont(FONT, size, flags or "OUTLINE")
+	text:SetFont(FONT, size + FONT_BUMP, flags or "OUTLINE")
 	text:SetJustifyH(justify or "CENTER")
 	return text
 end
@@ -187,11 +188,11 @@ local function BossLine(index)
 		line:SetWidth(WIDTH)
 		line:SetHeight(13)
 		line.name = line:CreateFontString(nil, "OVERLAY")
-		line.name:SetFont(FONT, 10, "OUTLINE")
+		line.name:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
 		line.name:SetPoint("LEFT", line, "LEFT", 0, 0)
 		line.name:SetJustifyH("LEFT")
 		line.time = line:CreateFontString(nil, "OVERLAY")
-		line.time:SetFont(FONT, 10, "OUTLINE")
+		line.time:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
 		line.time:SetPoint("RIGHT", line, "RIGHT", 0, 0)
 		line.time:SetJustifyH("RIGHT")
 		head.bosses[index] = line

@@ -13,6 +13,7 @@
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
+local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local BAR_WIDTH = 220
 local BAR_HEIGHT = 18
@@ -112,7 +113,7 @@ local function Bar(index)
 	bar.health:SetMinMaxValues(0, 1)
 
 	bar.name = bar.health:CreateFontString(nil, "OVERLAY")
-	bar.name:SetFont(FONT, 10, "OUTLINE")
+	bar.name:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
 	bar.name:SetPoint("LEFT", bar, "LEFT", 5, 0)
 	bar.name:SetWidth(BAR_WIDTH - 50)
 	bar.name:SetHeight(12)
@@ -120,7 +121,7 @@ local function Bar(index)
 	bar.name:SetTextColor(1, 1, 1)
 
 	bar.value = bar.health:CreateFontString(nil, "OVERLAY")
-	bar.value:SetFont(FONT, 10, "OUTLINE")
+	bar.value:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
 	bar.value:SetPoint("RIGHT", bar, "RIGHT", -5, 0)
 	bar.value:SetTextColor(1, 1, 1)
 

@@ -1,9 +1,8 @@
 -- Survivor UI: the run so far, in one small panel.
 --
---   This Run        a running count of what the game totals up on the screen
---                   that ends a run: time, level, kills, damage.
---   Biggest Crits   every ability that has crit, with its biggest critical
---                   strike; hover one for its last, average and smallest.
+-- This Run: a running count of what the game totals up on the screen that
+-- ends a run: time, level, kills, damage. The crits it reads from the combat
+-- log are shown in the damage meter's cards (Meter.lua), not here.
 --
 -- Where the game shares its run with addons (its API: AZS_RUN, AZS_GetRunTime,
 -- AZS_GetMeter, AZS_TAKEN), the panel shows the game's own numbers: its clock,
@@ -20,11 +19,11 @@
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
+local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WIDTH = 220
 local ROW_HEIGHT = 18
 local TITLE_HEIGHT = 24
-local CRIT_ROWS = 10
 
 -- The game's elites and bosses, by name: three elites and five bosses a zone.
 -- A lair guardian is one of the zone's elites, made stronger, under the same
@@ -287,7 +286,7 @@ local function Title(text, tip)
 	handle:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 	handle.text = handle:CreateFontString(nil, "OVERLAY")
-	handle.text:SetFont(FONT, 11, "OUTLINE")
+	handle.text:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
 	handle.text:SetPoint("LEFT", handle, "LEFT", 4, 0)
 	handle.text:SetTextColor(1, 0.82, 0)
 	handle.text:SetText(text)
@@ -298,29 +297,6 @@ end
 local RUN_TIP_GAME = "The game's own numbers. Hover a row for more."
 local RUN_TIP_OWN = "Counted by the addon from the combat log. A new run starts it over."
 local runTitle = Title("This Run", RUN_TIP_OWN)
-local critTitle = Title("Biggest Crits", "Each ability's biggest critical strike this run. Hover an ability for more.")
-
-local reset = CreateFrame("Button", nil, panel)
-reset:SetWidth(40)
-reset:SetHeight(14)
-reset:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -8)
-reset.text = reset:CreateFontString(nil, "OVERLAY")
-reset.text:SetFont(FONT, 9, "OUTLINE")
-reset.text:SetPoint("RIGHT", reset, "RIGHT", 0, 0)
-reset.text:SetText("Reset")
-reset.text:SetTextColor(0.6, 0.6, 0.6)
-reset:SetScript("OnEnter", function()
-	this.text:SetTextColor(1, 1, 1)
-	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
-	GameTooltip:SetText("Clears the crits. The run's numbers stay.", 1, 1, 1)
-	GameTooltip:Show()
-end)
-reset:SetScript("OnLeave", function()
-	this.text:SetTextColor(0.6, 0.6, 0.6)
-	GameTooltip:Hide()
-end)
-reset:SetScript("OnClick", function() ResetCrits() end)
-
 -- A row: a label and a value in one color, on a faint wash of that color, over
 -- a rule of it.
 local function MakeRow(valueSize, valueFlags)
@@ -340,14 +316,14 @@ local function MakeRow(valueSize, valueFlags)
 	row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
 
 	row.label = row:CreateFontString(nil, "OVERLAY")
-	row.label:SetFont(FONT, 10, "OUTLINE")
+	row.label:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
 	row.label:SetPoint("LEFT", row, "LEFT", 5, 0)
 	row.label:SetWidth(WIDTH - 66)
 	row.label:SetHeight(11)
 	row.label:SetJustifyH("LEFT")
 
 	row.value = row:CreateFontString(nil, "OVERLAY")
-	row.value:SetFont(FONT, valueSize, valueFlags)
+	row.value:SetFont(FONT, valueSize + FONT_BUMP, valueFlags)
 	row.value:SetPoint("RIGHT", row, "RIGHT", -5, 0)
 	return row
 end
@@ -507,7 +483,7 @@ critTip.fill:SetVertexColor(0.05, 0.05, 0.07, 0.97)
 critTip.fill:SetAllPoints(critTip)
 
 critTip.title = critTip:CreateFontString(nil, "OVERLAY")
-critTip.title:SetFont(FONT, 12, "OUTLINE")
+critTip.title:SetFont(FONT, 12 + FONT_BUMP, "OUTLINE")
 critTip.title:SetPoint("TOPLEFT", critTip, "TOPLEFT", 8, -8)
 
 critTip.lines = {}
@@ -524,10 +500,10 @@ local function TipLine(index, kind, label, value, color)
 		line.rule:SetPoint("BOTTOMLEFT", line, "BOTTOMLEFT", 0, 0)
 		line.rule:SetPoint("BOTTOMRIGHT", line, "BOTTOMRIGHT", 0, 0)
 		line.label = line:CreateFontString(nil, "OVERLAY")
-		line.label:SetFont(FONT, 10)
+		line.label:SetFont(FONT, 10 + FONT_BUMP)
 		line.label:SetPoint("LEFT", line, "LEFT", 2, 0)
 		line.value = line:CreateFontString(nil, "OVERLAY")
-		line.value:SetFont(FONT, 11, "OUTLINE")
+		line.value:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
 		line.value:SetPoint("RIGHT", line, "RIGHT", -2, 0)
 		critTip.lines[index] = line
 	end
@@ -628,29 +604,11 @@ function SurvivorUI_CritBest(ability)
 	return critBest[ability]
 end
 
-local critRows = {}
-for index = 1, CRIT_ROWS do
-	local row = MakeRow(14, "THICKOUTLINE")
-	row.label:SetFont(FONT, 9, "OUTLINE")
-	row.cardFrame = panel
-	row:EnableMouse(true)
-	row:SetScript("OnEnter", function()
-		critHovered = this
-		CritTooltip(this)
-	end)
-	row:SetScript("OnLeave", function()
-		critHovered = nil
-		critTip:Hide()
-	end)
-	row:Hide()
-	critRows[index] = row
-end
-
 local function Shown()
 	return not SurvivorUIDB or SurvivorUIDB.runPanel ~= false
 end
 
--- Lays the two sections out top to bottom and sizes the panel to them.
+-- Lays the rows out top to bottom and sizes the panel to them.
 local function Draw()
 	local y = -4
 
@@ -720,50 +678,8 @@ local function Draw()
 		end
 	end
 
-	-- With the damage meter on, the crits live in its lines' cards instead.
-	local sorted = {}
-	local meterOn = SurvivorUI_MeterActive and SurvivorUI_MeterActive()
-	for ability in pairs(critBest) do
-		if not meterOn then
-			table.insert(sorted, ability)
-		end
-	end
-	table.sort(sorted, function(a, b) return critBest[a] > critBest[b] end)
-
-	if table.getn(sorted) > 0 then
-		y = y - (running and 6 or 0)
-		critTitle:ClearAllPoints()
-		critTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, y)
-		critTitle:Show()
-		-- Reset clears this section only, so it sits on its title.
-		reset:ClearAllPoints()
-		reset:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, y - 4)
-		reset:Show()
-		y = y - TITLE_HEIGHT
-	else
-		critTitle:Hide()
-		reset:Hide()
-	end
-	for index = 1, CRIT_ROWS do
-		local row = critRows[index]
-		local ability = sorted[index]
-		if ability then
-			row.ability = ability
-			row.label:SetText(ability)
-			row.value:SetText(Short(critBest[ability]))
-			Paint(row, critColor[ability])
-			row:ClearAllPoints()
-			row:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, y)
-			row:Show()
-			y = y - ROW_HEIGHT
-		else
-			row.ability = nil
-			row:Hide()
-		end
-	end
-
-	panel:SetHeight(-y + 8)
-	return running or table.getn(sorted) > 0
+	panel:SetHeight(-y + 4)
+	return running
 end
 
 -- The game's own clock starts when the hero first moves, so this one does

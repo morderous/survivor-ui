@@ -26,7 +26,26 @@
 --   /splates scale N    plate size, 0.6 to 2 (default 1)
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
+-- Survivor UI's face when it is installed: a player's own Expressway, else its
+-- Barlow Condensed, else Friz Quadrata. This addon loads first, so it tries
+-- them itself, each on a probe, since a face that does not load leaves none.
 local FONT = "Fonts\\FRIZQT__.TTF"
+local FONT_BUMP = 0              -- Barlow Condensed reads small: one point up
+local FACES = {
+	{ path = "Interface\\AddOns\\SurvivorUI\\Fonts\\Expressway.ttf", mark = "expressway" },
+	{ path = "Interface\\AddOns\\SurvivorUI\\Media\\BarlowCondensed-Medium.ttf", mark = "barlow", bump = 1 },
+}
+for index = 1, table.getn(FACES) do
+	local face = FACES[index]
+	local probe = UIParent:CreateFontString(nil, "OVERLAY")
+	probe:SetFont(face.path, 12)
+	local got = probe:GetFont()
+	if got and string.find(string.lower(got), face.mark, 1, true) then
+		FONT = face.path
+		FONT_BUMP = face.bump or 0
+		break
+	end
+end
 local BORDER_TEXTURE = "Interface\\Tooltips\\Nameplate-Border"
 
 local EXECUTE_RANGE = 0.30      -- the game's execute effects start below this share of health
@@ -171,8 +190,8 @@ local function ApplyKind(overlay, kind)
 	overlay.bar:SetHeight(style.height * scale)
 	overlay.marker:SetHeight(style.height * scale)
 	overlay.marker:SetPoint("LEFT", overlay.bar, "LEFT", style.width * scale * EXECUTE_RANGE, 0)
-	overlay.name:SetFont(FONT, style.nameSize * scale, "OUTLINE")
-	overlay.health:SetFont(FONT, math.max(8, (style.height - 1) * scale), "OUTLINE")
+	overlay.name:SetFont(FONT, style.nameSize * scale + FONT_BUMP, "OUTLINE")
+	overlay.health:SetFont(FONT, math.max(8, (style.height - 1) * scale) + FONT_BUMP, "OUTLINE")
 
 	overlay.named = settings.names or kind ~= "normal"
 	if overlay.named and not overlay.put then
@@ -227,7 +246,7 @@ local function UpdatePlateDebuffs(overlay, isTarget)
 				icon.texture:SetAllPoints(icon)
 				icon.texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 				icon.count = icon:CreateFontString(nil, "OVERLAY")
-				icon.count:SetFont(FONT, 9, "OUTLINE")
+				icon.count:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
 				icon.count:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
 				icons[index] = icon
 			end

@@ -11,6 +11,7 @@
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
+local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local DEFAULT_Y = -150          -- the row's place under the screen's center
 
 local row = getglobal("SurvivorUIRow")
@@ -88,7 +89,7 @@ local function MakeHandle(label)
 	end
 
 	handle.label = handle:CreateFontString(nil, "OVERLAY")
-	handle.label:SetFont(FONT, 11, "OUTLINE")
+	handle.label:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
 	handle.label:SetPoint("TOP", handle, "TOP", 0, -4)
 	handle.label:SetTextColor(1, 0.82, 0)
 	handle.label:SetText(label)
@@ -223,6 +224,41 @@ gameLoader:SetScript("OnUpdate", function()
 		end
 	end
 end)
+
+------------------------------------------------------------------------------
+-- /sui scale: the size of the addon's panels, for screens where they crowd
+-- each other (a small resolution, or a large interface scale).
+
+local SCALED = {
+	"SurvivorUITracker", "SurvivorUIRun", "SurvivorUIMeter", "SurvivorUIBosses",
+	"SurvivorUILoot", "SurvivorUICritTip",
+}
+
+local function ApplyScale()
+	local scale = (SurvivorUIDB and SurvivorUIDB.panelScale) or 1
+	for index = 1, table.getn(SCALED) do
+		local frame = getglobal(SCALED[index])
+		if frame then
+			frame:SetScale(scale)
+		end
+	end
+end
+
+function SurvivorUI_SetScale(value)
+	SurvivorUIDB = SurvivorUIDB or {}
+	value = tonumber(value)
+	if not value then
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: panels at "..((SurvivorUIDB.panelScale) or 1).."; /sui scale 0.85 sets it, 0.6 to 1.4.")
+		return
+	end
+	SurvivorUIDB.panelScale = math.max(0.6, math.min(1.4, value))
+	ApplyScale()
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: panels at "..SurvivorUIDB.panelScale..".")
+end
+
+local scaler = CreateFrame("Frame")
+scaler:RegisterEvent("PLAYER_ENTERING_WORLD")
+scaler:SetScript("OnEvent", ApplyScale)
 
 ------------------------------------------------------------------------------
 -- /sui layout: every piece back in its first place.

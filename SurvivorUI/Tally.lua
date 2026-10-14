@@ -7,6 +7,7 @@
 -- put away. /sui tally brings the game's box back.
 
 local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
+local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local row = getglobal("SurvivorUIRow")
 if not row then
@@ -33,7 +34,7 @@ local function Thousands(value)
 end
 
 local line = row:CreateFontString("SurvivorUITally", "OVERLAY")
-line:SetFont(FONT, 11, "OUTLINE")
+line:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
 line:SetPoint("TOP", row, "BOTTOM", 0, -14)
 line:Hide()
 

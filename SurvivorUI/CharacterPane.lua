@@ -9,6 +9,7 @@
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
+local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 if not PaperDollFrame or not CharacterFrame then
 	return
@@ -190,7 +191,7 @@ for index = 1, 5 do
 
 		local text = getglobal(name.."Text")
 		if text then
-			text:SetFont(FONT, 11)
+			text:SetFont(FONT, 11 + FONT_BUMP)
 		end
 		table.insert(tabs, tab)
 	end
@@ -277,12 +278,12 @@ stats:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
 
 -- The headline: the damage bonus, with the hero's health under it.
 local headline = stats:CreateFontString(nil, "OVERLAY")
-headline:SetFont(FONT, 20, "OUTLINE")
+headline:SetFont(FONT, 20 + FONT_BUMP, "OUTLINE")
 headline:SetPoint("TOP", stats, "TOP", 0, -14)
 headline:SetTextColor(0.72, 0.45, 1)
 
 local headlineCaption = stats:CreateFontString(nil, "OVERLAY")
-headlineCaption:SetFont(FONT, 10)
+headlineCaption:SetFont(FONT, 10 + FONT_BUMP)
 headlineCaption:SetPoint("TOP", headline, "BOTTOM", 0, -3)
 
 local scroll = CreateFrame("ScrollFrame", "SurvivorUICharacterScroll", stats)
@@ -317,7 +318,7 @@ local function Header(index)
 		header:SetWidth(STATS_WIDTH - 24)
 		header:SetHeight(HEADER_HEIGHT)
 		header.text = header:CreateFontString(nil, "OVERLAY")
-		header.text:SetFont(FONT, 10, "OUTLINE")
+		header.text:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
 		header.text:SetPoint("CENTER", header, "CENTER", 0, -2)
 		header.left = Line(header, 1, 1, 1)
 		header.left:SetHeight(1)
@@ -342,11 +343,11 @@ local function Row(index)
 		row:SetScript("OnEnter", RowEnter)
 		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 		row.label = row:CreateFontString(nil, "OVERLAY")
-		row.label:SetFont(FONT, 11)
+		row.label:SetFont(FONT, 11 + FONT_BUMP)
 		row.label:SetPoint("LEFT", row, "LEFT", 2, 0)
 		row.label:SetTextColor(0.82, 0.82, 0.82)
 		row.value = row:CreateFontString(nil, "OVERLAY")
-		row.value:SetFont(FONT, 11)
+		row.value:SetFont(FONT, 11 + FONT_BUMP)
 		row.value:SetPoint("RIGHT", row, "RIGHT", -2, 0)
 		rows[index] = row
 	end
@@ -413,8 +414,8 @@ local function UpdateStats()
 				row:SetHeight(rowHeight)
 				if row.fontSize ~= fontSize then
 					row.fontSize = fontSize
-					row.label:SetFont(FONT, fontSize)
-					row.value:SetFont(FONT, fontSize)
+					row.label:SetFont(FONT, fontSize + FONT_BUMP)
+					row.value:SetFont(FONT, fontSize + FONT_BUMP)
 				end
 				local value = s and entry[2](s) or "-"
 				row:ClearAllPoints()

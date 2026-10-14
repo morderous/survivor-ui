@@ -28,10 +28,35 @@
 -- frame to move the whole row.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
--- The interface's face, shared with the addon's other files: Friz Quadrata,
--- the game's own.
+-- The interface's face, shared with the addon's other files. Barlow Condensed
+-- comes with the addon (Media, SIL Open Font License). A player's own
+-- Expressway, dropped in SurvivorUI\Fonts, wins over it; it may not be shipped.
+-- A face that does not load leaves a font string without one, so each is tried
+-- on a probe first, and Friz Quadrata, the game's own, is the last resort.
+local FACES = {
+	{ path = "Interface\\AddOns\\SurvivorUI\\Fonts\\Expressway.ttf", mark = "expressway" },
+	{ path = "Interface\\AddOns\\SurvivorUI\\Media\\BarlowCondensed-Medium.ttf", mark = "barlow", bump = 1 },
+}
+
+local function FaceLoads(face)
+	local probe = UIParent:CreateFontString(nil, "OVERLAY")
+	probe:SetFont(face.path, 12)
+	local got = probe:GetFont()
+	return got and string.find(string.lower(got), face.mark, 1, true) ~= nil
+end
+
 SurvivorUI_FONT = "Fonts\\FRIZQT__.TTF"
+SurvivorUI_FONT_BUMP = 0
+for index = 1, table.getn(FACES) do
+	if FaceLoads(FACES[index]) then
+		SurvivorUI_FONT = FACES[index].path
+		-- Barlow Condensed reads small at the same size: one point up.
+		SurvivorUI_FONT_BUMP = FACES[index].bump or 0
+		break
+	end
+end
 local FONT = SurvivorUI_FONT
+local FONT_BUMP = SurvivorUI_FONT_BUMP
 
 local BAR_BUTTONS = { 1, 2, 3, 4, 5, 6, 12 }     -- 12 is the = key
 local BUTTON_SIZE = 36
@@ -103,7 +128,7 @@ end
 
 local function Text(parent, size, point, x, y)
 	local text = parent:CreateFontString(nil, "OVERLAY")
-	text:SetFont(FONT, size, "OUTLINE")
+	text:SetFont(FONT, size + FONT_BUMP, "OUTLINE")
 	text:SetPoint(point, parent, point, x, y)
 	return text
 end
@@ -347,7 +372,7 @@ local function StyleButton(button)
 
 		local hotkey = getglobal(name.."HotKey")
 		if hotkey then
-			hotkey:SetFont(FONT, 10, "OUTLINE")
+			hotkey:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
 			hotkey:ClearAllPoints()
 			hotkey:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -2)
 		end
@@ -738,7 +763,7 @@ local function StyleChat()
 			end
 			local tabText = getglobal(name.."TabText")
 			if tabText then
-				tabText:SetFont(FONT, 11, "OUTLINE")
+				tabText:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
 			end
 		end
 	end
@@ -793,9 +818,14 @@ local function ApplyFonts()
 	for _, name in pairs(FONT_OBJECTS) do
 		local object = getglobal(name)
 		if object and object.GetFont and object.SetFont then
-			local _, size, flags = object:GetFont()
+			-- The stock size is kept on the first pass, so the bump is not added twice.
+			if not object.survivorSize then
+				local _, size, flags = object:GetFont()
+				object.survivorSize, object.survivorFlags = size, flags
+			end
+			local size = object.survivorSize
 			if size and size > 0 then
-				object:SetFont(FONT, size, flags)
+				object:SetFont(FONT, size + FONT_BUMP, object.survivorFlags)
 			end
 		end
 	end
@@ -842,15 +872,15 @@ local function StyleTooltips()
 
 	local header = getglobal("GameTooltipHeaderText")
 	if header then
-		header:SetFont(FONT, 13)
+		header:SetFont(FONT, 13 + FONT_BUMP)
 	end
 	local body = getglobal("GameTooltipText")
 	if body then
-		body:SetFont(FONT, 11)
+		body:SetFont(FONT, 11 + FONT_BUMP)
 	end
 	local small = getglobal("GameTooltipTextSmall")
 	if small then
-		small:SetFont(FONT, 10)
+		small:SetFont(FONT, 10 + FONT_BUMP)
 	end
 
 	local bar = getglobal("GameTooltipStatusBar")
@@ -977,10 +1007,10 @@ local function SpawnDamage(target, amount, crit, periodic)
 		text:SetFont(FONT, CRIT_POP_SIZE, "THICKOUTLINE")
 		text:SetTextColor(1, 0.76, 0.08)
 	elseif periodic then
-		text:SetFont(FONT, 12, "OUTLINE")
+		text:SetFont(FONT, 12 + FONT_BUMP, "OUTLINE")
 		text:SetTextColor(0.80, 0.80, 0.80)
 	else
-		text:SetFont(FONT, 14, "OUTLINE")
+		text:SetFont(FONT, 14 + FONT_BUMP, "OUTLINE")
 		text:SetTextColor(1, 1, 1)
 	end
 	text:SetText(amount)
@@ -1162,6 +1192,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleMeter then
 			SurvivorUI_ToggleMeter()
 		end
+	elseif command == "scale" then
+		if SurvivorUI_SetScale then
+			SurvivorUI_SetScale(argument)
+		end
 	elseif msg == "layout" then
 		if SurvivorUI_ResetLayout then
 			SurvivorUI_ResetLayout()
@@ -1183,6 +1217,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the bar and the game's own box")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui run  shows or hides the run panel (the run's numbers and biggest crits); /sui run reset clears the crits")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tracker  shows or hides the run tracker under the minimap (the clock and the bosses)")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui scale 0.85  sizes the panels, 0.6 to 1.4, for smaller screens")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui meter  switches between the addon's damage meter, with the crits, and the game's own")
 	end
 end

@@ -16,6 +16,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 |---|---|
 | `/sui` | Lists every command in the chat |
 | `/sui layout` | Puts every piece back in its first place |
+| `/sui scale 0.85` | Size of the panels (tracker, run panel, meter, boss bars), 0.6 to 1.4. For smaller screens |
 | `/sui center` | Puts the middle block (frames and buttons) back under the hero |
 | `/sui tracker` | Run tracker under the minimap: on or off |
 | `/sui run` | Run panel: on or off |
@@ -68,11 +69,11 @@ Unit frames and the action bar, in one centered row under the hero:
 - A flat, dark chat panel without the scroll buttons, in 12 point text. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
 - A flat character pane: the hero and the item slots on the left, the run's numbers in titled sections on the right.
 - A flat, dark tooltip with smaller type. An ability's tooltip is laid out again.
-- Friz Quadrata on every piece of interface text.
+- Barlow Condensed on every piece of interface text, chat and nameplates included (see Font below).
 - Quick damage numbers over the enemies, and the hits the hero takes in red, falling over the hero, in place of the game's own.
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the game's own clock.
 - A run panel under the run tracker: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
-- A damage meter in the bottom right corner, in place of the game's own: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits.
+- A damage meter under the run panel, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health, at any distance. Click one to target it.
 - Kills, gold and the next cache's price on a line under the experience bar, in place of the game's own box.
 
@@ -89,7 +90,8 @@ Commands:
 | `/sui meter` | Switches between the addon's damage meter (the default) and the game's own |
 | `/sui center` | Puts the middle block back under the hero |
 | `/sui layout` | Puts every piece back in its first place |
-| `/sui run reset` | Clears the crits; the run's numbers stay |
+| `/sui scale 0.85` | Size of the panels (tracker, run panel, meter, boss bars), 0.6 to 1.4. For smaller screens |
+| `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
 | `/sui bosses` | Switches the boss bars on (the default) or off |
 | `/sui bosses elites` | Lists every elite in the boss bars too |
 | `/sui tally` | Switches between the kills and gold line (the default) and the game's own box |
@@ -99,6 +101,13 @@ Commands:
 The addon's damage meter shows the run's damage by source, the same numbers as the game's meter, with each ability's crits on mouseover. The game's own meter also has views for **healing** and **damage to bosses**, which the game does not share with addons yet.
 
 To see them, type `/sui meter`: the addon's meter steps aside and the game's comes back, with its buttons. Type `/sui meter` again to return. Hovering the meter's title says the same.
+
+### Font
+
+The interface uses **Barlow Condensed**, which comes with the addon (SIL Open Font License, in `SurvivorUI\Media`).
+
+Prefer **Expressway**, the face of many retail UIs? It may not be shipped with the addon, but if you have it (it comes with EllesmereUI and ElvUI, for one), copy it as `SurvivorUI\Fonts\Expressway.ttf` and restart the game: the addon picks it up on its own. If neither loads, the game's Friz Quadrata is used.
+
 ### The game's addon API
 
 Azeroth Survivors shares its run with addons: its clock, phase, kills, bosses, guardians, damage meter and more. Survivor UI reads them where the game offers them, and falls back to its own count on a version of the game that does not.
@@ -130,6 +139,17 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v2.1, 2026-10-15
+
+**Survivor UI**
+- New font: Barlow Condensed, everywhere, one point larger than before. Your own Expressway is used instead if you put it in `SurvivorUI\Fonts` (see Font).
+- Smaller screens: the damage meter sits right under the run panel and shows as many lines as fit, three at least, instead of running over it. `/sui scale 0.85` sizes the panels (0.6 to 1.4).
+- The run panel's old Biggest Crits list is gone for good: the crits live in the damage meter's cards. `/sui meter` now only swaps the meter.
+- The damage meter marks a talent's or amulet's own damage as "proc" again.
+
+**Survivor Plates**
+- The same font as Survivor UI when it is installed.
+
 ### v2.0, 2026-10-14
 
 Built on the game's new addon API. On a version of the game without it, Survivor UI works as before.
@@ -143,7 +163,7 @@ Built on the game's new addon API. On a version of the game without it, Survivor
 
 **Survivor UI: changed**
 - The run panel reads the game's own numbers, the same as its victory screen: time, level, kills, elites, guardians on a row of their own again, bosses, damage dealt and taken, damage per second, gold earned and caches opened. Hover a row for more: enemies alive, the damage meter by source, damage taken by source, gold, rerolls and lives.
-- The right column stacks the run tracker, the run panel and the damage meter, all the same width and in one lighter shade. The crits live in the meter's cards now; the run panel's Biggest Crits list comes back with `/sui meter`.
+- The right column stacks the run tracker, the run panel and the damage meter, all the same width and in one lighter shade. The crits live in the meter's cards now; the run panel's old Biggest Crits list is gone.
 - The game's tooltip for enemies opens beside the damage meter instead of on top of it.
 - No more "Health Low" in big letters over the fight.
 - Updating puts every piece back in its first place once, since the layout changed.

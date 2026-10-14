@@ -4,15 +4,16 @@
 -- AZS_GetMeter): one flat bar per source of damage, the most first, each in a
 -- color of its own and a talent's or amulet's own damage in blue, as in the
 -- game's (its card says it is a proc). Hover a line for its card: its damage, share and damage per second,
--- and its critical strikes and normal hits from the combat log. The run
--- panel's crit list steps aside while this is on.
+-- and its critical strikes and normal hits from the combat log.
 --
 -- Reset clears the crits; the damage is the game's, for the whole run. Its
--- size stays the same, room for ten lines. Hold Alt and drag to move. The game's own meter is put away while this one is on;
+-- size holds through a run: up to ten lines, fewer on a small screen. Hold Alt
+-- and drag to move. The game's own meter is put away while this one is on;
 -- /sui meter brings it back. Needs the API; without it nothing shows.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
+local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WIDTH = 228
 local BAR_HEIGHT = 16
@@ -65,7 +66,7 @@ end
 
 ------------------------------------------------------------------------------
 -- The frame: a title line, then room for every bar from the start, so its size
--- never changes. At the bottom of the right column, under the run panel.
+-- holds through a run. At the bottom of the right column, under the run panel.
 
 local meter = CreateFrame("Frame", "SurvivorUIMeter", UIParent)
 meter:SetWidth(WIDTH + 8)
@@ -85,25 +86,54 @@ local function SavePlace()
 	settings.meterBottom = math.floor(meter:GetBottom() + 0.5)
 end
 
-local placed = false
+local shownLines = MAX_LINES
 
--- The saved place; else the bottom of the screen, right edge in line with the
--- run tracker's (known once the tracker is placed, so this waits for it).
-local function RestorePlace()
+local function SetLines(count)
+	if count ~= shownLines then
+		shownLines = count
+		meter:SetHeight(24 + count * (BAR_HEIGHT + BAR_GAP))
+	end
+end
+
+-- The saved place, with every line; else the right column, under the run panel
+-- (or the run tracker), with as many lines as fit above the screen's bottom,
+-- three at least. A small screen gets a shorter meter rather than an overlap.
+-- The size follows the layout, never the numbers, so it holds through a run.
+-- What the meter hangs from, last time: it is seated again only when that
+-- changes, so a drag in progress is never pulled back.
+local seatedOn
+
+local function Seat(key, point, relative, relativePoint, x, y)
+	if seatedOn ~= key then
+		seatedOn = key
+		meter:ClearAllPoints()
+		meter:SetPoint(point, relative, relativePoint, x, y)
+	end
+end
+
+local function Fit()
 	local settings = Settings()
 	if settings.meterRight then
-		meter:ClearAllPoints()
-		meter:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMLEFT", settings.meterRight, settings.meterBottom)
-		placed = true
+		Seat("saved"..settings.meterRight..","..settings.meterBottom, "BOTTOMRIGHT", UIParent, "BOTTOMLEFT", settings.meterRight, settings.meterBottom)
+		SetLines(MAX_LINES)
 		return
 	end
-	local tracker = SurvivorUITracker
-	local right = tracker and tracker:GetRight()
-	if right then
-		meter:ClearAllPoints()
-		meter:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMLEFT", right + 8, 40)
-		placed = true
+	local run, tracker = SurvivorUIRun, SurvivorUITracker
+	local above, shift = nil, 0
+	if run and run:IsShown() and run:GetBottom() then
+		above = run
+	elseif tracker and tracker:GetBottom() then
+		above, shift = tracker, 8
 	end
+	if not above then
+		Seat("screen", "BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -12, 40)
+		SetLines(MAX_LINES)
+		return
+	end
+	Seat(above:GetName(), "TOPRIGHT", above, "BOTTOMRIGHT", shift, -10)
+	local room = above:GetBottom() - 10 - 8
+	local fit = math.floor((room - 24) / (BAR_HEIGHT + BAR_GAP))
+	SetLines(math.max(3, math.min(MAX_LINES, fit)))
 end
 
 local function StartMove()
@@ -121,7 +151,7 @@ meter:SetScript("OnDragStart", StartMove)
 meter:SetScript("OnDragStop", StopMove)
 
 meter.title = meter:CreateFontString(nil, "OVERLAY")
-meter.title:SetFont(FONT, 11, "OUTLINE")
+meter.title:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
 meter.title:SetPoint("TOPLEFT", meter, "TOPLEFT", 5, -5)
 meter.title:SetTextColor(1, 0.82, 0)
 meter.title:SetText("Damage Done")
@@ -145,7 +175,7 @@ titleHover:RegisterForDrag("LeftButton")
 titleHover:SetScript("OnDragStart", StartMove)
 titleHover:SetScript("OnDragStop", StopMove)
 meter.total = meter:CreateFontString(nil, "OVERLAY")
-meter.total:SetFont(FONT, 9, "OUTLINE")
+meter.total:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
 meter.total:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -42, -6)
 meter.total:SetTextColor(0.7, 0.7, 0.7)
 
@@ -154,7 +184,7 @@ reset:SetWidth(32)
 reset:SetHeight(12)
 reset:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -5, -5)
 reset.text = reset:CreateFontString(nil, "OVERLAY")
-reset.text:SetFont(FONT, 9, "OUTLINE")
+reset.text:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
 reset.text:SetPoint("RIGHT", reset, "RIGHT", 0, 0)
 reset.text:SetText("Reset")
 reset.text:SetTextColor(0.6, 0.6, 0.6)
@@ -210,7 +240,7 @@ local function Bar(index)
 	bar.backing:SetAllPoints(bar)
 
 	bar.name = bar:CreateFontString(nil, "OVERLAY")
-	bar.name:SetFont(FONT, 9, "OUTLINE")
+	bar.name:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
 	bar.name:SetPoint("LEFT", bar, "LEFT", 4, 0)
 	-- Room for the numbers on the right: damage and share.
 	bar.name:SetWidth(WIDTH - 76)
@@ -219,7 +249,7 @@ local function Bar(index)
 	bar.name:SetTextColor(1, 1, 1)
 
 	bar.value = bar:CreateFontString(nil, "OVERLAY")
-	bar.value:SetFont(FONT, 9, "OUTLINE")
+	bar.value:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
 	bar.value:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
 	bar.value:SetTextColor(1, 1, 1)
 
@@ -249,7 +279,7 @@ local function Draw()
 	lines = lines or {}
 	meter.total:SetText(Short(Num(total)).."  |cffffffff"..Short(Num(dps)).."|r dps")
 
-	local count = math.min(MAX_LINES, table.getn(lines))
+	local count = math.min(shownLines, table.getn(lines))
 	local top = count > 0 and Num(lines[1].dmg) or 0
 	for index = 1, count do
 		local line = lines[index]
@@ -265,8 +295,8 @@ local function Draw()
 		bar.ability = name
 		bar.color = color
 
-		-- A proc says so by its blue bar and its card, not in the line.
-		bar.name:SetText(index..". "..name)
+		-- A talent's or amulet's own damage says so, as the game's meter does.
+		bar.name:SetText(index..". "..name..(proc and "  |cffc8e8ffproc|r" or ""))
 		bar.value:SetText(Short(Num(line.dmg)).."  |cffb0b0b0"..math.floor(Num(line.share) * 100 + 0.5).."%|r")
 		bar:Show()
 	end
@@ -284,9 +314,7 @@ watcher:SetScript("OnUpdate", function()
 		return
 	end
 	elapsed = 0
-	if not placed then
-		RestorePlace()
-	end
+	Fit()
 	if Settings().meter and Running() then
 		Draw()
 		if not meter:IsShown() then
@@ -322,8 +350,8 @@ function SurvivorUI_ToggleMeter()
 	settings.meter = not settings.meter
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.meter
-		and "damage meter on, crits in its lines; the game's own meter is put away."
-		or "damage meter off; the game's own is back, and the crits return to the run panel."))
+		and "damage meter on; the game's own meter is put away."
+		or "damage meter off; the game's own is back, with its healing and boss damage."))
 end
 
 -- The game's tooltip for units and the world sits by default in the bottom
@@ -343,14 +371,14 @@ end
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", function()
-	placed = false
-	RestorePlace()
+	seatedOn = nil
+	Fit()
 	ApplyGameHud()
 end)
 
 if SurvivorUI_RegisterMover then
 	SurvivorUI_RegisterMover(meter, "Damage meter", SavePlace, nil, function()
-		placed = false
-		RestorePlace()
+		seatedOn = nil
+		Fit()
 	end)
 end
