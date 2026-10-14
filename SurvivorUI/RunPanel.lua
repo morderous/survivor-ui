@@ -22,7 +22,9 @@ local TITLE_HEIGHT = 24
 local CRIT_ROWS = 10
 
 -- The game's elites and bosses, by name: three elites and five bosses a zone.
--- A guardian's name ends in "(Guardian)".
+-- A lair guardian is one of the zone's elites, made stronger: its plate reads
+-- "<name> (Guardian)", but its death line only "<name> dies.", the same as the
+-- elite's. So the guardians on screen are watched, see WatchGuardians.
 local ELITES = {
 	"Kobold Taskmaster", "Gruff Swiftbite", "Bellygrub",
 	"Nightbane Worgen Alpha", "Carrion Recluse", "Flesh Eating Abomination",
@@ -519,6 +521,69 @@ local function Draw()
 	return running or table.getn(sorted) > 0
 end
 
+-- [name] = GetTime() a guardian of that name was last seen: on a plate, or in
+-- the game's "<name> is slain! Its lair yields treasure" announcement.
+local guardianSeen = {}
+local GUARDIAN_MEMORY = 5
+local lastKill = {}             -- the last elite, guardian or boss counted, to set right
+
+local function PlateNames(visit)
+	if SurvivorPlatesRegistry then
+		for index = 1, table.getn(SurvivorPlatesRegistry) do
+			local overlay = SurvivorPlatesRegistry[index]
+			if overlay.plate:IsVisible() then
+				visit(overlay.stock.name:GetText())
+			end
+		end
+		return
+	end
+	local children = { WorldFrame:GetChildren() }
+	for index = 1, table.getn(children) do
+		local plate = children[index]
+		local border = plate:GetRegions()
+		if plate:IsVisible() and border and border.GetTexture and border:GetObjectType() == "Texture"
+			and border:GetTexture() == "Interface\\Tooltips\\Nameplate-Border" then
+			local regions = { plate:GetRegions() }
+			for region = 1, table.getn(regions) do
+				if regions[region]:GetObjectType() == "FontString" then
+					visit(regions[region]:GetText())
+					break
+				end
+			end
+		end
+	end
+end
+
+local function WatchGuardians()
+	local now = GetTime()
+	PlateNames(function(name)
+		local _, _, base = string.find(name or "", "^(.+) %(Guardian%)$")
+		if base then
+			guardianSeen[base] = now
+		end
+	end)
+end
+
+local function IsGuardian(name)
+	return guardianSeen[name] and GetTime() - guardianSeen[name] <= GUARDIAN_MEMORY
+end
+
+-- "Gruff Swiftbite is slain! Its lair yields treasure ..."
+local function LairCleared(message)
+	local _, _, name = string.find(message, "^(.+) is slain! Its lair")
+	if not name then
+		return
+	end
+	name = string.gsub(name, " %(Guardian%)$", "")
+	guardianSeen[name] = GetTime()
+	-- The death line came first and counted it as an elite: move it over.
+	if lastKill.name == name and lastKill.kind == "elites" and GetTime() - lastKill.at <= GUARDIAN_MEMORY then
+		run.elites = run.elites - 1
+		run.guardians = run.guardians + 1
+		lastKill.kind = "guardians"
+	end
+end
+
 -- The game's own clock starts when the hero first moves, so this one does
 -- too: from "Move to begin" the hero's map position is watched for a change.
 local function WatchFirstStep()
@@ -560,6 +625,10 @@ ticker:SetScript("OnUpdate", function()
 		return
 	end
 	elapsed = 0
+
+	if run.started and not run.ended then
+		WatchGuardians()
+	end
 
 	if Shown() and Draw() then
 		panel:Show()
@@ -714,10 +783,17 @@ local function Death(message)
 	end
 
 	run.kills = run.kills + 1
+	local kind
 	if string.find(name, "(Guardian)", 1, true) then
-		run.guardians = run.guardians + 1
-	elseif kindByName[name] then
-		run[kindByName[name]] = run[kindByName[name]] + 1
+		kind = "guardians"
+	elseif kindByName[name] == "elites" and IsGuardian(name) then
+		kind = "guardians"
+	else
+		kind = kindByName[name]
+	end
+	if kind then
+		run[kind] = run[kind] + 1
+		lastKill.name, lastKill.kind, lastKill.at = name, kind, GetTime()
 	end
 end
 
@@ -742,11 +818,18 @@ for _, group in pairs({ HIT_EVENTS, DEALT_EVENTS, TAKEN_EVENTS }) do
 end
 events:RegisterEvent("CHAT_MSG_COMBAT_HOSTILE_DEATH")
 events:RegisterEvent("CHAT_MSG_SYSTEM")
+events:RegisterEvent("CHAT_MSG_MONSTER_EMOTE")
+events:RegisterEvent("CHAT_MSG_MONSTER_YELL")
 -- Nothing to tally in a miss, but it is the world moving: see Alive.
 events:RegisterEvent("CHAT_MSG_COMBAT_SELF_MISSES")
 events:RegisterEvent("CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES")
 events:SetScript("OnEvent", function()
 	local message = arg1 or ""
+
+	-- Wherever the game puts its lair announcement.
+	if string.find(message, " is slain! Its lair", 1, true) then
+		LairCleared(message)
+	end
 
 	if event == "CHAT_MSG_SYSTEM" then
 		-- "<hero> enters <zone>. Move to begin.": a new run.

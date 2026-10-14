@@ -45,9 +45,9 @@ Unit frames and the action bar, in one centered row under the hero:
 - The micro buttons in the bottom right corner, hidden until the mouse reaches them.
 - A flat, dark chat panel without the scroll buttons, in 12 point text. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
 - A flat character pane: the hero and the item slots on the left, the run's numbers in titled sections on the right.
-- A flat, dark tooltip with smaller type.
+- A flat, dark tooltip with smaller type. An ability's tooltip is laid out again.
 - Friz Quadrata on every piece of interface text.
-- Quick damage numbers over the enemies, in place of the game's own.
+- Quick damage numbers over the enemies, and the hits the hero takes in red over the hero, in place of the game's own.
 - A run panel above the chat: the run so far (time survived, level, kills, elites, guardians and bosses slain, damage dealt, damage per second, damage taken) and the biggest critical strike of each ability, live.
 
 Left click a frame to target it, right click for its menu. Alt-drag either frame to move the whole row.
@@ -84,6 +84,13 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v1.7, 2026-10-14
+
+**Survivor UI**
+- The ability tooltip is laid out again. The name wears the color of its school (Holy, Fire, Frost, Nature, Shadow, Arcane, or physical), as do the rule under the summary and the school's damage in the description. Under the name: how it casts, its cooldown, its reach and its crit, each number in a color of its own. The description's numbers stand out in white. Each upgrade, bonus and talent gets a line of its own, with a thin rule between the sections. A tooltip the addon cannot read is left as the game wrote it.
+- The hits the hero takes float over the hero in the same quick style as the damage dealt, in red, in place of the slow floating combat text. Heals and the rest of the floating combat text are unchanged. `/sui damage` switches both back.
+- Lair guardians are counted as guardians in the run panel, not as elites. A guardian dies under its elite's name, so the panel watches the guardians' plates and the game's lair announcement to tell them apart.
 
 ### v1.6, 2026-10-13
 

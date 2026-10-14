@@ -931,6 +931,7 @@ local function PlatesNamed(name)
 	return found
 end
 
+-- target is nil for a hit the hero took: that number rises over the hero, in red.
 local function SpawnDamage(target, amount, crit, periodic)
 	local text = DamageText()
 	if not text then
@@ -939,9 +940,13 @@ local function SpawnDamage(target, amount, crit, periodic)
 
 	-- Over one of the enemies with that name, else in a ring around the hero.
 	local x, y
-	local plates = PlatesNamed(target)
+	local plates = target and PlatesNamed(target) or {}
 	local count = table.getn(plates)
-	if count > 0 then
+	if not target then
+		-- The camera keeps the hero in the middle of the screen.
+		x = UIParent:GetWidth() / 2
+		y = UIParent:GetHeight() / 2 + 50
+	elseif count > 0 then
 		local plate = plates[math.random(1, count)]
 		local px, py = plate:GetCenter()
 		if px and py then
@@ -959,7 +964,11 @@ local function SpawnDamage(target, amount, crit, periodic)
 		y = UIParent:GetHeight() / 2 + 30 + math.sin(angle) * reach * 0.6
 	end
 
-	if crit then
+	if not target then
+		text:SetFont(FONT, crit and CRIT_POP_SIZE or 14, crit and "THICKOUTLINE" or "OUTLINE")
+		text:SetTextColor(1, 0.22, 0.22)
+		amount = "-"..amount
+	elseif crit then
 		-- Lands oversized, then settles: see the update below.
 		text:SetFont(FONT, CRIT_POP_SIZE, "THICKOUTLINE")
 		text:SetTextColor(1, 0.76, 0.08)
@@ -1039,9 +1048,18 @@ local function ParseDamage(message)
 	end
 end
 
+-- The hits the hero takes come from the stock floating combat text's own feed.
+local TAKEN_TYPES = { DAMAGE = true, DAMAGE_CRIT = true, SPELL_DAMAGE = true }
+
 local damageEvents = CreateFrame("Frame")
 damageEvents:SetScript("OnEvent", function()
 	if not Settings().damageText then
+		return
+	end
+	if event == "COMBAT_TEXT_UPDATE" then
+		if TAKEN_TYPES[arg1] and tonumber(arg2) then
+			SpawnDamage(nil, arg2, arg1 == "DAMAGE_CRIT")
+		end
 		return
 	end
 	local target, amount, crit, periodic = ParseDamage(arg1 or "")
@@ -1053,8 +1071,32 @@ end)
 local DAMAGE_EVENTS = {
 	"CHAT_MSG_COMBAT_SELF_HITS", "CHAT_MSG_SPELL_SELF_DAMAGE",
 	"CHAT_MSG_COMBAT_PET_HITS", "CHAT_MSG_SPELL_PET_DAMAGE",
-	"CHAT_MSG_SPELL_PERIODIC_CREATURE_DAMAGE",
+	"CHAT_MSG_SPELL_PERIODIC_CREATURE_DAMAGE", "COMBAT_TEXT_UPDATE",
 }
+
+-- The stock floating combat text (Blizzard_CombatText, loaded on demand)
+-- scrolls the hits the hero takes slowly, in its own face. While the quick
+-- numbers are on, it leaves those to them; heals and the rest stay its own.
+local function ApplyTakenText()
+	if not COMBAT_TEXT_TYPE_INFO then
+		return
+	end
+	local on = Settings().damageText
+	for kind in pairs(TAKEN_TYPES) do
+		local info = COMBAT_TEXT_TYPE_INFO[kind]
+		if info then
+			info.show = not on and 1 or nil
+		end
+	end
+end
+
+local takenWatch = CreateFrame("Frame")
+takenWatch:RegisterEvent("ADDON_LOADED")
+takenWatch:SetScript("OnEvent", function()
+	if arg1 == "Blizzard_CombatText" then
+		ApplyTakenText()
+	end
+end)
 
 -- The engine's numbers are on when the addon's are off, and the other way round.
 local function ApplyDamageText()
@@ -1067,6 +1109,7 @@ local function ApplyDamageText()
 		end
 	end
 	SetCVar("CombatDamage", on and "0" or "1")
+	ApplyTakenText()
 end
 
 SLASH_SURVIVORUI1 = "/sui"
