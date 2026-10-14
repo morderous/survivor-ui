@@ -945,7 +945,8 @@ local function SpawnDamage(target, amount, crit, periodic)
 	if not target then
 		-- The camera keeps the hero in the middle of the screen.
 		x = UIParent:GetWidth() / 2
-		y = UIParent:GetHeight() / 2 + 50
+		-- From the hero's feet down, ending short of the bar row (150 below).
+		y = UIParent:GetHeight() / 2 - 15
 	elseif count > 0 then
 		local plate = plates[math.random(1, count)]
 		local px, py = plate:GetCenter()
@@ -990,6 +991,10 @@ local function SpawnDamage(target, amount, crit, periodic)
 	text.y = y
 	text.drift = (math.random() - 0.5) * 30
 	text.rise = crit and DAMAGE_RISE * 1.3 or DAMAGE_RISE
+	if not target then
+		-- A hit the hero took falls instead, apart from the ones it deals.
+		text.rise = -text.rise
+	end
 	text:SetAlpha(1)
 	text:Show()
 	damageLive = damageLive + 1
