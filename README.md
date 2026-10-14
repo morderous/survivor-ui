@@ -59,7 +59,7 @@ Commands:
 | `/sui damage` | Switches between the quick damage numbers (the default) and the game's own |
 | `/sui chat 12` | Chat text size, 8 to 18 (default 12) |
 | `/sui run` | Shows or hides the run panel |
-| `/sui run reset` | Clears the run panel's numbers |
+| `/sui run reset` | Clears the biggest crits; the run's numbers stay |
 
 ## Install
 
@@ -84,6 +84,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v1.6, 2026-10-13
+
+**Survivor UI**
+- Reset on the run panel clears only the biggest crits, and sits on that section's title. The run's numbers stay until the next run starts.
 
 ### v1.5, 2026-10-13
 

@@ -68,6 +68,11 @@ local run = {}
 local critBest, critStats, critColor, critSeen = {}, {}, {}, 0
 local hitStats = {}             -- [ability] = { last, sum, count }, normal hits only
 
+local function ResetCrits()
+	critBest, critStats, critColor, critSeen = {}, {}, {}, 0
+	hitStats = {}
+end
+
 local function ResetRun()
 	run.started = nil       -- GetTime() the clock started
 	run.armed = nil         -- waiting for the hero's first step
@@ -83,8 +88,7 @@ local function ResetRun()
 	run.dealt = 0
 	run.taken = 0
 
-	critBest, critStats, critColor, critSeen = {}, {}, {}, 0
-	hitStats = {}
+	ResetCrits()
 end
 ResetRun()
 
@@ -213,7 +217,7 @@ local function Title(text, tip)
 	return handle
 end
 
-local runTitle = Title("This Run", "Counted by the addon from the combat log. The clock does not stop while you pick a card.")
+local runTitle = Title("This Run", "Counted by the addon from the combat log. A new run starts it over.")
 local critTitle = Title("Biggest Crits", "Each ability's biggest critical strike this run. Hover an ability for more.")
 
 local reset = CreateFrame("Button", nil, panel)
@@ -228,14 +232,14 @@ reset.text:SetTextColor(0.6, 0.6, 0.6)
 reset:SetScript("OnEnter", function()
 	this.text:SetTextColor(1, 1, 1)
 	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
-	GameTooltip:SetText("Clears the run's numbers and the crits.", 1, 1, 1)
+	GameTooltip:SetText("Clears the crits. The run's numbers stay.", 1, 1, 1)
 	GameTooltip:Show()
 end)
 reset:SetScript("OnLeave", function()
 	this.text:SetTextColor(0.6, 0.6, 0.6)
 	GameTooltip:Hide()
 end)
-reset:SetScript("OnClick", function() ResetRun() end)
+reset:SetScript("OnClick", function() ResetCrits() end)
 
 -- A row: a label and a value in one color, on a faint wash of that color, over
 -- a rule of it.
@@ -484,9 +488,14 @@ local function Draw()
 		critTitle:ClearAllPoints()
 		critTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, y)
 		critTitle:Show()
+		-- Reset clears this section only, so it sits on its title.
+		reset:ClearAllPoints()
+		reset:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, y - 4)
+		reset:Show()
 		y = y - TITLE_HEIGHT
 	else
 		critTitle:Hide()
+		reset:Hide()
 	end
 	for index = 1, CRIT_ROWS do
 		local row = critRows[index]
@@ -566,7 +575,7 @@ function SurvivorUI_ToggleRun()
 end
 
 function SurvivorUI_ResetRun()
-	ResetRun()
+	ResetCrits()
 end
 
 ------------------------------------------------------------------------------
