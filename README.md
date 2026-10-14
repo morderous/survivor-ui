@@ -85,6 +85,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v1.8, 2026-10-14
+
+**Survivor UI**
+- Lair guardians really are counted as guardians now. A guardian is an elite to the client and dies under its elite's name, so v1.7 still counted it as an elite. The run panel now counts it from the game's own chat line, "is slain! Its lair yields treasure", and takes back the elite its death counted.
+
 ### v1.7, 2026-10-14
 
 **Survivor UI**
