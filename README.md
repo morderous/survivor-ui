@@ -48,6 +48,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - A flat, dark tooltip with smaller type.
 - Friz Quadrata on every piece of interface text.
 - Quick damage numbers over the enemies, in place of the game's own.
+- A run panel above the chat: the run so far (time survived, level, kills, elites, guardians and bosses slain, damage dealt, damage per second, damage taken) and the biggest critical strike of each ability, live.
 
 Left click a frame to target it, right click for its menu. Alt-drag either frame to move the whole row.
 
@@ -57,6 +58,8 @@ Commands:
 |---|---|
 | `/sui damage` | Switches between the quick damage numbers (the default) and the game's own |
 | `/sui chat 12` | Chat text size, 8 to 18 (default 12) |
+| `/sui run` | Shows or hides the run panel |
+| `/sui run reset` | Clears the run panel's numbers |
 
 ## Install
 
@@ -74,12 +77,22 @@ These come from the 1.12 client and cannot be worked around by an addon:
 - Debuffs can only be read from the current target, so only the target's plate shows them.
 - A debuff's time left is only known for the hero's own buffs and debuffs.
 - The game's own panels (the clock, kills, gold, the damage window) are drawn by the game, not by its addon interface, and cannot be moved from here.
+- The game does not share its clock or its pauses with addons. The run panel's time is the addon's own count and can drift from the game's; hover it for the rules it follows.
 
 If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v1.5, 2026-10-13
+
+**Survivor UI**
+- A run panel above the chat, in two sections. This Run: time survived, level, kills, elites, guardians and bosses slain, damage dealt, damage per second and damage taken, each in its own color. Biggest Crits: every ability that has crit, in its own color, with its biggest critical strike.
+- Hover an ability for its last, average and smallest crit, and its average and last normal hit.
+- The time starts at the hero's first step, as the game's does, and pauses when the game does (Escape, the level-up cards). The addon is not told about a pause, so it reads one from 1.5 seconds with no movement and no combat; hover the time for the details.
+- Hold Alt and drag a section title to move the panel. Reset clears it; a new run clears it too.
+- `/sui run` shows or hides the panel, `/sui run reset` clears it.
 
 ### v1.4, 2026-10-13
 
