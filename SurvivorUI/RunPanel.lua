@@ -23,7 +23,7 @@ local CRIT_ROWS = 10
 
 -- The game's elites and bosses, by name: three elites and five bosses a zone.
 -- A lair guardian is one of the zone's elites, made stronger, under the same
--- name: it is counted from the game's lair line in the chat, see LairCleared.
+-- name and as an elite to the client: the two are counted together.
 local ELITES = {
 	"Kobold Taskmaster", "Gruff Swiftbite", "Bellygrub",
 	"Nightbane Worgen Alpha", "Carrion Recluse", "Flesh Eating Abomination",
@@ -84,7 +84,6 @@ local function ResetRun()
 	run.ended = nil         -- GetTime() the run was over
 	run.kills = 0
 	run.elites = 0
-	run.guardians = 0
 	run.bosses = 0
 	run.dealt = 0
 	run.taken = 0
@@ -170,8 +169,7 @@ local RUN_ROWS = {
 	{ key = "time",      label = "Survived",        color = { 1.00, 0.82, 0.00 } },
 	{ key = "level",     label = "Level",           color = { 0.40, 1.00, 0.40 } },
 	{ key = "kills",     label = "Kills",           color = { 0.92, 0.92, 0.92 } },
-	{ key = "elites",    label = "Elites slain",    color = { 1.00, 0.55, 0.10 } },
-	{ key = "guardians", label = "Guardians slain", color = { 0.20, 0.75, 0.95 } },
+	{ key = "elites",    label = "Elites & guardians slain", color = { 1.00, 0.55, 0.10 } },
 	{ key = "bosses",    label = "Bosses slain",    color = { 0.72, 0.32, 1.00 } },
 	{ key = "dealt",     label = "Damage dealt",    color = { 1.00, 0.76, 0.08 } },
 	{ key = "dps",       label = "Damage / sec",    color = { 0.95, 0.60, 0.20 } },
@@ -458,7 +456,6 @@ local function Draw()
 		runRows.level.value:SetText(UnitLevel("player") or 1)
 		runRows.kills.value:SetText(run.kills)
 		runRows.elites.value:SetText(run.elites)
-		runRows.guardians.value:SetText(run.guardians)
 		runRows.bosses.value:SetText(run.bosses)
 		runRows.dealt.value:SetText(Short(run.dealt))
 		runRows.dps.value:SetText(seconds > 0 and Short(run.dealt / seconds) or 0)
@@ -520,54 +517,6 @@ local function Draw()
 	return running or table.getn(sorted) > 0
 end
 
--- A lair guardian dies under its elite's name, and as an elite to the client,
--- so its death line counts it as one. The game says so in the chat, though,
--- without a name: "is slain! Its lair yields treasure ...". That line counts
--- the guardian and takes back the elite its death line counted, within a few
--- seconds either way. "<name> yells: Who dares enter my lair?" names the
--- guardians, to pick the right kill when several elites die together.
-local GUARDIAN_MEMORY = 5
-local guardianNames = {}        -- [name] = true once it has yelled from a lair
-local eliteKills = {}           -- recent elite kills: { name, at, taken }
-local lairPending               -- GetTime() of a lair line still waiting for its death line
-
-local function LairCleared()
-	run.guardians = run.guardians + 1
-	local now = GetTime()
-	-- The newest recent elite kill, a known guardian's if there is one.
-	local pick
-	for index = table.getn(eliteKills), 1, -1 do
-		local kill = eliteKills[index]
-		if not kill.taken and now - kill.at <= GUARDIAN_MEMORY then
-			if guardianNames[kill.name] then
-				pick = kill
-				break
-			end
-			pick = pick or kill
-		end
-	end
-	if pick then
-		pick.taken = true
-		run.elites = run.elites - 1
-	else
-		lairPending = now
-	end
-end
-
--- An elite's death: false when it is the guardian a lair line already counted.
-local function EliteDied(name)
-	local now = GetTime()
-	if lairPending and now - lairPending <= GUARDIAN_MEMORY
-		and (guardianNames[name] or not next(guardianNames)) then
-		lairPending = nil
-		return false
-	end
-	table.insert(eliteKills, { name = name, at = now })
-	while table.getn(eliteKills) > 20 do
-		table.remove(eliteKills, 1)
-	end
-	return true
-end
 -- The game's own clock starts when the hero first moves, so this one does
 -- too: from "Move to begin" the hero's map position is watched for a change.
 local function WatchFirstStep()
@@ -764,9 +713,6 @@ local function Death(message)
 
 	run.kills = run.kills + 1
 	local kind = kindByName[name]
-	if kind == "elites" and not EliteDied(name) then
-		kind = nil
-	end
 	if kind then
 		run[kind] = run[kind] + 1
 	end
@@ -793,22 +739,12 @@ for _, group in pairs({ HIT_EVENTS, DEALT_EVENTS, TAKEN_EVENTS }) do
 end
 events:RegisterEvent("CHAT_MSG_COMBAT_HOSTILE_DEATH")
 events:RegisterEvent("CHAT_MSG_SYSTEM")
-events:RegisterEvent("CHAT_MSG_MONSTER_EMOTE")
-events:RegisterEvent("CHAT_MSG_MONSTER_YELL")
 -- Nothing to tally in a miss, but it is the world moving: see Alive.
 events:RegisterEvent("CHAT_MSG_COMBAT_SELF_MISSES")
 events:RegisterEvent("CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES")
 events:SetScript("OnEvent", function()
 	local message = arg1 or ""
 
-	-- "is slain! Its lair yields treasure ...", wherever the game puts it.
-	if string.find(message, "is slain! Its lair", 1, true) then
-		LairCleared()
-	end
-	-- "<name> yells: Who dares enter my lair?"
-	if event == "CHAT_MSG_MONSTER_YELL" and arg2 and string.find(message, "enter my lair", 1, true) then
-		guardianNames[arg2] = true
-	end
 
 	if event == "CHAT_MSG_SYSTEM" then
 		-- "<hero> enters <zone>. Move to begin.": a new run.

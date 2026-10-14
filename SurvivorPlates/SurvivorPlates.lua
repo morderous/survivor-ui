@@ -1,7 +1,8 @@
 -- Survivor Plates: nameplates in the manner of Plater, for Azeroth Survivors.
 -- A flat health bar on a dark backing with a thin black border, the name above
 -- it, the unit's health on it, an execute-range marker, and a highlighted
--- target with its debuffs. Elites, guardians and bosses get larger plates in their own colors.
+-- target with its debuffs. Elites and bosses get larger plates in their own colors;
+-- a lair guardian is an elite to the client, under its elite's name, and wears the elite's.
 --
 -- The 1.12 client owns the nameplate frames: they are unnamed children of
 -- WorldFrame, recognized by their border texture. Each one is skinned once,
@@ -29,7 +30,6 @@ local EXECUTE_RANGE = 0.30      -- the game's execute effects start below this s
 local KINDS = {
 	normal   = { width = 100, height = 9,  nameSize = 9,  color = { 0.84, 0.20, 0.20 } },
 	elite    = { width = 130, height = 11, nameSize = 11, color = { 1.00, 0.55, 0.10 } },
-	guardian = { width = 150, height = 12, nameSize = 12, color = { 0.20, 0.75, 0.95 } },
 	boss     = { width = 170, height = 14, nameSize = 13, color = { 0.72, 0.32, 1.00 } },
 }
 local EXECUTE_COLOR = { 1.00, 0.86, 0.25 }
@@ -81,10 +81,6 @@ end
 local function Classify(name)
 	if not name then
 		return "normal"
-	end
-	-- A guardian's plate reads "<name> (Guardian)".
-	if string.find(name, "(Guardian)", 1, true) then
-		return "guardian"
 	end
 	return kindByName[name] or "normal"
 end

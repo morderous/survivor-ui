@@ -18,7 +18,7 @@ Nameplates.
 
 - A flat health bar with a thin border, the name above it and the unit's health on it.
 - A marker at 30% health, where execute effects start. Below it the bar turns yellow.
-- Elites, guardians and bosses get larger plates in their own colors.
+- Elites and bosses get larger plates in their own colors. A lair guardian wears its elite's plate.
 - The target's plate shows its debuffs and their stacks.
 
 Commands:
@@ -48,7 +48,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - A flat, dark tooltip with smaller type. An ability's tooltip is laid out again.
 - Friz Quadrata on every piece of interface text.
 - Quick damage numbers over the enemies, and the hits the hero takes in red, falling over the hero, in place of the game's own.
-- A run panel above the chat: the run so far (time survived, level, kills, elites, guardians and bosses slain, damage dealt, damage per second, damage taken) and the biggest critical strike of each ability, live.
+- A run panel above the chat: the run so far (time survived, level, kills, elites and guardians slain, bosses slain, damage dealt, damage per second, damage taken) and the biggest critical strike of each ability, live.
 
 Left click a frame to target it, right click for its menu. Alt-drag either frame to move the whole row.
 
@@ -77,6 +77,7 @@ These come from the 1.12 client and cannot be worked around by an addon:
 - Debuffs can only be read from the current target, so only the target's plate shows them.
 - A debuff's time left is only known for the hero's own buffs and debuffs.
 - The game's own panels (the clock, kills, gold, the damage window) are drawn by the game, not by its addon interface, and cannot be moved from here.
+- A lair guardian is an elite to the client, under its elite's name, so its plate is an elite's and the run panel counts elites and guardians together.
 - The game does not share its clock or its pauses with addons. The run panel's time is the addon's own count and can drift from the game's; hover it for the rules it follows.
 
 If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
@@ -84,6 +85,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v1.8.1, 2026-10-14
+
+**Survivor Plates**
+- The separate guardian plate is gone: it never showed, since a guardian reaches the client under its elite's name. Guardians wear the elite's plate, as they already did.
+
+**Survivor UI**
+- Elites and guardians are counted together in the run panel, as "Elites & guardians slain". The game tells addons nothing that sets a guardian apart from its elite, and the chat line v1.8 relied on did not reach the addon. They can be split again once the game marks its guardians.
 
 ### v1.8, 2026-10-14
 
