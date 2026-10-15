@@ -280,7 +280,8 @@ namespace SurvivorInstaller
                 {
                     Dictionary<string, object> a = (Dictionary<string, object>)asset;
                     string name = (string)a["name"];
-                    if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    // The addons' zip, "SurvivorUI-v2.4.zip", not the installer's own.
+                    if (Regex.IsMatch(name, @"^SurvivorUI-v[\d.]+\.zip$", RegexOptions.IgnoreCase))
                     {
                         release.ZipName = name;
                         release.ZipUrl = (string)a["browser_download_url"];
