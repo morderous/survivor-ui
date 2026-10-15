@@ -231,7 +231,7 @@ end)
 
 local SCALED = {
 	"SurvivorUITracker", "SurvivorUIRun", "SurvivorUIMeter", "SurvivorUIBosses",
-	"SurvivorUILoot", "SurvivorUICritTip",
+	"SurvivorUILoot", "SurvivorUICritTip", "SurvivorUICrits",
 }
 
 -- A moved panel keeps its place as a point in its own scale's units: the same
@@ -244,6 +244,7 @@ local SAVED = {
 	SurvivorUIMeter = { "meterRight", "meterBottom", "BOTTOMRIGHT" },
 	SurvivorUIBosses = { "bossLeft", "bossTop", "TOPLEFT" },
 	SurvivorUILoot = { "lootLeft", "lootTop", "TOPLEFT" },
+	SurvivorUICrits = { "critsLeft", "critsBottom", "BOTTOMLEFT" },
 }
 
 local function ApplyScale(from)
@@ -295,7 +296,7 @@ scaler:SetScript("OnEvent", function() ApplyScale() end)
 local PLACES = {
 	"rowX", "rowY", "runLeft", "runTop", "runBottom", "trackerRight", "trackerTop",
 	"meterRight", "meterBottom", "bossLeft", "bossTop", "lootLeft", "lootTop",
-	"chatLeft", "chatBottom", "mapRight", "mapTop", "tipRight", "tipBottom",
+	"chatLeft", "chatBottom", "mapRight", "mapTop", "tipRight", "tipBottom", "critsLeft", "critsBottom",
 }
 
 -- A new layout starts everyone from the first places once: the pieces moved

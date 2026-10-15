@@ -28,9 +28,9 @@
 -- frame to move the whole row.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
--- The interface's face, shared with the addon's other files. Barlow Condensed
--- comes with the addon (Media, SIL Open Font License). A player's own
--- Expressway, dropped in SurvivorUI\Fonts, wins over it; it may not be shipped.
+-- The interface's face, shared with the addon's other files: Friz Quadrata, the
+-- game's own, unless a face is dropped in: Expressway in SurvivorUI\Fonts, or
+-- Barlow Condensed in SurvivorUI\Media (neither is shipped).
 -- A face that does not load leaves a font string without one, so each is tried
 -- on a probe first, and Friz Quadrata, the game's own, is the last resort.
 local FACES = {
@@ -221,7 +221,10 @@ local function UnitFrame(unit, name, side, dropdown)
 	frame.power:SetPoint("TOP", frame.health, "BOTTOM", 0, -1)
 
 	frame.name = Text(frame.health, 10, "LEFT", 5, 0)
-	frame.name:SetWidth(FRAME_WIDTH - 82)
+	-- The player's health reads "524 | 100%", a target's only "67%": the target's
+	-- name gets the room the numbers leave.
+	frame.nameRoom = unit == "player" and FRAME_WIDTH - 82 or FRAME_WIDTH - 44
+	frame.name:SetWidth(frame.nameRoom)
 	frame.name:SetHeight(12)
 	frame.name:SetJustifyH("LEFT")
 	frame.name:SetTextColor(1, 1, 1)
@@ -264,7 +267,18 @@ local function UpdateUnitFrame(frame)
 	local r, g, b = HealthColor(unit)
 	frame.health:SetValue(share)
 	frame.health:SetStatusBarColor(r, g, b, 1)
-	frame.name:SetText(UnitName(unit))
+	-- A name too long for its room goes by its first word, not cut short.
+	local name = UnitName(unit) or ""
+	if name ~= frame.shownName then
+		frame.shownName = name
+		frame.name:SetWidth(0)
+		frame.name:SetText(name)
+		if frame.name:GetStringWidth() > frame.nameRoom then
+			local _, _, first = string.find(name, "^(%S+)")
+			frame.name:SetText(first or name)
+		end
+		frame.name:SetWidth(frame.nameRoom)
+	end
 
 	if UnitIsDead(unit) or UnitIsGhost(unit) then
 		frame.value:SetText("Dead")
@@ -965,6 +979,16 @@ local function PlatesNamed(name)
 end
 
 -- target is nil for a hit the hero took: that number rises over the hero, in red.
+-- A pooled number changes size and outline only when it must: setting the same
+-- face again still costs the engine a font lookup, many times a second.
+local function Face(text, size, flags)
+	local key = size..flags
+	if text.faceKey ~= key then
+		text.faceKey = key
+		text:SetFont(FONT, size, flags)
+	end
+end
+
 local function SpawnDamage(target, amount, crit, periodic)
 	local text = DamageText()
 	if not text then
@@ -999,18 +1023,18 @@ local function SpawnDamage(target, amount, crit, periodic)
 	end
 
 	if not target then
-		text:SetFont(FONT, crit and CRIT_POP_SIZE or 14, crit and "THICKOUTLINE" or "OUTLINE")
+		Face(text, crit and CRIT_POP_SIZE or 14, crit and "THICKOUTLINE" or "OUTLINE")
 		text:SetTextColor(1, 0.22, 0.22)
 		amount = "-"..amount
 	elseif crit then
 		-- Lands oversized, then settles: see the update below.
-		text:SetFont(FONT, CRIT_POP_SIZE, "THICKOUTLINE")
+		Face(text, CRIT_POP_SIZE, "THICKOUTLINE")
 		text:SetTextColor(1, 0.76, 0.08)
 	elseif periodic then
-		text:SetFont(FONT, 12 + FONT_BUMP, "OUTLINE")
+		Face(text, 12 + FONT_BUMP, "OUTLINE")
 		text:SetTextColor(0.80, 0.80, 0.80)
 	else
-		text:SetFont(FONT, 14 + FONT_BUMP, "OUTLINE")
+		Face(text, 14 + FONT_BUMP, "OUTLINE")
 		text:SetTextColor(1, 1, 1)
 	end
 	text:SetText(amount)
@@ -1045,7 +1069,7 @@ damageLayer:SetScript("OnUpdate", function()
 			local t = text.age / text.life
 			if text.crit and not text.popped and text.age >= CRIT_POP_TIME then
 				text.popped = true
-				text:SetFont(FONT, CRIT_SIZE, "THICKOUTLINE")
+				Face(text, CRIT_SIZE, "THICKOUTLINE")
 			end
 			if t >= 1 then
 				text.live = nil
@@ -1204,6 +1228,14 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleHover then
 			SurvivorUI_ToggleHover()
 		end
+	elseif msg == "loot" then
+		if SurvivorUI_ToggleLoot then
+			SurvivorUI_ToggleLoot()
+		end
+	elseif msg == "crits" then
+		if SurvivorUI_ToggleCrits then
+			SurvivorUI_ToggleCrits()
+		end
 	elseif msg == "center" then
 		if SurvivorUI_CenterRow then
 			SurvivorUI_CenterRow()
@@ -1221,6 +1253,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the bar and the game's own box")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui run  shows or hides the run panel (the run's numbers and biggest crits); /sui run reset clears the crits")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tracker  shows or hides the run tracker under the minimap (the clock and the bosses)")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui crits  shows or hides the Biggest Crits box (off by default)")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui hover  switches the white outline around what the mouse is on")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui scale 0.85  sizes the panels, 0.6 to 1.4, for smaller screens")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui meter  switches between the addon's damage meter, with the crits, and the game's own")

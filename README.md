@@ -17,6 +17,8 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui` | Lists every command in the chat |
 | `/sui layout` | Puts every piece back in its first place |
 | `/sui hover` | The white outline around what the mouse is on: on or off |
+| `/sui loot` | Loot list: on or off |
+| `/sui crits` | Biggest Crits box: on or off (off by default) |
 | `/sui scale 0.85` | Size of the panels (tracker, run panel, meter, boss bars), 0.6 to 1.4. For smaller screens |
 | `/sui center` | Puts the middle block (frames and buttons) back under the hero |
 | `/sui tracker` | Run tracker under the minimap: on or off |
@@ -70,13 +72,15 @@ Unit frames and the action bar, in one centered row under the hero:
 - A flat, dark chat panel without the scroll buttons, in 12 point text. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
 - A flat character pane: the hero and the item slots on the left, the run's numbers in titled sections on the right.
 - A flat, dark tooltip with smaller type. An ability's tooltip is laid out again.
-- Barlow Condensed on every piece of interface text, chat and nameplates included (see Font below).
+- Friz Quadrata on every piece of interface text, chat and nameplates included, or a face of your own (see Font below).
 - Quick damage numbers over the enemies, and the hits the hero takes in red, falling over the hero, in place of the game's own.
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the game's own clock.
 - A run panel under the run tracker: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
 - A damage meter under the run panel, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health, at any distance. Click one to target it.
 - Kills, gold and the next cache's price on a line under the experience bar, in place of the game's own box.
+- A loot list in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came.
+- A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike.
 - A thin white outline around whatever the mouse is on: a button, a bar, a buff. The nameplates, the chat, the minimap and the run tracker go without.
 
 Left click a frame to target it, right click for its menu. Hold Alt to outline the whole middle block (frames, buttons, experience bar, kills and gold, buffs) and drag it anywhere; the place is kept. `/sui center` puts it back.
@@ -93,6 +97,8 @@ Commands:
 | `/sui center` | Puts the middle block back under the hero |
 | `/sui layout` | Puts every piece back in its first place |
 | `/sui hover` | The white outline around what the mouse is on: on or off |
+| `/sui loot` | Loot list: on or off |
+| `/sui crits` | Biggest Crits box: on or off (off by default) |
 | `/sui scale 0.85` | Size of the panels (tracker, run panel, meter, boss bars), 0.6 to 1.4. For smaller screens |
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
 | `/sui bosses` | Switches the boss bars on (the default) or off |
@@ -107,9 +113,7 @@ To see them, type `/sui meter`: the addon's meter steps aside and the game's com
 
 ### Font
 
-The interface uses **Barlow Condensed**, which comes with the addon (SIL Open Font License, in `SurvivorUI\Media`).
-
-Prefer **Expressway**, the face of many retail UIs? It may not be shipped with the addon, but if you have it (it comes with EllesmereUI and ElvUI, for one), copy it as `SurvivorUI\Fonts\Expressway.ttf` and restart the game: the addon picks it up on its own. If neither loads, the game's Friz Quadrata is used.
+The interface uses the game's own **Friz Quadrata**. Prefer **Expressway**, the face of many retail UIs? It cannot be shipped with the addon, but if you have it (it comes with EllesmereUI and ElvUI, for one), copy it as `SurvivorUI\Fonts\Expressway.ttf` and restart the game: the addon picks it up on its own.
 
 ### The game's addon API
 
@@ -142,6 +146,16 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v2.3, 2026-10-15
+
+**Survivor UI**
+- **Fixed stuttering since v2.1:** the interface is back on the game's own Friz Quadrata, and the damage numbers no longer set their font again on every hit. Want Expressway? Drop your own in `SurvivorUI\Fonts` (see Font).
+- **Loot list** in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came. `/sui loot`
+- **Biggest Crits box** is back as an option, off by default: `/sui crits`.
+- The damage meter's card shows the spell's rank, its cooldown and when it is ready again, handy while the cards are up and the action bar is not.
+- An enemy's name in the target frame has more room, and goes by its first word when it still does not fit, instead of being cut short.
+- No hover outline on the hero in the character pane, nor around whole panels (only their lines).
+
 ### v2.2.2, 2026-10-15
 
 **Survivor UI**
@@ -160,6 +174,8 @@ Newest first. The version is also in each addon's `.toc`, so it shows in the gam
 - The damage meter's Reset works: the meter starts over from that moment (damage, damage per second and shares) and the crits are cleared. The run panel keeps the whole run.
 - More colors in the damage meter: twelve distinct ones, procs included, so neighbours never look alike. Procs keep their "proc" tag.
 - The run tracker shows when each boss fell, beside when it came: `4:00 / 5:32`.
+- A loot list in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came.
+- A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike.
 - A thin white outline around whatever the mouse is on: a button, a bar, a buff. `/sui hover` switches it off.
 
 ### v2.1, 2026-10-15

@@ -35,8 +35,24 @@ end
 
 local SKIP = {}                 -- frames that are the background, not an item
 
+-- The addon's panels themselves: their lines get the outline, the whole box
+-- does not.
+local PANELS = {
+	SurvivorUILoot = true, SurvivorUIMeter = true, SurvivorUIRun = true,
+	SurvivorUICrits = true, SurvivorUIBosses = true,
+}
+
 local function Wanted(frame)
 	if not frame or SKIP[frame] or not frame:IsVisible() then
+		return false
+	end
+	-- A 3D model (the hero in the character pane) is a picture, not an item.
+	local kind = frame.GetObjectType and frame:GetObjectType()
+	if kind == "PlayerModel" or kind == "Model" or kind == "DressUpModel" then
+		return false
+	end
+	local ownName = frame.GetName and frame:GetName()
+	if ownName and PANELS[ownName] then
 		return false
 	end
 	-- Nameplates hang from the world, not the interface; the chat (its window,

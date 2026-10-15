@@ -299,8 +299,8 @@ local RUN_TIP_OWN = "Counted by the addon from the combat log. A new run starts 
 local runTitle = Title("This Run", RUN_TIP_OWN)
 -- A row: a label and a value in one color, on a faint wash of that color, over
 -- a rule of it.
-local function MakeRow(valueSize, valueFlags)
-	local row = CreateFrame("Frame", nil, panel)
+local function MakeRow(valueSize, valueFlags, parent)
+	local row = CreateFrame("Frame", nil, parent or panel)
 	row:SetWidth(WIDTH)
 	row:SetHeight(ROW_HEIGHT)
 
@@ -527,13 +527,39 @@ end
 
 local critHovered = nil
 
+-- The spell's live entry in the game's list (AZS_SPELLS): its rank and its
+-- cooldown. The list names spells by key ("holy_wrath"), the meter and the
+-- combat log by name ("Holy Wrath").
+local SPELL_KEYS = {
+	["shadow word: pain"] = "sw_pain", ["power word: shield"] = "pw_shield",
+	["demoralizing shout"] = "demo_shout", ["hunter's mark"] = "hunters_mark",
+}
+
+local function SpellEntry(ability)
+	if not (ability and AZS_SPELLS) then
+		return nil
+	end
+	local lower = string.lower(ability)
+	local key = SPELL_KEYS[lower] or string.gsub(string.gsub(lower, "[^%a ]", ""), " ", "_")
+	for index = 1, table.getn(AZS_SPELLS) do
+		local entry = AZS_SPELLS[index]
+		if Field(entry, "key", 1) == key then
+			return entry
+		end
+	end
+end
+
+local function Seconds1(value)
+	return string.format("%.1f sec", value)
+end
+
 local function CritTooltip(row)
 	local ability = row.ability
 	local stats = ability and critStats[ability]
 	local hits = ability and hitStats[ability]
 	-- Its line in the game's damage meter, where the game shares it.
 	local meter = ability and MeterLine(ability)
-	if not (stats or hits or meter) then
+	if not (stats or hits or meter or SpellEntry(ability)) then
 		critTip:Hide()
 		return
 	end
@@ -550,6 +576,15 @@ local function CritTooltip(row)
 		TipLine(count, kind, label, value, color)
 	end
 
+	-- Its rank and cooldown, from the game: the action bar's own count is gone
+	-- while the cards are up.
+	local spell = SpellEntry(ability)
+	if spell then
+		local left, full = Num(Field(spell, "cd", 4)), Num(Field(spell, "cdmax", 5))
+		Add("head", "Spell", "Rank "..Num(Field(spell, "rank", 3)))
+		Add("row", "Cooldown", full > 0 and Seconds1(full) or "none")
+		Add("row", "Ready in", left > 0.05 and Seconds1(left) or "ready")
+	end
 	if meter then
 		Add("head", "Damage done", Short(Num(meter.dmg)))
 		Add("row", "Share of all", math.floor(Num(meter.share) * 100 + 0.5).."%")
@@ -583,7 +618,11 @@ local function CritTooltip(row)
 	-- Beside the whole window the row belongs to, top edges together, on its
 	-- left: the right column sits at the screen's edge.
 	critTip:ClearAllPoints()
-	critTip:SetPoint("TOPRIGHT", row.cardFrame or row, "TOPLEFT", -6, 0)
+	if row.cardRight then
+		critTip:SetPoint("TOPLEFT", row.cardFrame or row, "TOPRIGHT", 6, 0)
+	else
+		critTip:SetPoint("TOPRIGHT", row.cardFrame or row, "TOPLEFT", -6, 0)
+	end
 	critTip:Show()
 end
 
@@ -682,6 +721,134 @@ local function Draw()
 	return running
 end
 
+------------------------------------------------------------------------------
+-- Biggest Crits: the old box, on request. Every ability that has crit, in its
+-- own color, with its biggest critical strike; hover one for its card. Off by
+-- default: /sui crits shows it. Above the chat, growing upward; Alt moves it.
+
+local CRIT_ROWS = 10
+
+local critBox = CreateFrame("Frame", "SurvivorUICrits", UIParent)
+critBox:SetWidth(WIDTH + 16)
+critBox:SetHeight(TITLE_HEIGHT + 8)
+if ChatFrame1 then
+	critBox:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", -6, 30)
+else
+	critBox:SetPoint("LEFT", UIParent, "LEFT", 30, 60)
+end
+critBox:SetBackdrop({ bgFile = FLAT })
+critBox:SetBackdropColor(0.04, 0.04, 0.07, 0.55)
+critBox:SetMovable(true)
+critBox:Hide()
+
+local function CritsShown()
+	return SurvivorUIDB and SurvivorUIDB.critBox == true
+end
+
+local function SaveCritBox()
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.critsLeft = math.floor(critBox:GetLeft() + 0.5)
+	SurvivorUIDB.critsBottom = math.floor(critBox:GetBottom() + 0.5)
+end
+
+local function RestoreCritBox()
+	critBox:ClearAllPoints()
+	if SurvivorUIDB and SurvivorUIDB.critsLeft then
+		critBox:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", SurvivorUIDB.critsLeft, SurvivorUIDB.critsBottom)
+	elseif ChatFrame1 then
+		critBox:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", -6, 30)
+	else
+		critBox:SetPoint("LEFT", UIParent, "LEFT", 30, 60)
+	end
+end
+
+critBox.title = critBox:CreateFontString(nil, "OVERLAY")
+critBox.title:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
+critBox.title:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -8)
+critBox.title:SetTextColor(1, 0.82, 0)
+critBox.title:SetText("Biggest Crits")
+
+local critReset = CreateFrame("Button", nil, critBox)
+critReset:SetWidth(40)
+critReset:SetHeight(14)
+critReset:SetPoint("TOPRIGHT", critBox, "TOPRIGHT", -8, -8)
+critReset.text = critReset:CreateFontString(nil, "OVERLAY")
+critReset.text:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+critReset.text:SetPoint("RIGHT", critReset, "RIGHT", 0, 0)
+critReset.text:SetText("Reset")
+critReset.text:SetTextColor(0.6, 0.6, 0.6)
+critReset:SetScript("OnEnter", function()
+	this.text:SetTextColor(1, 1, 1)
+	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
+	GameTooltip:SetText("Clears the crits.", 1, 1, 1)
+	GameTooltip:Show()
+end)
+critReset:SetScript("OnLeave", function()
+	this.text:SetTextColor(0.6, 0.6, 0.6)
+	GameTooltip:Hide()
+end)
+critReset:SetScript("OnClick", function() ResetCrits() end)
+
+local critRows = {}
+for index = 1, CRIT_ROWS do
+	local row = MakeRow(14, "THICKOUTLINE", critBox)
+	row.label:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	row:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -TITLE_HEIGHT - 4 - (index - 1) * ROW_HEIGHT)
+	-- The box sits on the left of the screen: its cards open on its right.
+	row.cardFrame = critBox
+	row.cardRight = true
+	row:EnableMouse(true)
+	row:SetScript("OnEnter", function()
+		critHovered = this
+		CritTooltip(this)
+	end)
+	row:SetScript("OnLeave", function()
+		critHovered = nil
+		critTip:Hide()
+	end)
+	row:Hide()
+	critRows[index] = row
+end
+
+local function DrawCrits()
+	if not CritsShown() then
+		critBox:Hide()
+		return
+	end
+	local sorted = {}
+	for ability in pairs(critBest) do
+		table.insert(sorted, ability)
+	end
+	table.sort(sorted, function(a, b) return critBest[a] > critBest[b] end)
+	for index = 1, CRIT_ROWS do
+		local row = critRows[index]
+		local ability = sorted[index]
+		if ability then
+			row.ability = ability
+			row.label:SetText(ability)
+			row.value:SetText(Short(critBest[ability]))
+			Paint(row, critColor[ability])
+			row:Show()
+		else
+			row.ability = nil
+			row:Hide()
+		end
+	end
+	local count = math.min(CRIT_ROWS, table.getn(sorted))
+	if count == 0 then
+		critBox:Hide()
+		return
+	end
+	critBox:SetHeight(TITLE_HEIGHT + 8 + count * ROW_HEIGHT)
+	critBox:Show()
+end
+
+function SurvivorUI_ToggleCrits()
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.critBox = not CritsShown()
+	DrawCrits()
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: Biggest Crits box "..(SurvivorUIDB.critBox and "on (it shows once something crits)." or "off."))
+end
 -- The game's own clock starts when the hero first moves, so this one does
 -- too: from "Move to begin" the hero's map position is watched for a change.
 local function WatchFirstStep()
@@ -740,16 +907,23 @@ ticker:SetScript("OnUpdate", function()
 	else
 		panel:Hide()
 	end
+	DrawCrits()
+	-- An open card keeps its cooldown and damage current.
+	if critHovered and critTip:IsVisible() then
+		CritTooltip(critHovered)
+	end
 end)
 
 local placer = CreateFrame("Frame")
 placer:RegisterEvent("PLAYER_ENTERING_WORLD")
 placer:SetScript("OnEvent", function()
 	RestorePanel()
+	RestoreCritBox()
 end)
 
 if SurvivorUI_RegisterMover then
 	SurvivorUI_RegisterMover(panel, "This Run", SavePanel, nil, RestorePanel)
+	SurvivorUI_RegisterMover(critBox, "Biggest Crits", SaveCritBox, nil, RestoreCritBox)
 end
 
 function SurvivorUI_ToggleRun()
