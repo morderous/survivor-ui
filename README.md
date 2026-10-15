@@ -169,6 +169,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v2.7.1, 2026-10-15
+
+**Installer**
+- Recommends where the game should be: `AzerothSurvivors.exe` inside the game's `benilla-config` folder, usually `C:\Git\wenilla\benilla-config`. The hint sits under the folder box, "Find game..." opens there, and picking the game anywhere else asks first, showing where the addons would go.
+
 ### v2.7, 2026-10-15
 
 Built on the game's new addon API: healing and boss meters, debuffs, caches and lairs.

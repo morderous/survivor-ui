@@ -51,6 +51,8 @@ namespace SurvivorInstaller
     {
         const string Repo = "morderous/survivor-ui";
         const string GameExe = "AzerothSurvivors.exe";
+        // Where the game usually is: its exe inside the benilla-config folder.
+        const string CommonGameFolder = @"C:\Git\wenilla\benilla-config";
         static readonly string[] AddonFolders = { "SurvivorUI", "SurvivorPlates" };
 
         static readonly Color Back = Color.FromArgb(18, 18, 24);
@@ -136,15 +138,24 @@ namespace SurvivorInstaller
             browseButton.Click += delegate { BrowseForGame(); };
             Controls.Add(browseButton);
 
+            // Where the game should be, under the box.
+            Label hint = new Label();
+            hint.Text = "Recommended: " + GameExe + " inside the game's benilla-config folder, usually\n" + CommonGameFolder;
+            hint.Font = new Font("Segoe UI", 8f);
+            hint.ForeColor = Muted;
+            hint.AutoSize = true;
+            hint.Location = new Point(20, 158);
+            Controls.Add(hint);
+
             Label notesLabel = new Label();
             notesLabel.Text = "What's new";
             notesLabel.ForeColor = Muted;
             notesLabel.AutoSize = true;
-            notesLabel.Location = new Point(20, 166);
+            notesLabel.Location = new Point(20, 194);
             Controls.Add(notesLabel);
 
-            notesBox.Location = new Point(20, 186);
-            notesBox.Size = new Size(520, 196);
+            notesBox.Location = new Point(20, 214);
+            notesBox.Size = new Size(520, 168);
             notesBox.Multiline = true;
             notesBox.ReadOnly = true;
             notesBox.ScrollBars = ScrollBars.Vertical;
@@ -239,7 +250,19 @@ namespace SurvivorInstaller
             {
                 dialog.Title = "Pick the game: " + GameExe;
                 dialog.Filter = "Azeroth Survivors|" + GameExe + "|Programs|*.exe";
+                if (Directory.Exists(CommonGameFolder)) dialog.InitialDirectory = CommonGameFolder;
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                // The game belongs in its benilla-config folder; anywhere else, ask first.
+                string picked = Path.GetFileName(Path.GetDirectoryName(dialog.FileName));
+                if (!string.Equals(picked, "benilla-config", StringComparison.OrdinalIgnoreCase))
+                {
+                    DialogResult go = MessageBox.Show(this,
+                        "It is recommended that " + GameExe + " be inside the game's benilla-config folder, usually:\n\n" +
+                        CommonGameFolder + "\n\nThe addons would go to:\n" + AddonsFor(dialog.FileName) +
+                        "\n\nUse this place anyway?",
+                        "Survivor UI", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (go != DialogResult.Yes) return;
+                }
                 folderBox.Text = AddonsFor(dialog.FileName);
                 try { File.WriteAllText(ConfigPath, folderBox.Text); } catch { }
                 Status("AddOns folder set.");
