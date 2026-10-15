@@ -462,6 +462,17 @@ local function LayoutBar()
 		Hide(name)
 	end
 
+	-- The bar the client puts in the experience bar's place at the top level
+	-- (99), and the reputation bar: shown again by the stock code on every
+	-- update, so kept away for good.
+	for _, name in pairs({ "MainMenuBarMaxLevelBar", "ReputationWatchBar" }) do
+		local frame = getglobal(name)
+		if frame then
+			frame:Hide()
+			frame.Show = function() end
+		end
+	end
+
 	-- The experience bar: a thin flat strip under the whole row.
 	local xp = getglobal("MainMenuExpBar")
 	if xp then
@@ -1034,11 +1045,104 @@ local function Face(text, size, flags)
 	end
 end
 
-local function SpawnDamage(target, amount, crit, periodic)
+------------------------------------------------------------------------------
+-- Beside the hero (/sui damage side, or the option): the numbers scroll in
+-- columns by the hero instead of popping over the enemies. The damage dealt
+-- climbs on the left in white, its crits on the right in gold; under the hero
+-- the healing rises up to it, in green, and the damage
+-- taken falls from under the hero, in red. Hits that come together start a
+-- line apart, so the column reads.
+
+local SIDE_LIFE = 1.3
+local SIDE_RISE = 190
+local SIDE_GAP = 15             -- between numbers that start together
+-- The hits dealt in two columns, the plain ones left of the hero, the crits
+-- right of it, so one never covers the other.
+local SIDE_COLUMNS = {
+	-- Five grid squares out (the move mode's lines are 32 apart).
+	dealt = { x = -160, y = 0, rise = 1 },
+	crit = { x = 160, y = 0, rise = 1 },
+	-- Under the hero, kept above the action bar (some 150 below it): the hits
+	-- taken fall a little, left of the middle; the heals rise up to the hero,
+	-- right of it, so the two never cross.
+	taken = { x = -30, y = -35, rise = -1, reach = 70, spread = -1 },
+	heal = { x = 30, y = -105, rise = 1, reach = 70, spread = 1 },
+}
+local sideStack = {}            -- [column] = { at = time, count = numbers started together }
+local SPREAD = { 0, 40, 80, 120, 160 }
+
+local function SideOn()
+	return Settings().damageSide
+end
+
+local function SpawnSide(kind, amount, crit, periodic)
 	local text = DamageText()
 	if not text then
 		return
 	end
+	if kind == "dealt" and crit then
+		kind = "crit"
+	end
+	local column = SIDE_COLUMNS[kind]
+	local now = GetTime()
+	local stack = sideStack[kind] or { at = 0, count = 0 }
+	sideStack[kind] = stack
+	if now - stack.at < 0.12 then
+		stack.count = math.mod(stack.count + 1, 5)
+	else
+		stack.count = 0
+	end
+	stack.at = now
+
+	local size = crit and CRIT_POP_SIZE or ((periodic and 12 or 14) + FONT_BUMP)
+	Face(text, size, crit and "THICKOUTLINE" or "OUTLINE")
+	if kind == "taken" then
+		text:SetTextColor(1, 0.22, 0.22)
+		amount = "-"..amount
+	elseif kind == "heal" then
+		text:SetTextColor(0.3, 1, 0.4)
+		amount = "+"..amount
+	elseif crit then
+		text:SetTextColor(1, 0.76, 0.08)
+	elseif periodic then
+		text:SetTextColor(0.80, 0.80, 0.80)
+	else
+		text:SetTextColor(1, 1, 1)
+	end
+	text:SetText(amount)
+
+	text.live = true
+	text.crit = crit
+	text.popped = nil
+	text.life = crit and SIDE_LIFE * 1.2 or SIDE_LIFE
+	text.age = 0
+	text.side = true
+	-- Numbers that start together line up, the later ones a line further on.
+	text.x = UIParent:GetWidth() / 2 + column.x
+	text.y = UIParent:GetHeight() / 2 + column.y - column.rise * stack.count * SIDE_GAP
+	if column.spread then
+		-- Under the hero, numbers that start together go side by side, outward,
+		-- not closer and closer to the bar.
+		text.x = text.x + column.spread * SPREAD[stack.count + 1]
+		text.y = UIParent:GetHeight() / 2 + column.y
+	end
+	text.drift = 0
+	text.rise = (column.reach or SIDE_RISE) * column.rise
+	text:SetAlpha(1)
+	text:Show()
+	damageLive = damageLive + 1
+end
+
+local function SpawnDamage(target, amount, crit, periodic)
+	if SideOn() then
+		SpawnSide(target and "dealt" or "taken", amount, crit, periodic)
+		return
+	end
+	local text = DamageText()
+	if not text then
+		return
+	end
+	text.side = nil
 
 	-- Over one of the enemies with that name, else in a ring around the hero.
 	local x, y
@@ -1122,7 +1226,8 @@ damageLayer:SetScript("OnUpdate", function()
 				damageLive = damageLive - 1
 			else
 				-- Fast at first, slowing as it tops out; fading over the last third.
-				local eased = 1 - (1 - t) * (1 - t)
+				-- Beside the hero, a steadier scroll, so a column reads.
+				local eased = text.side and (1 - (1 - t) * (1 - t) * 0.5 - 0.5 * (1 - t)) or (1 - (1 - t) * (1 - t))
 				text:ClearAllPoints()
 				text:SetPoint("CENTER", UIParent, "BOTTOMLEFT", text.x + text.drift * eased, text.y + text.rise * eased)
 				text:SetAlpha(t > 0.66 and (1 - t) / 0.34 or 1)
@@ -1157,6 +1262,8 @@ end
 
 -- The hits the hero takes come from the stock floating combat text's own feed.
 local TAKEN_TYPES = { DAMAGE = true, DAMAGE_CRIT = true, SPELL_DAMAGE = true }
+-- And the heals, beside the hero only.
+local HEAL_TYPES = { HEAL = true, HEAL_CRIT = true, PERIODIC_HEAL = true }
 
 local damageEvents = CreateFrame("Frame")
 damageEvents:SetScript("OnEvent", function()
@@ -1166,6 +1273,12 @@ damageEvents:SetScript("OnEvent", function()
 	if event == "COMBAT_TEXT_UPDATE" then
 		if TAKEN_TYPES[arg1] and tonumber(arg2) then
 			SpawnDamage(nil, arg2, arg1 == "DAMAGE_CRIT")
+		elseif HEAL_TYPES[arg1] and SideOn() then
+			-- A heal: arg2 the healer, arg3 the health it gave.
+			local amount = tonumber(arg3) or tonumber(arg2)
+			if amount and amount > 0 then
+				SpawnSide("heal", math.floor(amount + 0.5), arg1 == "HEAL_CRIT", arg1 == "PERIODIC_HEAL")
+			end
 		end
 		return
 	end
@@ -1205,6 +1318,14 @@ local function ApplyTakenText()
 			info.show = not on and 1 or nil
 		end
 	end
+	-- Beside the hero, the heals are the addon's too.
+	local heals = on and Settings().damageSide
+	for kind in pairs(HEAL_TYPES) do
+		local info = COMBAT_TEXT_TYPE_INFO[kind]
+		if info then
+			info.show = not heals and 1 or nil
+		end
+	end
 end
 
 local takenWatch = CreateFrame("Frame")
@@ -1234,6 +1355,17 @@ function SurvivorUI_ToggleDamage()
 	settings.damageText = not settings.damageText
 	ApplyDamageText()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.damageText and "quick damage numbers." or "the game's own damage numbers."))
+end
+
+-- The numbers beside the hero, or over the enemies again.
+function SurvivorUI_ToggleDamageSide()
+	local settings = Settings()
+	settings.damageSide = not settings.damageSide
+	if settings.damageSide and not settings.damageText then
+		settings.damageText = true
+	end
+	ApplyDamageText()
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: damage numbers "..(settings.damageSide and "beside the hero: hits on the left, crits on the right, heals rising and damage taken falling below." or "over the enemies."))
 end
 
 SLASH_SURVIVORUI1 = "/sui"
@@ -1296,15 +1428,23 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleCrits then
 			SurvivorUI_ToggleCrits()
 		end
+	elseif msg == "pins" then
+		if SurvivorUI_PinsReport then
+			SurvivorUI_PinsReport()
+		end
 	elseif msg == "center" then
 		if SurvivorUI_CenterRow then
 			SurvivorUI_CenterRow()
 		end
 	elseif msg == "damage" then
 		SurvivorUI_ToggleDamage()
+	elseif msg == "damage side" then
+		SurvivorUI_ToggleDamageSide()
 	else
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui opt  opens the options: every piece on or off, panel size, and a move mode with a grid")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between the quick damage numbers and the game's own")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage side  puts the damage numbers beside the hero, or back over the enemies")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 12  sets the chat text size, 8 to 18")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui bosses  switches the boss bars on or off; /sui bosses elites  lists elites too")

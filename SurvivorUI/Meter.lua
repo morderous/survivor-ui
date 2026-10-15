@@ -3,7 +3,9 @@
 -- The game's own meter, drawn again from the numbers it shares (its addon API,
 -- AZS_GetMeter): one flat bar per source of damage, the most first, each in a
 -- color of its own, a talent's or amulet's own damage tagged as a proc. Hover a line for its card: its damage, share and damage per second,
--- and its critical strikes and normal hits from the combat log.
+-- and its critical strikes and normal hits from the combat log. The title's
+-- menu switches to the run's healing (AZS_GetHealing) or the last boss fight's damage
+-- to bosses (AZS_GetBossMeter), in the same bars.
 --
 -- Reset starts the meter over from that moment and clears the crits; the run
 -- panel keeps the whole run. Its
@@ -159,34 +161,202 @@ end
 meter:SetScript("OnDragStart", StartMove)
 meter:SetScript("OnDragStop", StopMove)
 
-meter.title = meter:CreateFontString(nil, "OVERLAY")
+-- What the meter shows: the run's damage, its healing, or the last boss
+-- fight's damage to bosses. The title opens a menu of them; a view the game
+-- does not share (an older game) is greyed out there.
+local VIEWS = {
+	{ key = "damage", title = "Damage Done", get = function() return AZS_GetMeter end },
+	{ key = "healing", title = "Healing Done", get = function() return AZS_GetHealing end },
+	{ key = "boss", title = "Boss Damage", get = function() return AZS_GetBossMeter end },
+}
+local view = 1
+
+local GOLD = { 1, 0.82, 0 }
+
+-- The title: a button with the view's name and a small caret, lit under the
+-- mouse with a soft gold wash, no outline.
+local titleButton = CreateFrame("Button", nil, meter)
+titleButton:SetPoint("TOPLEFT", meter, "TOPLEFT", 2, -2)
+titleButton:SetHeight(17)
+titleButton.noHoverOutline = true
+
+titleButton.wash = titleButton:CreateTexture(nil, "BACKGROUND")
+titleButton.wash:SetTexture(FLAT)
+titleButton.wash:SetAllPoints(titleButton)
+titleButton.wash:SetVertexColor(1, 0.82, 0, 0)
+
+meter.title = titleButton:CreateFontString(nil, "OVERLAY")
 meter.title:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
-meter.title:SetPoint("TOPLEFT", meter, "TOPLEFT", 5, -5)
-meter.title:SetTextColor(1, 0.82, 0)
+meter.title:SetPoint("LEFT", titleButton, "LEFT", 3, 0)
+meter.title:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
 meter.title:SetText("Damage Done")
 
--- The title says what this meter leaves to the game's: healing and boss damage.
-local titleHover = CreateFrame("Frame", nil, meter)
-titleHover:SetPoint("TOPLEFT", meter, "TOPLEFT", 0, 0)
-titleHover:SetWidth(110)
-titleHover:SetHeight(20)
-titleHover:EnableMouse(true)
-titleHover:SetScript("OnEnter", function()
-	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
-	GameTooltip:SetText("Damage Done", 1, 0.82, 0)
-	GameTooltip:AddLine("The game's own numbers, for the whole run or since you last pressed Reset. Hover a line for its crits.", 1, 1, 1, 1)
-	GameTooltip:AddLine("Healing and damage to bosses are in the game's own meter: type /sui meter to switch to it, and again to come back.", 0.7, 0.7, 0.7, 1)
-	GameTooltip:AddLine("Hold Alt and drag to move.", 0.7, 0.7, 0.7, 1)
-	GameTooltip:Show()
+-- The caret: three flat lines, five, three and one pixel wide, a small
+-- triangle pointing down.
+titleButton.caret = {}
+for row = 1, 3 do
+	local line = titleButton:CreateTexture(nil, "OVERLAY")
+	line:SetTexture(FLAT)
+	line:SetHeight(1)
+	line:SetWidth(7 - 2 * row)
+	table.insert(titleButton.caret, line)
+end
+
+local function TintCaret(r, g, b, a)
+	for row = 1, 3 do
+		titleButton.caret[row]:SetVertexColor(r, g, b, a)
+	end
+end
+
+-- The button hugs the title and the caret beside it.
+local function FitTitle()
+	local width = meter.title:GetStringWidth()
+	for row = 1, 3 do
+		local line = titleButton.caret[row]
+		line:ClearAllPoints()
+		line:SetPoint("TOP", titleButton, "TOPLEFT", 3 + width + 7, -7 - row)
+	end
+	titleButton:SetWidth(width + 16)
+end
+
+local menu = CreateFrame("Frame", "SurvivorUIMeterViews", meter)
+menu:SetFrameStrata("DIALOG")
+menu:SetWidth(120)
+menu:SetHeight(6 + table.getn(VIEWS) * 18)
+menu:SetPoint("TOPLEFT", titleButton, "BOTTOMLEFT", 0, -2)
+menu:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+menu:SetBackdropColor(0.05, 0.05, 0.08, 0.97)
+menu:SetBackdropBorderColor(1, 0.82, 0, 0.35)
+menu:EnableMouse(true)
+menu.noHoverOutline = true
+menu:Hide()
+
+local function Lit(on)
+	if on or menu:IsShown() then
+		titleButton.wash:SetVertexColor(1, 0.82, 0, 0.14)
+		meter.title:SetTextColor(1, 0.92, 0.5)
+		TintCaret(1, 0.92, 0.5, 1)
+	else
+		titleButton.wash:SetVertexColor(1, 0.82, 0, 0)
+		meter.title:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+		TintCaret(0.6, 0.6, 0.6, 0.9)
+	end
+end
+
+local function SetView(index)
+	view = index
+	Settings().meterView = VIEWS[index].key
+	meter.title:SetText(VIEWS[index].title)
+	FitTitle()
+end
+
+-- One row a view: the one shown in gold with a gold mark at its left, one the
+-- game does not share greyed, the one under the mouse on a soft wash.
+menu.rows = {}
+local function PaintRows()
+	for index = 1, table.getn(VIEWS) do
+		local row = menu.rows[index]
+		local shared = VIEWS[index].get() ~= nil
+		row.mark:SetAlpha(index == view and 1 or 0)
+		row.wash:SetVertexColor(1, 1, 1, (row.hot and shared) and 0.08 or 0)
+		if not shared then
+			row.text:SetTextColor(0.35, 0.35, 0.38)
+		elseif index == view then
+			row.text:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+		elseif row.hot then
+			row.text:SetTextColor(1, 1, 1)
+		else
+			row.text:SetTextColor(0.75, 0.75, 0.78)
+		end
+	end
+end
+
+for index = 1, table.getn(VIEWS) do
+	local row = CreateFrame("Button", nil, menu)
+	row:SetHeight(18)
+	row:SetPoint("TOPLEFT", menu, "TOPLEFT", 3, -3 - (index - 1) * 18)
+	row:SetPoint("TOPRIGHT", menu, "TOPRIGHT", -3, -3 - (index - 1) * 18)
+	row.noHoverOutline = true
+	row.index = index
+
+	row.wash = row:CreateTexture(nil, "BACKGROUND")
+	row.wash:SetTexture(FLAT)
+	row.wash:SetAllPoints(row)
+
+	row.mark = row:CreateTexture(nil, "ARTWORK")
+	row.mark:SetTexture(FLAT)
+	row.mark:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 1)
+	row.mark:SetWidth(2)
+	row.mark:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -3)
+	row.mark:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 3)
+
+	row.text = row:CreateFontString(nil, "OVERLAY")
+	row.text:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+	row.text:SetPoint("LEFT", row, "LEFT", 8, 0)
+	row.text:SetText(VIEWS[index].title)
+
+	row:SetScript("OnEnter", function()
+		this.hot = true
+		PaintRows()
+	end)
+	row:SetScript("OnLeave", function()
+		this.hot = nil
+		PaintRows()
+	end)
+	row:SetScript("OnClick", function()
+		if VIEWS[this.index].get() then
+			SetView(this.index)
+			menu:Hide()
+			Lit(false)
+		end
+	end)
+	menu.rows[index] = row
+end
+
+-- The menu closes once the mouse has been off it and the title a moment.
+menu.away = 0
+menu:SetScript("OnShow", function()
+	this.away = 0
+	PaintRows()
 end)
-titleHover:SetScript("OnLeave", function() GameTooltip:Hide() end)
-titleHover:RegisterForDrag("LeftButton")
-titleHover:SetScript("OnDragStart", StartMove)
-titleHover:SetScript("OnDragStop", StopMove)
+menu:SetScript("OnUpdate", function()
+	if MouseIsOver(this) or MouseIsOver(titleButton) then
+		this.away = 0
+	else
+		this.away = this.away + arg1
+		if this.away > 0.6 then
+			this:Hide()
+			Lit(false)
+		end
+	end
+end)
+
+titleButton:SetScript("OnEnter", function() Lit(true) end)
+titleButton:SetScript("OnLeave", function() Lit(false) end)
+titleButton:SetScript("OnClick", function()
+	if menu:IsShown() then
+		menu:Hide()
+	else
+		menu:Show()
+	end
+	Lit(true)
+end)
+titleButton:RegisterForDrag("LeftButton")
+titleButton:SetScript("OnDragStart", StartMove)
+titleButton:SetScript("OnDragStop", StopMove)
+FitTitle()
+Lit(false)
 meter.total = meter:CreateFontString(nil, "OVERLAY")
 meter.total:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
 meter.total:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -42, -6)
 meter.total:SetTextColor(0.7, 0.7, 0.7)
+
+-- A view with nothing in it yet says so.
+meter.empty = meter:CreateFontString(nil, "OVERLAY")
+meter.empty:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+meter.empty:SetPoint("TOPLEFT", meter, "TOPLEFT", 8, -24)
+meter.empty:SetTextColor(0.55, 0.55, 0.6)
+meter.empty:Hide()
 
 local reset = CreateFrame("Button", nil, meter)
 reset:SetWidth(32)
@@ -438,12 +608,22 @@ local function Bar(index)
 	-- The crit card sits beside the whole meter, on its left, tops together.
 	bar.cardFrame = meter
 	bar:EnableMouse(true)
+	-- The damage view's lines have the crit card; the others, their numbers.
 	bar:SetScript("OnEnter", function()
-		if SurvivorUI_CritCardShow then
+		if this.view ~= "damage" and this.line then
+			GameTooltip:SetOwner(meter, "ANCHOR_NONE")
+			GameTooltip:SetPoint("TOPRIGHT", meter, "TOPLEFT", -4, 0)
+			GameTooltip:SetText(this.line.name, this.color[1], this.color[2], this.color[3])
+			local word = this.view == "healing" and "Healing" or "Damage to bosses"
+			GameTooltip:AddDoubleLine(word, Short(this.line.dmg), 0.8, 0.8, 0.8, 1, 1, 1)
+			GameTooltip:AddDoubleLine("Share", math.floor(this.line.share * 100 + 0.5).."%", 0.8, 0.8, 0.8, 1, 1, 1)
+			GameTooltip:Show()
+		elseif SurvivorUI_CritCardShow then
 			SurvivorUI_CritCardShow(this)
 		end
 	end)
 	bar:SetScript("OnLeave", function()
+		GameTooltip:Hide()
 		if SurvivorUI_CritCardHide then
 			SurvivorUI_CritCardHide()
 		end
@@ -458,7 +638,7 @@ end
 
 -- The game's lines, or what came after Reset: each source's damage less what
 -- it had then, the most first, shares and damage per second from there.
-local function Lines()
+local function DamageLines()
 	local lines, total, dps = AZS_GetMeter()
 	lines = lines or {}
 	local seconds = RunSeconds()
@@ -494,15 +674,44 @@ local function Lines()
 	return shown, sum, span > 0 and sum / span or 0
 end
 
+-- The healing or the boss fight's lines, as the game gives them (Reset is the
+-- damage view's).
+local function OtherLines(get)
+	local lines, total, rate = get()()
+	local shown = {}
+	for index = 1, table.getn(lines or {}) do
+		local line = lines[index]
+		table.insert(shown, { name = line.name or "?", dmg = Num(line.dmg), share = Num(line.share), proc = Num(line.proc) == 1 })
+	end
+	return shown, Num(total), Num(rate)
+end
+
 local function Draw()
-	local lines, total, dps = Lines()
+	-- The build list's shares are always the damage's.
+	local damage, damageTotal, damageRate = DamageLines()
 	for name in pairs(shares) do
 		shares[name] = nil
 	end
-	for index = 1, table.getn(lines) do
-		shares[lines[index].name] = lines[index].share
+	for index = 1, table.getn(damage) do
+		shares[damage[index].name] = damage[index].share
 	end
-	meter.total:SetText(Short(total).."  |cffffffff"..Short(dps).."|r dps")
+
+	local key = VIEWS[view].key
+	local lines, total, dps
+	if key == "damage" then
+		lines, total, dps = damage, damageTotal, damageRate
+	else
+		lines, total, dps = OtherLines(VIEWS[view].get)
+	end
+	meter.total:SetText(Short(total).."  |cffffffff"..Short(dps).."|r "..(key == "healing" and "hps" or "dps"))
+	reset:SetAlpha(key == "damage" and 1 or 0)
+	reset:EnableMouse(key == "damage")
+	if table.getn(lines) == 0 then
+		meter.empty:SetText(key == "boss" and "No boss fight yet." or (key == "healing" and "No healing yet." or ""))
+		meter.empty:Show()
+	else
+		meter.empty:Hide()
+	end
 
 	local count = math.min(shownLines, table.getn(lines))
 	local top = count > 0 and lines[1].dmg or 0
@@ -517,7 +726,8 @@ local function Draw()
 		bar:SetPoint("TOPLEFT", meter, "TOPLEFT", 4, -20 - (index - 1) * (BAR_HEIGHT + BAR_GAP))
 		bar:SetValue(top > 0 and line.dmg / top or 0)
 		bar:SetStatusBarColor(color[1], color[2], color[3], 0.85)
-		bar.ability = name
+		bar.ability = key == "damage" and name or nil
+		bar.view, bar.line = key, line
 		bar.color = color
 
 		-- A talent's or amulet's own damage says so, as the game's meter does.
@@ -551,6 +761,7 @@ local function Draw()
 end
 
 local elapsed = 0
+local viewRestored
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
 	elapsed = elapsed + arg1
@@ -559,10 +770,21 @@ watcher:SetScript("OnUpdate", function()
 	end
 	elapsed = 0
 	Fit()
+	-- The view chosen last time, once the saved settings are in.
+	if not viewRestored and SurvivorUIDB then
+		viewRestored = true
+		for index = 1, table.getn(VIEWS) do
+			if VIEWS[index].key == SurvivorUIDB.meterView and VIEWS[index].get() then
+				SetView(index)
+			end
+		end
+	end
 	if Settings().meter and Running() then
 		Draw()
 		if not meter:IsShown() then
 			meter:Show()
+			-- The title's width is known once it is drawn.
+			FitTitle()
 		end
 	elseif meter:IsShown() then
 		meter:Hide()

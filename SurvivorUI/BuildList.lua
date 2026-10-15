@@ -349,7 +349,8 @@ local function ReadPiece(slot, link)
 	end
 	local _, _, name = string.find(link, "%[(.-)%]")
 	name = name or ""
-	local _, _, rank = string.find(name, " ([IVXL]+)$")
+	-- Past rank X the name says "X+", and so does the row.
+	local _, _, rank = string.find(name, " ([IVXL]+%+?)$")
 	if rank then
 		name = string.sub(name, 1, string.len(name) - string.len(rank) - 1)
 	end
@@ -369,7 +370,9 @@ local function ReadPiece(slot, link)
 			local tag = StatOf(text)
 			if tag and not seen[tag] then
 				seen[tag] = true
-				table.insert(tags, tag)
+				-- With the line's number, its sign dropped: "CRIT DMG 86%".
+				local _, _, value = string.find(text, "[%+%-]?(%d+%.?%d*%%?)")
+				table.insert(tags, value and (tag.." "..value) or tag)
 			end
 		end
 	end
@@ -441,6 +444,48 @@ local function PaintGear(line, r, g, b, fill, edge)
 	end
 end
 
+-- A piece's bonuses beside its slot, a point or two smaller when they would
+-- run into it (a legendary amulet has many). Sized again only when the text
+-- changes, as a font set over and over costs.
+-- A legendary amulet's spell, short, to leave room for its bonuses: several
+-- words by their initials ("Hammer of Justice" HoJ), one long word cut
+-- ("Consecration" Consec.). Hover the row for the whole name.
+local SMALL_WORDS = { of = true, the = true, ["and"] = true }
+
+local function Short(spell)
+	local initials, words = "", 0
+	for word in string.gfind(spell, "%S+") do
+		words = words + 1
+		local first = string.sub(word, 1, 1)
+		initials = initials..(SMALL_WORDS[string.lower(word)] and string.lower(first) or string.upper(first))
+	end
+	if words > 1 then
+		return initials
+	end
+	if string.len(spell) > 7 then
+		return string.sub(spell, 1, 6).."."
+	end
+	return spell
+end
+
+local function FitTags(line, text)
+	local key = (line.label:GetText() or "").."|"..text
+	if line.tagText == key then
+		return
+	end
+	line.tags:SetText(text)
+	local labelWidth = line.label:GetStringWidth()
+	-- A label not drawn yet measures nothing: sized again next time.
+	line.tagText = labelWidth > 0 and key or nil
+	local room = WIDTH - 8 - labelWidth - 10
+	for size = 9, 6, -1 do
+		line.tags:SetFont(FONT, size + FONT_BUMP, "OUTLINE")
+		if line.tags:GetStringWidth() <= room then
+			break
+		end
+	end
+end
+
 local function DrawGear()
 	list.gearTitle:SetText("Jewelry")
 	for index = 1, table.getn(GEAR_SLOTS) do
@@ -458,15 +503,15 @@ local function DrawGear()
 			-- The slot, then the piece's rank as a Roman numeral: "Ring  II". A
 			-- legendary amulet shows the spell it boosts in the slot's place.
 			local piece = ReadPiece(slot, link)
-			line.label:SetText((piece.spell or label).."  "..piece.rank)
+			line.label:SetText((piece.spell and Short(piece.spell) or label).."  "..piece.rank)
 			line.label:SetTextColor(1, 1, 1)
-			line.tags:SetText(piece.tags ~= "" and piece.tags or "-")
+			FitTags(line, piece.tags ~= "" and piece.tags or "-")
 			line.tags:SetTextColor(1, 1, 1)
 		else
 			PaintGear(line, 0.5, 0.5, 0.55, 0.06, 0.15)
 			line.label:SetText(label)
 			line.label:SetTextColor(0.45, 0.45, 0.5)
-			line.tags:SetText("empty")
+			FitTags(line, "empty")
 			line.tags:SetTextColor(0.4, 0.4, 0.45)
 		end
 		line:Show()

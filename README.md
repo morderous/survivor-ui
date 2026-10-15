@@ -26,11 +26,13 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui tracker` | Run tracker under the minimap: on or off |
 | `/sui run` | Run panel: on or off |
 | `/sui run reset` | Clears the crits |
-| `/sui meter` | The addon's damage meter, or the game's own (for healing and boss damage) |
+| `/sui meter` | The addon's damage meter, or the game's own |
 | `/sui bosses` | Boss bars: on or off |
 | `/sui bosses elites` | Adds every elite to the boss bars |
 | `/sui tally` | Kills and gold line under the bar, or the game's own box |
 | `/sui damage` | Quick damage numbers, or the game's own |
+| `/sui damage side` | Damage numbers beside the hero instead of over the enemies (test, off by default) |
+| `/sui pins` | Prints what the minimap's cache and lair pins read, to check them |
 | `/sui chat 12` | Chat text size, 8 to 18 |
 | `/splates all` | Plates on every enemy, or only on elites, guardians and bosses |
 | `/splates names` | Names only on elites, guardians and bosses, or on every plate |
@@ -78,8 +80,9 @@ Unit frames and the action bar, in one centered row under the hero:
 - Quick damage numbers over the enemies, and the hits the hero takes in red, falling over the hero, in place of the game's own.
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the game's own clock.
 - A run panel on the left, under the loot list: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
-- A damage meter under the build list, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits.
-- Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health, at any distance. Click one to target it.
+- A damage meter under the build list, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, or the damage to bosses in the last boss fight.
+- Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health and its debuffs (icons that drain to grey as they run out), at any distance. Click one to target it.
+- Caches and lairs on the minimap: a golden chest for each cache, a horned skull for each guardian's lair (grey once empty); one out of range waits on the minimap's edge, pointing the way.
 - Kills, gold and the next cache's price on a line under the experience bar, in place of the game's own box.
 - A build list in the right column, between the run tracker and the damage meter: every spell slot with the spell's icon, rank and share of the damage, from the highest rank down, each filled with its damage meter color; the free slots; and the jewelry, the gear a run drops: a row a slot (neck, rings, trinkets), filled with the piece's quality color, with its rank and what it gives in short. A legendary amulet names the spell it boosts in place of "Neck".
 - A loot list in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came.
@@ -94,6 +97,8 @@ Commands:
 | Command | What it does |
 |---|---|
 | `/sui damage` | Switches between the quick damage numbers (the default) and the game's own |
+| `/sui damage side` | Damage numbers beside the hero: hits on the left, crits on the right, heals and damage taken below (test, off by default) |
+| `/sui pins` | Prints what the minimap's cache and lair pins read, to check them |
 | `/sui chat 12` | Chat text size, 8 to 18 (default 12) |
 | `/sui run` | Shows or hides the run panel |
 | `/sui tracker` | Shows or hides the run tracker under the minimap |
@@ -112,9 +117,7 @@ Commands:
 
 ### Healing and boss damage
 
-The addon's damage meter shows the run's damage by source, the same numbers as the game's meter, with each ability's crits on mouseover. The game's own meter also has views for **healing** and **damage to bosses**, which the game does not share with addons yet.
-
-To see them, type `/sui meter`: the addon's meter steps aside and the game's comes back, with its buttons. Type `/sui meter` again to return. Hovering the meter's title says the same.
+Click the meter's title for its menu: **Damage Done** (the run's damage, with each ability's crits on mouseover), **Healing Done** (the run's healing, overhealing left out) or **Boss Damage** (the damage dealt to bosses in the last boss fight). The meter keeps the view you chose.
 
 ### Font
 
@@ -132,7 +135,11 @@ The run tracker, the damage meter, the boss bars and the kills and gold line put
 
 1. Download `SurvivorUI-Installer.zip` from the [latest release](https://github.com/morderous/survivor-ui/releases/latest) and unzip it.
 2. Open `SurvivorInstaller.exe`. Windows may say it protected your PC, since the program is new and not signed: click **More info**, then **Run anyway**.
-3. Click **Find game...** and pick `AzerothSurvivors.exe` (or put the installer in the game's folder and it finds it by itself).
+3. Click **Find game...** and pick the game itself, `AzerothSurvivors.exe`, in the game's folder: the `benilla-config` folder, the one that also holds `AddOns`, `Data` and `saved`. A common place is:
+   ```
+   C:\Git\wenilla\benilla-config\AzerothSurvivors.exe
+   ```
+   The installer puts the addons in that folder's `AddOns` and shows the path under "Game's AddOns folder": check that it ends in `benilla-config\AddOns`. (Or put the installer in the game's folder and it finds the game by itself.)
 4. Click **Install / Update**, and restart the game if it was open.
 
 Open it again any time to update: it always offers the latest release, with its notes. It only touches the `SurvivorUI` and `SurvivorPlates` folders in the game's `AddOns` folder. Its source is in [`installer/`](installer), built with the C# compiler that comes with Windows (`installer\build.bat`).
@@ -161,6 +168,24 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v2.7, 2026-10-15
+
+Built on the game's new addon API: healing and boss meters, debuffs, caches and lairs.
+
+**Survivor UI**
+- **Healing and boss damage in the damage meter:** click the meter's title for a menu: Damage Done, Healing Done (the run's healing, overhealing left out) or Boss Damage (the last boss fight). No need to switch to the game's own meter anymore.
+- **Debuffs on the boss bars:** every boss, guardian and elite shows its debuffs as small icons inside its bar. Each drains to grey as it runs out, with the time left in the middle, the stacks in the corner and its dispel type's color on the edge.
+- **Caches and lairs on the minimap:** a golden chest for each cache, a horned skull for each guardian's lair (grey once empty). One out of range sits on the minimap's edge, pointing the way. Hover a pin for what it is and how far. Off in the options; `/sui pins` prints what the addon reads.
+- **Jewelry bonuses with their values:** `CRIT DMG 86%`, `CDR 31%`... The text gets smaller on its own when a piece has many (legendary amulets), and a legendary amulet's spell is shortened (`Consec.`, `HoJ`) to leave room.
+- A piece past rank X shows `X+`, as its name does.
+- **Damage numbers beside the hero** (test, off by default): `/sui damage side` or the option. Hits rise on the left, crits on the right, heals rise from under the hero and damage taken falls below it. Type it again to go back.
+- The grey bar the client shows at the top level (99) is gone.
+- The meter's title lights up in gold under the mouse, without the white outline.
+- The options panel names the author and the repository.
+
+**Both**
+- **License: GPL-3.0** from this version on (v2.6 and earlier stay MIT). Copies and changes stay open source and keep the credit; see Credits.
 
 ### v2.6, 2026-10-15
 
@@ -350,6 +375,14 @@ First release.
 
 The addons are free and open source, and will stay that way. If they made your runs nicer and you want to say thanks, you can [buy me a coffee on Ko-fi](https://ko-fi.com/morderous). Bug reports and ideas help just as much: open an [issue](https://github.com/morderous/survivor-ui/issues).
 
+## Credits
+
+Survivor UI and Survivor Plates are made by **morderous** ([github.com/morderous/survivor-ui](https://github.com/morderous/survivor-ui)).
+
+If you use, adapt or build on this code, please credit Survivor UI and link the repository. Suggestions and bug reports are welcome on the [issues page](https://github.com/morderous/survivor-ui/issues).
+
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Copyright (C) 2026 morderous.
+
+GNU General Public License v3.0 (GPL-3.0), from v2.7 on: you may use, change and share the addons, as long as what you share stays under the same license, with its source and this credit. See [LICENSE](LICENSE). Versions up to v2.6 were released under the MIT license.

@@ -55,6 +55,10 @@ local function Wanted(frame)
 	if ownName and PANELS[ownName] then
 		return false
 	end
+	-- A piece with a hover look of its own (the meter's view menu).
+	if frame.noHoverOutline then
+		return false
+	end
 	-- Nameplates hang from the world, not the interface; the chat (its window,
 	-- tabs, edit box and buttons) is text to read; and the minimap, its zone
 	-- name and the buttons around it are a map, and so is the run tracker

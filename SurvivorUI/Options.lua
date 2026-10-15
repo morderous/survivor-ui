@@ -81,6 +81,7 @@ local SECTIONS = {
 	} },
 	{ column = 1, title = "Combat", rows = {
 		{ "Quick damage numbers", OnUnlessOff("damageText"), Call("SurvivorUI_ToggleDamage") },
+		{ "Numbers beside the hero (test)", OnlyIfOn("damageSide"), Call("SurvivorUI_ToggleDamageSide") },
 	} },
 	{ column = 1, title = "Nameplates", plates = true, rows = {
 		{ "Plates on every enemy", PlatesOn("important", false), PlatesToggle("all") },
@@ -93,6 +94,10 @@ local SECTIONS = {
 		{ "Ability tooltip, laid out again", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip") },
 		{ "Character pane", FeatureOn("characterPane"), FeatureToggle("characterPane") },
 		{ "Square minimap", FeatureOn("minimap"), FeatureToggle("minimap") },
+		-- At once, no reload: the pins look at it every update.
+		{ "Caches and lairs on the minimap", FeatureOn("mapPins"), function()
+			SurvivorUI_SetFeature("mapPins", not SurvivorUI_Feature("mapPins"))
+		end },
 		{ "Flat chat", FeatureOn("chat"), FeatureToggle("chat") },
 		{ "Flat tooltips", FeatureOn("tooltip"), FeatureToggle("tooltip") },
 		{ "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts") },
@@ -351,7 +356,14 @@ end
 y = y - 30
 EndColumn(2)
 
-panel:SetHeight(-math.min(columnY[1], columnY[2]) + 6)
+-- Under the columns, who made it and where it lives.
+panel:SetHeight(-math.min(columnY[1], columnY[2]) + 6 + 16)
+local credit = panel:CreateFontString(nil, "OVERLAY")
+credit:SetFont(FONT, 9, "")
+credit:SetPoint("BOTTOM", panel, "BOTTOM", 0, 7)
+credit:SetTextColor(0.5, 0.5, 0.55)
+local version = GetAddOnMetadata and GetAddOnMetadata("SurvivorUI", "Version")
+credit:SetText("Survivor UI"..(version and " v"..version or "").." by morderous  ·  github.com/morderous/survivor-ui  ·  GPL-3.0")
 
 panel:SetScript("OnShow", function()
 	RefreshAll()

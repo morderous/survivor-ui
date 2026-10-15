@@ -3,7 +3,8 @@
 -- A column of flat bars at the top of the screen, one for every boss alive,
 -- the final boss on top, then every lair guardian that is awake (and, on
 -- request, every elite). Each shows the whole name on the left and the health
--- left on the right, in the color of its kind; an enraged boss's name turns red. The game sends these to
+-- left on the right, in the color of its kind; an enraged boss's name turns red;
+-- its debuffs as small icons inside it, draining as they run out. The game sends these to
 -- addons for the whole map, so a bar stays live at any distance, unlike a
 -- nameplate.
 --
@@ -153,8 +154,151 @@ local function Bar(index)
 	end)
 	bar:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+	bar.debuffs = {}
 	bars[index] = bar
 	return bar
+end
+
+------------------------------------------------------------------------------
+-- The debuffs on each enemy (AZS_GetDebuffs): small icons inside its bar, at
+-- the right, before the health. Each drains as it runs out: the time gone
+-- turns grey from the top, a thin light line where it stands, the time left
+-- in the middle and the stacks in the corner; edged in its dispel type's
+-- color. Hover one for its name.
+
+local DEBUFF_SIZE = BAR_HEIGHT - 4
+local DEBUFF_GAP = 2
+local MAX_DEBUFFS = 6
+local VALUE_ROOM = 38           -- the health's share at the bar's right end
+
+local function TimeLeft(seconds)
+	if seconds >= 60 then
+		return math.floor(seconds / 60 + 0.5).."m"
+	end
+	return math.floor(seconds + 0.5)
+end
+
+local function DebuffIcon(bar, index)
+	local icon = bar.debuffs[index]
+	if icon then
+		return icon
+	end
+	icon = CreateFrame("Frame", nil, bar.health)
+	icon:SetFrameLevel(bar.health:GetFrameLevel() + 2)
+	icon:SetWidth(DEBUFF_SIZE)
+	icon:SetHeight(DEBUFF_SIZE)
+	icon:SetPoint("RIGHT", bar, "RIGHT", -VALUE_ROOM - (index - 1) * (DEBUFF_SIZE + DEBUFF_GAP), 0)
+
+	icon.edge = icon:CreateTexture(nil, "BACKGROUND")
+	icon.edge:SetTexture(FLAT)
+	icon.edge:SetPoint("TOPLEFT", icon, "TOPLEFT", -1, 1)
+	icon.edge:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
+
+	-- The whole icon in grey, and over it the part still to run in color.
+	icon.grey = icon:CreateTexture(nil, "BORDER")
+	icon.grey:SetAllPoints(icon)
+	icon.grey:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	icon.art = icon:CreateTexture(nil, "ARTWORK")
+	icon.art:SetPoint("BOTTOMLEFT", icon, "BOTTOMLEFT", 0, 0)
+	icon.art:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 0, 0)
+	icon.line = icon:CreateTexture(nil, "OVERLAY")
+	icon.line:SetTexture(FLAT)
+	icon.line:SetVertexColor(1, 1, 1, 0.75)
+	icon.line:SetHeight(1)
+	icon.line:SetPoint("BOTTOMLEFT", icon.art, "TOPLEFT", 0, 0)
+	icon.line:SetPoint("BOTTOMRIGHT", icon.art, "TOPRIGHT", 0, 0)
+
+	icon.time = icon:CreateFontString(nil, "OVERLAY")
+	icon.time:SetFont(FONT, 8 + FONT_BUMP, "OUTLINE")
+	icon.time:SetPoint("CENTER", icon, "CENTER", 0, 0)
+	icon.time:SetTextColor(1, 1, 1)
+	icon.stacks = icon:CreateFontString(nil, "OVERLAY")
+	icon.stacks:SetFont(FONT, 7 + FONT_BUMP, "OUTLINE")
+	icon.stacks:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 2, -1)
+	icon.stacks:SetTextColor(1, 0.85, 0.3)
+
+	icon:EnableMouse(true)
+	icon:SetScript("OnEnter", function()
+		GameTooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT")
+		GameTooltip:SetText(this.name or "", 1, 0.3, 0.3)
+		if this.dispel then
+			GameTooltip:AddLine(this.dispel, 0.7, 0.7, 0.7)
+		end
+		if this.left then
+			GameTooltip:AddLine(math.floor(this.left + 0.5).." sec left", 0.8, 0.8, 0.8)
+		end
+		GameTooltip:Show()
+	end)
+	icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+	bar.debuffs[index] = icon
+	return icon
+end
+
+-- The part of the icon still to run, from the bottom: 1 is all of it.
+local function Drain(icon, share)
+	if share >= 1 then
+		icon.art:SetHeight(DEBUFF_SIZE)
+		icon.art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		icon.art:Show()
+		icon.line:Hide()
+	elseif share <= 0 then
+		icon.art:Hide()
+		icon.line:Hide()
+	else
+		icon.art:SetHeight(DEBUFF_SIZE * share)
+		icon.art:SetTexCoord(0.08, 0.92, 0.92 - 0.84 * share, 0.92)
+		icon.art:Show()
+		icon.line:Show()
+	end
+end
+
+local function FillDebuffs(bar, id)
+	local list = (AZS_GetDebuffs and id) and AZS_GetDebuffs(id) or {}
+	local count = math.min(MAX_DEBUFFS, table.getn(list))
+	for index = 1, count do
+		local debuff = list[index]
+		local icon = DebuffIcon(bar, index)
+		local art = debuff.icon or ""
+		if art ~= "" and not string.find(art, "\\", 1, true) then
+			art = "Interface\\Icons\\"..art
+		end
+		if art == "" then
+			art = "Interface\\Icons\\INV_Misc_QuestionMark"
+		end
+		icon.art:SetTexture(art)
+		icon.grey:SetTexture(art)
+		-- Grey where the client can; else only darker.
+		if icon.grey.SetDesaturated then
+			icon.grey:SetDesaturated(1)
+		end
+		icon.grey:SetVertexColor(0.45, 0.45, 0.45)
+		icon.name, icon.dispel = debuff.name, debuff.dispelType
+		local tint = debuff.dispelType and DebuffTypeColor and DebuffTypeColor[debuff.dispelType]
+		if tint then
+			icon.edge:SetVertexColor(tint.r, tint.g, tint.b, 1)
+		else
+			icon.edge:SetVertexColor(0, 0, 0, 1)
+		end
+		local stacks = tonumber(debuff.stacks) or 0
+		icon.stacks:SetText(stacks > 1 and stacks or "")
+		local left, duration = tonumber(debuff.remaining), tonumber(debuff.duration)
+		if left and duration and duration > 0 and not debuff.permanent then
+			icon.left = left
+			Drain(icon, left / duration)
+			icon.time:SetText(TimeLeft(left))
+		else
+			icon.left = nil
+			Drain(icon, 1)
+			icon.time:SetText("")
+		end
+		icon:Show()
+	end
+	for index = count + 1, table.getn(bar.debuffs) do
+		bar.debuffs[index]:Hide()
+	end
+	-- The name gives way to the icons.
+	bar.name:SetWidth(BAR_WIDTH - VALUE_ROOM - 8 - count * (DEBUFF_SIZE + DEBUFF_GAP))
 end
 
 local KIND_LABELS = { final = "Final boss", boss = "Boss", guardian = "Lair guardian", elite = "Elite" }
@@ -189,6 +333,7 @@ local function Fill(bar, unit)
 	else
 		bar.border:SetVertexColor(0, 0, 0, 1)
 	end
+	FillDebuffs(bar, tonumber(Field(unit, "id", 2)))
 	bar:Show()
 end
 
