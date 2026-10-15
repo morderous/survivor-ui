@@ -256,6 +256,97 @@ local SPELL_KEYS = {
 	["demoralizing shout"] = "demo_shout", ["hunter's mark"] = "hunters_mark",
 }
 
+-- A source's icon. A spell of the build: its action button's (the game puts
+-- them on buttons 1 to 6, the racial on the last). Anything else, a talent's or
+-- an item's own damage: the spellbook, the talents, then the worn items, by
+-- name. Found icons are kept; a miss is asked again now and then, as talents
+-- and items come during a run.
+local OWN_ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIcon"
+local icons = {}                -- [name] = texture
+local missedAt = {}             -- [name] = GetTime() of the last miss
+
+local function SpellIndex(name)
+	if not AZS_SPELLS then
+		return nil
+	end
+	local lower = string.lower(name)
+	local key = SPELL_KEYS[lower] or string.gsub(string.gsub(lower, "[^%a ]", ""), " ", "_")
+	local count = table.getn(AZS_SPELLS)
+	for index = 1, count do
+		local entry = AZS_SPELLS[index]
+		if (entry.key or entry[1]) == key then
+			return index, index == count
+		end
+	end
+end
+
+local function FromSpellbook(name)
+	if not (GetNumSpellTabs and GetSpellTabInfo and GetSpellName and GetSpellTexture) then
+		return nil
+	end
+	for tab = 1, GetNumSpellTabs() do
+		local _, _, offset, count = GetSpellTabInfo(tab)
+		for index = (offset or 0) + 1, (offset or 0) + (count or 0) do
+			if GetSpellName(index, "spell") == name then
+				return GetSpellTexture(index, "spell")
+			end
+		end
+	end
+end
+
+local function FromTalents(name)
+	if not (GetNumTalentTabs and GetNumTalents and GetTalentInfo) then
+		return nil
+	end
+	for tab = 1, GetNumTalentTabs() do
+		for index = 1, GetNumTalents(tab) do
+			local talent, texture = GetTalentInfo(tab, index)
+			if talent == name then
+				return texture
+			end
+		end
+	end
+end
+
+-- A worn piece whose name the source's starts with ("Eye of the Splitting Sky:
+-- Exorcism" is the amulet's) or is.
+local function FromItems(name)
+	if not (GetInventoryItemLink and GetInventoryItemTexture) then
+		return nil
+	end
+	local lower = string.lower(name)
+	for slot = 1, 19 do
+		local link = GetInventoryItemLink("player", slot)
+		local _, _, item = string.find(link or "", "%[(.-)%]")
+		if item and item ~= "" then
+			local itemLower = string.lower(item)
+			if lower == itemLower or string.find(lower, itemLower, 1, true) == 1 or string.find(itemLower, lower, 1, true) then
+				return GetInventoryItemTexture("player", slot)
+			end
+		end
+	end
+end
+
+local function IconOf(name)
+	if icons[name] then
+		return icons[name]
+	end
+	local index, racial = SpellIndex(name)
+	local texture = index and GetActionTexture and GetActionTexture(racial and 12 or index)
+	if not texture then
+		if missedAt[name] and GetTime() - missedAt[name] < 10 then
+			return nil
+		end
+		texture = FromSpellbook(name) or FromTalents(name) or FromItems(name)
+	end
+	if texture then
+		icons[name] = texture
+	else
+		missedAt[name] = GetTime()
+	end
+	return texture
+end
+
 local function RankOf(name)
 	if not (name and AZS_SPELLS) then
 		return nil
@@ -313,9 +404,16 @@ local function Bar(index)
 
 	bar.name = bar:CreateFontString(nil, "OVERLAY")
 	bar.name:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
-	bar.name:SetPoint("LEFT", bar, "LEFT", 4, 0)
+	-- The source's icon, square at the bar's left end.
+	bar.icon = bar:CreateTexture(nil, "OVERLAY")
+	bar.icon:SetWidth(BAR_HEIGHT)
+	bar.icon:SetHeight(BAR_HEIGHT)
+	bar.icon:SetPoint("LEFT", bar, "LEFT", 0, 0)
+	bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+	bar.name:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 4, 0)
 	-- Room for the numbers on the right: damage and share.
-	bar.name:SetWidth(WIDTH - 76)
+	bar.name:SetWidth(WIDTH - 76 - BAR_HEIGHT)
 	bar.name:SetHeight(12)
 	bar.name:SetJustifyH("LEFT")
 	bar.name:SetTextColor(1, 1, 1)
@@ -420,10 +518,20 @@ local function Draw()
 		-- A talent's or amulet's own damage says so, as the game's meter does.
 		-- The spell's rank after its name, as a Roman numeral: "Holy Wrath XII".
 		local rank = RankOf(name)
+		-- With no icon of its own found, the addon's (the minimap button's), whole.
+		local icon = IconOf(name)
+		bar.icon:SetVertexColor(1, 1, 1)
+		if icon then
+			bar.icon:SetTexture(icon)
+			bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		else
+			bar.icon:SetTexture(OWN_ICON)
+			bar.icon:SetTexCoord(0, 1, 0, 1)
+		end
 		bar.name:SetText(index..". "..name..(rank and rank > 0 and "  |cffbdbdbd"..Roman(rank).."|r" or ""))
 		if proc then
 			bar.tag:ClearAllPoints()
-			bar.tag:SetPoint("LEFT", bar, "LEFT", 4 + bar.name:GetStringWidth() + 4, 0)
+			bar.tag:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 4 + bar.name:GetStringWidth() + 4, 0)
 			bar.tag:Show()
 		else
 			bar.tag:Hide()

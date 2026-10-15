@@ -162,6 +162,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v2.5.1, 2026-10-15
+
+**Survivor UI**
+- **Icons in the damage meter:** every line starts with its source's icon. A spell's comes from its action button; a talent's or an item's own damage is looked up in the spellbook, the talents and the worn items, by name. With none found, the addon's own icon stands in.
+
 ### v2.5, 2026-10-15
 
 **Survivor UI**
