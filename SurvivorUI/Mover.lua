@@ -60,6 +60,78 @@ end
 
 local handles = {}
 local dragging                  -- the handle being dragged, until it is let go
+local editing = false           -- configuration mode: everything unlocked, the grid on
+
+------------------------------------------------------------------------------
+-- The grid of configuration mode: a line every GRID units, the screen's middle
+-- lines brighter, and a piece let go there snaps to the nearest step.
+
+local GRID = 32
+local SNAP = 8
+
+local grid = CreateFrame("Frame", "SurvivorUIGrid", UIParent)
+grid:SetAllPoints(UIParent)
+grid:SetFrameStrata("BACKGROUND")
+grid:Hide()
+grid.lines = {}
+
+local function GridLine(vertical, offset, bright)
+	local line = grid:CreateTexture(nil, "ARTWORK")
+	line:SetTexture(FLAT)
+	if bright then
+		line:SetVertexColor(1, 0.82, 0, 0.45)
+	else
+		line:SetVertexColor(1, 1, 1, 0.08)
+	end
+	if vertical then
+		line:SetWidth(1)
+		line:SetPoint("TOP", grid, "TOP", offset, 0)
+		line:SetPoint("BOTTOM", grid, "BOTTOM", offset, 0)
+	else
+		line:SetHeight(1)
+		line:SetPoint("LEFT", grid, "LEFT", 0, offset)
+		line:SetPoint("RIGHT", grid, "RIGHT", 0, offset)
+	end
+	table.insert(grid.lines, line)
+end
+
+-- Lines from the middle out, so the middle lines fall on the screen's center.
+local function BuildGrid()
+	if grid.built then
+		return
+	end
+	grid.built = true
+	local halfWidth, halfHeight = UIParent:GetWidth() / 2, UIParent:GetHeight() / 2
+	for x = 0, halfWidth, GRID do
+		GridLine(true, x, x == 0)
+		if x > 0 then
+			GridLine(true, -x, false)
+		end
+	end
+	for y = 0, halfHeight, GRID do
+		GridLine(false, y, y == 0)
+		if y > 0 then
+			GridLine(false, -y, false)
+		end
+	end
+end
+
+-- A piece let go in configuration mode lands on the nearest SNAP step, its top
+-- left corner counted from the screen's corner, in the screen's own units.
+local function Snap(frame)
+	if not editing then
+		return
+	end
+	local left, top = frame:GetLeft(), frame:GetTop()
+	if not (left and top) then
+		return
+	end
+	local ratio = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	local x = math.floor(left * ratio / SNAP + 0.5) * SNAP
+	local y = math.floor(top * ratio / SNAP + 0.5) * SNAP
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / ratio, y / ratio)
+end
 
 local function MakeHandle(label)
 	local handle = CreateFrame("Frame", nil, UIParent)
@@ -113,6 +185,7 @@ function SurvivorUI_RegisterMover(frame, label, save, mover, default)
 	handle:SetScript("OnDragStop", function()
 		dragging = nil
 		mover:StopMovingOrSizing()
+		Snap(mover)
 		if save then
 			save()
 		end
@@ -120,11 +193,12 @@ function SurvivorUI_RegisterMover(frame, label, save, mover, default)
 	return handle
 end
 
--- The middle block: from the buffs above the player frame to the kills and
--- gold line under the row.
-local middle = MakeHandle("Middle block  -  /sui center puts it back")
-middle:SetPoint("TOPLEFT", player, "TOPLEFT", -4, 34)
-middle:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 4, -32)
+-- The action bar: the buttons and the experience bar under them. The player
+-- and target frames, the buffs and the kills and gold line move on their own,
+-- below; left where they are, they follow the bar.
+local middle = MakeHandle("Action bar  -  /sui center puts it back")
+middle:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 4)
+middle:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 4, -12)
 middle.label:ClearAllPoints()
 middle.label:SetPoint("BOTTOM", middle, "TOP", 0, 3)
 middle:SetScript("OnDragStart", function()
@@ -134,21 +208,120 @@ end)
 middle:SetScript("OnDragStop", function()
 	dragging = nil
 	row:StopMovingOrSizing()
+	Snap(row)
 	Save()
 end)
 
--- Shown with Alt held, or while a drag that began with it is still going.
+-- The buffs and the kills and gold line: their own handles. Left where they
+-- are, they follow the middle block; once moved, they stay put.
+local function KeepPiece(frame, label, xKey, yKey, point, default)
+	if not frame then
+		return
+	end
+	frame:SetMovable(true)
+	if frame.SetClampedToScreen then
+		frame:SetClampedToScreen(true)
+	end
+	local function SavePiece()
+		SurvivorUIDB = SurvivorUIDB or {}
+		local x = point == "BOTTOMLEFT" and frame:GetLeft() or frame:GetLeft()
+		local y = point == "BOTTOMLEFT" and frame:GetBottom() or frame:GetTop()
+		SurvivorUIDB[xKey] = math.floor(x + 0.5)
+		SurvivorUIDB[yKey] = math.floor(y + 0.5)
+	end
+	local function RestorePiece()
+		frame:ClearAllPoints()
+		if SurvivorUIDB and SurvivorUIDB[xKey] and SurvivorUIDB[yKey] then
+			frame:SetPoint(point, UIParent, "BOTTOMLEFT", SurvivorUIDB[xKey], SurvivorUIDB[yKey])
+		else
+			default()
+		end
+	end
+	local handle = SurvivorUI_RegisterMover(frame, label, SavePiece, nil, RestorePiece)
+	local loader = CreateFrame("Frame")
+	loader:RegisterEvent("PLAYER_ENTERING_WORLD")
+	loader:SetScript("OnEvent", RestorePiece)
+	return handle
+end
+
+local GAP = 6                    -- between a unit frame and the buttons, as SurvivorUI.lua sets it
+local playerHandle = KeepPiece(player, "Player frame", "playerLeft", "playerTop", "TOPLEFT", function()
+	player:SetPoint("RIGHT", row, "LEFT", -GAP, 0)
+end)
+local targetHandle = KeepPiece(target, "Target frame", "targetLeft", "targetTop", "TOPLEFT", function()
+	target:SetPoint("LEFT", row, "RIGHT", GAP, 0)
+end)
+
+-- The option to keep the two frames joined to the bar: back at its sides,
+-- moved with it as one piece, their own handles put away.
+local function Linked()
+	return SurvivorUIDB and SurvivorUIDB.linkFrames == true
+end
+
+local function ApplyLink()
+	local linked = Linked()
+	if linked then
+		SurvivorUIDB.playerLeft, SurvivorUIDB.playerTop = nil, nil
+		SurvivorUIDB.targetLeft, SurvivorUIDB.targetTop = nil, nil
+		player:ClearAllPoints()
+		player:SetPoint("RIGHT", row, "LEFT", -GAP, 0)
+		target:ClearAllPoints()
+		target:SetPoint("LEFT", row, "RIGHT", GAP, 0)
+	end
+	if playerHandle then
+		playerHandle.disabled = linked
+	end
+	if targetHandle then
+		targetHandle.disabled = linked
+	end
+	middle:ClearAllPoints()
+	if linked then
+		middle:SetPoint("TOPLEFT", player, "TOPLEFT", -4, 4)
+		middle:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 4, -12)
+		middle.label:SetText("Action bar and frames  -  /sui center puts it back")
+	else
+		middle:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 4)
+		middle:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 4, -12)
+		middle.label:SetText("Action bar  -  /sui center puts it back")
+	end
+	-- Handles already up follow at once.
+	for _, handle in pairs({ playerHandle, targetHandle }) do
+		if handle and handle.disabled then
+			handle:EnableMouse(false)
+			handle:Hide()
+		end
+	end
+end
+
+function SurvivorUI_SetLinkFrames(on)
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.linkFrames = on and true or false
+	ApplyLink()
+end
+
+function SurvivorUI_LinkFrames()
+	return Linked()
+end
+
+local linker = CreateFrame("Frame")
+linker:RegisterEvent("PLAYER_ENTERING_WORLD")
+linker:SetScript("OnEvent", ApplyLink)
+KeepPiece(getglobal("SurvivorUIBuffs"), "Buffs", "buffsLeft", "buffsBottom", "BOTTOMLEFT", function()
+	SurvivorUIBuffs:SetPoint("BOTTOMLEFT", player, "TOPLEFT", 0, 5)
+end)
+
+-- Shown with Alt held, in configuration mode, or while a drag is still going.
 local shown = false
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
-	local wanted = IsAltKeyDown() or dragging ~= nil
+	local wanted = IsAltKeyDown() or editing or dragging ~= nil
 	if wanted == shown then
 		return
 	end
 	shown = wanted
 	for index = 1, table.getn(handles) do
 		local handle = handles[index]
-		if wanted then
+		if wanted and not handle.disabled then
 			handle:Show()
 			handle:EnableMouse(true)
 		else
@@ -294,10 +467,26 @@ scaler:SetScript("OnEvent", function() ApplyScale() end)
 ------------------------------------------------------------------------------
 -- /sui layout: every piece back in its first place.
 
+-- Configuration mode on or off: every piece unlocked, without Alt, over a grid.
+function SurvivorUI_SetEditMode(on)
+	editing = on and true or false
+	if editing then
+		BuildGrid()
+		grid:Show()
+	else
+		grid:Hide()
+	end
+end
+
+function SurvivorUI_EditMode()
+	return editing
+end
+
 local PLACES = {
 	"rowX", "rowY", "runLeft", "runTop", "runBottom", "trackerRight", "trackerTop",
 	"meterRight", "meterBottom", "bossLeft", "bossTop", "lootLeft", "lootTop",
 	"chatLeft", "chatBottom", "mapRight", "mapTop", "tipRight", "tipBottom", "critsLeft", "critsBottom", "critsTop", "buildLeft", "buildTop",
+	"buffsLeft", "buffsBottom", "tallyLeft", "tallyTop", "playerLeft", "playerTop", "targetLeft", "targetTop",
 }
 
 -- A new layout starts everyone from the first places once: the pieces moved

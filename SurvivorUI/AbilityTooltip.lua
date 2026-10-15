@@ -290,6 +290,10 @@ watcher:SetScript("OnUpdate", function()
 	if not GameTooltip:IsVisible() then
 		return
 	end
+	-- Switched off in the options panel: the game's own layout stays.
+	if SurvivorUI_Feature and not SurvivorUI_Feature("abilityTooltip") then
+		return
+	end
 	local signature = Signature()
 	if signature == written then
 		return

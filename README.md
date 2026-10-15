@@ -10,10 +10,11 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 
 ## Commands at a glance
 
-**Hold Alt** to see everything that can be moved, outlined with its name, and drag it. Every piece keeps its place.
+**Click the S button** by the minimap (or type `/sui opt`) for the options: every piece and every look on or off, the panels' size, and a move mode with a grid to line things up. **Hold Alt** any time to see everything that can be moved, outlined with its name, and drag it. Every piece keeps its place.
 
 | Command | What it does |
 |---|---|
+| `/sui opt` | The options panel (the minimap button opens it in move mode) |
 | `/sui` | Lists every command in the chat |
 | `/sui layout` | Puts every piece back in its first place |
 | `/sui hover` | The white outline around what the mouse is on: on or off |
@@ -84,8 +85,9 @@ Unit frames and the action bar, in one centered row under the hero:
 - A loot list in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came.
 - A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike.
 - A thin white outline around whatever the mouse is on: a button, a bar, a buff. The nameplates, the chat, the minimap and the run tracker go without.
+- An options panel (`/sui opt`, or the S button by the minimap): every panel and every look on or off, the nameplates' choices, the panels' size, and a move mode that unlocks every piece over a grid they snap to.
 
-Left click a frame to target it, right click for its menu. Hold Alt to outline the whole middle block (frames, buttons, experience bar, kills and gold, buffs) and drag it anywhere; the place is kept. `/sui center` puts it back.
+Left click a frame to target it, right click for its menu. Hold Alt to outline every movable piece: the action bar, the player and target frames, the buffs, the kills and gold line, the panels. Drag any of them; each keeps its place. `/sui center` puts the action bar back; the option "Unit frames move with the action bar" joins the two frames to it.
 
 Commands:
 
@@ -159,6 +161,15 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v2.5, 2026-10-15
+
+**Survivor UI**
+- **Options panel** (`/sui opt`): every panel on or off (run tracker, build list, damage meter, This Run, Biggest Crits, boss bars, kills and gold, loot), the quick damage numbers, every look the addon gives the game (cooldown numbers, key labels, ability tooltip, character pane, square minimap, flat chat and tooltips, the font, the menu buttons), and Survivor Plates' two choices. Panels switch at once; a look waits for a reload, and the Reload button lights up.
+- **Move mode with a grid:** from the panel, every piece unlocks without Alt over a grid (the screen's middle lines in gold), and a piece let go snaps to it.
+- **Minimap button** with the addon's own icon, outside the minimap's bottom left corner: click for the options in move mode, right click for the options alone.
+- **More pieces to move:** the player frame, the target frame, the action bar, the buffs and the kills and gold line, each on its own. The option `Unit frames move with the action bar` keeps the two frames at its sides, moving as one.
+- The game's battleground button on the minimap gets the same square look.
 
 ### v2.4, 2026-10-15
 

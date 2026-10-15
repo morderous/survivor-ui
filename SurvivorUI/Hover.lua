@@ -39,7 +39,7 @@ local SKIP = {}                 -- frames that are the background, not an item
 -- does not.
 local PANELS = {
 	SurvivorUILoot = true, SurvivorUIMeter = true, SurvivorUIRun = true,
-	SurvivorUICrits = true, SurvivorUIBosses = true, SurvivorUIBuild = true,
+	SurvivorUICrits = true, SurvivorUIBosses = true, SurvivorUIBuild = true, SurvivorUIOptions = true,
 }
 
 local function Wanted(frame)

@@ -33,9 +33,17 @@ local function Thousands(value)
 	return text..result
 end
 
-local line = row:CreateFontString("SurvivorUITally", "OVERLAY")
+-- The line sits on a holder of its own, under the experience bar, so it can be
+-- moved apart from the middle block (Mover.lua).
+local holder = CreateFrame("Frame", "SurvivorUITallyFrame", UIParent)
+holder:SetWidth(320)
+holder:SetHeight(16)
+holder:SetPoint("TOP", row, "BOTTOM", 0, -12)
+holder:SetMovable(true)
+
+local line = holder:CreateFontString("SurvivorUITally", "OVERLAY")
 line:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
-line:SetPoint("TOP", row, "BOTTOM", 0, -14)
+line:SetPoint("CENTER", holder, "CENTER", 0, 0)
 line:Hide()
 
 local function Running()
@@ -93,6 +101,29 @@ function SurvivorUI_Tally()
 		or "the game's own kills and gold box is back."))
 end
 
+-- Its place: under the experience bar, following the middle block, until moved.
+local function SavePlace()
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.tallyLeft = math.floor(holder:GetLeft() + 0.5)
+	SurvivorUIDB.tallyTop = math.floor(holder:GetTop() + 0.5)
+end
+
+local function RestorePlace()
+	holder:ClearAllPoints()
+	if SurvivorUIDB and SurvivorUIDB.tallyLeft and SurvivorUIDB.tallyTop then
+		holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", SurvivorUIDB.tallyLeft, SurvivorUIDB.tallyTop)
+	else
+		holder:SetPoint("TOP", row, "BOTTOM", 0, -12)
+	end
+end
+
+if SurvivorUI_RegisterMover then
+	SurvivorUI_RegisterMover(holder, "Kills & gold", SavePlace, nil, RestorePlace)
+end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
-loader:SetScript("OnEvent", ApplyGameHud)
+loader:SetScript("OnEvent", function()
+	RestorePlace()
+	ApplyGameHud()
+end)

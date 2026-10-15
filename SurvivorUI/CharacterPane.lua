@@ -449,9 +449,20 @@ end
 ------------------------------------------------------------------------------
 -- Putting the stock pieces away, and keeping everything current while open.
 
+-- Switched off in the options panel: the stock pane stays, the game's own box
+-- with it.
+local function Enabled()
+	return not SurvivorUI_Feature or SurvivorUI_Feature("characterPane")
+end
+
 -- The game's own side box would sit on top of the numbers.
 if AZS_UpdateMore then
-	AZS_UpdateMore = function() end
+	local stockUpdateMore = AZS_UpdateMore
+	AZS_UpdateMore = function()
+		if not Enabled() then
+			return stockUpdateMore()
+		end
+	end
 end
 
 local function HideStock()
@@ -466,6 +477,10 @@ end
 local closeButton = getglobal("CharacterFrameCloseButton")
 
 panel:SetScript("OnShow", function()
+	if not Enabled() then
+		this:Hide()
+		return
+	end
 	HideStock()
 	UpdateSlotBorders()
 	UpdateTabs()

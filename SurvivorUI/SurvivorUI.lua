@@ -73,6 +73,22 @@ local ENEMY = { 0.80, 0.22, 0.22 }
 local CHAT_SIZE = 12                            -- default; /sui chat N changes it
 
 -- Saved between sessions; the /sui command at the end of the file changes them.
+-- Every look the addon gives the game's interface can be switched off in the
+-- options panel (/sui opt): SurvivorUIDB.features[key] = false. Most take hold
+-- at the next /reload, as they are laid on when the world loads.
+function SurvivorUI_Feature(key)
+	local features = SurvivorUIDB and SurvivorUIDB.features
+	return not features or features[key] ~= false
+end
+
+function SurvivorUI_SetFeature(key, on)
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.features = SurvivorUIDB.features or {}
+	SurvivorUIDB.features[key] = on and true or false
+end
+
+local Feature = SurvivorUI_Feature
+
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
 	if SurvivorUIDB.damageText == nil then
@@ -388,7 +404,7 @@ local function StyleButton(button)
 		-- since the stock code shows and fills them again on its own.
 		local hotkey = getglobal(name.."HotKey")
 		if hotkey then
-			hotkey:SetAlpha(0)
+			hotkey:SetAlpha(Feature("hideKeys") and 0 or 1)
 		end
 	end
 end
@@ -479,12 +495,20 @@ local function TimeText(seconds)
 	return string.format("%.1f", seconds)
 end
 
+-- The buffs sit on a holder of their own, over the player frame, so they can be
+-- moved apart from the middle block (Mover.lua).
+local buffHolder = CreateFrame("Frame", "SurvivorUIBuffs", UIParent)
+buffHolder:SetWidth(AURA_MAX * (AURA_SIZE + 3) - 3)
+buffHolder:SetHeight(AURA_SIZE)
+buffHolder:SetPoint("BOTTOMLEFT", player, "TOPLEFT", 0, 5)
+buffHolder:SetMovable(true)
+
 local auras = {}
 for index = 1, AURA_MAX do
-	local aura = CreateFrame("Button", nil, player)
+	local aura = CreateFrame("Button", nil, buffHolder)
 	aura:SetWidth(AURA_SIZE)
 	aura:SetHeight(AURA_SIZE)
-	aura:SetPoint("BOTTOMLEFT", player, "TOPLEFT", (index - 1) * (AURA_SIZE + 3), 5)
+	aura:SetPoint("BOTTOMLEFT", buffHolder, "BOTTOMLEFT", (index - 1) * (AURA_SIZE + 3), 0)
 	aura.border = AddBorder(aura)
 
 	aura.texture = aura:CreateTexture(nil, "ARTWORK")
@@ -590,6 +614,12 @@ if CooldownFrame_SetTimer and not OmniCC_OnUpdate then
 
 		local parent = cooldown and cooldown:GetParent()
 		if not parent then
+			return
+		end
+		if not Feature("cooldownNumbers") then
+			if parent.survivorCounter then
+				parent.survivorCounter:Hide()
+			end
 			return
 		end
 
@@ -1199,6 +1229,13 @@ local function ApplyDamageText()
 	ApplyTakenText()
 end
 
+function SurvivorUI_ToggleDamage()
+	local settings = Settings()
+	settings.damageText = not settings.damageText
+	ApplyDamageText()
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.damageText and "quick damage numbers." or "the game's own damage numbers."))
+end
+
 SLASH_SURVIVORUI1 = "/sui"
 SlashCmdList["SURVIVORUI"] = function(msg)
 	local _, _, command, argument = string.find(msg or "", "^(%S*)%s*(.*)$")
@@ -1247,6 +1284,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleLoot then
 			SurvivorUI_ToggleLoot()
 		end
+	elseif msg == "opt" or msg == "options" or msg == "config" then
+		if SurvivorUI_ToggleOptions then
+			SurvivorUI_ToggleOptions()
+		end
 	elseif msg == "build" then
 		if SurvivorUI_ToggleBuild then
 			SurvivorUI_ToggleBuild()
@@ -1260,11 +1301,9 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 			SurvivorUI_CenterRow()
 		end
 	elseif msg == "damage" then
-		local settings = Settings()
-		settings.damageText = not settings.damageText
-		ApplyDamageText()
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.damageText and "quick damage numbers." or "the game's own damage numbers."))
+		SurvivorUI_ToggleDamage()
 	else
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui opt  opens the options: every piece on or off, panel size, and a move mode with a grid")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between the quick damage numbers and the game's own")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 12  sets the chat text size, 8 to 18")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
@@ -1291,12 +1330,22 @@ loader:SetScript("OnEvent", function()
 		HideStockUnitFrames()
 		HideStockBuffs()
 		LayoutBar()
-		SquareMinimap()
-		MoveMicroButtons()
-		HideMicroButtons()
-		ApplyFonts()
-		StyleChat()
-		StyleTooltips()
+		if Feature("minimap") then
+			SquareMinimap()
+		end
+		if Feature("microMenu") then
+			MoveMicroButtons()
+			HideMicroButtons()
+		end
+		if Feature("fonts") then
+			ApplyFonts()
+		end
+		if Feature("chat") then
+			StyleChat()
+		end
+		if Feature("tooltip") then
+			StyleTooltips()
+		end
 		ApplyDamageText()
 		UpdatePortrait(player)
 	elseif event == "PLAYER_TARGET_CHANGED" then
