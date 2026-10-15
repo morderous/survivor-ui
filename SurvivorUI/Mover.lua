@@ -295,7 +295,7 @@ scaler:SetScript("OnEvent", function() ApplyScale() end)
 local PLACES = {
 	"rowX", "rowY", "runLeft", "runTop", "runBottom", "trackerRight", "trackerTop",
 	"meterRight", "meterBottom", "bossLeft", "bossTop", "lootLeft", "lootTop",
-	"chatLeft", "chatBottom", "mapRight", "mapTop",
+	"chatLeft", "chatBottom", "mapRight", "mapTop", "tipRight", "tipBottom",
 }
 
 -- A new layout starts everyone from the first places once: the pieces moved

@@ -142,6 +142,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v2.2.2, 2026-10-15
+
+**Survivor UI**
+- The tooltip for enemies and the world can be moved: hold Alt and drag the "Tooltip" box. Left alone, it opens beside the damage meter as before. `/sui layout` puts it back.
+
 ### v2.2.1, 2026-10-15
 
 **Survivor UI**
@@ -177,7 +182,7 @@ Built on the game's new addon API. On a version of the game without it, Survivor
 - **Damage meter** in place of the game's: one bar per source with its damage and share, a talent's or amulet's own damage in blue. Hover a line for its card: damage per second from the game, and critical strikes (biggest, last, average, smallest) and normal hits from the combat log. One size all run; its cards open on its left. For healing and boss damage, `/sui meter` switches to the game's own meter and back.
 - **Boss bars** at the top of the screen: every boss alive, the final boss on top, and every awake lair guardian, at any distance, with the name and the health left. An enraged boss's name turns red. Click a bar to target it. `/sui bosses`, `/sui bosses elites`
 - **Kills, gold and cache** on a line under the experience bar, in place of the game's own box, so they move with the middle block. `/sui tally`
-- **Hold Alt** and every piece that can move shows outlined with its name: the middle block, the chat, the minimap, the run tracker, the run panel, the damage meter and the boss bars. Drag any of them; each keeps its place. `/sui layout` puts everything back, `/sui center` only the middle block.
+- **Hold Alt** and every piece that can move shows outlined with its name: the middle block, the chat, the minimap, the run tracker, the run panel, the damage meter, the boss bars and the tooltip. Drag any of them; each keeps its place. `/sui layout` puts everything back, `/sui center` only the middle block.
 
 **Survivor UI: changed**
 - The run panel reads the game's own numbers, the same as its victory screen: time, level, kills, elites, guardians on a row of their own again, bosses, damage dealt and taken, damage per second, gold earned and caches opened. Hover a row for more: enemies alive, the damage meter by source, damage taken by source, gold, rerolls and lives.

@@ -431,20 +431,51 @@ function SurvivorUI_ToggleMeter()
 		or "damage meter off; the game's own is back, with its healing and boss damage."))
 end
 
--- The game's tooltip for units and the world sits by default in the bottom
--- right corner, where the meter is: while the meter shows, it opens beside it,
--- on its left, bottoms together.
+-- The game's tooltip for units and the world: it opens at an anchor of its own
+-- that Alt can move. Left where it is, the anchor sits beside the meter, on its
+-- left, bottoms together (the tooltip's stock corner is where the meter is), or
+-- in that corner when the meter is off.
+local tipAnchor = CreateFrame("Frame", "SurvivorUITooltipAnchor", UIParent)
+tipAnchor:SetWidth(200)
+tipAnchor:SetHeight(80)
+tipAnchor:SetMovable(true)
+if tipAnchor.SetClampedToScreen then
+	tipAnchor:SetClampedToScreen(true)
+end
+
+local function PlaceTipAnchor()
+	local settings = Settings()
+	tipAnchor:ClearAllPoints()
+	if settings.tipRight then
+		tipAnchor:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMLEFT", settings.tipRight, settings.tipBottom)
+	elseif meter:IsVisible() then
+		tipAnchor:SetPoint("BOTTOMRIGHT", meter, "BOTTOMLEFT", -6, 0)
+	else
+		tipAnchor:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -13, 64)
+	end
+end
+
+local function SaveTipAnchor()
+	local settings = Settings()
+	settings.tipRight = math.floor(tipAnchor:GetRight() + 0.5)
+	settings.tipBottom = math.floor(tipAnchor:GetBottom() + 0.5)
+end
+
 local stockDefaultAnchor = GameTooltip_SetDefaultAnchor
 if stockDefaultAnchor then
 	GameTooltip_SetDefaultAnchor = function(tooltip, parent)
 		stockDefaultAnchor(tooltip, parent)
-		if meter:IsVisible() and tooltip then
+		if tooltip then
+			PlaceTipAnchor()
 			tooltip:ClearAllPoints()
-			tooltip:SetPoint("BOTTOMRIGHT", meter, "BOTTOMLEFT", -6, 0)
+			tooltip:SetPoint("BOTTOMRIGHT", tipAnchor, "BOTTOMRIGHT", 0, 0)
 		end
 	end
 end
 
+if SurvivorUI_RegisterMover then
+	SurvivorUI_RegisterMover(tipAnchor, "Tooltip", SaveTipAnchor, nil, PlaceTipAnchor)
+end
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", function()
