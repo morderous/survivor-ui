@@ -18,6 +18,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui layout` | Puts every piece back in its first place |
 | `/sui hover` | The white outline around what the mouse is on: on or off |
 | `/sui loot` | Loot list: on or off |
+| `/sui build` | Build list: on or off |
 | `/sui crits` | Biggest Crits box: on or off (off by default) |
 | `/sui scale 0.85` | Size of the panels (tracker, run panel, meter, boss bars), 0.6 to 1.4. For smaller screens |
 | `/sui center` | Puts the middle block (frames and buttons) back under the hero |
@@ -75,10 +76,11 @@ Unit frames and the action bar, in one centered row under the hero:
 - Friz Quadrata on every piece of interface text, chat and nameplates included, or a face of your own (see Font below).
 - Quick damage numbers over the enemies, and the hits the hero takes in red, falling over the hero, in place of the game's own.
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the game's own clock.
-- A run panel under the run tracker: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
-- A damage meter under the run panel, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits.
+- A run panel on the left, under the loot list: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
+- A damage meter under the build list, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health, at any distance. Click one to target it.
 - Kills, gold and the next cache's price on a line under the experience bar, in place of the game's own box.
+- A build list in the right column, between the run tracker and the damage meter: every spell slot with the spell's icon, rank and share of the damage, from the highest rank down, each filled with its damage meter color; the free slots; and the gear, each piece of jewelry with what it gives (or what all the gear adds, with its sources on hover).
 - A loot list in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came.
 - A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike.
 - A thin white outline around whatever the mouse is on: a button, a bar, a buff. The nameplates, the chat, the minimap and the run tracker go without.
@@ -98,6 +100,7 @@ Commands:
 | `/sui layout` | Puts every piece back in its first place |
 | `/sui hover` | The white outline around what the mouse is on: on or off |
 | `/sui loot` | Loot list: on or off |
+| `/sui build` | Build list: on or off |
 | `/sui crits` | Biggest Crits box: on or off (off by default) |
 | `/sui scale 0.85` | Size of the panels (tracker, run panel, meter, boss bars), 0.6 to 1.4. For smaller screens |
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
@@ -146,6 +149,17 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v2.4, 2026-10-15
+
+**Survivor UI**
+- **Build list** (new): every spell slot with the spell's icon, rank and share of the damage, from the highest rank down, each row filled with its damage meter color; the free slots (the count turns red when they are full); the racial apart. Under it, the gear: each piece of jewelry with what it gives in short (`CDR · DMG`, colored as in the character pane), or, with none worn, what all the gear adds, with the pieces it comes from on hover. `/sui build`
+- **New layout:** the build list joins the right column, between the run tracker and the damage meter; the run panel moves to the left, under the loot list, with the Biggest Crits box right under it. Every piece goes back to its first place once.
+- **Damage meter:** each spell's rank after its name, in Roman numerals (`Holy Wrath XII`). Its card also shows the spell's rank and cooldown, and for a buff how long it lasts and how long it has left.
+- **Run tracker:** in endless mode, when the next boss comes. Over each boss's tick, the time until it comes (the next one in orange); a tick turns green once its boss is slain. Smaller and tighter, the level without the numbers.
+- **One experience bar:** the one under the action bar hides while the run tracker shows its own.
+- **Action bar:** no key labels; a spell cooling down is dimmed, and its last two seconds count down in red.
+- **Biggest Crits box:** the damage meter's colors, and the run panel's style.
+
 ### v2.3, 2026-10-15
 
 **Survivor UI**
@@ -174,8 +188,6 @@ Newest first. The version is also in each addon's `.toc`, so it shows in the gam
 - The damage meter's Reset works: the meter starts over from that moment (damage, damage per second and shares) and the crits are cleared. The run panel keeps the whole run.
 - More colors in the damage meter: twelve distinct ones, procs included, so neighbours never look alike. Procs keep their "proc" tag.
 - The run tracker shows when each boss fell, beside when it came: `4:00 / 5:32`.
-- A loot list in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came.
-- A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike.
 - A thin white outline around whatever the mouse is on: a button, a bar, a buff. `/sui hover` switches it off.
 
 ### v2.1, 2026-10-15

@@ -231,7 +231,7 @@ end)
 
 local SCALED = {
 	"SurvivorUITracker", "SurvivorUIRun", "SurvivorUIMeter", "SurvivorUIBosses",
-	"SurvivorUILoot", "SurvivorUICritTip", "SurvivorUICrits",
+	"SurvivorUILoot", "SurvivorUICritTip", "SurvivorUICrits", "SurvivorUIBuild",
 }
 
 -- A moved panel keeps its place as a point in its own scale's units: the same
@@ -244,7 +244,8 @@ local SAVED = {
 	SurvivorUIMeter = { "meterRight", "meterBottom", "BOTTOMRIGHT" },
 	SurvivorUIBosses = { "bossLeft", "bossTop", "TOPLEFT" },
 	SurvivorUILoot = { "lootLeft", "lootTop", "TOPLEFT" },
-	SurvivorUICrits = { "critsLeft", "critsBottom", "BOTTOMLEFT" },
+	SurvivorUICrits = { "critsLeft", "critsTop", "TOPLEFT" },
+	SurvivorUIBuild = { "buildLeft", "buildTop", "TOPLEFT" },
 }
 
 local function ApplyScale(from)
@@ -296,13 +297,13 @@ scaler:SetScript("OnEvent", function() ApplyScale() end)
 local PLACES = {
 	"rowX", "rowY", "runLeft", "runTop", "runBottom", "trackerRight", "trackerTop",
 	"meterRight", "meterBottom", "bossLeft", "bossTop", "lootLeft", "lootTop",
-	"chatLeft", "chatBottom", "mapRight", "mapTop", "tipRight", "tipBottom", "critsLeft", "critsBottom",
+	"chatLeft", "chatBottom", "mapRight", "mapTop", "tipRight", "tipBottom", "critsLeft", "critsBottom", "critsTop", "buildLeft", "buildTop",
 }
 
 -- A new layout starts everyone from the first places once: the pieces moved
 -- around in v2.0, and an old saved place would leave one stranded. Runs when
 -- the saved settings arrive, before any piece puts itself back.
-local LAYOUT_VERSION = 2
+local LAYOUT_VERSION = 3          -- 3: the build list joins the right column
 local migrator = CreateFrame("Frame")
 migrator:RegisterEvent("ADDON_LOADED")
 migrator:SetScript("OnEvent", function()

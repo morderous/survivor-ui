@@ -14,8 +14,8 @@
 --
 -- The boss timeline is the run tracker's, under the minimap (Tracker.lua).
 --
--- Under the run tracker by default, in the right column with the damage meter.
--- Hold Alt to move it; the place is kept. /sui run hides it.
+-- On the left by default, under the loot list. Hold Alt to move it; the place
+-- is kept. /sui run hides it.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
@@ -260,10 +260,9 @@ local function RestorePanel()
 	panel:ClearAllPoints()
 	if SurvivorUIDB and SurvivorUIDB.runLeft and SurvivorUIDB.runTop then
 		panel:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", SurvivorUIDB.runLeft, SurvivorUIDB.runTop)
-	elseif SurvivorUITracker then
-		panel:SetPoint("TOPRIGHT", SurvivorUITracker, "BOTTOMRIGHT", 8, -14)
-	elseif Minimap then
-		panel:SetPoint("TOPRIGHT", Minimap, "BOTTOMRIGHT", 8, -230)
+	else
+		-- The left side, under the loot list.
+		panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 12, -215)
 	end
 end
 
@@ -535,6 +534,43 @@ local SPELL_KEYS = {
 	["demoralizing shout"] = "demo_shout", ["hunter's mark"] = "hunters_mark",
 }
 
+-- Buffs: the game lists each one with its spell id and the seconds it has left
+-- (AZS_BUFFS), not its full length. The length is learned instead: the left
+-- time right after a buff goes up, or comes back up when refreshed.
+local buffLength = {}           -- [spell id] = seconds it lasts
+local buffLastLeft = {}
+
+local function WatchBuffs()
+	local seen = {}
+	for index = 1, table.getn(AZS_BUFFS or {}) do
+		local entry = AZS_BUFFS[index]
+		local spell = tonumber(Field(entry, "spell", 1))
+		local left = Num(Field(entry, "left", 2))
+		if spell then
+			seen[spell] = true
+			if left > (buffLastLeft[spell] or 0) + 0.3 then
+				buffLength[spell] = left
+			end
+			buffLastLeft[spell] = left
+		end
+	end
+	for spell in pairs(buffLastLeft) do
+		if not seen[spell] then
+			buffLastLeft[spell] = nil
+		end
+	end
+end
+
+-- The seconds left on this spell's buff, or nil when it is not up.
+local function BuffLeft(spell)
+	for index = 1, table.getn(AZS_BUFFS or {}) do
+		local entry = AZS_BUFFS[index]
+		if tonumber(Field(entry, "spell", 1)) == spell then
+			return Num(Field(entry, "left", 2))
+		end
+	end
+end
+
 local function SpellEntry(ability)
 	if not (ability and AZS_SPELLS) then
 		return nil
@@ -584,6 +620,14 @@ local function CritTooltip(row)
 		Add("head", "Spell", "Rank "..Num(Field(spell, "rank", 3)))
 		Add("row", "Cooldown", full > 0 and Seconds1(full) or "none")
 		Add("row", "Ready in", left > 0.05 and Seconds1(left) or "ready")
+		-- A buff also says how long it lasts and how long it has left.
+		local spellId = tonumber(Field(spell, "spell", 2))
+		local length = spellId and buffLength[spellId]
+		if length then
+			local up = BuffLeft(spellId)
+			Add("row", "Lasts", Seconds1(length))
+			Add("row", "Active", up and up > 0.05 and Seconds1(up).." left" or "not now")
+		end
 	end
 	if meter then
 		Add("head", "Damage done", Short(Num(meter.dmg)))
@@ -724,18 +768,15 @@ end
 ------------------------------------------------------------------------------
 -- Biggest Crits: the old box, on request. Every ability that has crit, in its
 -- own color, with its biggest critical strike; hover one for its card. Off by
--- default: /sui crits shows it. Above the chat, growing upward; Alt moves it.
+-- default: /sui crits shows it. Right under This Run and in its style, growing
+-- downward; Alt moves it.
 
 local CRIT_ROWS = 10
 
 local critBox = CreateFrame("Frame", "SurvivorUICrits", UIParent)
 critBox:SetWidth(WIDTH + 16)
 critBox:SetHeight(TITLE_HEIGHT + 8)
-if ChatFrame1 then
-	critBox:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", -6, 30)
-else
-	critBox:SetPoint("LEFT", UIParent, "LEFT", 30, 60)
-end
+critBox:SetPoint("TOPLEFT", panel, "BOTTOMLEFT", 0, -10)
 critBox:SetBackdrop({ bgFile = FLAT })
 critBox:SetBackdropColor(0.04, 0.04, 0.07, 0.55)
 critBox:SetMovable(true)
@@ -748,23 +789,22 @@ end
 local function SaveCritBox()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.critsLeft = math.floor(critBox:GetLeft() + 0.5)
-	SurvivorUIDB.critsBottom = math.floor(critBox:GetBottom() + 0.5)
+	SurvivorUIDB.critsTop = math.floor(critBox:GetTop() + 0.5)
 end
 
 local function RestoreCritBox()
 	critBox:ClearAllPoints()
-	if SurvivorUIDB and SurvivorUIDB.critsLeft then
-		critBox:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", SurvivorUIDB.critsLeft, SurvivorUIDB.critsBottom)
-	elseif ChatFrame1 then
-		critBox:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", -6, 30)
+	if SurvivorUIDB and SurvivorUIDB.critsLeft and SurvivorUIDB.critsTop then
+		critBox:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", SurvivorUIDB.critsLeft, SurvivorUIDB.critsTop)
 	else
-		critBox:SetPoint("LEFT", UIParent, "LEFT", 30, 60)
+		-- Under This Run, left edges together.
+		critBox:SetPoint("TOPLEFT", panel, "BOTTOMLEFT", 0, -10)
 	end
 end
 
 critBox.title = critBox:CreateFontString(nil, "OVERLAY")
 critBox.title:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
-critBox.title:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -8)
+critBox.title:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -9)
 critBox.title:SetTextColor(1, 0.82, 0)
 critBox.title:SetText("Biggest Crits")
 
@@ -791,8 +831,8 @@ critReset:SetScript("OnClick", function() ResetCrits() end)
 
 local critRows = {}
 for index = 1, CRIT_ROWS do
-	local row = MakeRow(14, "THICKOUTLINE", critBox)
-	row.label:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	-- The same rows as This Run's: no heavy face.
+	local row = MakeRow(11, "OUTLINE", critBox)
 	row:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -TITLE_HEIGHT - 4 - (index - 1) * ROW_HEIGHT)
 	-- The box sits on the left of the screen: its cards open on its right.
 	row.cardFrame = critBox
@@ -827,7 +867,10 @@ local function DrawCrits()
 			row.ability = ability
 			row.label:SetText(ability)
 			row.value:SetText(Short(critBest[ability]))
-			Paint(row, critColor[ability])
+			-- The damage meter's color for the ability, so both lists match.
+			local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(ability) or critColor[ability]
+			row.color = color
+			Paint(row, color)
 			row:Show()
 		else
 			row.ability = nil
@@ -908,6 +951,7 @@ ticker:SetScript("OnUpdate", function()
 		panel:Hide()
 	end
 	DrawCrits()
+	WatchBuffs()
 	-- An open card keeps its cooldown and damage current.
 	if critHovered and critTip:IsVisible() then
 		CritTooltip(critHovered)

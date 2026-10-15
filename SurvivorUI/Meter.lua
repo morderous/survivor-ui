@@ -104,8 +104,8 @@ local function SetLines(count)
 	end
 end
 
--- The saved place, with every line; else the right column, under the run panel
--- (or the run tracker), with as many lines as fit above the screen's bottom,
+-- The saved place, with every line; else the right column, under the build
+-- list (or the run tracker), with as many lines as fit above the screen's bottom,
 -- three at least. A small screen gets a shorter meter rather than an overlap.
 -- The size follows the layout, never the numbers, so it holds through a run.
 -- What the meter hangs from, last time: it is seated again only when that
@@ -127,10 +127,10 @@ local function Fit()
 		SetLines(MAX_LINES)
 		return
 	end
-	local run, tracker = SurvivorUIRun, SurvivorUITracker
+	local build, tracker = SurvivorUIBuild, SurvivorUITracker
 	local above, shift = nil, 0
-	if run and run:IsShown() and run:GetBottom() then
-		above = run
+	if build and build:IsShown() and build:GetBottom() then
+		above = build
 	elseif tracker and tracker:GetBottom() then
 		above, shift = tracker, 8
 	end
@@ -249,6 +249,52 @@ local function ColorOf(name)
 	return colors[name]
 end
 
+-- A spell's rank, from the game's list (AZS_SPELLS names it by key: "holy_wrath"
+-- for "Holy Wrath"), as a Roman numeral: XII.
+local SPELL_KEYS = {
+	["shadow word: pain"] = "sw_pain", ["power word: shield"] = "pw_shield",
+	["demoralizing shout"] = "demo_shout", ["hunter's mark"] = "hunters_mark",
+}
+
+local function RankOf(name)
+	if not (name and AZS_SPELLS) then
+		return nil
+	end
+	local lower = string.lower(name)
+	local key = SPELL_KEYS[lower] or string.gsub(string.gsub(lower, "[^%a ]", ""), " ", "_")
+	for index = 1, table.getn(AZS_SPELLS) do
+		local entry = AZS_SPELLS[index]
+		if (entry.key or entry[1]) == key then
+			return tonumber(entry.rank or entry[3])
+		end
+	end
+end
+
+local ROMAN = { { 50, "L" }, { 40, "XL" }, { 10, "X" }, { 9, "IX" }, { 5, "V" }, { 4, "IV" }, { 1, "I" } }
+
+local function Roman(number)
+	local text = ""
+	for index = 1, table.getn(ROMAN) do
+		local value, letters = ROMAN[index][1], ROMAN[index][2]
+		while number >= value do
+			text = text..letters
+			number = number - value
+		end
+	end
+	return text
+end
+
+-- The same color for the same source anywhere in the interface (the build list).
+function SurvivorUI_MeterColor(name)
+	return ColorOf(name)
+end
+
+-- A source's share of the meter's damage as shown, 0 to 1, or nil.
+local shares = {}
+function SurvivorUI_MeterShare(name)
+	return shares[name]
+end
+
 local function Bar(index)
 	local bar = bars[index]
 	if bar then
@@ -347,6 +393,12 @@ end
 
 local function Draw()
 	local lines, total, dps = Lines()
+	for name in pairs(shares) do
+		shares[name] = nil
+	end
+	for index = 1, table.getn(lines) do
+		shares[lines[index].name] = lines[index].share
+	end
 	meter.total:SetText(Short(total).."  |cffffffff"..Short(dps).."|r dps")
 
 	local count = math.min(shownLines, table.getn(lines))
@@ -366,7 +418,9 @@ local function Draw()
 		bar.color = color
 
 		-- A talent's or amulet's own damage says so, as the game's meter does.
-		bar.name:SetText(index..". "..name)
+		-- The spell's rank after its name, as a Roman numeral: "Holy Wrath XII".
+		local rank = RankOf(name)
+		bar.name:SetText(index..". "..name..(rank and rank > 0 and "  |cffbdbdbd"..Roman(rank).."|r" or ""))
 		if proc then
 			bar.tag:ClearAllPoints()
 			bar.tag:SetPoint("LEFT", bar, "LEFT", 4 + bar.name:GetStringWidth() + 4, 0)

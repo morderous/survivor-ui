@@ -384,11 +384,11 @@ local function StyleButton(button)
 	if not button.survivorStyled then
 		button.survivorStyled = true
 
+		-- No key labels: the spells cast themselves. Made clear rather than hidden,
+		-- since the stock code shows and fills them again on its own.
 		local hotkey = getglobal(name.."HotKey")
 		if hotkey then
-			hotkey:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
-			hotkey:ClearAllPoints()
-			hotkey:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -2)
+			hotkey:SetAlpha(0)
 		end
 	end
 end
@@ -566,6 +566,7 @@ end
 if CooldownFrame_SetTimer and not OmniCC_OnUpdate then
 	local stockSetTimer = CooldownFrame_SetTimer
 
+	-- The last two seconds count down in red.
 	local function CounterUpdate()
 		local left = this.start + this.duration - GetTime()
 		if left <= 0 then
@@ -573,6 +574,15 @@ if CooldownFrame_SetTimer and not OmniCC_OnUpdate then
 			return
 		end
 		this.text:SetText(TimeText(left))
+		local soon = left <= 2
+		if soon ~= this.soon then
+			this.soon = soon
+			if soon then
+				this.text:SetTextColor(1, 0.25, 0.25)
+			else
+				this.text:SetTextColor(1, 0.95, 0.6)
+			end
+		end
 	end
 
 	CooldownFrame_SetTimer = function(cooldown, start, duration, enable)
@@ -588,6 +598,11 @@ if CooldownFrame_SetTimer and not OmniCC_OnUpdate then
 			counter = CreateFrame("Frame", nil, parent)
 			counter:SetAllPoints(parent)
 			counter:SetFrameLevel(cooldown:GetFrameLevel() + 3)
+			-- A button cooling down is dimmed under its count.
+			counter.dim = counter:CreateTexture(nil, "BACKGROUND")
+			counter.dim:SetTexture(FLAT)
+			counter.dim:SetVertexColor(0, 0, 0, 0.45)
+			counter.dim:SetAllPoints(counter)
 			counter.text = Text(counter, 14, "CENTER", 0, 0)
 			counter.text:SetTextColor(1, 0.95, 0.6)
 			counter:SetScript("OnUpdate", CounterUpdate)
@@ -1232,6 +1247,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleLoot then
 			SurvivorUI_ToggleLoot()
 		end
+	elseif msg == "build" then
+		if SurvivorUI_ToggleBuild then
+			SurvivorUI_ToggleBuild()
+		end
 	elseif msg == "crits" then
 		if SurvivorUI_ToggleCrits then
 			SurvivorUI_ToggleCrits()
@@ -1253,6 +1272,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the bar and the game's own box")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui run  shows or hides the run panel (the run's numbers and biggest crits); /sui run reset clears the crits")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tracker  shows or hides the run tracker under the minimap (the clock and the bosses)")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui build  shows or hides the build list (spells, ranks, slots)")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui crits  shows or hides the Biggest Crits box (off by default)")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui hover  switches the white outline around what the mouse is on")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui scale 0.85  sizes the panels, 0.6 to 1.4, for smaller screens")

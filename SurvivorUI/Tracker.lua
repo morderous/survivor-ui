@@ -128,12 +128,12 @@ local function HeadBar(height)
 	return bar
 end
 
-head.zone = HeadText(14)
+head.zone = HeadText(12)
 head.state = HeadText(9)
-head.clock = HeadText(22, "THICKOUTLINE")
+head.clock = HeadText(18, "THICKOUTLINE")
 head.timeline = HeadBar(8)
 head.timeline:SetStatusBarColor(0.30, 0.80, 0.35, 1)
-head.level = HeadText(10)
+head.level = HeadText(9)
 head.xp = HeadBar(5)
 head.xp:SetStatusBarColor(0.58, 0.30, 0.85, 1)
 head.ticks = {}
@@ -190,11 +190,11 @@ local function BossLine(index)
 		line:SetWidth(WIDTH)
 		line:SetHeight(13)
 		line.name = line:CreateFontString(nil, "OVERLAY")
-		line.name:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+		line.name:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
 		line.name:SetPoint("LEFT", line, "LEFT", 0, 0)
 		line.name:SetJustifyH("LEFT")
 		line.time = line:CreateFontString(nil, "OVERLAY")
-		line.time:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+		line.time:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
 		line.time:SetPoint("RIGHT", line, "RIGHT", 0, 0)
 		line.time:SetJustifyH("RIGHT")
 		head.bosses[index] = line
@@ -277,7 +277,7 @@ local function Draw(game, phase)
 	local y = 0
 	head.zone:SetText(zoneName)
 	head.zone:SetTextColor(1, 0.82, 0)
-	y = Put(head.zone, y, 18)
+	y = Put(head.zone, y, 15)
 
 	-- How the run stands: won, fallen or endless, and the lives left, small in
 	-- the top right corner, so it takes no line of its own.
@@ -315,14 +315,16 @@ local function Draw(game, phase)
 	if endless or length <= 0 then
 		head.clock:SetText(Clock(seconds))
 	else
-		head.clock:SetText(Clock(seconds).."  |cff8a8a8a/|r  |cffb0b0b0"..Clock(length).."|r")
+		head.clock:SetText(Clock(seconds).." |cff8a8a8a/|r |cffb0b0b0"..Clock(length).."|r")
 	end
 	if phase == "paused" or phase == "choosing" then
 		head.clock:SetTextColor(0.6, 0.6, 0.6)
 	else
 		head.clock:SetTextColor(1, 1, 1)
 	end
-	y = Put(head.clock, y - 2, 30)
+	y = Put(head.clock, y - 1, 24)
+	-- Room over the timeline for each coming boss's countdown.
+	y = y - 10
 
 	-- The timeline: green up to now, each boss's tick in its own color.
 	head.timeline:SetValue(length > 0 and math.min(1, seconds / length) or 1)
@@ -331,7 +333,7 @@ local function Draw(game, phase)
 	else
 		head.timeline:SetStatusBarColor(0.30, 0.80, 0.35, 1)
 	end
-	y = Put(head.timeline, y, 14)
+	y = Put(head.timeline, y, 15)
 
 	local schedule = AZS_SCHEDULE or {}
 	local count = table.getn(schedule)
@@ -345,7 +347,8 @@ local function Draw(game, phase)
 		if isNext then
 			nextShown = true
 		end
-		local color = STATE_COLORS[isNext and "next" or state] or WAITING
+		-- A tick is white until its boss is slain, then green.
+		local color = state == "dead" and STATE_COLORS.dead or STATE_COLORS.next
 		local final = Num(Field(entry, "final", 4)) == 1
 
 		local tick = head.ticks[index]
@@ -364,23 +367,72 @@ local function Draw(game, phase)
 		tick:SetVertexColor(color[1], color[2], color[3], 1)
 		tick:Show()
 
+		-- Over a boss still to come, small and yellow, the time until it does.
+		if not tick.label then
+			tick.label = head.timeline:CreateFontString(nil, "OVERLAY")
+			tick.label:SetFont(FONT, 8 + FONT_BUMP, "OUTLINE")
+		end
+		-- The next boss's countdown in orange, the later ones in yellow.
+		if isNext then
+			tick.label:SetTextColor(1, 0.55, 0.15)
+		else
+			tick.label:SetTextColor(1, 0.82, 0.2)
+		end
+		if state == "due" and at > seconds then
+			-- Over its tick, kept inside the box at the ends.
+			tick.label:SetText(Clock(at - seconds))
+			local half = tick.label:GetStringWidth() / 2 + 1
+			local x = length > 0 and WIDTH * math.min(1, at / length) or WIDTH
+			x = math.max(half, math.min(WIDTH - half, x))
+			tick.label:ClearAllPoints()
+			tick.label:SetPoint("BOTTOM", head.timeline, "TOPLEFT", x, 4)
+			tick.label:Show()
+		else
+			tick.label:Hide()
+		end
+
 		local line = BossLine(index)
 		FillBossLine(line, entry, index, seconds, isNext)
-		y = Put(line, y, 14)
+		y = Put(line, y, 13)
 	end
 	for index = count + 1, table.getn(head.ticks) do
 		head.ticks[index]:Hide()
+		if head.ticks[index].label then
+			head.ticks[index].label:Hide()
+		end
 	end
 	for index = count + 1, table.getn(head.bosses) do
 		head.bosses[index]:Hide()
 	end
 	-- Empty lines keep their room.
-	y = y - (slots - count) * 14
+	y = y - (slots - count) * 13
 
+	-- Endless mode: the schedule is spent and bosses return on a timer, so one
+	-- more line, kept all run long, says when the next comes.
+	local nextLine = head.nextBoss
+	if not nextLine then
+		nextLine = BossLine(table.getn(head.bosses) + 1)
+		head.bosses[table.getn(head.bosses)] = nil
+		head.nextBoss = nextLine
+	end
+	local nextIn = tonumber(game.nb) or -1
+	if Num(game.endl) == 1 and nextIn >= 0 then
+		local name = game.nbn
+		if not name or name == "" then
+			name = "Next boss"
+		end
+		nextLine.name:SetText(name)
+		nextLine.name:SetTextColor(1, 1, 1)
+		nextLine.time:SetText("|cffffd24din "..Clock(nextIn).."|r")
+		y = Put(nextLine, y, 13)
+	else
+		nextLine:Hide()
+		y = y - 13
+	end
 	-- The level, and how far to the next.
 	local xp, xpNeeded = Num(game.xp), Num(game.xpn)
-	head.level:SetText("|cffbf8cffLevel "..Num(game.lvl).."|r  |cff8a8a8a"..Short(xp).." / "..Short(xpNeeded).."|r")
-	y = Put(head.level, y - 4, 14)
+	head.level:SetText("|cffbf8cffLevel "..Num(game.lvl).."|r")
+	y = Put(head.level, y - 2, 13)
 	head.xp:SetValue(xpNeeded > 0 and xp / xpNeeded or 0)
 	y = Put(head.xp, y, 6)
 
@@ -409,13 +461,25 @@ watcher:SetScript("OnUpdate", function()
 	end
 	watched = 0
 	local game, phase = Game()
-	if game and Settings().tracker then
+	local showing = game and Settings().tracker
+	if showing then
 		if not head:IsShown() then
 			Draw(game, phase)
 			head:Show()
 		end
 	elseif head:IsShown() then
 		head:Hide()
+	end
+	-- One experience bar is enough: the tracker's, while it shows.
+	local bar = getglobal("MainMenuExpBar")
+	if bar then
+		local want = showing and 0 or 1
+		if bar:GetAlpha() ~= want then
+			bar:SetAlpha(want)
+			if bar.EnableMouse then
+				bar:EnableMouse(not showing)
+			end
+		end
 	end
 end)
 
