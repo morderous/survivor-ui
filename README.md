@@ -77,7 +77,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - A damage meter under the run panel, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health, at any distance. Click one to target it.
 - Kills, gold and the next cache's price on a line under the experience bar, in place of the game's own box.
-- A thin white outline around whatever the mouse is on: a button, a bar, a buff.
+- A thin white outline around whatever the mouse is on: a button, a bar, a buff. The nameplates, the chat, the minimap and the run tracker go without.
 
 Left click a frame to target it, right click for its menu. Hold Alt to outline the whole middle block (frames, buttons, experience bar, kills and gold, buffs) and drag it anywhere; the place is kept. `/sui center` puts it back.
 
@@ -141,6 +141,13 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v2.2.1, 2026-10-15
+
+**Survivor UI**
+- `/sui scale` no longer sends a moved panel off the screen: each panel keeps its place at any scale, and none can leave the screen. `/sui layout` brings back one that went missing in v2.2.
+- The damage meter's proc tag reads "(proc)", smaller.
+- No hover outline on the nameplates, the chat, the minimap and the run tracker.
 
 ### v2.2, 2026-10-15
 

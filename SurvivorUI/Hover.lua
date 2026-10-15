@@ -1,7 +1,7 @@
 -- Survivor UI: a thin white outline around whatever piece of the interface the
 -- mouse is on, a button, a bar, a frame, so it is always clear what a click
--- or a tooltip belongs to. The world itself and the large windows (the chat,
--- the screen) get none. /sui hover switches it off.
+-- or a tooltip belongs to. The world itself, the nameplates over it, the chat
+-- and the large windows get none. /sui hover switches it off.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local MAX_WIDTH, MAX_HEIGHT = 520, 420  -- larger than this is a window, not an item
@@ -38,6 +38,22 @@ local SKIP = {}                 -- frames that are the background, not an item
 local function Wanted(frame)
 	if not frame or SKIP[frame] or not frame:IsVisible() then
 		return false
+	end
+	-- Nameplates hang from the world, not the interface; the chat (its window,
+	-- tabs, edit box and buttons) is text to read; and the minimap, its zone
+	-- name and the buttons around it are a map, and so is the run tracker
+	-- under it. None gets one.
+	local node = frame
+	while node do
+		if node == WorldFrame then
+			return false
+		end
+		local name = node.GetName and node:GetName()
+		if name and (string.find(name, "^ChatFrame") or string.find(name, "^Mini[Mm]ap")
+			or name == "SurvivorUITracker") then
+			return false
+		end
+		node = node.GetParent and node:GetParent()
 	end
 	local width, height = frame:GetWidth(), frame:GetHeight()
 	if not width or not height or width <= 0 or height <= 0 then

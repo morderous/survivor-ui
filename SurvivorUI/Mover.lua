@@ -234,12 +234,41 @@ local SCALED = {
 	"SurvivorUILoot", "SurvivorUICritTip",
 }
 
-local function ApplyScale()
-	local scale = (SurvivorUIDB and SurvivorUIDB.panelScale) or 1
+-- A moved panel keeps its place as a point in its own scale's units: the same
+-- numbers under another scale would put it elsewhere, off the screen even.
+-- So a change of scale converts each saved place, keeping the panel where it
+-- stands, and no panel may leave the screen.
+local SAVED = {
+	SurvivorUITracker = { "trackerRight", "trackerTop", "TOPRIGHT" },
+	SurvivorUIRun = { "runLeft", "runTop", "TOPLEFT" },
+	SurvivorUIMeter = { "meterRight", "meterBottom", "BOTTOMRIGHT" },
+	SurvivorUIBosses = { "bossLeft", "bossTop", "TOPLEFT" },
+	SurvivorUILoot = { "lootLeft", "lootTop", "TOPLEFT" },
+}
+
+local function ApplyScale(from)
+	SurvivorUIDB = SurvivorUIDB or {}
+	local scale = SurvivorUIDB.panelScale or 1
+	from = from or scale
 	for index = 1, table.getn(SCALED) do
-		local frame = getglobal(SCALED[index])
+		local name = SCALED[index]
+		local frame = getglobal(name)
 		if frame then
+			if frame.SetClampedToScreen then
+				frame:SetClampedToScreen(true)
+			end
 			frame:SetScale(scale)
+			local spec = SAVED[name]
+			local x, y = spec and SurvivorUIDB[spec[1]], spec and SurvivorUIDB[spec[2]]
+			if x and y then
+				if from ~= scale then
+					x = math.floor(x * from / scale + 0.5)
+					y = math.floor(y * from / scale + 0.5)
+					SurvivorUIDB[spec[1]], SurvivorUIDB[spec[2]] = x, y
+				end
+				frame:ClearAllPoints()
+				frame:SetPoint(spec[3], UIParent, "BOTTOMLEFT", x, y)
+			end
 		end
 	end
 end
@@ -251,14 +280,14 @@ function SurvivorUI_SetScale(value)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: panels at "..((SurvivorUIDB.panelScale) or 1).."; /sui scale 0.85 sets it, 0.6 to 1.4.")
 		return
 	end
+	local from = SurvivorUIDB.panelScale or 1
 	SurvivorUIDB.panelScale = math.max(0.6, math.min(1.4, value))
-	ApplyScale()
+	ApplyScale(from)
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: panels at "..SurvivorUIDB.panelScale..".")
 end
-
 local scaler = CreateFrame("Frame")
 scaler:RegisterEvent("PLAYER_ENTERING_WORLD")
-scaler:SetScript("OnEvent", ApplyScale)
+scaler:SetScript("OnEvent", function() ApplyScale() end)
 
 ------------------------------------------------------------------------------
 -- /sui layout: every piece back in its first place.

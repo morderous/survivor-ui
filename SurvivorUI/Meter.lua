@@ -274,6 +274,13 @@ local function Bar(index)
 	bar.name:SetJustifyH("LEFT")
 	bar.name:SetTextColor(1, 1, 1)
 
+	-- "(proc)", smaller, right after the name.
+	bar.tag = bar:CreateFontString(nil, "OVERLAY")
+	bar.tag:SetFont(FONT, 7 + FONT_BUMP, "OUTLINE")
+	bar.tag:SetTextColor(0.78, 0.91, 1)
+	bar.tag:SetText("(proc)")
+	bar.tag:Hide()
+
 	bar.value = bar:CreateFontString(nil, "OVERLAY")
 	bar.value:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
 	bar.value:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
@@ -359,7 +366,14 @@ local function Draw()
 		bar.color = color
 
 		-- A talent's or amulet's own damage says so, as the game's meter does.
-		bar.name:SetText(index..". "..name..(proc and "  |cffc8e8ffproc|r" or ""))
+		bar.name:SetText(index..". "..name)
+		if proc then
+			bar.tag:ClearAllPoints()
+			bar.tag:SetPoint("LEFT", bar, "LEFT", 4 + bar.name:GetStringWidth() + 4, 0)
+			bar.tag:Show()
+		else
+			bar.tag:Hide()
+		end
 		bar.value:SetText(Short(line.dmg).."  |cffb0b0b0"..math.floor(line.share * 100 + 0.5).."%|r")
 		bar:Show()
 	end
