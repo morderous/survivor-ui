@@ -126,6 +126,17 @@ The run tracker, the damage meter, the boss bars and the kills and gold line put
 
 ## Install
 
+### With the installer (easiest)
+
+1. Download `SurvivorUI-Installer.zip` from the [latest release](https://github.com/morderous/survivor-ui/releases/latest) and unzip it.
+2. Open `SurvivorInstaller.exe`. Windows may say it protected your PC, since the program is new and not signed: click **More info**, then **Run anyway**.
+3. Click **Find game...** and pick `AzerothSurvivors.exe` (or put the installer in the game's folder and it finds it by itself).
+4. Click **Install / Update**, and restart the game if it was open.
+
+Open it again any time to update: it always offers the latest release, with its notes. It only touches the `SurvivorUI` and `SurvivorPlates` folders in the game's `AddOns` folder. Its source is in [`installer/`](installer), built with the C# compiler that comes with Windows (`installer\build.bat`).
+
+### By hand
+
 1. Download `SurvivorUI-vX.Y.zip` from the [latest release](https://github.com/morderous/survivor-ui/releases/latest).
 2. Unzip it into the game's addon folder, `benilla-config\AddOns\`. You should end up with `AddOns\SurvivorPlates` and `AddOns\SurvivorUI`. Keep only the one you want, or both.
 3. Restart the game.
