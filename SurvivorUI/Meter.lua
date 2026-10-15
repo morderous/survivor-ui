@@ -2,11 +2,11 @@
 --
 -- The game's own meter, drawn again from the numbers it shares (its addon API,
 -- AZS_GetMeter): one flat bar per source of damage, the most first, each in a
--- color of its own and a talent's or amulet's own damage in blue, as in the
--- game's (its card says it is a proc). Hover a line for its card: its damage, share and damage per second,
+-- color of its own, a talent's or amulet's own damage tagged as a proc. Hover a line for its card: its damage, share and damage per second,
 -- and its critical strikes and normal hits from the combat log.
 --
--- Reset clears the crits; the damage is the game's, for the whole run. Its
+-- Reset starts the meter over from that moment and clears the crits; the run
+-- panel keeps the whole run. Its
 -- size holds through a run: up to ten lines, fewer on a small screen. Hold Alt
 -- and drag to move. The game's own meter is put away while this one is on;
 -- /sui meter brings it back. Needs the API; without it nothing shows.
@@ -20,14 +20,23 @@ local BAR_HEIGHT = 16
 local BAR_GAP = 2
 local MAX_LINES = 10
 
--- One color per source, handed out in the order they first show.
+-- One color per source, handed out in the order they first show: twelve hues
+-- spread around the wheel, each next one far from the last, so neighbours in
+-- the meter never look alike. A proc gets one too; its tag says it is a proc.
 local PALETTE = {
-	{ 0.86, 0.24, 0.24 }, { 0.26, 0.52, 0.96 }, { 0.93, 0.76, 0.20 }, { 0.30, 0.78, 0.45 },
-	{ 0.70, 0.36, 0.90 }, { 0.95, 0.52, 0.18 }, { 0.25, 0.80, 0.82 }, { 0.90, 0.40, 0.65 },
-	{ 0.62, 0.42, 0.24 }, { 0.60, 0.70, 0.85 },
+	{ 0.93, 0.70, 0.15 }, -- gold
+	{ 0.85, 0.20, 0.25 }, -- crimson
+	{ 0.25, 0.45, 0.95 }, -- royal blue
+	{ 0.30, 0.75, 0.30 }, -- green
+	{ 0.65, 0.35, 0.90 }, -- purple
+	{ 0.95, 0.50, 0.10 }, -- orange
+	{ 0.15, 0.70, 0.70 }, -- teal
+	{ 0.95, 0.40, 0.70 }, -- pink
+	{ 0.65, 0.85, 0.20 }, -- lime
+	{ 0.60, 0.40, 0.25 }, -- brown
+	{ 0.45, 0.75, 1.00 }, -- sky
+	{ 0.55, 0.55, 0.70 }, -- slate
 }
-local PROC_COLOR = { 0.44, 0.84, 1.00 }
-
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
 	if SurvivorUIDB.meter == nil then
@@ -165,7 +174,7 @@ titleHover:EnableMouse(true)
 titleHover:SetScript("OnEnter", function()
 	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
 	GameTooltip:SetText("Damage Done", 1, 0.82, 0)
-	GameTooltip:AddLine("The game's own numbers, for the whole run. Hover a line for its crits.", 1, 1, 1, 1)
+	GameTooltip:AddLine("The game's own numbers, for the whole run or since you last pressed Reset. Hover a line for its crits.", 1, 1, 1, 1)
 	GameTooltip:AddLine("Healing and damage to bosses are in the game's own meter: type /sui meter to switch to it, and again to come back.", 0.7, 0.7, 0.7, 1)
 	GameTooltip:AddLine("Hold Alt and drag to move.", 0.7, 0.7, 0.7, 1)
 	GameTooltip:Show()
@@ -191,15 +200,35 @@ reset.text:SetTextColor(0.6, 0.6, 0.6)
 reset:SetScript("OnEnter", function()
 	this.text:SetTextColor(1, 1, 1)
 	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
-	GameTooltip:SetText("Clears the crits.", 1, 1, 1)
-	GameTooltip:AddLine("The damage is the game's own, for the whole run.", 0.7, 0.7, 0.7, 1)
+	GameTooltip:SetText("Starts the meter over from now.", 1, 1, 1)
+	GameTooltip:AddLine("Damage, damage per second and shares count from here, and the crits are cleared. The run panel keeps the whole run's numbers.", 0.7, 0.7, 0.7, 1)
 	GameTooltip:Show()
 end)
 reset:SetScript("OnLeave", function()
 	this.text:SetTextColor(0.6, 0.6, 0.6)
 	GameTooltip:Hide()
 end)
+------------------------------------------------------------------------------
+-- Reset: the game's numbers cover the whole run, so the meter keeps what each
+-- source stood at when Reset was pressed, and shows what came after.
+
+local base = nil                -- { at = run second, total = damage, [source] = damage }
+local lastSeconds
+
+local function RunSeconds()
+	return (AZS_GetRunTime and AZS_GetRunTime()) or 0
+end
+
+local function TakeBase()
+	local lines, total = AZS_GetMeter()
+	base = { at = RunSeconds(), total = Num(total), sources = {} }
+	for index = 1, table.getn(lines or {}) do
+		base.sources[lines[index].name or "?"] = Num(lines[index].dmg)
+	end
+end
+
 reset:SetScript("OnClick", function()
+	TakeBase()
 	if SurvivorUI_ResetRun then
 		SurvivorUI_ResetRun()
 	end
@@ -212,10 +241,7 @@ local colors = {}               -- [source] = palette entry
 local colorsGiven = 0
 local bars = {}
 
-local function ColorOf(name, proc)
-	if proc then
-		return PROC_COLOR
-	end
+local function ColorOf(name)
 	if not colors[name] then
 		colorsGiven = colorsGiven + 1
 		colors[name] = PALETTE[math.mod(colorsGiven - 1, table.getn(PALETTE)) + 1]
@@ -274,30 +300,67 @@ local function Bar(index)
 	return bar
 end
 
-local function Draw()
+-- The game's lines, or what came after Reset: each source's damage less what
+-- it had then, the most first, shares and damage per second from there.
+local function Lines()
 	local lines, total, dps = AZS_GetMeter()
 	lines = lines or {}
-	meter.total:SetText(Short(Num(total)).."  |cffffffff"..Short(Num(dps)).."|r dps")
+	local seconds = RunSeconds()
+	-- The clock going back means a new run: the reset goes with the old one.
+	if base and lastSeconds and seconds + 3 < lastSeconds then
+		base = nil
+	end
+	lastSeconds = seconds
+	if not base then
+		local shown = {}
+		for index = 1, table.getn(lines) do
+			local line = lines[index]
+			table.insert(shown, { name = line.name or "?", dmg = Num(line.dmg), share = Num(line.share), proc = Num(line.proc) == 1 })
+		end
+		return shown, Num(total), Num(dps)
+	end
 
-	local count = math.min(shownLines, table.getn(lines))
-	local top = count > 0 and Num(lines[1].dmg) or 0
-	for index = 1, count do
+	local shown, sum = {}, 0
+	for index = 1, table.getn(lines) do
 		local line = lines[index]
 		local name = line.name or "?"
-		local proc = Num(line.proc) == 1
-		local color = ColorOf(name, proc)
+		local dmg = Num(line.dmg) - (base.sources[name] or 0)
+		if dmg > 0 then
+			table.insert(shown, { name = name, dmg = dmg, proc = Num(line.proc) == 1 })
+			sum = sum + dmg
+		end
+	end
+	table.sort(shown, function(a, b) return a.dmg > b.dmg end)
+	for index = 1, table.getn(shown) do
+		shown[index].share = sum > 0 and shown[index].dmg / sum or 0
+	end
+	local span = seconds - base.at
+	return shown, sum, span > 0 and sum / span or 0
+end
+
+local function Draw()
+	local lines, total, dps = Lines()
+	meter.total:SetText(Short(total).."  |cffffffff"..Short(dps).."|r dps")
+
+	local count = math.min(shownLines, table.getn(lines))
+	local top = count > 0 and lines[1].dmg or 0
+	for index = 1, count do
+		local line = lines[index]
+		local name = line.name
+		local proc = line.proc
+		local color = ColorOf(name)
 		local bar = Bar(index)
 
 		bar:ClearAllPoints()
 		bar:SetPoint("TOPLEFT", meter, "TOPLEFT", 4, -20 - (index - 1) * (BAR_HEIGHT + BAR_GAP))
-		bar:SetValue(top > 0 and Num(line.dmg) / top or 0)
+		bar:SetValue(top > 0 and line.dmg / top or 0)
 		bar:SetStatusBarColor(color[1], color[2], color[3], 0.85)
 		bar.ability = name
 		bar.color = color
 
 		-- A talent's or amulet's own damage says so, as the game's meter does.
 		bar.name:SetText(index..". "..name..(proc and "  |cffc8e8ffproc|r" or ""))
-		bar.value:SetText(Short(Num(line.dmg)).."  |cffb0b0b0"..math.floor(Num(line.share) * 100 + 0.5).."%|r")
+		bar.value:SetText(Short(line.dmg).."  |cffb0b0b0"..math.floor(line.share * 100 + 0.5).."%|r")
 		bar:Show()
 	end
 	for index = count + 1, table.getn(bars) do

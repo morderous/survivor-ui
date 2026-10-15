@@ -16,6 +16,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 |---|---|
 | `/sui` | Lists every command in the chat |
 | `/sui layout` | Puts every piece back in its first place |
+| `/sui hover` | The white outline around what the mouse is on: on or off |
 | `/sui scale 0.85` | Size of the panels (tracker, run panel, meter, boss bars), 0.6 to 1.4. For smaller screens |
 | `/sui center` | Puts the middle block (frames and buttons) back under the hero |
 | `/sui tracker` | Run tracker under the minimap: on or off |
@@ -76,6 +77,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - A damage meter under the run panel, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health, at any distance. Click one to target it.
 - Kills, gold and the next cache's price on a line under the experience bar, in place of the game's own box.
+- A thin white outline around whatever the mouse is on: a button, a bar, a buff.
 
 Left click a frame to target it, right click for its menu. Hold Alt to outline the whole middle block (frames, buttons, experience bar, kills and gold, buffs) and drag it anywhere; the place is kept. `/sui center` puts it back.
 
@@ -90,6 +92,7 @@ Commands:
 | `/sui meter` | Switches between the addon's damage meter (the default) and the game's own |
 | `/sui center` | Puts the middle block back under the hero |
 | `/sui layout` | Puts every piece back in its first place |
+| `/sui hover` | The white outline around what the mouse is on: on or off |
 | `/sui scale 0.85` | Size of the panels (tracker, run panel, meter, boss bars), 0.6 to 1.4. For smaller screens |
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
 | `/sui bosses` | Switches the boss bars on (the default) or off |
@@ -138,6 +141,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v2.2, 2026-10-15
+
+**Survivor UI**
+- The damage meter's Reset works: the meter starts over from that moment (damage, damage per second and shares) and the crits are cleared. The run panel keeps the whole run.
+- More colors in the damage meter: twelve distinct ones, procs included, so neighbours never look alike. Procs keep their "proc" tag.
+- The run tracker shows when each boss fell, beside when it came: `4:00 / 5:32`.
+- A thin white outline around whatever the mouse is on: a button, a bar, a buff. `/sui hover` switches it off.
 
 ### v2.1, 2026-10-15
 

@@ -165,6 +165,8 @@ end
 -- The bosses.
 
 local lastSeconds
+local bossSeenUp = {}             -- [boss] = true once seen alive
+local bossKilled = {}             -- [boss] = the run second it was seen to fall
 
 -- The boss alive under this name, for its health.
 local function LiveBoss(name)
@@ -202,16 +204,27 @@ end
 
 -- Grey until it falls, then in its own color. Alive, its health shows by the
 -- time; the next to come says how long.
-local function FillBossLine(line, entry, seconds, isNext)
+local function FillBossLine(line, entry, index, seconds, isNext)
 	local name = Field(entry, "name", 3) or "?"
 	local at = Num(Field(entry, "at", 2))
 	local state = Field(entry, "state", 5) or "due"
+	local key = index..name
+	if state == "up" then
+		bossSeenUp[key] = true
+	elseif state == "dead" and bossSeenUp[key] and not bossKilled[key] then
+		bossKilled[key] = seconds
+	end
 
 	line.name:SetText(name)
 	if state == "dead" then
 		local color = STATE_COLORS.dead
 		line.name:SetTextColor(color[1], color[2], color[3])
-		line.time:SetText(Clock(at))
+		-- The second it came, and the second it fell when that was seen.
+		if bossKilled[key] then
+			line.time:SetText("|cff8a8a8a"..Clock(at).."  /|r  "..Clock(bossKilled[key]))
+		else
+			line.time:SetText(Clock(at))
+		end
 		line.time:SetTextColor(color[1], color[2], color[3])
 	elseif state == "up" then
 		local color = STATE_COLORS.up
@@ -248,6 +261,10 @@ end
 local function Draw(game, phase)
 	local zone = AZS_ZONE or {}
 	local seconds = (AZS_GetRunTime and AZS_GetRunTime()) or Num(game.t)
+	-- The clock going back means a new run: forget the last one's bosses.
+	if lastSeconds and seconds + 3 < lastSeconds then
+		bossSeenUp, bossKilled = {}, {}
+	end
 	lastSeconds = seconds
 
 	-- The zone's facts come once a run, and can be missed (a restart mid-run):
@@ -348,7 +365,7 @@ local function Draw(game, phase)
 		tick:Show()
 
 		local line = BossLine(index)
-		FillBossLine(line, entry, seconds, isNext)
+		FillBossLine(line, entry, index, seconds, isNext)
 		y = Put(line, y, 14)
 	end
 	for index = count + 1, table.getn(head.ticks) do

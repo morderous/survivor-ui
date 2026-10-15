@@ -1200,6 +1200,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ResetLayout then
 			SurvivorUI_ResetLayout()
 		end
+	elseif msg == "hover" then
+		if SurvivorUI_ToggleHover then
+			SurvivorUI_ToggleHover()
+		end
 	elseif msg == "center" then
 		if SurvivorUI_CenterRow then
 			SurvivorUI_CenterRow()
@@ -1217,6 +1221,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the bar and the game's own box")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui run  shows or hides the run panel (the run's numbers and biggest crits); /sui run reset clears the crits")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tracker  shows or hides the run tracker under the minimap (the clock and the bosses)")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui hover  switches the white outline around what the mouse is on")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui scale 0.85  sizes the panels, 0.6 to 1.4, for smaller screens")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui meter  switches between the addon's damage meter, with the crits, and the game's own")
 	end
