@@ -831,9 +831,32 @@ critReset:SetScript("OnClick", function() ResetCrits() end)
 
 local critRows = {}
 for index = 1, CRIT_ROWS do
-	-- The same rows as This Run's: no heavy face.
-	local row = MakeRow(11, "OUTLINE", critBox)
+	-- Rows in the build list's look: the spell's icon, the row filled with its
+	-- damage meter color under light text, a border in that color.
+	local row = MakeRow(10, "OUTLINE", critBox)
 	row:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -TITLE_HEIGHT - 4 - (index - 1) * ROW_HEIGHT)
+	row.label:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	row.icon = row:CreateTexture(nil, "ARTWORK")
+	row.icon:SetWidth(ROW_HEIGHT - 4)
+	row.icon:SetHeight(ROW_HEIGHT - 4)
+	row.icon:SetPoint("LEFT", row, "LEFT", 2, 0)
+	row.label:ClearAllPoints()
+	row.label:SetPoint("LEFT", row, "LEFT", ROW_HEIGHT + 2, 0)
+	row.edges = {}
+	for _, side in pairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+		local line = row:CreateTexture(nil, "OVERLAY")
+		line:SetTexture(FLAT)
+		if side == "TOP" or side == "BOTTOM" then
+			line:SetHeight(1)
+			line:SetPoint(side.."LEFT", row, side.."LEFT", 0, 0)
+			line:SetPoint(side.."RIGHT", row, side.."RIGHT", 0, 0)
+		else
+			line:SetWidth(1)
+			line:SetPoint("TOP"..side, row, "TOP"..side, 0, 0)
+			line:SetPoint("BOTTOM"..side, row, "BOTTOM"..side, 0, 0)
+		end
+		table.insert(row.edges, line)
+	end
 	-- The box sits on the left of the screen: its cards open on its right.
 	row.cardFrame = critBox
 	row.cardRight = true
@@ -870,7 +893,22 @@ local function DrawCrits()
 			-- The damage meter's color for the ability, so both lists match.
 			local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(ability) or critColor[ability]
 			row.color = color
-			Paint(row, color)
+			-- The build list's look: filled with the color, light text, a border.
+			row.label:SetTextColor(1, 1, 1)
+			row.value:SetTextColor(1, 1, 1)
+			row.wash:SetVertexColor(color[1], color[2], color[3], 0.45)
+			row.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
+			for _, line in pairs(row.edges) do
+				line:SetVertexColor(color[1], color[2], color[3], 0.6)
+			end
+			local icon = SurvivorUI_MeterIcon and SurvivorUI_MeterIcon(ability)
+			if icon then
+				row.icon:SetTexture(icon)
+				row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			else
+				row.icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIcon")
+				row.icon:SetTexCoord(0, 1, 0, 1)
+			end
 			row:Show()
 		else
 			row.ability = nil

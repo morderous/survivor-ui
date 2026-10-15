@@ -1,6 +1,6 @@
 ## Interface: 11200
 ## Title: Survivor Plates
-## Version: 2.5.1
+## Version: 2.6
 ## Notes: Flat, Plater-style nameplates for Azeroth Survivors: health percent, execute marker, elite and boss styles.
 ## SavedVariables: SurvivorPlatesDB
 SurvivorPlates.lua

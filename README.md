@@ -81,9 +81,9 @@ Unit frames and the action bar, in one centered row under the hero:
 - A damage meter under the build list, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health, at any distance. Click one to target it.
 - Kills, gold and the next cache's price on a line under the experience bar, in place of the game's own box.
-- A build list in the right column, between the run tracker and the damage meter: every spell slot with the spell's icon, rank and share of the damage, from the highest rank down, each filled with its damage meter color; the free slots; and the gear, each piece of jewelry with what it gives (or what all the gear adds, with its sources on hover).
+- A build list in the right column, between the run tracker and the damage meter: every spell slot with the spell's icon, rank and share of the damage, from the highest rank down, each filled with its damage meter color; the free slots; and the jewelry, the gear a run drops: a row a slot (neck, rings, trinkets), filled with the piece's quality color, with its rank and what it gives in short. A legendary amulet names the spell it boosts in place of "Neck".
 - A loot list in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came.
-- A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike.
+- A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike, in the build list's look.
 - A thin white outline around whatever the mouse is on: a button, a bar, a buff. The nameplates, the chat, the minimap and the run tracker go without.
 - An options panel (`/sui opt`, or the S button by the minimap): every panel and every look on or off, the nameplates' choices, the panels' size, and a move mode that unlocks every piece over a grid they snap to.
 
@@ -161,6 +161,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v2.6, 2026-10-15
+
+**Survivor UI**
+- **Jewelry in the build list:** the gear section shows only the jewelry, the gear a run drops: one row for the neck, each ring and each trinket, filled with the piece's quality color. Each row has the slot, the piece's rank in Roman numerals (read off its name, "Blackhand's Breadth IV") and what it gives in short (`CRIT DMG`, `CDR`, `LUCK`...). An empty slot is faint. Hover a piece for its tooltip.
+- **Legendary amulets:** the row names the spell the amulet boosts in place of "Neck" (`Consecration IV`), with what it adds to it: `AREA`, `DUR` (duration), `DMG`, `BOOM` (kills explode).
+- "Increases the damage of your critical strikes" now reads as `CRIT DMG`, not `CRIT`.
+- **Biggest Crits** in the build list's look: each ability's icon and its damage meter color.
 
 ### v2.5.1, 2026-10-15
 

@@ -375,6 +375,11 @@ local function Roman(number)
 	return text
 end
 
+-- The same icon for a source anywhere in the interface (the Biggest Crits box).
+function SurvivorUI_MeterIcon(name)
+	return IconOf(name)
+end
+
 -- The same color for the same source anywhere in the interface (the build list).
 function SurvivorUI_MeterColor(name)
 	return ColorOf(name)

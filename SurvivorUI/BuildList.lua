@@ -8,9 +8,9 @@
 -- cooldown, damage and crits. The spells run from the highest rank down, each
 -- in a border of its color.
 --
--- Under the spells, the gear: each piece of jewelry worn (neck, rings,
--- trinkets) with what it gives, read off its tooltip ("Neck  CDR · DMG"). If
--- the pieces cannot be read, what all the gear adds, from the game (AZS_STATS).
+-- Under the spells, the jewelry worn (neck, rings, trinkets), the gear a run
+-- drops: each slot filled with the piece's quality color, with what it gives in
+-- short, read off its tooltip ("Neck  CDR · DMG").
 --
 -- From the game's addon API (AZS_SPELLS); without it nothing shows. Hold Alt
 -- and drag to move; /sui build hides it.
@@ -72,7 +72,7 @@ end
 
 local list = CreateFrame("Frame", "SurvivorUIBuild", UIParent)
 list:SetWidth(WIDTH + 12)
-list:SetHeight(GEAR_TOP + 16 + table.getn(GEAR_SLOTS) * 15 + 8)
+list:SetHeight(GEAR_TOP + 16 + table.getn(GEAR_SLOTS) * 17 + 6)
 list:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -12, -260)
 list:SetBackdrop({ bgFile = FLAT })
 list:SetBackdropColor(0.04, 0.04, 0.07, 0.55)
@@ -311,7 +311,9 @@ end
 
 -- Words in a tooltip line and their short names, the more specific first.
 local STAT_WORDS = {
+	{ "explode", "BOOM" }, { "duration", "DUR" },
 	{ "critical strike damage", "CRIT DMG" }, { "critical damage", "CRIT DMG" },
+	{ "damage of your critical", "CRIT DMG" },
 	{ "critical", "CRIT" }, { "crit", "CRIT" }, { "cooldown", "CDR" },
 	{ "damage reduction", "DMG RED" }, { "damage taken", "DMG RED" }, { "armor", "DMG RED" },
 	{ "area", "AREA" }, { "target", "TGT" }, { "twice", "ECHO" }, { "echo", "ECHO" },
@@ -321,101 +323,40 @@ local STAT_WORDS = {
 	{ "live", "LIFE" }, { "damage", "DMG" },
 }
 
--- The same short names for what all the gear adds (AZS_STATS, keys with a g).
-local GEAR_TOTALS = {
-	{ "gdmg", "DMG" }, { "gcd", "CDR" }, { "gcrit", "CRIT" }, { "gcm", "CRIT DMG" },
-	{ "garm", "DMG RED" }, { "garea", "AREA" }, { "gcnt", "TGT" }, { "gecho", "ECHO" },
-	{ "gspd", "SPD" }, { "ghp", "HP" }, { "greg", "REGEN" }, { "gpick", "PICK" },
-	{ "glch", "LEECH" }, { "gheal", "HEAL" }, { "gthn", "THORNS" }, { "gliv", "LIFE" },
-	{ "gxp", "XP" }, { "ggold", "GOLD" }, { "gluck", "LUCK" },
-}
-
--- Each short name in its section's color in the character pane: Offense,
--- Reach, Defense, Utility.
-local OFFENSE, REACH, DEFENSE, UTILITY = "ff7340", "b873ff", "4da6ff", "59e68c"
-local TAG_COLORS = {
-	["DMG"] = OFFENSE, ["CRIT"] = OFFENSE, ["CRIT DMG"] = OFFENSE, ["CDR"] = OFFENSE, ["ECHO"] = OFFENSE,
-	["AREA"] = REACH, ["TGT"] = REACH, ["PICK"] = REACH,
-	["HP"] = DEFENSE, ["DMG RED"] = DEFENSE, ["REGEN"] = DEFENSE, ["LEECH"] = DEFENSE,
-	["HEAL"] = DEFENSE, ["THORNS"] = DEFENSE, ["LIFE"] = DEFENSE,
-	["SPD"] = UTILITY, ["XP"] = UTILITY, ["GOLD"] = UTILITY, ["LUCK"] = UTILITY,
-}
-
-local function Tinted(tag, text)
-	return "|cff"..(TAG_COLORS[tag] or "d0d0d0")..(text or tag).."|r"
+-- The short name a tooltip line gives: the first word of the list it names,
+-- in the list's order, so "+29% critical strike damage" is CRIT DMG, not CRIT.
+local function StatOf(text)
+	for index = 1, table.getn(STAT_WORDS) do
+		if string.find(text, STAT_WORDS[index][1], 1, true) then
+			return STAT_WORDS[index][2]
+		end
+	end
 end
 
 local scan = CreateFrame("GameTooltip", "SurvivorUIScanTip", nil, "GameTooltipTemplate")
 scan:SetOwner(WorldFrame, "ANCHOR_NONE")
 
-local readLinks = {}            -- [item link] = "CDR · DMG"
+-- Each worn piece, by its link: its rank, the Roman numeral that ends its name
+-- ("Blackhand's Breadth IV"); the spell a legendary amulet boosts, named after
+-- its colon ("Amulet of the Inferno: Consecration IV"); and what it gives, the
+-- tooltip's lines with a number in them. An upgrade renames the piece, so the
+-- link alone says when to read it again.
+local pieces = {}               -- [item link] = { rank, spell, tags }
 
--- Where each total comes from: every worn piece (armor too, slots 1 to 19),
--- its stat lines read off its tooltip. Read again only when the gear changes.
-local sources = {}              -- [short name] = { { name, color, value }, ... }
-local sourcesKey
-
-local function ReadSources()
-	local links = {}
-	for slot = 1, 19 do
-		links[slot] = GetInventoryItemLink and GetInventoryItemLink("player", slot) or ""
+local function ReadPiece(slot, link)
+	if pieces[link] then
+		return pieces[link]
 	end
-	local key = table.concat(links, "|")
-	if key == sourcesKey then
-		return
+	local _, _, name = string.find(link, "%[(.-)%]")
+	name = name or ""
+	local _, _, rank = string.find(name, " ([IVXL]+)$")
+	if rank then
+		name = string.sub(name, 1, string.len(name) - string.len(rank) - 1)
 	end
-	sourcesKey = key
-	sources = {}
-	for slot = 1, 19 do
-		local link = links[slot]
-		if link ~= "" then
-			local _, _, name = string.find(link, "%[(.-)%]")
-			local _, _, color = string.find(link, "|c(%x%x%x%x%x%x%x%x)")
-			scan:SetOwner(WorldFrame, "ANCHOR_NONE")
-			scan:ClearLines()
-			scan:SetInventoryItem("player", slot)
-			for index = 2, scan:NumLines() do
-				local line = getglobal("SurvivorUIScanTipTextLeft"..index)
-				local text = line and string.lower(line:GetText() or "") or ""
-				local _, _, value = string.find(text, "([%+%-]?%d+%.?%d*%%?)")
-				if value then
-					for _, pair in pairs(STAT_WORDS) do
-						if string.find(text, pair[1], 1, true) then
-							sources[pair[2]] = sources[pair[2]] or {}
-							table.insert(sources[pair[2]], { name = name or "?", color = color or "ffffffff", value = value })
-							break
-						end
-					end
-				end
-			end
-		end
-	end
-end
-
--- A total's tooltip: the pieces that add to it.
-local function ShowSources(owner, stats)
-	ReadSources()
-	GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-	GameTooltip:SetText("Where it comes from", 1, 0.82, 0)
-	for _, stat in pairs(stats) do
-		GameTooltip:AddLine(stat.text, 1, 1, 1)
-		local list = sources[stat.tag]
-		if list and table.getn(list) > 0 then
-			for index = 1, table.getn(list) do
-				local piece = list[index]
-				GameTooltip:AddDoubleLine("   |c"..piece.color..piece.name.."|r", piece.value, 1, 1, 1, 0.85, 0.85, 0.85)
-			end
-		else
-			GameTooltip:AddLine("   no worn piece names it", 0.55, 0.55, 0.55)
-		end
-	end
-	GameTooltip:Show()
-end
-
--- What a piece gives, from its tooltip: the lines with a number in them.
-local function ItemTags(slot, link)
-	if readLinks[link] then
-		return readLinks[link]
+	-- Only a legendary amulet names a spell: one for each spell of each class.
+	local spell
+	if slot == 2 and string.find(link, "|cffff8000", 1, true) then
+		_, _, spell = string.find(name, ": (.+)$")
 	end
 	scan:SetOwner(WorldFrame, "ANCHOR_NONE")
 	scan:ClearLines()
@@ -425,19 +366,15 @@ local function ItemTags(slot, link)
 		local line = getglobal("SurvivorUIScanTipTextLeft"..index)
 		local text = line and string.lower(line:GetText() or "") or ""
 		if string.find(text, "%d") then
-			for _, pair in pairs(STAT_WORDS) do
-				if string.find(text, pair[1], 1, true) then
-					if not seen[pair[2]] then
-						seen[pair[2]] = true
-						table.insert(tags, Tinted(pair[2]))
-					end
-					break
-				end
+			local tag = StatOf(text)
+			if tag and not seen[tag] then
+				seen[tag] = true
+				table.insert(tags, tag)
 			end
 		end
 	end
-	readLinks[link] = table.concat(tags, " · ")
-	return readLinks[link]
+	pieces[link] = { rank = rank or "I", spell = spell, tags = table.concat(tags, " · ") }
+	return pieces[link]
 end
 
 list.gearTitle = list:CreateFontString(nil, "OVERLAY")
@@ -446,28 +383,49 @@ list.gearTitle:SetPoint("TOPLEFT", list, "TOPLEFT", 7, -GEAR_TOP)
 list.gearTitle:SetTextColor(1, 0.82, 0)
 list.gearTitle:SetText("Gear")
 
+-- The jewelry worn, the gear a run drops: one row a slot, filled with the
+-- piece's quality color, the slot's name and what the piece gives in short;
+-- an empty slot faint. Hover a piece for its own tooltip.
+local GEAR_ROW = 17
+
 local gearLines = {}
 for index = 1, table.getn(GEAR_SLOTS) do
 	local line = CreateFrame("Frame", nil, list)
 	line:SetWidth(WIDTH)
-	line:SetHeight(15)
-	line:SetPoint("TOPLEFT", list, "TOPLEFT", 6, -GEAR_TOP - 15 - (index - 1) * 15)
+	line:SetHeight(GEAR_ROW - 1)
+	line:SetPoint("TOPLEFT", list, "TOPLEFT", 6, -GEAR_TOP - 15 - (index - 1) * GEAR_ROW)
+
+	line.wash = line:CreateTexture(nil, "BACKGROUND")
+	line.wash:SetTexture(FLAT)
+	line.wash:SetAllPoints(line)
+
+	line.edges = {}
+	for _, side in pairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+		local edge = line:CreateTexture(nil, "BORDER")
+		edge:SetTexture(FLAT)
+		if side == "TOP" or side == "BOTTOM" then
+			edge:SetHeight(1)
+			edge:SetPoint(side.."LEFT", line, side.."LEFT", 0, 0)
+			edge:SetPoint(side.."RIGHT", line, side.."RIGHT", 0, 0)
+		else
+			edge:SetWidth(1)
+			edge:SetPoint("TOP"..side, line, "TOP"..side, 0, 0)
+			edge:SetPoint("BOTTOM"..side, line, "BOTTOM"..side, 0, 0)
+		end
+		table.insert(line.edges, edge)
+	end
+
 	line.label = line:CreateFontString(nil, "OVERLAY")
-	line.label:SetFont(FONT, 8 + FONT_BUMP, "OUTLINE")
-	line.label:SetPoint("LEFT", line, "LEFT", 2, 0)
+	line.label:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	line.label:SetPoint("LEFT", line, "LEFT", 4, 0)
 	line.tags = line:CreateFontString(nil, "OVERLAY")
-	line.tags:SetFont(FONT, 8 + FONT_BUMP, "OUTLINE")
+	line.tags:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
 	line.tags:SetPoint("RIGHT", line, "RIGHT", -4, 0)
-	line.tags:SetTextColor(0.85, 0.85, 0.85)
-	-- The piece's own tooltip on hover.
+
 	line:EnableMouse(true)
 	line:SetScript("OnEnter", function()
-		if this.stats then
-			ShowSources(this, this.stats)
-			return
-		end
 		if this.slot and GetInventoryItemLink("player", this.slot) then
-			GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+			GameTooltip:SetOwner(this, "ANCHOR_LEFT")
 			GameTooltip:SetInventoryItem("player", this.slot)
 			GameTooltip:Show()
 		end
@@ -476,58 +434,45 @@ for index = 1, table.getn(GEAR_SLOTS) do
 	gearLines[index] = line
 end
 
-local function Percent(value)
-	if math.abs(value) < 5 then
-		return string.format("%+.0f%%", value * 100)
+local function PaintGear(line, r, g, b, fill, edge)
+	line.wash:SetVertexColor(r, g, b, fill)
+	for _, piece in pairs(line.edges) do
+		piece:SetVertexColor(r, g, b, edge)
 	end
-	return string.format("%+.0f", value)
 end
 
 local function DrawGear()
-	local any = false
+	list.gearTitle:SetText("Jewelry")
 	for index = 1, table.getn(GEAR_SLOTS) do
 		local slot, label = GEAR_SLOTS[index][1], GEAR_SLOTS[index][2]
 		local line = gearLines[index]
 		line.slot = slot
-		line.stats = nil
 		local link = GetInventoryItemLink and GetInventoryItemLink("player", slot)
 		if link then
-			any = true
-			local _, _, color = string.find(link, "|c(%x%x%x%x%x%x%x%x)")
-			line.label:SetText("|c"..(color or "ffffffff")..label.."|r")
-			line.tags:SetText(ItemTags(slot, link))
+			-- The quality color the link carries: "|cffa335ee" is an epic's purple.
+			local _, _, rr, gg, bb = string.find(link, "|c%x%x(%x%x)(%x%x)(%x%x)")
+			local r = (tonumber(rr or "cc", 16) or 204) / 255
+			local g = (tonumber(gg or "cc", 16) or 204) / 255
+			local b = (tonumber(bb or "cc", 16) or 204) / 255
+			PaintGear(line, r, g, b, 0.45, 0.7)
+			-- The slot, then the piece's rank as a Roman numeral: "Ring  II". A
+			-- legendary amulet shows the spell it boosts in the slot's place.
+			local piece = ReadPiece(slot, link)
+			line.label:SetText((piece.spell or label).."  "..piece.rank)
+			line.label:SetTextColor(1, 1, 1)
+			line.tags:SetText(piece.tags ~= "" and piece.tags or "-")
+			line.tags:SetTextColor(1, 1, 1)
 		else
-			line.label:SetText("|cff6a6a6a"..label.."|r")
-			line.tags:SetText("|cff6a6a6a-|r")
+			PaintGear(line, 0.5, 0.5, 0.55, 0.06, 0.15)
+			line.label:SetText(label)
+			line.label:SetTextColor(0.45, 0.45, 0.5)
+			line.tags:SetText("empty")
+			line.tags:SetTextColor(0.4, 0.4, 0.45)
 		end
 		line:Show()
 	end
-	if any then
-		list.gearTitle:SetText("Gear")
-		return
-	end
-	-- No piece to read: what all the gear adds, two to a line.
-	list.gearTitle:SetText("Gear  |cff8a8a8a(all pieces)|r")
-	local stats, parts = AZS_STATS or {}, {}
-	for _, pair in pairs(GEAR_TOTALS) do
-		local value = tonumber(stats[pair[1]])
-		if value and value ~= 0 then
-			table.insert(parts, { tag = pair[2], text = Tinted(pair[2], pair[2].." "..Percent(value)) })
-		end
-	end
-	for index = 1, table.getn(gearLines) do
-		local line = gearLines[index]
-		line.slot = nil
-		local a, b = parts[index * 2 - 1], parts[index * 2]
-		line.label:SetText(a and a.text or "")
-		line.tags:SetText(b and b.text or "")
-		-- Hover: which pieces add to these two.
-		line.stats = a and { a, b } or nil
-		if index == 1 and not a then
-			line.label:SetText("|cff6a6a6anothing worn|r")
-		end
-	end
 end
+
 local elapsed = 0
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
