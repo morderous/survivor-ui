@@ -190,9 +190,7 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
-### v2.10-beta, 2026-10-16
-
-A beta: the installer stays on v2.9 until this one is out of beta.
+### v2.10, 2026-10-16
 
 **Survivor UI**
 - **Kill pace** (new): a glowing orb on the run tracker, left of its clock, that tells how fast the enemies die against your own runs.
