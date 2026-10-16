@@ -94,6 +94,15 @@ local function Settings()
 	if SurvivorUIDB.damageText == nil then
 		SurvivorUIDB.damageText = true
 	end
+	-- From v2.8 the numbers beside the hero are the default: switched on once
+	-- for everyone who has the addon's own numbers, and kept as each one sets
+	-- them after that.
+	if SurvivorUIDB.damageDefaults ~= 2 then
+		SurvivorUIDB.damageDefaults = 2
+		if SurvivorUIDB.damageText and not SurvivorUIDB.damageNone then
+			SurvivorUIDB.damageSide = true
+		end
+	end
 	SurvivorUIDB.chatSize = SurvivorUIDB.chatSize or CHAT_SIZE
 	return SurvivorUIDB
 end
@@ -1297,8 +1306,31 @@ local DAMAGE_EVENTS = {
 -- The stock floating combat text (Blizzard_CombatText, loaded on demand)
 -- scrolls the hits the hero takes slowly, in its own face. While the quick
 -- numbers are on, it leaves those to them; heals and the rest stay its own.
+-- Each kind's own "show", as the stock code set it, to give back after "no
+-- combat text at all".
+local stockShow
+
 local function ApplyTakenText()
 	if not COMBAT_TEXT_TYPE_INFO then
+		return
+	end
+	if not stockShow then
+		stockShow = {}
+		for kind, info in pairs(COMBAT_TEXT_TYPE_INFO) do
+			stockShow[kind] = info.show
+		end
+	end
+	-- No combat text at all (/sui damage none): every kind of the stock
+	-- floating text silenced; back as it was when switched off.
+	local none = Settings().damageNone
+	for kind, info in pairs(COMBAT_TEXT_TYPE_INFO) do
+		if none then
+			info.show = nil
+		elseif info.var ~= "SURVIVORUI_NEVER" then
+			info.show = stockShow[kind]
+		end
+	end
+	if none then
 		return
 	end
 	-- "Health Low" in big letters over the fight says what the player frame
@@ -1338,7 +1370,8 @@ end)
 
 -- The engine's numbers are on when the addon's are off, and the other way round.
 local function ApplyDamageText()
-	local on = Settings().damageText
+	local none = Settings().damageNone
+	local on = Settings().damageText and not none
 	for _, event in pairs(DAMAGE_EVENTS) do
 		if on then
 			damageEvents:RegisterEvent(event)
@@ -1346,23 +1379,48 @@ local function ApplyDamageText()
 			damageEvents:UnregisterEvent(event)
 		end
 	end
-	SetCVar("CombatDamage", on and "0" or "1")
+	-- The engine's own numbers: only when the game's are the ones chosen.
+	SetCVar("CombatDamage", (on or none) and "0" or "1")
 	ApplyTakenText()
 end
 
 function SurvivorUI_ToggleDamage()
 	local settings = Settings()
 	settings.damageText = not settings.damageText
+	settings.damageNone = nil
 	ApplyDamageText()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.damageText and "quick damage numbers." or "the game's own damage numbers."))
+end
+
+-- How the combat numbers show, for the options: "quick" (over the enemies),
+-- "side" (beside the hero), "game" (the game's own) or "none" (no combat text).
+function SurvivorUI_DamageMode()
+	local settings = Settings()
+	if settings.damageNone then
+		return "none"
+	elseif not settings.damageText then
+		return "game"
+	elseif settings.damageSide then
+		return "side"
+	end
+	return "quick"
+end
+
+function SurvivorUI_SetDamageMode(mode)
+	local settings = Settings()
+	settings.damageNone = mode == "none"
+	settings.damageText = mode == "quick" or mode == "side"
+	settings.damageSide = mode == "side"
+	ApplyDamageText()
 end
 
 -- The numbers beside the hero, or over the enemies again.
 function SurvivorUI_ToggleDamageSide()
 	local settings = Settings()
 	settings.damageSide = not settings.damageSide
-	if settings.damageSide and not settings.damageText then
+	if settings.damageSide then
 		settings.damageText = true
+		settings.damageNone = nil
 	end
 	ApplyDamageText()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: damage numbers "..(settings.damageSide and "beside the hero: hits on the left, crits on the right, heals rising and damage taken falling below." or "over the enemies."))
@@ -1428,6 +1486,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleCrits then
 			SurvivorUI_ToggleCrits()
 		end
+	elseif msg == "jewelry" then
+		if SurvivorUI_ToggleJewelry then
+			SurvivorUI_ToggleJewelry()
+		end
 	elseif msg == "pins" then
 		if SurvivorUI_PinsReport then
 			SurvivorUI_PinsReport()
@@ -1440,11 +1502,16 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		SurvivorUI_ToggleDamage()
 	elseif msg == "damage side" then
 		SurvivorUI_ToggleDamageSide()
+	elseif msg == "damage none" then
+		local none = SurvivorUI_DamageMode() ~= "none"
+		SurvivorUI_SetDamageMode(none and "none" or "quick")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(none and "no combat text at all." or "quick damage numbers."))
 	else
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui opt  opens the options: every piece on or off, panel size, and a move mode with a grid")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between the quick damage numbers and the game's own")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage side  puts the damage numbers beside the hero, or back over the enemies")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui jewelry  the jewelry your class has found on this game, with the values seen")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 12  sets the chat text size, 8 to 18")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui bosses  switches the boss bars on or off; /sui bosses elites  lists elites too")

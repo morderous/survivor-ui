@@ -1,4 +1,4 @@
--- Survivor UI: loot log (beta).
+-- Survivor UI: loot log.
 --
 -- A small list in the top left corner of what the run has dropped, newest on
 -- top, each with the run second it came. The game's addon API says nothing
@@ -65,7 +65,7 @@ log.title = log:CreateFontString(nil, "OVERLAY")
 log.title:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
 log.title:SetPoint("TOPLEFT", log, "TOPLEFT", 1, 0)
 log.title:SetTextColor(0.75, 0.75, 0.75)
-log.title:SetText("Loot  |cff8a8a8a(beta)|r")
+log.title:SetText("Loot")
 
 log.empty = log:CreateFontString(nil, "OVERLAY")
 log.empty:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")

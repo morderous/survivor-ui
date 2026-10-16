@@ -21,8 +21,9 @@
 -- bosses carry a name on it.
 --
 -- Slash commands:
---   /splates all        plates on every enemy (default), or only on elites, guardians and bosses
+--   /splates all        plates on every enemy, or only on elites, guardians and bosses
 --   /splates names      names only on elites, guardians and bosses (default), or on every plate
+--   /splates none       no nameplates at all (the default), or back
 --   /splates scale N    plate size, 0.6 to 2 (default 1)
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
@@ -155,10 +156,15 @@ local function Settings()
 	local db = SurvivorPlatesDB
 	-- The defaults: a plate on every enemy, a name only on elites, guardians and
 	-- bosses. Settings saved under the earlier defaults start over once.
-	if db.defaults ~= 2 then
-		db.defaults = 2
+	if (db.defaults or 0) < 2 then
 		db.important = false
 		db.names = false
+	end
+	-- From v2.8 no plates by default: Survivor UI's boss bars show the bosses,
+	-- guardians and elites. Once for everyone; whoever wants plates turns them on.
+	if (db.defaults or 0) < 3 then
+		db.defaults = 3
+		db.hidden = true
 	end
 	db.scale = db.scale or 1
 	return db
@@ -441,12 +447,20 @@ scanner:SetScript("OnUpdate", function()
 	end
 end)
 
--- Enemy nameplates are off by default; a run is unreadable without them.
+-- Enemy nameplates are off by default; a run is unreadable without them. Off
+-- again for whoever chose no plates at all (/splates none).
+local function ApplyShown()
+	if Settings().hidden then
+		HideNameplates()
+		NAMEPLATES_ON = nil
+	else
+		ShowNameplates()
+		NAMEPLATES_ON = 1
+	end
+end
+
 scanner:RegisterEvent("PLAYER_ENTERING_WORLD")
-scanner:SetScript("OnEvent", function()
-	ShowNameplates()
-	NAMEPLATES_ON = 1
-end)
+scanner:SetScript("OnEvent", ApplyShown)
 
 local function Restyle()
 	for index = 1, table.getn(overlays) do
@@ -470,12 +484,29 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 	elseif command == "names" then
 		settings.names = not settings.names
 		Say("names on "..(settings.names and "every plate" or "elites, guardians and bosses only")..".")
+	elseif command == "none" then
+		settings.hidden = not settings.hidden
+		ApplyShown()
+		Say(settings.hidden and "no nameplates." or "nameplates back.")
 	elseif command == "scale" and number then
 		settings.scale = math.max(0.6, math.min(2, number))
 		Say("scale "..settings.scale..".")
 	else
-		Say("/splates all | names | scale 0.6-2")
+		Say("/splates all | names | none | scale 0.6-2")
 		return
 	end
 	Restyle()
+end
+
+-- For Survivor UI's options: the plates' size and whether they show, quietly.
+function SurvivorPlates_GetScale()
+	return Settings().scale or 1
+end
+
+function SurvivorPlates_SetScale(value)
+	value = tonumber(value)
+	if value then
+		Settings().scale = math.max(0.6, math.min(2, math.floor(value * 100 + 0.5) / 100))
+		Restyle()
+	end
 end

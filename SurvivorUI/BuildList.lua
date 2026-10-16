@@ -333,6 +333,11 @@ local function StatOf(text)
 	end
 end
 
+-- The same short names for the jewelry collection (Jewelry.lua).
+function SurvivorUI_StatOf(text)
+	return StatOf(string.lower(text or ""))
+end
+
 local scan = CreateFrame("GameTooltip", "SurvivorUIScanTip", nil, "GameTooltipTemplate")
 scan:SetOwner(WorldFrame, "ANCHOR_NONE")
 

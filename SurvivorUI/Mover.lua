@@ -33,6 +33,9 @@ local function Save()
 	if not (x and cx) then
 		return
 	end
+	-- The bar's center is in its own size's units; the screen's, made the same.
+	local ratio = UIParent:GetEffectiveScale() / row:GetEffectiveScale()
+	cx, cy = cx * ratio, cy * ratio
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.rowX = math.floor(x - cx + 0.5)
 	SurvivorUIDB.rowY = math.floor(y - cy + 0.5)
@@ -399,70 +402,202 @@ gameLoader:SetScript("OnUpdate", function()
 end)
 
 ------------------------------------------------------------------------------
--- /sui scale: the size of the addon's panels, for screens where they crowd
--- each other (a small resolution, or a large interface scale).
+-- Sizes: one for the whole interface (/sui scale, the options' "All" slider)
+-- and one for each part, the two multiplied. A part is one or more frames,
+-- and the saved places that belong to them.
 
-local SCALED = {
-	"SurvivorUITracker", "SurvivorUIRun", "SurvivorUIMeter", "SurvivorUIBosses",
-	"SurvivorUILoot", "SurvivorUICritTip", "SurvivorUICrits", "SurvivorUIBuild",
+local SCALE_MIN, SCALE_MAX = 0.5, 2
+local PARTS = {
+	{ key = "tracker", label = "Run tracker", frames = { "SurvivorUITracker" },
+		places = { { "trackerRight", "trackerTop", "TOPRIGHT" } } },
+	{ key = "build", label = "Build list", frames = { "SurvivorUIBuild" },
+		places = { { "buildLeft", "buildTop", "TOPLEFT" } } },
+	{ key = "meter", label = "Damage meter", frames = { "SurvivorUIMeter", "SurvivorUICritTip" },
+		places = { { "meterRight", "meterBottom", "BOTTOMRIGHT" } } },
+	{ key = "run", label = "This Run", frames = { "SurvivorUIRun" },
+		places = { { "runLeft", "runTop", "TOPLEFT" } }, extra = { "runBottom" } },
+	{ key = "crits", label = "Biggest Crits", frames = { "SurvivorUICrits" },
+		places = { { "critsLeft", "critsTop", "TOPLEFT" } }, extra = { "critsBottom" } },
+	{ key = "bosses", label = "Boss bars", frames = { "SurvivorUIBosses" },
+		places = { { "bossLeft", "bossTop", "TOPLEFT" } } },
+	{ key = "loot", label = "Loot list", frames = { "SurvivorUILoot" },
+		places = { { "lootLeft", "lootTop", "TOPLEFT" } } },
+	-- The buttons belong to the game's bar, hung on the row: sized with it.
+	{ key = "bar", label = "Action bar", frames = { "SurvivorUIRow", "MainMenuExpBar",
+		"ActionButton1", "ActionButton2", "ActionButton3", "ActionButton4", "ActionButton5", "ActionButton6",
+		"ActionButton7", "ActionButton8", "ActionButton9", "ActionButton10", "ActionButton11", "ActionButton12",
+		"BonusActionButton1", "BonusActionButton2", "BonusActionButton3", "BonusActionButton4", "BonusActionButton5", "BonusActionButton6",
+		"BonusActionButton7", "BonusActionButton8", "BonusActionButton9", "BonusActionButton10", "BonusActionButton11", "BonusActionButton12" },
+		places = {}, extra = { "rowX", "rowY" }, restore = function() Restore() end },
+	{ key = "frames", label = "Player and target", frames = { "SurvivorUIPlayer", "SurvivorUITarget" },
+		places = { { "playerLeft", "playerTop", "TOPLEFT", "SurvivorUIPlayer" }, { "targetLeft", "targetTop", "TOPLEFT", "SurvivorUITarget" } } },
+	{ key = "buffs", label = "Buffs", frames = { "SurvivorUIBuffs" },
+		places = { { "buffsLeft", "buffsBottom", "BOTTOMLEFT" } } },
+	{ key = "tally", label = "Kills and gold", frames = { "SurvivorUITallyFrame" },
+		places = { { "tallyLeft", "tallyTop", "TOPLEFT" } } },
 }
 
--- A moved panel keeps its place as a point in its own scale's units: the same
--- numbers under another scale would put it elsewhere, off the screen even.
--- So a change of scale converts each saved place, keeping the panel where it
--- stands, and no panel may leave the screen.
-local SAVED = {
-	SurvivorUITracker = { "trackerRight", "trackerTop", "TOPRIGHT" },
-	SurvivorUIRun = { "runLeft", "runTop", "TOPLEFT" },
-	SurvivorUIMeter = { "meterRight", "meterBottom", "BOTTOMRIGHT" },
-	SurvivorUIBosses = { "bossLeft", "bossTop", "TOPLEFT" },
-	SurvivorUILoot = { "lootLeft", "lootTop", "TOPLEFT" },
-	SurvivorUICrits = { "critsLeft", "critsTop", "TOPLEFT" },
-	SurvivorUIBuild = { "buildLeft", "buildTop", "TOPLEFT" },
-}
+local function Clamp(value)
+	return math.max(SCALE_MIN, math.min(SCALE_MAX, value))
+end
 
-local function ApplyScale(from)
+local function PartScales()
 	SurvivorUIDB = SurvivorUIDB or {}
-	local scale = SurvivorUIDB.panelScale or 1
+	SurvivorUIDB.partScale = SurvivorUIDB.partScale or {}
+	return SurvivorUIDB.partScale
+end
+
+-- A part's size on screen: the whole interface's times its own.
+local function Effective(part)
+	return Clamp((SurvivorUIDB and SurvivorUIDB.panelScale or 1) * (PartScales()[part.key] or 1))
+end
+
+-- A moved piece keeps its place as a point in its own size's units: the same
+-- numbers at another size would put it elsewhere, off the screen even. So a
+-- change of size converts the part's saved places, keeping it where it
+-- stands, and no piece may leave the screen.
+local function ApplyPart(part, from)
+	local scale = Effective(part)
 	from = from or scale
-	for index = 1, table.getn(SCALED) do
-		local name = SCALED[index]
+	local db = SurvivorUIDB
+	if from ~= scale then
+		local keys = {}
+		for _, place in pairs(part.places) do
+			table.insert(keys, place[1])
+			table.insert(keys, place[2])
+		end
+		for _, key in pairs(part.extra or {}) do
+			table.insert(keys, key)
+		end
+		for _, key in pairs(keys) do
+			if db[key] then
+				db[key] = math.floor(db[key] * from / scale + 0.5)
+			end
+		end
+	end
+	-- Kept on the screen: the part's own frames, the ones it moves by. Not the
+	-- action buttons: the ones put away wait below the screen's edge.
+	local kept = { [part.frames[1]] = true }
+	for _, place in pairs(part.places) do
+		kept[place[4] or part.frames[1]] = true
+	end
+	for _, name in pairs(part.frames) do
 		local frame = getglobal(name)
 		if frame then
-			if frame.SetClampedToScreen then
+			if kept[name] and frame.SetClampedToScreen then
 				frame:SetClampedToScreen(true)
 			end
 			frame:SetScale(scale)
-			local spec = SAVED[name]
-			local x, y = spec and SurvivorUIDB[spec[1]], spec and SurvivorUIDB[spec[2]]
-			if x and y then
-				if from ~= scale then
-					x = math.floor(x * from / scale + 0.5)
-					y = math.floor(y * from / scale + 0.5)
-					SurvivorUIDB[spec[1]], SurvivorUIDB[spec[2]] = x, y
-				end
-				frame:ClearAllPoints()
-				frame:SetPoint(spec[3], UIParent, "BOTTOMLEFT", x, y)
-			end
+		end
+	end
+	for _, place in pairs(part.places) do
+		local frame = getglobal(place[4] or part.frames[1])
+		if frame and db[place[1]] and db[place[2]] then
+			frame:ClearAllPoints()
+			frame:SetPoint(place[3], UIParent, "BOTTOMLEFT", db[place[1]], db[place[2]])
+		end
+	end
+	if part.restore then
+		part.restore()
+	end
+end
+
+local function ApplyScale()
+	SurvivorUIDB = SurvivorUIDB or {}
+	for _, part in pairs(PARTS) do
+		ApplyPart(part)
+	end
+end
+
+local function FindPart(key)
+	for _, part in pairs(PARTS) do
+		if part.key == key then
+			return part
 		end
 	end
 end
 
-function SurvivorUI_SetScale(value)
+-- The parts, for the options: { key, label } each.
+function SurvivorUI_ScaleParts()
+	local list = {}
+	for index = 1, table.getn(PARTS) do
+		table.insert(list, { key = PARTS[index].key, label = PARTS[index].label })
+	end
+	return list
+end
+
+-- A part's own size (key), or the whole interface's (key nil).
+function SurvivorUI_GetScale(key)
+	SurvivorUIDB = SurvivorUIDB or {}
+	if key then
+		return PartScales()[key] or 1
+	end
+	return SurvivorUIDB.panelScale or 1
+end
+
+function SurvivorUI_SetPartScale(key, value)
+	local part = FindPart(key)
+	value = tonumber(value)
+	if not (part and value) then
+		return
+	end
+	local from = Effective(part)
+	PartScales()[key] = Clamp(math.floor(value * 100 + 0.5) / 100)
+	ApplyPart(part, from)
+end
+
+-- The whole interface's size: /sui scale 0.85, or the options' slider.
+function SurvivorUI_SetScale(value, quiet)
 	SurvivorUIDB = SurvivorUIDB or {}
 	value = tonumber(value)
 	if not value then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: panels at "..((SurvivorUIDB.panelScale) or 1).."; /sui scale 0.85 sets it, 0.6 to 1.4.")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: interface at "..(SurvivorUIDB.panelScale or 1).."; /sui scale 0.85 sets it, 0.6 to 1.4. Each part has its own size in /sui opt.")
 		return
 	end
-	local from = SurvivorUIDB.panelScale or 1
-	SurvivorUIDB.panelScale = math.max(0.6, math.min(1.4, value))
-	ApplyScale(from)
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: panels at "..SurvivorUIDB.panelScale..".")
+	local froms = {}
+	for _, part in pairs(PARTS) do
+		froms[part.key] = Effective(part)
+	end
+	SurvivorUIDB.panelScale = math.max(0.6, math.min(1.4, math.floor(value * 100 + 0.5) / 100))
+	for _, part in pairs(PARTS) do
+		ApplyPart(part, froms[part.key])
+	end
+	if not quiet then
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: interface at "..SurvivorUIDB.panelScale..".")
+	end
 end
+
+-- Every part back to its own size 1 (the whole interface's stays).
+function SurvivorUI_ResetPartScales()
+	for _, part in pairs(PARTS) do
+		SurvivorUI_SetPartScale(part.key, 1)
+	end
+end
+
+-- Before v2.8 the whole-interface size reached the panels only: a player who
+-- had set it keeps the action bar, the frames, the buffs and the kills line
+-- at the size they had, through their own sizes.
+local function MigrateScale()
+	SurvivorUIDB = SurvivorUIDB or {}
+	if SurvivorUIDB.scaleVersion == 2 then
+		return
+	end
+	SurvivorUIDB.scaleVersion = 2
+	local global = SurvivorUIDB.panelScale or 1
+	if global ~= 1 then
+		local parts = PartScales()
+		for _, key in pairs({ "bar", "frames", "buffs", "tally" }) do
+			parts[key] = parts[key] or Clamp(math.floor(100 / global + 0.5) / 100)
+		end
+	end
+end
+
 local scaler = CreateFrame("Frame")
 scaler:RegisterEvent("PLAYER_ENTERING_WORLD")
-scaler:SetScript("OnEvent", function() ApplyScale() end)
+scaler:SetScript("OnEvent", function()
+	MigrateScale()
+	ApplyScale()
+end)
 
 ------------------------------------------------------------------------------
 -- /sui layout: every piece back in its first place.

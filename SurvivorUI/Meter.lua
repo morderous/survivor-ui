@@ -142,7 +142,8 @@ local function Fit()
 		return
 	end
 	Seat(above:GetName(), "TOPRIGHT", above, "BOTTOMRIGHT", shift, -10)
-	local room = above:GetBottom() - 10 - 8
+	-- The piece above has a size of its own: its bottom read in the meter's units.
+	local room = above:GetBottom() * above:GetEffectiveScale() / meter:GetEffectiveScale() - 10 - 8
 	local fit = math.floor((room - 24) / (BAR_HEIGHT + BAR_GAP))
 	SetLines(math.max(3, math.min(MAX_LINES, fit)))
 end

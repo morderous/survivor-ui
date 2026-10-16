@@ -21,7 +21,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui loot` | Loot list: on or off |
 | `/sui build` | Build list: on or off |
 | `/sui crits` | Biggest Crits box: on or off (off by default) |
-| `/sui scale 0.85` | Size of the panels (tracker, run panel, meter, boss bars), 0.6 to 1.4. For smaller screens |
+| `/sui scale 0.85` | Size of the whole interface, 0.6 to 1.4. Each part has its own size in `/sui opt`, Size |
 | `/sui center` | Puts the middle block (frames and buttons) back under the hero |
 | `/sui tracker` | Run tracker under the minimap: on or off |
 | `/sui run` | Run panel: on or off |
@@ -30,21 +30,24 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui bosses` | Boss bars: on or off |
 | `/sui bosses elites` | Adds every elite to the boss bars |
 | `/sui tally` | Kills and gold line under the bar, or the game's own box |
-| `/sui damage` | Quick damage numbers, or the game's own |
-| `/sui damage side` | Damage numbers beside the hero instead of over the enemies (test, off by default) |
+| `/sui damage side` | Damage numbers beside the hero (the default), or over the enemies |
+| `/sui damage` | The addon's damage numbers, or the game's own |
+| `/sui damage none` | No combat text at all, or back |
+| `/sui jewelry` | The jewelry your class has found, with the values seen |
 | `/sui pins` | Prints what the minimap's cache and lair pins read, to check them |
 | `/sui chat 12` | Chat text size, 8 to 18 |
 | `/splates all` | Plates on every enemy, or only on elites, guardians and bosses |
 | `/splates names` | Names only on elites, guardians and bosses, or on every plate |
+| `/splates none` | No nameplates (the default), or back |
 | `/splates scale 1.3` | Plate size, 0.6 to 2 |
 
 ## Survivor Plates
 
 Nameplates.
 
-> **Too many plates?** Type `/splates all` in chat to keep them only on elites, guardians and bosses. Type it again to bring them all back.
+> **Out of the box there are no nameplates:** Survivor UI's boss bars already show every boss, guardian and elite with its health. To turn plates on, pick them in `/sui opt`, Nameplates, or type `/splates none`.
 >
-> Out of the box every enemy carries a plate, and only elites, guardians and bosses carry a name on it. `/splates names` puts a name on every plate. Both choices are remembered.
+> Turned on, every enemy carries a plate (`/splates all` keeps them on elites, guardians and bosses only), and only elites, guardians and bosses carry a name on it (`/splates names` puts a name on every plate). Every choice is remembered.
 
 - A flat health bar with a thin border, the name above it and the unit's health on it.
 - A marker at 30% health, where execute effects start. Below it the bar turns yellow.
@@ -55,7 +58,8 @@ Commands:
 
 | Command | What it does |
 |---|---|
-| `/splates all` | Switches between plates on every enemy (the default) and plates only on elites, guardians and bosses |
+| `/splates none` | Switches between no nameplates (the default) and nameplates |
+| `/splates all` | Switches between plates on every enemy and plates only on elites, guardians and bosses |
 | `/splates names` | Switches between names only on elites, guardians and bosses (the default) and names on every plate |
 | `/splates scale 1.3` | Plate size, 0.6 to 2 |
 
@@ -77,7 +81,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - A flat character pane: the hero and the item slots on the left, the run's numbers in titled sections on the right.
 - A flat, dark tooltip with smaller type. An ability's tooltip is laid out again.
 - Friz Quadrata on every piece of interface text, chat and nameplates included, or a face of your own (see Font below).
-- Quick damage numbers over the enemies, and the hits the hero takes in red, falling over the hero, in place of the game's own.
+- Damage numbers beside the hero, in place of the game's own: the hits dealt rising on the left, the crits on the right, the heals rising from under the hero and the hits taken falling below it. Or over the enemies, the game's own, or none at all.
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the game's own clock.
 - A run panel on the left, under the loot list: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
 - A damage meter under the build list, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, or the damage to bosses in the last boss fight.
@@ -88,7 +92,8 @@ Unit frames and the action bar, in one centered row under the hero:
 - A loot list in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came.
 - A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike, in the build list's look.
 - A thin white outline around whatever the mouse is on: a button, a bar, a buff. The nameplates, the chat, the minimap and the run tracker go without.
-- An options panel (`/sui opt`, or the S button by the minimap): every panel and every look on or off, the nameplates' choices, the panels' size, and a move mode that unlocks every piece over a grid they snap to.
+- An options panel (`/sui opt`, or the S button by the minimap), in tabs of their own color: every panel on or off, the combat numbers, the nameplates, every look, a size for the whole interface and one for each part, and a move mode, always at the bottom, that unlocks every piece over a grid they snap to.
+- A jewelry book (the ring button by the minimap, or `/sui jewelry`): every neck, ring and trinket your class has worn on this game, with the range seen of each bonus. One book per class, shared by every character and account on the game. A slim list to read at a glance, even in a fight.
 
 Left click a frame to target it, right click for its menu. Hold Alt to outline every movable piece: the action bar, the player and target frames, the buffs, the kills and gold line, the panels. Drag any of them; each keeps its place. `/sui center` puts the action bar back; the option "Unit frames move with the action bar" joins the two frames to it.
 
@@ -96,8 +101,10 @@ Commands:
 
 | Command | What it does |
 |---|---|
-| `/sui damage` | Switches between the quick damage numbers (the default) and the game's own |
-| `/sui damage side` | Damage numbers beside the hero: hits on the left, crits on the right, heals and damage taken below (test, off by default) |
+| `/sui damage side` | Damage numbers beside the hero (the default): hits on the left, crits on the right, heals rising and damage taken falling below; again for over the enemies |
+| `/sui damage` | Switches between the addon's damage numbers and the game's own |
+| `/sui damage none` | No combat text at all; again to bring it back |
+| `/sui jewelry` | The jewelry book: every neck, ring and trinket your class has worn on this game, with the values seen |
 | `/sui pins` | Prints what the minimap's cache and lair pins read, to check them |
 | `/sui chat 12` | Chat text size, 8 to 18 (default 12) |
 | `/sui run` | Shows or hides the run panel |
@@ -109,7 +116,7 @@ Commands:
 | `/sui loot` | Loot list: on or off |
 | `/sui build` | Build list: on or off |
 | `/sui crits` | Biggest Crits box: on or off (off by default) |
-| `/sui scale 0.85` | Size of the panels (tracker, run panel, meter, boss bars), 0.6 to 1.4. For smaller screens |
+| `/sui scale 0.85` | Size of the whole interface, 0.6 to 1.4. Each part has its own size in `/sui opt`, Size |
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
 | `/sui bosses` | Switches the boss bars on (the default) or off |
 | `/sui bosses elites` | Lists every elite in the boss bars too |
@@ -168,6 +175,20 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v2.8, 2026-10-16
+
+**Survivor UI**
+- **New options panel:** tabs down the left, each in its own color (Panels, Combat, Nameplates, Interface, Size, Layout), a short note on every choice, and **Move mode** always at the bottom, next to Reload, lit while it is on.
+- **A size for each part:** the action bar, the player and target frames, the buffs, the kills and gold line and every panel each have their own slider, on top of the whole interface's (`/sui scale`). Moved pieces keep their place. Whoever had changed `/sui scale` keeps the bar and the frames at the size they had.
+- **Jewelry book:** a new ring button by the minimap (or `/sui jewelry`) opens every neck, ring and trinket your class has worn, each with the range of every bonus seen (`CRIT DMG 29-86%`). One book per class for the whole game folder: every character and account on it fills the same books. A slim list, quick to read in a fight; hover a piece for its bonuses written out.
+- **Damage numbers beside the hero are now the default:** hits on the left, crits on the right, heals rising and damage taken falling below. Over the enemies and the game's own are still in Combat.
+- **No combat text at all:** a new choice in Combat (`/sui damage none`): no numbers and no floating combat text.
+- **Loot list** is out of beta.
+
+**Survivor Plates**
+- **No nameplates by default:** the boss bars show every boss, guardian and elite already. Turn them back on in `/sui opt`, Nameplates, or `/splates none`.
+- A plate size slider in the options.
 
 ### v2.7.1, 2026-10-15
 
