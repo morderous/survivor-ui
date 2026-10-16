@@ -936,7 +936,28 @@ credit:SetText("by morderous\ngithub.com/morderous/\nsurvivor-ui\nGPL-3.0")
 
 ------------------------------------------------------------------------------
 
+-- The game keeps the place it was dragged to, per character, and a change of
+-- size since can leave it past the screen's edge: then it opens in the
+-- middle again. /sui layout puts it there too.
+function SurvivorUI_ResetOptionsPlace()
+	panel:ClearAllPoints()
+	panel:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
+end
+
+local function OnScreen()
+	local left, right, top, bottom = panel:GetLeft(), panel:GetRight(), panel:GetTop(), panel:GetBottom()
+	if not (left and right and top and bottom) then
+		return false
+	end
+	local scale = panel:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	left, right, top, bottom = left * scale, right * scale, top * scale, bottom * scale
+	return left >= -1 and bottom >= -1 and right <= UIParent:GetWidth() + 1 and top <= UIParent:GetHeight() + 1
+end
+
 panel:SetScript("OnShow", function()
+	if not OnScreen() then
+		SurvivorUI_ResetOptionsPlace()
+	end
 	ShowPage(current or "panels")
 end)
 -- Closing the panel ends move mode.

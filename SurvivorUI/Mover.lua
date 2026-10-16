@@ -708,6 +708,9 @@ function SurvivorUI_ResetLayout()
 			end
 		end
 	end
+	if SurvivorUI_ResetOptionsPlace then
+		SurvivorUI_ResetOptionsPlace()
+	end
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: every piece is back in its first place.")
 end
 

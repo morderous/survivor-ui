@@ -190,6 +190,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v2.10.1, 2026-10-16
+
+**Survivor UI**
+- **The options window can't get lost anymore:** dragged past the screen's edge (or left there by a change of size), it opens in the middle again, and `/sui layout` brings it back too.
+
 ### v2.10, 2026-10-16
 
 **Survivor UI**
