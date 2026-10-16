@@ -190,6 +190,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v2.10.2, 2026-10-16
+
+**Survivor UI**
+- **Loot list in every language:** it read only the English loot line, so in a game set to German, French or any other language it always said "Nothing yet". It now reads the game's loot line, and its "New in your collection", in all ten of the game's languages.
+
 ### v2.10.1, 2026-10-16
 
 **Survivor UI**

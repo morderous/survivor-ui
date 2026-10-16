@@ -175,8 +175,42 @@ end
 
 local lastAdded, lastAddedAt = nil, 0
 
-local function Add(message)
+-- The line as the game writes it in each of its languages: English, Polish,
+-- German, Portuguese, Spanish, French, Turkish, Russian, Chinese, Korean.
+local RECEIVE = {
+	"You receive loot:", "Otrzymujesz łup:", "Du erhältst Beute:", "Você recebe saque:",
+	"Recibes botín:", "Vous recevez du butin :", "Ganimet aldın:", "Вы получаете добычу:",
+	"你获得了战利品：", "전리품을 받았습니다:",
+}
+local NEW = {
+	"New in your collection", "Nowość w kolekcji", "Neu in deiner Sammlung", "Novo na sua coleção",
+	"Nuevo en tu colección", "Nouveau dans votre collection", "Koleksiyonunda yeni",
+	"Новое в вашей коллекции", "收藏新增", "수집품에 새로 추가",
+}
+
+-- What follows "You receive loot:" (or its own words), or nil.
+local function Received(message)
+	for _, words in pairs(RECEIVE) do
+		local _, last = string.find(message, words, 1, true)
+		if last then
+			return string.sub(message, last + 1)
+		end
+	end
 	local _, _, rest = string.find(message, "You receive [%a ]+: (.+)")
+	return rest
+end
+
+local function IsNew(rest)
+	for _, words in pairs(NEW) do
+		if string.find(rest, words, 1, true) then
+			return true
+		end
+	end
+	return false
+end
+
+local function Add(message)
+	local rest = Received(message)
 	if not rest then
 		return
 	end
@@ -197,7 +231,7 @@ local function Add(message)
 
 	table.insert(entries, 1, {
 		item = item, name = name, color = color, count = tonumber(count),
-		new = string.find(rest, "New in your collection", 1, true) ~= nil,
+		new = IsNew(rest),
 		at = RunSeconds(),
 	})
 	while table.getn(entries) > 30 do
@@ -218,7 +252,7 @@ local function Seen(text)
 	if string.find(text, "Move to begin", 1, true) then
 		entries = {}
 		Draw()
-	elseif string.find(text, "You receive", 1, true) then
+	elseif string.find(text, "[", 1, true) then
 		Add(text)
 	end
 end
