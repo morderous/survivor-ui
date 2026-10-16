@@ -676,7 +676,10 @@ local function Piece(row, entry)
 		row.color = { r, g, b }
 		row.wash:SetVertexColor(r * 0.5, g * 0.5, b * 0.5, 0.5)
 		row.edge:SetVertexColor(r, g, b, 1)
-		row.icon:SetTexture(item.texture or "Interface\\Icons\\INV_Misc_QuestionMark")
+		-- A piece with no icon of its own (one written in, never worn here): a
+		-- class amulet shows its spell's.
+		local icon = item.texture or (entry.spell and SurvivorUI_MeterIcon and SurvivorUI_MeterIcon(entry.spell))
+		row.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
 		row.icon:SetVertexColor(1, 1, 1)
 		row.name:SetTextColor(1, 1, 1)
 	elseif entry.classColor then
@@ -730,8 +733,13 @@ local function Group(list, slot, foundItems, wornNow, slots)
 		local data = slot == "Neck" and { rarity = spec[2], bonuses = spec[3] } or { byRarity = spec[2] }
 		known[Plain(spec[1])] = { name = spec[1], data = data }
 	end
-	-- The found ones, the best quality first.
+	-- The found ones: what is worn now first, to see at a glance, then the
+	-- best quality.
 	table.sort(foundItems, function(a, b)
+		local aWorn, bWorn = wornNow[a.base] and 1 or 0, wornNow[b.base] and 1 or 0
+		if aWorn ~= bWorn then
+			return aWorn > bWorn
+		end
 		if (a.item.quality or 0) ~= (b.item.quality or 0) then
 			return (a.item.quality or 0) > (b.item.quality or 0)
 		end
@@ -809,6 +817,14 @@ function panel.Draw()
 				wornLegendary = 1
 			end
 		end
+		-- The one worn now first, then by spell.
+		table.sort(legendary, function(a, b)
+			local aWorn, bWorn = wornNow[a.base] and 1 or 0, wornNow[b.base] and 1 or 0
+			if aWorn ~= bWorn then
+				return aWorn > bWorn
+			end
+			return (a.item.spell or a.base) < (b.item.spell or b.base)
+		end)
 		-- The neck is one slot, shared by a class amulet and the others.
 		local cr, cg, cb = 1, 0.5, 0
 		if SurvivorUI_ClassColor then

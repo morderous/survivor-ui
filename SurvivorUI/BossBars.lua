@@ -188,7 +188,6 @@ local function DebuffIcon(bar, index)
 	icon:SetFrameLevel(bar.health:GetFrameLevel() + 2)
 	icon:SetWidth(DEBUFF_SIZE)
 	icon:SetHeight(DEBUFF_SIZE)
-	icon:SetPoint("RIGHT", bar, "RIGHT", -VALUE_ROOM - (index - 1) * (DEBUFF_SIZE + DEBUFF_GAP), 0)
 
 	icon.edge = icon:CreateTexture(nil, "BACKGROUND")
 	icon.edge:SetTexture(FLAT)
@@ -260,6 +259,9 @@ local function FillDebuffs(bar, id)
 	for index = 1, count do
 		local debuff = list[index]
 		local icon = DebuffIcon(bar, index)
+		-- Left of the health, however wide its numbers.
+		icon:ClearAllPoints()
+		icon:SetPoint("RIGHT", bar, "RIGHT", -(bar.valueRoom or VALUE_ROOM) - (index - 1) * (DEBUFF_SIZE + DEBUFF_GAP), 0)
 		local art = debuff.icon or ""
 		if art ~= "" and not string.find(art, "\\", 1, true) then
 			art = "Interface\\Icons\\"..art
@@ -299,7 +301,7 @@ local function FillDebuffs(bar, id)
 		bar.debuffs[index]:Hide()
 	end
 	-- The name gives way to the icons.
-	bar.name:SetWidth(BAR_WIDTH - VALUE_ROOM - 8 - count * (DEBUFF_SIZE + DEBUFF_GAP))
+	bar.name:SetWidth(BAR_WIDTH - (bar.valueRoom or VALUE_ROOM) - 8 - count * (DEBUFF_SIZE + DEBUFF_GAP))
 end
 
 local KIND_LABELS = { final = "Final boss", boss = "Boss", guardian = "Lair guardian", elite = "Elite" }
@@ -326,7 +328,13 @@ local function Fill(bar, unit)
 	else
 		bar.name:SetTextColor(1, 1, 1)
 	end
-	bar.value:SetText(math.floor(share * 100 + 0.5).."%")
+	-- As the option reads it (/sui opt, Unit frames): 73%, 1.2M, 1.2M / 3.4M or 1.2M | 73%.
+	if SurvivorUI_HealthText then
+		bar.value:SetText(SurvivorUI_HealthText(hp, hpm, Settings().bossHealth or "percent"))
+	else
+		bar.value:SetText(math.floor(share * 100 + 0.5).."%")
+	end
+	bar.valueRoom = math.max(VALUE_ROOM, math.ceil(bar.value:GetStringWidth()) + 12)
 
 	-- The target wears a white border.
 	if UnitExists("target") and UnitName("target") == name then

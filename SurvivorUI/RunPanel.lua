@@ -223,6 +223,7 @@ local RUN_ROWS = {
 	{ key = "time",      label = "Survived",        color = { 1.00, 0.82, 0.00 } },
 	{ key = "level",     label = "Level",           color = { 0.40, 1.00, 0.40 } },
 	{ key = "kills",     label = "Kills",           color = { 0.92, 0.92, 0.92 } },
+	{ key = "kpm",       label = "Kills / min",     color = { 0.78, 0.80, 0.88 }, api = true },
 	{ key = "elites",    label = "Elites slain",    color = { 1.00, 0.55, 0.10 }, plain = "Elites & guardians slain" },
 	{ key = "guardians", label = "Guardians slain", color = { 0.20, 0.75, 0.95 }, api = true },
 	{ key = "bosses",    label = "Bosses slain",    color = { 0.72, 0.32, 1.00 } },
@@ -345,6 +346,19 @@ for index = 1, table.getn(RUN_ROWS) do
 	runRows[index] = row
 end
 
+-- Kills / min: small notes, "last 20s" after the label and the run's average
+-- before the value.
+local function Note(row)
+	local note = row:CreateFontString(nil, "OVERLAY")
+	note:SetFont(FONT, 8 + FONT_BUMP, "OUTLINE")
+	note:SetTextColor(0.55, 0.55, 0.58)
+	return note
+end
+runRows.kpm.window = Note(runRows.kpm)
+runRows.kpm.window:SetPoint("LEFT", runRows.kpm, "LEFT", 5 + runRows.kpm.label:GetStringWidth() + 4, -1)
+runRows.kpm.average = Note(runRows.kpm)
+runRows.kpm.average:SetPoint("RIGHT", runRows.kpm.value, "LEFT", -6, -1)
+
 -- The clock is the addon's own count, not the game's: say where they can part.
 runRows.time:EnableMouse(true)
 runRows.time:SetScript("OnEnter", function()
@@ -399,6 +413,18 @@ local function RowTip(key, fill)
 	end)
 	row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
+
+RowTip("kpm", function(game)
+	GameTooltip:SetText("Kills / min", 0.78, 0.80, 0.88)
+	local rate, window
+	if SurvivorUI_PaceRate then
+		rate, window = SurvivorUI_PaceRate()
+	end
+	local seconds = AZS_GetRunTime and AZS_GetRunTime() or Num(game.t)
+	Pair("Last "..(window or 20).." seconds", rate and string.format("%.0f", rate) or "-")
+	Pair("The whole run", (seconds or 0) >= 10 and string.format("%.0f", Num(game.kills) / seconds * 60) or "-")
+	GameTooltip:AddLine("The last seconds' rate is the kill pace's (/sui pace): off with it.", 0.7, 0.7, 0.7, 1)
+end)
 
 RowTip("kills", function(game)
 	GameTooltip:SetText("Kills", 0.92, 0.92, 0.92)
@@ -729,6 +755,14 @@ local function Draw()
 			dealt = Num(game.dealt)
 			runRows.level.value:SetText(Num(game.lvl))
 			runRows.kills.value:SetText(Num(game.kills))
+			-- The kill pace's rate (Pace.lua), and the whole run's.
+			local rate, window
+			if SurvivorUI_PaceRate then
+				rate, window = SurvivorUI_PaceRate()
+			end
+			runRows.kpm.value:SetText(rate and string.format("%.0f", rate) or "-")
+			runRows.kpm.window:SetText("last "..(window or 20).."s")
+			runRows.kpm.average:SetText(seconds >= 10 and string.format("run %.0f", Num(game.kills) / seconds * 60) or "")
 			runRows.elites.value:SetText(Num(game.ek))
 			runRows.guardians.value:SetText(Num(game.gk))
 			runRows.bosses.value:SetText(Num(game.bk))

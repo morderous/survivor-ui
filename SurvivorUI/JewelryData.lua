@@ -16,7 +16,7 @@ SurvivorUI_JEWELRY = {
 		{ "Blooddrinker's Band", { "1.5% of damage dealt heals", "2.1% of damage dealt heals", "2.7% of damage dealt heals", "3.0% of damage dealt heals", "3.0% of damage dealt heals" } },
 		{ "Heavy Dark Iron Ring", { "+30% max health", "+42% max health", "+54% max health", "+60% max health", "+60% max health" } },
 		{ "Master Dragonslayer's Ring", { "+6% critical strike", "+8% critical strike", "+11% critical strike", "+14% critical strike", "+19% critical strike" } },
-		{ "Quick Strike Ring", { nil, "-19% cooldowns", "-24% cooldowns", "-32% cooldowns", "-43% cooldowns" } },
+		{ "Quick Strike Ring", { "-14% cooldowns", "-19% cooldowns", "-24% cooldowns", "-32% cooldowns", "-43% cooldowns" } },
 		{ "Ring of Spell Power", { "+21% area of effect", "+29% area of effect", "+38% area of effect", "+50% area of effect", "+67% area of effect" } },
 		{ "Ring of the Devoured", { "+2.2 health per second", "+3.1 health per second", "+4.0 health per second", "+4.5 health per second", "+4.5 health per second" } },
 		{ "Seal of the Damned", { "Faster damage over time", "Faster damage over time", "Faster damage over time", "Faster damage over time", "Faster damage over time" } },

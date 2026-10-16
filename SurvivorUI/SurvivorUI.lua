@@ -189,14 +189,38 @@ local function Hide(name)
 	end
 end
 
--- 439K, 1.2M
-local function Short(value)
-	if value >= 1000000 then
-		return string.format("%.1fM", value / 1000000)
-	elseif value >= 10000 then
-		return math.floor(value / 1000 + 0.5).."K"
+-- 950, 1k, 1.1k, 15.3k, 2M, 2.2M, 1.5B: one decimal at most, none when round.
+local SIZES = { { 1000000000, "B" }, { 1000000, "M" }, { 1000, "k" } }
+function SurvivorUI_Abbrev(value)
+	value = tonumber(value) or 0
+	for index = 1, table.getn(SIZES) do
+		if value >= SIZES[index][1] then
+			local size = SIZES[index]
+			local scaled = math.floor(value / size[1] * 10 + 0.5) / 10
+			-- 999,960 rounds to 1000k: the next size up says it.
+			if scaled >= 1000 and index > 1 then
+				size = SIZES[index - 1]
+				scaled = math.floor(value / size[1] * 10 + 0.5) / 10
+			end
+			local text = string.gsub(string.format("%.1f", scaled), "%.0$", "")
+			return text..size[2]
+		end
 	end
-	return value
+	return tostring(math.floor(value + 0.5))
+end
+
+-- A health as an option reads it: "percent" 73%, "absolute" 1.2M, "both"
+-- 1.2M / 3.4M, "absolutePercent" 1.2M | 73% (as the player's frame).
+function SurvivorUI_HealthText(hp, hpm, style)
+	hp, hpm = tonumber(hp) or 0, tonumber(hpm) or 0
+	if style == "absolute" then
+		return SurvivorUI_Abbrev(hp)
+	elseif style == "both" then
+		return SurvivorUI_Abbrev(hp).." / "..SurvivorUI_Abbrev(hpm)
+	elseif style == "absolutePercent" then
+		return SurvivorUI_Abbrev(hp).." | "..(hpm > 0 and math.floor(hp / hpm * 100 + 0.5) or 0).."%"
+	end
+	return (hpm > 0 and math.floor(hp / hpm * 100 + 0.5) or 0).."%"
 end
 
 ------------------------------------------------------------------------------
@@ -312,10 +336,34 @@ local function UpdateUnitFrame(frame)
 
 	local health, healthMax = UnitHealth(unit), UnitHealthMax(unit)
 	local share = healthMax > 0 and health / healthMax or 0
-	local percent = math.floor(share * 100 + 0.5)
 	local r, g, b = HealthColor(unit)
 	frame.health:SetValue(share)
 	frame.health:SetStatusBarColor(r, g, b, 1)
+	-- The health as the option reads it (/sui opt, Unit frames): the player's
+	-- "1.2k | 100%" by default, a target's "73%". The game's API has an enemy's
+	-- numbers (AZS_TARGET); the client alone only its share. The name gets the
+	-- room the numbers leave.
+	local hp, hpm, style = health, healthMax, nil
+	if unit == "player" then
+		style = SurvivorUIDB and SurvivorUIDB.playerHealth or "absolutePercent"
+	else
+		style = SurvivorUIDB and SurvivorUIDB.targetHealth or "percent"
+		if AZS_TARGET and AZS_TARGET.name == UnitName(unit) and (tonumber(AZS_TARGET.hpm) or 0) > 0 then
+			hp, hpm = AZS_TARGET.hp, AZS_TARGET.hpm
+		elseif healthMax == 100 then
+			style = "percent"
+		end
+	end
+	local room = FRAME_WIDTH - 44
+	if style == "both" or style == "absolutePercent" then
+		room = FRAME_WIDTH - 82
+	elseif style == "absolute" then
+		room = FRAME_WIDTH - 52
+	end
+	if room ~= frame.nameRoom then
+		frame.nameRoom = room
+		frame.shownName = nil
+	end
 	-- A name too long for its room goes by its first word, not cut short.
 	local name = UnitName(unit) or ""
 	if name ~= frame.shownName then
@@ -331,11 +379,8 @@ local function UpdateUnitFrame(frame)
 
 	if UnitIsDead(unit) or UnitIsGhost(unit) then
 		frame.value:SetText("Dead")
-	elseif unit ~= "player" then
-		-- An enemy's frame keeps to the percentage; its nameplate has the numbers.
-		frame.value:SetText(percent.."%")
 	else
-		frame.value:SetText(Short(health).." | "..percent.."%")
+		frame.value:SetText(SurvivorUI_HealthText(hp, hpm, style))
 	end
 
 	local power, powerMax = UnitMana(unit), UnitManaMax(unit)
@@ -1650,6 +1695,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_Tally then
 			SurvivorUI_Tally()
 		end
+	elseif msg == "pace" or msg == "pace reset" or msg == "pace class" then
+		if SurvivorUI_TogglePace then
+			SurvivorUI_TogglePace(argument)
+		end
 	elseif msg == "meter" then
 		if SurvivorUI_ToggleMeter then
 			SurvivorUI_ToggleMeter()
@@ -1717,6 +1766,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui bosses  switches the boss bars on or off; /sui bosses elites  lists elites too")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the bar and the game's own box")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pace  shows or hides the kill pace, the orb by the run tracker's clock; /sui pace class  against this class's runs only, or every class's; /sui pace reset  forgets the runs it holds against")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui run  shows or hides the run panel (the run's numbers and biggest crits); /sui run reset clears the crits")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tracker  shows or hides the run tracker under the minimap (the clock and the bosses)")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui build  shows or hides the build list (spells, ranks, slots)")

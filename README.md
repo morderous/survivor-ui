@@ -36,6 +36,9 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui bosses` | Boss bars: on or off |
 | `/sui bosses elites` | Adds every elite to the boss bars |
 | `/sui tally` | Kills and gold line under the bar, or the game's own box |
+| `/sui pace` | Kill pace, the orb by the run tracker's clock: on or off |
+| `/sui pace class` | Kill pace against this class's runs only, or every class's (the default) |
+| `/sui pace reset` | Forgets the runs the kill pace holds against, on this zone and modifiers |
 | `/sui damage` | The addon's combat text, or the game's own (the rest is in `/sui opt`, Combat text) |
 | `/sui damage none` | No combat text at all, or back |
 | `/sui damage side` | The numbers beside the hero, or over the enemies |
@@ -95,6 +98,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health and its debuffs (icons that drain to grey as they run out), at any distance. Click one to target it.
 - Caches and lairs on the minimap: a golden chest for each cache, a horned skull for each guardian's lair (grey once empty); one out of range waits on the minimap's edge, pointing the way.
 - Kills, gold and the next cache's price on a line under the experience bar, in place of the game's own box.
+- A kill pace on the run tracker, a glowing orb left of its clock: how fast the enemies die (kills a minute over the last 20 seconds), held against your own runs on the zone and modifiers at the same minute of the run, every class's (to see how your shaman does against your paladin) or this class's only. Red as slow as your slowest, yellow in between, blue near your fastest, green as fast or faster, its sparks livelier the better it goes; white until three of your runs reach that minute. Hover it for the numbers: kills a minute, the share of your fastest, your fastest, average and slowest (with their class), the enemies alive, the stretch going on, and the run's modifiers (a run is held only against runs of the very same ones). As each boss comes, a banner left of the tracker tells the stretch just ended: its kills since the boss before (or the start), their share of your best on that stretch and the place they take among your runs (`2nd of 6`), in the color of how it went.
 - A build list in the right column, between the run tracker and the damage meter: every spell slot with the spell's icon, rank and share of the damage, from the highest rank down, each filled with its damage meter color; the free slots; and the jewelry, the gear a run drops: a row a slot (neck, rings, trinkets), filled with the piece's quality color, with its rank and what it gives in short. A legendary amulet names the spell it boosts in place of "Neck".
 - A loot list in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came.
 - A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike, in the build list's look.
@@ -185,6 +189,23 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v2.10-beta, 2026-10-16
+
+A beta: the installer stays on v2.9 until this one is out of beta.
+
+**Survivor UI**
+- **Kill pace** (new): a glowing orb on the run tracker, left of its clock, that tells how fast the enemies die against your own runs.
+  - Kills a minute over the last 20 seconds of the run's clock, held against your runs on the same zone and modifiers at the same minute of the run, as a run grows thicker as it goes on.
+  - Red as slow as your slowest run at that minute (its sparks sinking), yellow in between, blue near your fastest, green as fast or faster (quick sparks and stars). White until three of your runs reach that minute.
+  - Every class's runs by default, to see how one hero does against another (the fastest and the slowest name their class); `/sui pace class` holds it against this class's only. Only runs with the very same modifiers count.
+  - **Stretches:** as each boss comes, a banner left of the tracker tells the stretch just ended, from the boss before (or the start): its kills, their share of your best on it and its place among your runs (`2nd of 6`), in the color of how it went.
+  - Hover the orb for the numbers: kills a minute, the share of your fastest, your fastest, average and slowest, the enemies alive, the stretch going on and the run's modifiers.
+  - Each run keeps its kills minute by minute, its stretches and its class: the last 60 of each zone and modifiers, on your own PC. A run of under two minutes, or one joined after a reload, is not kept.
+  - **Its own tab** in `/sui opt`: on or off, every class's runs or this class's, the seconds the rate is read over (10 to 60), the runs a minute needs before it is colored (1 to 10), the sparks (full, calm or none), the boss banner and how long it stays, and a button to forget the zone's runs. Also `/sui pace`, `/sui pace class` and `/sui pace reset`. It moves and sizes with the tracker.
+- **This Run:** a Kills / min row under Kills: the last 20 seconds' rate, and the whole run's beside it in small type.
+- **Health numbers,** on a new Unit frames tab in `/sui opt`: your frame, the target frame and the boss bars each show the health as a percent (`73%`), the health left (`1.2M`), both (`1.2M / 3.4M`) or the health left and the percent (`1.2M | 73%`), always short: 1k, 1.1k, 2M, 2.2M. Your frame keeps its `1.2k | 100%` and the others their percent until you pick another.
+- **Jewelry Collection:** what you wear now comes first in its group, to see at a glance, and your class's amulets come in order, the one worn first. A class amulet with no icon of its own (one not yet worn on this game) shows its spell's. The Common Quick Strike Ring's bonus is filled in (-14% cooldowns).
 
 ### v2.9, 2026-10-16
 

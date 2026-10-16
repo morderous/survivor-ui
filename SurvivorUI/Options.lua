@@ -155,6 +155,8 @@ local TABS = {
 	{ key = "combat", label = "Combat text", color = { 1, 0.38, 0.32 } },
 	{ key = "plates", label = "Nameplates", color = { 0.38, 0.9, 0.45 } },
 	{ key = "interface", label = "Interface", color = { 0.4, 0.68, 1 } },
+	{ key = "units", label = "Unit frames", color = { 1, 0.62, 0.25 } },
+	{ key = "pace", label = "Kill pace", color = { 0.7, 1, 0.3 } },
 	{ key = "size", label = "Size", color = { 0.78, 0.52, 1 } },
 	{ key = "character", label = "Character", color = { 1, 0.5, 0.7 } },
 	{ key = "layout", label = "Layout", color = { 0.25, 0.85, 0.8 } },
@@ -606,6 +608,114 @@ Check(page, "Flat chat", FeatureOn("chat"), FeatureToggle("chat"))
 Check(page, "Flat tooltips", FeatureOn("tooltip"), FeatureToggle("tooltip"))
 Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"))
 Check(page, "Menu buttons in the corner, on hover", FeatureOn("microMenu"), FeatureToggle("microMenu"))
+
+------------------------------------------------------------------------------
+-- Unit frames: the player's and the target's frames, and the boss bars.
+
+page = pages.units
+Header(page, "Unit frames", "Your frame, your target's and the boss bars at the top of the screen.")
+-- The health on the frames and the boss bars: one row each, its four looks
+-- side by side, always short (1.1k, 2.2M).
+local HEALTH_LOOKS = {
+	{ "percent", "73%", 64 },
+	{ "absolute", "1.2M", 64 },
+	{ "both", "1.2M / 3.4M", 104 },
+	{ "absolutePercent", "1.2M | 73%", 104 },
+}
+local function HealthRow(label, key, default)
+	local color = page.color
+	local name = Text(page, 10, TEXT)
+	name:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 3)
+	name:SetText(label)
+	local x = 96
+	for index = 1, table.getn(HEALTH_LOOKS) do
+		local look = HEALTH_LOOKS[index]
+		local value = look[1]
+		local option = CreateFrame("Button", nil, page)
+		option:SetWidth(look[3])
+		option:SetHeight(ROW)
+		option:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
+		x = x + look[3]
+
+		option.ring = Fill(option, "BORDER", 0.3, 0.3, 0.35, 1)
+		option.ring:SetWidth(13)
+		option.ring:SetHeight(13)
+		option.ring:SetPoint("TOPLEFT", option, "TOPLEFT", 2, -4)
+		option.inner = Fill(option, "ARTWORK", 0.05, 0.05, 0.07, 1)
+		option.inner:SetPoint("TOPLEFT", option.ring, "TOPLEFT", 1, -1)
+		option.inner:SetPoint("BOTTOMRIGHT", option.ring, "BOTTOMRIGHT", -1, 1)
+		option.dot = Fill(option, "OVERLAY", 0, 0, 0, 1)
+		option.dot:SetPoint("TOPLEFT", option.ring, "TOPLEFT", 3, -3)
+		option.dot:SetPoint("BOTTOMRIGHT", option.ring, "BOTTOMRIGHT", -3, 3)
+		option.label = Text(option, 10, TEXT)
+		option.label:SetPoint("TOPLEFT", option.ring, "TOPRIGHT", 6, 0)
+		option.label:SetText(look[2])
+
+		option:SetScript("OnClick", function()
+			DB()[key] = value
+			RefreshAll()
+		end)
+		option:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+		option:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+		function option:Refresh()
+			local chosen = (DB()[key] or default) == value
+			self.ring:SetVertexColor(chosen and color[1] or 0.3, chosen and color[2] or 0.3, chosen and color[3] or 0.35, 1)
+			self.dot:SetVertexColor(color[1], color[2], color[3], chosen and 1 or 0)
+			if self.hot then
+				self.label:SetTextColor(1, 1, 1)
+			elseif chosen then
+				self.label:SetTextColor(color[1], color[2], color[3])
+			else
+				self.label:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+			end
+		end
+		table.insert(widgets, option)
+	end
+	page.y = page.y - ROW - 2
+end
+Subheader(page, "Health numbers")
+Note(page, "Percent, the health left, both, or the health left and the percent; always short.")
+HealthRow("Player", "playerHealth", "absolutePercent")
+HealthRow("Target", "targetHealth", "percent")
+HealthRow("Boss bars", "bossHealth", "percent")
+
+------------------------------------------------------------------------------
+-- Kill pace: the orb by the run tracker's clock (Pace.lua).
+
+page = pages.pace
+Header(page, "Kill pace", "An orb by the run tracker's clock: how fast the enemies die, against your own runs with the same modifiers at the same minute. Hover it for the numbers.")
+Check(page, "Kill pace", OnUnlessOff("pace"), Call("SurvivorUI_TogglePace"), "on the run tracker, and This Run's Kills / min")
+
+Subheader(page, "Held against")
+Choice(page, {
+	{ "account", "Every class: all your runs on the zone" },
+	{ "class", "This class only" },
+}, function() return DB().paceClassOnly and "class" or "account" end,
+	function(choice) DB().paceClassOnly = choice == "class" or nil end)
+Slider(page, "Rate over (sec)", 10, 60, 5, function() return DB().paceWindow or 20 end,
+	function(value) DB().paceWindow = math.floor(value + 0.5) end, "%d")
+Slider(page, "Runs to compare", 1, 10, 1, function() return DB().paceMinRuns or 3 end,
+	function(value) DB().paceMinRuns = math.floor(value + 0.5) end, "%d")
+
+Subheader(page, "The orb")
+Choice(page, {
+	{ "full", "Full: sparks, and stars when it flies" },
+	{ "calm", "Calm: fewer sparks, no stars" },
+	{ "none", "The orb alone" },
+}, function() return DB().paceEffects or "full" end, function(choice) DB().paceEffects = choice end)
+
+Subheader(page, "Boss stretches")
+Check(page, "Banner as each boss comes", OnUnlessOff("paceBanner"),
+	function() DB().paceBanner = DB().paceBanner == false end, "the stretch just ended, left of the tracker")
+Slider(page, "Banner stays (sec)", 3, 15, 1, function() return DB().paceBannerHold or 6 end,
+	function(value) DB().paceBannerHold = math.floor(value + 0.5) end, "%d")
+page.y = page.y - 6
+Button(page, "Forget this zone's runs", 200, 0, function()
+	if SurvivorUI_TogglePace then
+		SurvivorUI_TogglePace("reset")
+	end
+end)
+page.y = page.y - 30
 
 ------------------------------------------------------------------------------
 -- Character: where the run's numbers go, and which of them this class shows.
