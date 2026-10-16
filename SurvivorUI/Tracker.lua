@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: the run tracker, after a Mythic+ timer.
 --
 -- Under the minimap, where a quest log would sit, centered: the zone, how the
@@ -470,10 +471,11 @@ watcher:SetScript("OnUpdate", function()
 	elseif head:IsShown() then
 		head:Hide()
 	end
-	-- One experience bar is enough: the tracker's, while it shows.
+	-- One experience bar is enough: the tracker's. Away whenever the tracker
+	-- is on, before the run starts too; back only with the tracker off.
 	local bar = getglobal("MainMenuExpBar")
 	if bar then
-		local want = showing and 0 or 1
+		local want = Settings().tracker and 0 or 1
 		if bar:GetAlpha() ~= want then
 			bar:SetAlpha(want)
 			if bar.EnableMouse then

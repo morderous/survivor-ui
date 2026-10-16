@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: a thin white outline around whatever piece of the interface the
 -- mouse is on, a button, a bar, a frame, so it is always clear what a click
 -- or a tooltip belongs to. The world itself, the nameplates over it, the chat

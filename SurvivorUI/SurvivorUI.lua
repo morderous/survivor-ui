@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: unit frames and an action bar for Azeroth Survivors, in the
 -- flat, dark manner of EllesmereUI. Everything sits in one centered row at the
 -- bottom of the screen:
@@ -70,7 +71,7 @@ local HEALTH_HEIGHT = BUTTON_SIZE - POWER_HEIGHT - 1
 
 local ENEMY = { 0.80, 0.22, 0.22 }
 
-local CHAT_SIZE = 12                            -- default; /sui chat N changes it
+local CHAT_SIZE = 10                            -- default; /sui chat N changes it
 
 -- Saved between sessions; the /sui command at the end of the file changes them.
 -- Every look the addon gives the game's interface can be switched off in the
@@ -97,10 +98,24 @@ local function Settings()
 	-- From v2.8 the numbers beside the hero are the default: switched on once
 	-- for everyone who has the addon's own numbers, and kept as each one sets
 	-- them after that.
-	if SurvivorUIDB.damageDefaults ~= 2 then
-		SurvivorUIDB.damageDefaults = 2
+	if (SurvivorUIDB.damageDefaults or 0) < 2 then
 		if SurvivorUIDB.damageText and not SurvivorUIDB.damageNone then
 			SurvivorUIDB.damageSide = true
+		end
+	end
+	-- From v2.9 the numbers beside the hero with icons are the default: once for everyone with
+	-- the numbers beside the hero, kept as each one sets it after that.
+	if (SurvivorUIDB.damageDefaults or 0) < 3 then
+		SurvivorUIDB.damageDefaults = 3
+		if SurvivorUIDB.damageText and SurvivorUIDB.damageSide and not SurvivorUIDB.damageNone then
+			SurvivorUIDB.damageModern = true
+		end
+	end
+	-- From v2.9 the chat's default is 10, not 12: the old default moves once.
+	if (SurvivorUIDB.chatDefaults or 0) < 2 then
+		SurvivorUIDB.chatDefaults = 2
+		if SurvivorUIDB.chatSize == 12 then
+			SurvivorUIDB.chatSize = nil
 		end
 	end
 	SurvivorUIDB.chatSize = SurvivorUIDB.chatSize or CHAT_SIZE
@@ -111,6 +126,15 @@ end
 local CLASS_OVERRIDES = {
 	SHAMAN = { r = 0.00, g = 0.44, b = 0.87 },
 }
+
+-- A class's color, as the unit frames wear it (the shaman's blue): r, g, b.
+function SurvivorUI_ClassColor(class)
+	local color = class and (CLASS_OVERRIDES[class] or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]))
+	if color then
+		return color.r, color.g, color.b
+	end
+	return 1, 0.82, 0
+end
 
 local POWER_COLORS = {
 	[0] = { 0.25, 0.50, 1.00 },   -- mana
@@ -443,6 +467,13 @@ local function PlaceButton(prefix, id, position)
 	else
 		-- Off screen rather than hidden: the stock code shows buttons on its own.
 		button:SetPoint("TOP", UIParent, "BOTTOM", 0, -600)
+	end
+end
+
+-- The bags: a run has nothing to keep in them, so B and Shift+B open none.
+for _, name in pairs({ "ToggleBackpack", "OpenBackpack", "ToggleBag", "OpenBag", "OpenAllBags", "ToggleKeyRing" }) do
+	if getglobal(name) then
+		setglobal(name, function() end)
 	end
 end
 
@@ -927,16 +958,45 @@ local function PaintTooltip(tooltip)
 	tooltip:SetBackdropBorderColor(0, 0, 0, 1)
 end
 
+-- The game's right click menus (a chat tab's, a unit frame's): a fifth
+-- smaller, as the tooltips.
+local function SizeMenus()
+	for level = 1, 3 do
+		local menu = getglobal("DropDownList"..level)
+		-- The stock code sets a menu's size each time it opens: a fifth off
+		-- whatever it set, once (not again on a size already made smaller).
+		local size = menu and menu:GetScale()
+		if size and not (menu.survivorSize and math.abs(size - menu.survivorSize) < 0.001) then
+			menu.survivorSize = size * 0.8
+			menu:SetScale(menu.survivorSize)
+		end
+	end
+end
+
+-- After the stock opens one.
+if ToggleDropDownMenu then
+	local stockToggle = ToggleDropDownMenu
+	ToggleDropDownMenu = function(a1, a2, a3, a4, a5, a6, a7, a8)
+		stockToggle(a1, a2, a3, a4, a5, a6, a7, a8)
+		if Feature("tooltip") then
+			SizeMenus()
+		end
+	end
+end
+
 local function StyleTooltips()
 	-- The stock code repaints a tooltip from these two.
 	TOOLTIP_DEFAULT_COLOR = { r = 0, g = 0, b = 0 }
 	TOOLTIP_DEFAULT_BACKGROUND_COLOR = { r = 0.05, g = 0.05, b = 0.07 }
 
+	SizeMenus()
 	for _, name in pairs(TOOLTIPS) do
 		local tooltip = getglobal(name)
 		if tooltip and not tooltip.survivorStyled then
 			tooltip.survivorStyled = true
 			tooltip:SetBackdrop(TOOLTIP_BACKDROP)
+			-- A fifth smaller than the stock size: it covers less of the fight.
+			tooltip:SetScale(0.8)
 			PaintTooltip(tooltip)
 
 			local stockShow = tooltip:GetScript("OnShow")
@@ -1005,6 +1065,11 @@ local function DamageText()
 		return nil
 	end
 	local text = damageLayer:CreateFontString(nil, "OVERLAY")
+	-- The source's icon, left of the number (beside the hero, with icons).
+	text.icon = damageLayer:CreateTexture(nil, "OVERLAY")
+	text.icon:SetPoint("RIGHT", text, "LEFT", -3, 0)
+	text.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	text.icon:Hide()
 	table.insert(damageTexts, text)
 	return text
 end
@@ -1046,11 +1111,39 @@ end
 -- target is nil for a hit the hero took: that number rises over the hero, in red.
 -- A pooled number changes size and outline only when it must: setting the same
 -- face again still costs the engine a font lookup, many times a second.
+------------------------------------------------------------------------------
+-- Survivor's combat text, as the player sets it (the options, Combat text):
+-- where the numbers go, how they look and what shows. The first time, the
+-- choices of the earlier versions carry over.
+
+local CT_DEFAULTS = {
+	ctLayout = "sides", ctDistance = 160, ctRise = 190, ctCritColumn = true,
+	ctIcons = true, ctMeterColors = true, ctSize = 0.85,
+	ctPeriodic = true, ctHeals = true, ctTaken = true,
+}
+
+local function CT()
+	local db = Settings()
+	if (db.ctVersion or 0) < 1 then
+		db.ctVersion = 1
+		for key, value in pairs(CT_DEFAULTS) do
+			if db[key] == nil then
+				db[key] = value
+			end
+		end
+		db.ctLayout = (db.damageSide or db.damageModern) and "sides" or "enemies"
+		db.ctIcons = db.damageModern and true or false
+		db.ctMeterColors = db.damageModern and true or false
+	end
+	return db
+end
+
 local function Face(text, size, flags)
-	local key = size..flags
+	local share = CT().ctSize or 0.85
+	local key = size..flags..share
 	if text.faceKey ~= key then
 		text.faceKey = key
-		text:SetFont(FONT, size, flags)
+		text:SetFont(FONT, math.max(6, math.floor(size * share + 0.5)), flags)
 	end
 end
 
@@ -1081,18 +1174,83 @@ local sideStack = {}            -- [column] = { at = time, count = numbers start
 local SPREAD = { 0, 40, 80, 120, 160 }
 
 local function SideOn()
-	return Settings().damageSide
+	return CT().ctLayout == "sides"
 end
 
-local function SpawnSide(kind, amount, crit, periodic)
+-- Beside the hero, with icons: each hit with its source's icon, in
+-- the color the damage meter gives that source. A melee hit shows the weapon
+-- in hand; a shot the ranged weapon (a hunter's bow, a wand).
+local OWN_ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIcon"
+local RANGED = { ["Auto Shot"] = true, ["Shoot"] = true, ["Shot"] = true, ["Auto Shoot"] = true }
+local iconCache, iconCacheAt = {}, 0
+
+local function SourceIcon(source)
+	if source == "Melee" then
+		return GetInventoryItemTexture("player", 16) or OWN_ICON, false
+	elseif RANGED[source] then
+		return GetInventoryItemTexture("player", 18) or GetInventoryItemTexture("player", 16) or OWN_ICON, false
+	end
+	-- The meter's lookup goes through the spellbook, the talents and the
+	-- items: kept a while, so a fight of many hits asks once per source.
+	if GetTime() - iconCacheAt > 30 then
+		iconCache, iconCacheAt = {}, GetTime()
+	end
+	if iconCache[source] == nil then
+		iconCache[source] = (SurvivorUI_MeterIcon and SurvivorUI_MeterIcon(source)) or false
+	end
+	if iconCache[source] then
+		return iconCache[source], false
+	end
+	return OWN_ICON, true
+end
+
+-- A hit dealt in the meter's color and with its source's icon, as chosen;
+-- false when neither.
+local function Dress(text, dealt, crit, source)
+	local ct = CT()
+	local colored = dealt and source and ct.ctMeterColors
+	if colored then
+		local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(source) or { 1, 1, 1 }
+		text:SetTextColor(color[1], color[2], color[3])
+	end
+	if dealt and source and ct.ctIcons then
+		local icon, whole = SourceIcon(source)
+		text.icon:SetTexture(icon)
+		if whole then
+			text.icon:SetTexCoord(0, 1, 0, 1)
+		else
+			text.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		end
+		-- The icon sized with the type.
+		local edge = math.floor((crit and 22 or 16) * (ct.ctSize or 0.85) + 0.5)
+		text.icon:SetWidth(edge)
+		text.icon:SetHeight(edge)
+		text.icon:SetAlpha(1)
+		text.icon:Show()
+	else
+		text.icon:Hide()
+	end
+	return colored
+end
+
+local function SpawnSide(kind, amount, crit, periodic, source)
 	local text = DamageText()
 	if not text then
 		return
 	end
-	if kind == "dealt" and crit then
+	local dealt = kind == "dealt"
+	local ct = CT()
+	-- The crits in a column of their own, on the right, or with the rest.
+	if kind == "dealt" and crit and ct.ctCritColumn then
 		kind = "crit"
 	end
 	local column = SIDE_COLUMNS[kind]
+	local columnX = column.x
+	if kind == "dealt" then
+		columnX = -(ct.ctDistance or 160)
+	elseif kind == "crit" then
+		columnX = ct.ctDistance or 160
+	end
 	local now = GetTime()
 	local stack = sideStack[kind] or { at = 0, count = 0 }
 	sideStack[kind] = stack
@@ -1119,6 +1277,7 @@ local function SpawnSide(kind, amount, crit, periodic)
 		text:SetTextColor(1, 1, 1)
 	end
 	text:SetText(amount)
+	Dress(text, dealt, crit, source)
 
 	text.live = true
 	text.crit = crit
@@ -1127,7 +1286,7 @@ local function SpawnSide(kind, amount, crit, periodic)
 	text.age = 0
 	text.side = true
 	-- Numbers that start together line up, the later ones a line further on.
-	text.x = UIParent:GetWidth() / 2 + column.x
+	text.x = UIParent:GetWidth() / 2 + columnX
 	text.y = UIParent:GetHeight() / 2 + column.y - column.rise * stack.count * SIDE_GAP
 	if column.spread then
 		-- Under the hero, numbers that start together go side by side, outward,
@@ -1136,15 +1295,19 @@ local function SpawnSide(kind, amount, crit, periodic)
 		text.y = UIParent:GetHeight() / 2 + column.y
 	end
 	text.drift = 0
-	text.rise = (column.reach or SIDE_RISE) * column.rise
+	text.rise = (column.reach or ct.ctRise or SIDE_RISE) * column.rise
 	text:SetAlpha(1)
 	text:Show()
 	damageLive = damageLive + 1
 end
 
-local function SpawnDamage(target, amount, crit, periodic)
+local function SpawnDamage(target, amount, crit, periodic, source)
+	local ct = CT()
+	if (periodic and not ct.ctPeriodic) or (not target and not ct.ctTaken) then
+		return
+	end
 	if SideOn() then
-		SpawnSide(target and "dealt" or "taken", amount, crit, periodic)
+		SpawnSide(target and "dealt" or "taken", amount, crit, periodic, source)
 		return
 	end
 	local text = DamageText()
@@ -1196,6 +1359,7 @@ local function SpawnDamage(target, amount, crit, periodic)
 		text:SetTextColor(1, 1, 1)
 	end
 	text:SetText(amount)
+	Dress(text, target ~= nil, crit, source)
 
 	text.live = true
 	text.crit = crit
@@ -1232,6 +1396,7 @@ damageLayer:SetScript("OnUpdate", function()
 			if t >= 1 then
 				text.live = nil
 				text:Hide()
+				text.icon:Hide()
 				damageLive = damageLive - 1
 			else
 				-- Fast at first, slowing as it tops out; fading over the last third.
@@ -1240,32 +1405,46 @@ damageLayer:SetScript("OnUpdate", function()
 				text:ClearAllPoints()
 				text:SetPoint("CENTER", UIParent, "BOTTOMLEFT", text.x + text.drift * eased, text.y + text.rise * eased)
 				text:SetAlpha(t > 0.66 and (1 - t) / 0.34 or 1)
+				text.icon:SetAlpha(text:GetAlpha())
 			end
 		end
 	end
 end)
 
+-- The hit's source, as the damage meter names it: "Your Fireball" is
+-- Fireball, "You" Melee, a pet its own name.
+local function SourceOf(who)
+	local _, _, spell = string.find(who or "", "^Your (.+)$")
+	if spell then
+		return spell
+	elseif who == "You" then
+		return "Melee"
+	end
+	return who
+end
+
 local function ParseDamage(message)
-	local _, _, target, amount = string.find(message, " crits (.+) for (%d+)")
+	local _, _, who, target, amount = string.find(message, "^(.-) crits (.+) for (%d+)")
 	if target then
-		return target, amount, true
+		return target, amount, true, false, SourceOf(who)
 	end
-	_, _, target, amount = string.find(message, " crit (.+) for (%d+)")
+	_, _, who, target, amount = string.find(message, "^(.-) crit (.+) for (%d+)")
 	if target then
-		return target, amount, true
+		return target, amount, true, false, SourceOf(who)
 	end
-	_, _, target, amount = string.find(message, " hits (.+) for (%d+)")
+	_, _, who, target, amount = string.find(message, "^(.-) hits (.+) for (%d+)")
 	if target then
-		return target, amount
+		return target, amount, false, false, SourceOf(who)
 	end
-	_, _, target, amount = string.find(message, " hit (.+) for (%d+)")
+	_, _, who, target, amount = string.find(message, "^(.-) hit (.+) for (%d+)")
 	if target then
-		return target, amount
+		return target, amount, false, false, SourceOf(who)
 	end
 	-- "Kobold Vermin suffers 12 Fire damage from your Flame Shock."
-	_, _, target, amount = string.find(message, "^(.+) suffers (%d+) .+ from your ")
+	local spell
+	_, _, target, amount, spell = string.find(message, "^(.+) suffers (%d+) .+ from your (.-)%.?$")
 	if target then
-		return target, amount, false, true
+		return target, amount, false, true, spell
 	end
 end
 
@@ -1282,7 +1461,7 @@ damageEvents:SetScript("OnEvent", function()
 	if event == "COMBAT_TEXT_UPDATE" then
 		if TAKEN_TYPES[arg1] and tonumber(arg2) then
 			SpawnDamage(nil, arg2, arg1 == "DAMAGE_CRIT")
-		elseif HEAL_TYPES[arg1] and SideOn() then
+		elseif HEAL_TYPES[arg1] and CT().ctHeals then
 			-- A heal: arg2 the healer, arg3 the health it gave.
 			local amount = tonumber(arg3) or tonumber(arg2)
 			if amount and amount > 0 then
@@ -1291,9 +1470,9 @@ damageEvents:SetScript("OnEvent", function()
 		end
 		return
 	end
-	local target, amount, crit, periodic = ParseDamage(arg1 or "")
+	local target, amount, crit, periodic, source = ParseDamage(arg1 or "")
 	if target then
-		SpawnDamage(target, amount, crit, periodic)
+		SpawnDamage(target, amount, crit, periodic, source)
 	end
 end)
 
@@ -1351,7 +1530,8 @@ local function ApplyTakenText()
 		end
 	end
 	-- Beside the hero, the heals are the addon's too.
-	local heals = on and Settings().damageSide
+	-- The heals are the addon's in its own mode, shown or not as chosen.
+	local heals = on
 	for kind in pairs(HEAL_TYPES) do
 		local info = COMBAT_TEXT_TYPE_INFO[kind]
 		if info then
@@ -1400,30 +1580,46 @@ function SurvivorUI_DamageMode()
 		return "none"
 	elseif not settings.damageText then
 		return "game"
-	elseif settings.damageSide then
-		return "side"
 	end
-	return "quick"
+	return "survivor"
 end
 
 function SurvivorUI_SetDamageMode(mode)
 	local settings = Settings()
 	settings.damageNone = mode == "none"
-	settings.damageText = mode == "quick" or mode == "side"
-	settings.damageSide = mode == "side"
+	settings.damageText = mode == "survivor"
 	ApplyDamageText()
+end
+
+-- For the options: one of Survivor's combat text settings, and its change.
+function SurvivorUI_CT(key)
+	return CT()[key]
+end
+
+function SurvivorUI_SetCT(key, value)
+	CT()[key] = value
+	ApplyDamageText()
+end
+
+-- Survivor's own look: beside the hero, with icons and the meter's colors.
+function SurvivorUI_CTDefaults()
+	local ct = CT()
+	for key, value in pairs(CT_DEFAULTS) do
+		ct[key] = value
+	end
+	SurvivorUI_SetDamageMode("survivor")
 end
 
 -- The numbers beside the hero, or over the enemies again.
 function SurvivorUI_ToggleDamageSide()
 	local settings = Settings()
-	settings.damageSide = not settings.damageSide
-	if settings.damageSide then
-		settings.damageText = true
-		settings.damageNone = nil
-	end
+	local ct = CT()
+	ct.ctLayout = ct.ctLayout == "sides" and "enemies" or "sides"
+	settings.damageSide = ct.ctLayout == "sides"
+	settings.damageText = true
+	settings.damageNone = nil
 	ApplyDamageText()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: damage numbers "..(settings.damageSide and "beside the hero: hits on the left, crits on the right, heals rising and damage taken falling below." or "over the enemies."))
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: damage numbers "..(settings.damageSide and "beside the hero." or "over the enemies."))
 end
 
 SLASH_SURVIVORUI1 = "/sui"
@@ -1486,7 +1682,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleCrits then
 			SurvivorUI_ToggleCrits()
 		end
-	elseif msg == "jewelry" then
+	elseif msg == "collection" or msg == "jewelry" then
 		if SurvivorUI_ToggleJewelry then
 			SurvivorUI_ToggleJewelry()
 		end
@@ -1502,17 +1698,22 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		SurvivorUI_ToggleDamage()
 	elseif msg == "damage side" then
 		SurvivorUI_ToggleDamageSide()
+	elseif msg == "damage modern" or msg == "damage icons" then
+		local on = not CT().ctIcons
+		CT().ctIcons, CT().ctMeterColors = on, on
+		SurvivorUI_SetDamageMode("survivor")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: damage numbers "..(on and "with their source's icon, in its damage meter color." or "without icons, in the classic colors."))
 	elseif msg == "damage none" then
 		local none = SurvivorUI_DamageMode() ~= "none"
-		SurvivorUI_SetDamageMode(none and "none" or "quick")
+		SurvivorUI_SetDamageMode(none and "none" or "survivor")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(none and "no combat text at all." or "quick damage numbers."))
 	else
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui opt  opens the options: every piece on or off, panel size, and a move mode with a grid")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between the quick damage numbers and the game's own")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage side  puts the damage numbers beside the hero, or back over the enemies")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui jewelry  the jewelry your class has found on this game, with the values seen")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 12  sets the chat text size, 8 to 18")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui collection  the Jewelry Collection: every amulet, ring and trinket found, and what is left to find")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 10  sets the chat text size, 8 to 18 (default 10)")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui bosses  switches the boss bars on or off; /sui bosses elites  lists elites too")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the bar and the game's own box")

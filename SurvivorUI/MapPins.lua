@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: caches and lairs on the minimap.
 --
 -- The game shares every cache on the field (AZS_CHESTS) and every guardian's

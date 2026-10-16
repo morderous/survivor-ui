@@ -1,3 +1,4 @@
+-- Survivor Plates - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor Plates: nameplates in the manner of Plater, for Azeroth Survivors.
 -- A flat health bar on a dark backing with a thin black border, the name above
 -- it, the unit's health on it, an execute-range marker, and a highlighted

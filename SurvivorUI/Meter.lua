@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: the damage meter.
 --
 -- The game's own meter, drawn again from the numbers it shares (its addon API,
@@ -498,7 +499,27 @@ local function FromItems(name)
 	end
 end
 
+-- The white damage: a swing shows the weapon in hand, a shot the ranged one
+-- (a bow, a gun, a wand). Read each time: the weapon can change in a run.
+local MELEE = { ["Melee"] = true, ["Attack"] = true, ["Auto Attack"] = true }
+local RANGED = { ["Auto Shot"] = true, ["Shoot"] = true, ["Shot"] = true, ["Auto Shoot"] = true }
+
+local function WeaponIcon(name)
+	if not GetInventoryItemTexture then
+		return nil
+	end
+	if MELEE[name] then
+		return GetInventoryItemTexture("player", 16)
+	elseif RANGED[name] then
+		return GetInventoryItemTexture("player", 18) or GetInventoryItemTexture("player", 16)
+	end
+end
+
 local function IconOf(name)
+	local weapon = WeaponIcon(name)
+	if weapon then
+		return weapon
+	end
 	if icons[name] then
 		return icons[name]
 	end

@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: loot log.
 --
 -- A small list in the top left corner of what the run has dropped, newest on

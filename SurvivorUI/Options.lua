@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: the options panel, /sui opt (or the minimap button).
 --
 -- A window with a column of tabs on the left, each in a color of its own, and
@@ -16,7 +17,7 @@ local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
-local WIDTH, HEIGHT = 640, 500
+local WIDTH, HEIGHT = 640, 540
 local SIDEBAR = 150
 local PAGE_X = SIDEBAR + 18               -- the pages' left edge
 local PAGE_WIDTH = WIDTH - PAGE_X - 18
@@ -83,6 +84,8 @@ panel:SetWidth(WIDTH)
 panel:SetHeight(HEIGHT)
 panel:SetFrameStrata("FULLSCREEN_DIALOG")
 panel:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
+-- A fifth smaller than its layout; the type a point larger to make up for it.
+panel:SetScale(0.8)
 panel:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
 panel:SetBackdropColor(0.05, 0.05, 0.07, 0.97)
 panel:SetBackdropBorderColor(0, 0, 0, 1)
@@ -102,7 +105,7 @@ end
 
 local function Text(parent, size, color, flags)
 	local text = parent:CreateFontString(nil, "OVERLAY")
-	text:SetFont(FONT, size + FONT_BUMP, flags or "OUTLINE")
+	text:SetFont(FONT, size + 1 + FONT_BUMP, flags or "OUTLINE")
 	text:SetTextColor(color[1], color[2], color[3])
 	return text
 end
@@ -149,10 +152,11 @@ close:SetScript("OnClick", function() panel:Hide() end)
 
 local TABS = {
 	{ key = "panels", label = "Panels", color = { 1, 0.82, 0 } },
-	{ key = "combat", label = "Combat", color = { 1, 0.38, 0.32 } },
+	{ key = "combat", label = "Combat text", color = { 1, 0.38, 0.32 } },
 	{ key = "plates", label = "Nameplates", color = { 0.38, 0.9, 0.45 } },
 	{ key = "interface", label = "Interface", color = { 0.4, 0.68, 1 } },
 	{ key = "size", label = "Size", color = { 0.78, 0.52, 1 } },
+	{ key = "character", label = "Character", color = { 1, 0.5, 0.7 } },
 	{ key = "layout", label = "Layout", color = { 0.25, 0.85, 0.8 } },
 }
 
@@ -349,7 +353,13 @@ local function Choice(page, options, get, set)
 		if option[3] then
 			row.note = Text(row, 9, MUTED)
 			row.note:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -2)
+			-- Wrapped within the page: a long note takes two lines.
+			row.note:SetWidth(PAGE_WIDTH - 26)
+			row.note:SetJustifyH("LEFT")
 			row.note:SetText(option[3])
+			if row.note:GetStringWidth() > PAGE_WIDTH - 26 then
+				row:SetHeight(44)
+			end
 		end
 
 		row:SetScript("OnClick", function()
@@ -371,7 +381,7 @@ local function Choice(page, options, get, set)
 			end
 		end
 		table.insert(widgets, row)
-		page.y = page.y - (option[3] and 34 or ROW)
+		page.y = page.y - row:GetHeight() - 2
 	end
 end
 
@@ -380,7 +390,7 @@ end
 local function Slider(page, label, low, high, step, get, set, format)
 	local holder = CreateFrame("Frame", nil, page)
 	holder:SetWidth(PAGE_WIDTH)
-	holder:SetHeight(24)
+	holder:SetHeight(20)
 	holder:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 	local color = page.color
 
@@ -439,7 +449,7 @@ local function Slider(page, label, low, high, step, get, set, format)
 		slider.quiet = nil
 	end
 	table.insert(widgets, holder)
-	page.y = page.y - 26
+	page.y = page.y - 22
 	return holder
 end
 
@@ -488,14 +498,59 @@ Check(page, "Caches and lairs on the minimap", FeatureOn("mapPins"), FeatureTogg
 -- Combat.
 
 page = pages.combat
-Header(page, "Combat text", "The numbers of the fight: the damage you deal, the hits you take and your heals.")
+Header(page, "Combat text")
 Choice(page, {
-	{ "side", "Beside the hero", "Hits on the left, crits on the right, heals rising and damage taken falling below." },
-	{ "quick", "Over the enemies", "Small and quick, over the enemy hit; crits big and gold. Your hits taken fall in red." },
-	{ "game", "The game's own", "The engine's floating numbers and the game's combat text, as it shows them." },
-	{ "none", "None at all", "No numbers and no floating combat text." },
-}, function() return SurvivorUI_DamageMode and SurvivorUI_DamageMode() or "quick" end,
+	{ "survivor", "Survivor", "The addon's own numbers, set up below." },
+	{ "game", "The game's own", "The engine's floating numbers and the game's combat text." },
+	{ "none", "None at all", "No numbers and no floating combat text, ever." },
+}, function() return SurvivorUI_DamageMode and SurvivorUI_DamageMode() or "survivor" end,
 	function(mode) if SurvivorUI_SetDamageMode then SurvivorUI_SetDamageMode(mode) end end)
+
+-- Survivor's settings: each a setting of SurvivorUI.lua's (SurvivorUI_CT).
+local function CTGet(key)
+	return function() return SurvivorUI_CT and SurvivorUI_CT(key) end
+end
+local function CTToggle(key)
+	return function()
+		if SurvivorUI_SetCT and SurvivorUI_CT then
+			SurvivorUI_SetCT(key, not SurvivorUI_CT(key))
+		end
+	end
+end
+local function CTSet(key)
+	return function(value)
+		if SurvivorUI_SetCT then
+			SurvivorUI_SetCT(key, value)
+		end
+	end
+end
+
+Subheader(page, "Where")
+Choice(page, {
+	{ "sides", "Beside the hero" },
+	{ "enemies", "Over the enemies  |cff8a8a90(needs nameplates on, or they ring the hero)|r" },
+}, CTGet("ctLayout"), CTSet("ctLayout"))
+Slider(page, "Distance from the hero", 60, 320, 10, CTGet("ctDistance"), CTSet("ctDistance"), "%d")
+Slider(page, "How far they rise", 80, 320, 10, CTGet("ctRise"), CTSet("ctRise"), "%d")
+Check(page, "Crits in a column of their own", CTGet("ctCritColumn"), CTToggle("ctCritColumn"), "on the right")
+
+Subheader(page, "Look")
+Check(page, "Source icons", CTGet("ctIcons"), CTToggle("ctIcons"), "melee and shots show the weapon")
+Check(page, "Damage meter colors", CTGet("ctMeterColors"), CTToggle("ctMeterColors"), "names and colors from the meter")
+Slider(page, "Text size", 0.5, 1.5, 0.05, CTGet("ctSize"), CTSet("ctSize"))
+
+Subheader(page, "What shows")
+Check(page, "Damage over time", CTGet("ctPeriodic"), CTToggle("ctPeriodic"))
+Check(page, "Heals", CTGet("ctHeals"), CTToggle("ctHeals"))
+Check(page, "Damage taken", CTGet("ctTaken"), CTToggle("ctTaken"))
+page.y = page.y - 6
+Button(page, "Survivor defaults", 200, 0, function()
+	if SurvivorUI_CTDefaults then
+		SurvivorUI_CTDefaults()
+	end
+	RefreshAll()
+end)
+page.y = page.y - 30
 
 ------------------------------------------------------------------------------
 -- Nameplates.
@@ -551,6 +606,103 @@ Check(page, "Flat chat", FeatureOn("chat"), FeatureToggle("chat"))
 Check(page, "Flat tooltips", FeatureOn("tooltip"), FeatureToggle("tooltip"))
 Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"))
 Check(page, "Menu buttons in the corner, on hover", FeatureOn("microMenu"), FeatureToggle("microMenu"))
+
+------------------------------------------------------------------------------
+-- Character: where the run's numbers go, and which of them this class shows.
+
+page = pages.character
+Header(page, "Character pane & stats")
+Choice(page, {
+	{ "attached", "In the character pane" },
+	{ "detached", "On their own, with the character pane" },
+	{ "always", "On their own, always shown" },
+}, function() return SurvivorUI_StatsMode and SurvivorUI_StatsMode() or "attached" end,
+	function(mode) if SurvivorUI_SetStatsMode then SurvivorUI_SetStatsMode(mode) end end)
+page.y = page.y - 4
+
+
+-- The class whose choices these are.
+local classLine = Text(page, 10, page.color)
+classLine:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+local classWidget = {}
+function classWidget:Refresh()
+	local name = UnitClass and UnitClass("player") or "this class"
+	classLine:SetText("Stats for "..(name or "this class").."  |cff8a8a90each class keeps its own; off is never shown|r")
+end
+table.insert(widgets, classWidget)
+page.y = page.y - 18
+
+-- Every number, by group, in two columns: on shows, off never does.
+local function StatCheck(x, y, width, label, color)
+	local check = CreateFrame("Button", nil, page)
+	check:SetWidth(width)
+	check:SetHeight(15)
+	check:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+	check.edge = Fill(check, "BORDER", 0.3, 0.3, 0.35, 1)
+	check.edge:SetWidth(10)
+	check.edge:SetHeight(10)
+	check.edge:SetPoint("LEFT", check, "LEFT", 2, 0)
+	check.box = Fill(check, "ARTWORK", 0, 0, 0, 1)
+	check.box:SetPoint("TOPLEFT", check.edge, "TOPLEFT", 1, -1)
+	check.box:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -1, 1)
+	check.label = Text(check, 9, TEXT)
+	check.label:SetPoint("LEFT", check.edge, "RIGHT", 6, 0)
+	check.label:SetText(label)
+	check:SetScript("OnClick", function()
+		if SurvivorUI_SetStatShown and SurvivorUI_StatShown then
+			SurvivorUI_SetStatShown(label, not SurvivorUI_StatShown(label))
+		end
+		this:Refresh()
+	end)
+	check:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+	check:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+	function check:Refresh()
+		local on = not SurvivorUI_StatShown or SurvivorUI_StatShown(label)
+		self.box:SetVertexColor(color[1], color[2], color[3], on and 1 or 0)
+		self.edge:SetVertexColor(on and color[1] or 0.3, on and color[2] or 0.3, on and color[3] or 0.35, 1)
+		if self.hot then
+			self.label:SetTextColor(1, 1, 1)
+		elseif on then
+			self.label:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+		else
+			self.label:SetTextColor(MUTED[1] * 0.8, MUTED[2] * 0.8, MUTED[3] * 0.8)
+		end
+	end
+	table.insert(widgets, check)
+end
+
+local groups = SurvivorUI_StatList and SurvivorUI_StatList() or {}
+-- Three columns, each group into the shortest, in order.
+local columnWidth = PAGE_WIDTH / 3 - 4
+local columnX = { 0, PAGE_WIDTH / 3 + 2, 2 * PAGE_WIDTH / 3 + 4 }
+local columnY = { page.y, page.y, page.y }
+for index = 1, table.getn(groups) do
+	local group = groups[index]
+	local column = 1
+	for each = 2, 3 do
+		if columnY[each] > columnY[column] then
+			column = each
+		end
+	end
+	local y = columnY[column]
+	local title = Text(page, 9, group.color)
+	title:SetPoint("TOPLEFT", page, "TOPLEFT", columnX[column], y)
+	title:SetText(group.title)
+	y = y - 15
+	for each = 1, table.getn(group.rows) do
+		StatCheck(columnX[column], y, columnWidth, group.rows[each][1], group.color)
+		y = y - 15
+	end
+	columnY[column] = y - 6
+end
+page.y = math.min(columnY[1], math.min(columnY[2], columnY[3])) - 4
+Note(page, "To change their order: in move mode (or holding Alt), drag a stat or a group's title in the stats panel.", 2)
+Button(page, "Default for this class", 200, 0, function()
+	if SurvivorUI_ResetStatOrder then
+		SurvivorUI_ResetStatOrder()
+	end
+	RefreshAll()
+end)
 
 ------------------------------------------------------------------------------
 -- Size.
@@ -665,7 +817,7 @@ end
 table.insert(widgets, reloadButton)
 
 local credit = panel:CreateFontString(nil, "OVERLAY")
-credit:SetFont(FONT, 8, "")
+credit:SetFont(FONT, 9, "")
 credit:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12, 12)
 credit:SetWidth(SIDEBAR - 18)
 credit:SetJustifyH("LEFT")

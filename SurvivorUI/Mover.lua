@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: the middle of the screen moves as one.
 --
 -- The player frame, the action buttons, the target frame, the experience bar,
@@ -422,19 +423,31 @@ local PARTS = {
 		places = { { "bossLeft", "bossTop", "TOPLEFT" } } },
 	{ key = "loot", label = "Loot list", frames = { "SurvivorUILoot" },
 		places = { { "lootLeft", "lootTop", "TOPLEFT" } } },
+	-- The whole center at once: the bar, the frames, the buffs and the kills
+	-- line, each still with its own size on top.
+	{ key = "middle", label = "Whole center bar", frames = {}, places = {}, members = "middle" },
 	-- The buttons belong to the game's bar, hung on the row: sized with it.
-	{ key = "bar", label = "Action bar", frames = { "SurvivorUIRow", "MainMenuExpBar",
+	{ key = "bar", label = "Action bar", group = "middle", frames = { "SurvivorUIRow", "MainMenuExpBar",
 		"ActionButton1", "ActionButton2", "ActionButton3", "ActionButton4", "ActionButton5", "ActionButton6",
 		"ActionButton7", "ActionButton8", "ActionButton9", "ActionButton10", "ActionButton11", "ActionButton12",
 		"BonusActionButton1", "BonusActionButton2", "BonusActionButton3", "BonusActionButton4", "BonusActionButton5", "BonusActionButton6",
 		"BonusActionButton7", "BonusActionButton8", "BonusActionButton9", "BonusActionButton10", "BonusActionButton11", "BonusActionButton12" },
 		places = {}, extra = { "rowX", "rowY" }, restore = function() Restore() end },
-	{ key = "frames", label = "Player and target", frames = { "SurvivorUIPlayer", "SurvivorUITarget" },
+	{ key = "frames", label = "Player and target", group = "middle", frames = { "SurvivorUIPlayer", "SurvivorUITarget" },
 		places = { { "playerLeft", "playerTop", "TOPLEFT", "SurvivorUIPlayer" }, { "targetLeft", "targetTop", "TOPLEFT", "SurvivorUITarget" } } },
-	{ key = "buffs", label = "Buffs", frames = { "SurvivorUIBuffs" },
+	{ key = "buffs", label = "Buffs", group = "middle", frames = { "SurvivorUIBuffs" },
 		places = { { "buffsLeft", "buffsBottom", "BOTTOMLEFT" } } },
-	{ key = "tally", label = "Kills and gold", frames = { "SurvivorUITallyFrame" },
+	{ key = "tally", label = "Kills and gold", group = "middle", frames = { "SurvivorUITallyFrame" },
 		places = { { "tallyLeft", "tallyTop", "TOPLEFT" } } },
+	-- The minimap with all it holds: the zone's name, the pins and the buttons.
+	{ key = "minimap", label = "Minimap", frames = { "MinimapCluster" },
+		places = { { "mapRight", "mapTop", "TOPRIGHT" } } },
+	-- A little smaller than the game made it, to leave room beside it.
+	{ key = "character", label = "Character pane", frames = { "CharacterFrame" }, places = {}, default = 0.85 },
+	-- The numbers on their own (CharacterPane.lua): sized and placed there, as
+	-- inside the character pane they take its size.
+	{ key = "stats", label = "Stats on their own", frames = {}, places = {}, extra = { "statsLeft", "statsTop" },
+		apply = function(scale) if SurvivorUI_StatsScale then SurvivorUI_StatsScale(scale) end end },
 }
 
 local function Clamp(value)
@@ -447,9 +460,11 @@ local function PartScales()
 	return SurvivorUIDB.partScale
 end
 
--- A part's size on screen: the whole interface's times its own.
+-- A part's size on screen: the whole interface's times its group's (the
+-- whole center bar) times its own.
 local function Effective(part)
-	return Clamp((SurvivorUIDB and SurvivorUIDB.panelScale or 1) * (PartScales()[part.key] or 1))
+	local group = part.group and (PartScales()[part.group] or 1) or 1
+	return Clamp((SurvivorUIDB and SurvivorUIDB.panelScale or 1) * group * (PartScales()[part.key] or part.default or 1))
 end
 
 -- A moved piece keeps its place as a point in its own size's units: the same
@@ -457,6 +472,10 @@ end
 -- change of size converts the part's saved places, keeping it where it
 -- stands, and no piece may leave the screen.
 local function ApplyPart(part, from)
+	-- A group's size is only its members'.
+	if part.members then
+		return
+	end
 	local scale = Effective(part)
 	from = from or scale
 	local db = SurvivorUIDB
@@ -477,7 +496,10 @@ local function ApplyPart(part, from)
 	end
 	-- Kept on the screen: the part's own frames, the ones it moves by. Not the
 	-- action buttons: the ones put away wait below the screen's edge.
-	local kept = { [part.frames[1]] = true }
+	local kept = {}
+	if part.frames[1] then
+		kept[part.frames[1]] = true
+	end
 	for _, place in pairs(part.places) do
 		kept[place[4] or part.frames[1]] = true
 	end
@@ -499,6 +521,9 @@ local function ApplyPart(part, from)
 	end
 	if part.restore then
 		part.restore()
+	end
+	if part.apply then
+		part.apply(scale)
 	end
 end
 
@@ -530,15 +555,38 @@ end
 function SurvivorUI_GetScale(key)
 	SurvivorUIDB = SurvivorUIDB or {}
 	if key then
-		return PartScales()[key] or 1
+		local part = FindPart(key)
+		return PartScales()[key] or (part and part.default) or 1
 	end
 	return SurvivorUIDB.panelScale or 1
+end
+
+-- A part's size on screen, the whole interface's times its own.
+function SurvivorUI_PartScale(key)
+	local part = FindPart(key)
+	return part and Effective(part) or 1
 end
 
 function SurvivorUI_SetPartScale(key, value)
 	local part = FindPart(key)
 	value = tonumber(value)
 	if not (part and value) then
+		return
+	end
+	-- A group: each member keeps its place through the change.
+	if part.members then
+		local froms = {}
+		for _, member in pairs(PARTS) do
+			if member.group == part.members then
+				froms[member.key] = Effective(member)
+			end
+		end
+		PartScales()[key] = Clamp(math.floor(value * 100 + 0.5) / 100)
+		for _, member in pairs(PARTS) do
+			if member.group == part.members then
+				ApplyPart(member, froms[member.key])
+			end
+		end
 		return
 	end
 	local from = Effective(part)
@@ -570,7 +618,7 @@ end
 -- Every part back to its own size 1 (the whole interface's stays).
 function SurvivorUI_ResetPartScales()
 	for _, part in pairs(PARTS) do
-		SurvivorUI_SetPartScale(part.key, 1)
+		SurvivorUI_SetPartScale(part.key, part.default or 1)
 	end
 end
 

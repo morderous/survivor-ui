@@ -2,9 +2,15 @@
 
 [![Latest release](https://img.shields.io/github/v/release/morderous/survivor-ui?label=download&color=2ea44f)](https://github.com/morderous/survivor-ui/releases/latest) [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/morderous)
 
+![Survivor UI in a run: the run tracker, the build list with its jewelry and the damage meter on the right, This Run and Biggest Crits on the left, the loot list at the top, boss bars, the action bar with the unit frames, and the damage numbers beside the hero with their spells' icons](docs/screenshot.jpg)
+
+![The Jewelry Collection beside the character pane: the class's legendary amulets by spell, the amulets, rings and trinkets found and still to find, with what is worn now; the character pane in the class's color, and the run tracker, build list and damage meter on the right](docs/screenshot-collection.jpg)
+
 Two interface addons for Azeroth Survivors, the Vampire Survivors-style game that runs on [benilla](https://github.com/samwhosung/benilla), a World of Warcraft 1.12.1 client. They are independent: use either one or both.
 
 These are fan-made and not affiliated with the game or its author.
+
+> **The installer (.exe) is optional.** The addons are plain Lua files: download `SurvivorUI-vX.Y.zip` from the [latest release](https://github.com/morderous/survivor-ui/releases/latest), unzip it and move the `SurvivorUI` and `SurvivorPlates` folders into the game's `benilla-config\AddOns` folder yourself ([how](#by-hand)). The installer only saves those steps, and its source code is in [`installer/`](installer) for anyone to read.
 
 Both are flat and dark, in the manner of EllesmereUI and Plater. They are written from scratch for the 1.12 addon API and share no code with those addons.
 
@@ -30,12 +36,13 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui bosses` | Boss bars: on or off |
 | `/sui bosses elites` | Adds every elite to the boss bars |
 | `/sui tally` | Kills and gold line under the bar, or the game's own box |
-| `/sui damage side` | Damage numbers beside the hero (the default), or over the enemies |
-| `/sui damage` | The addon's damage numbers, or the game's own |
+| `/sui damage` | The addon's combat text, or the game's own (the rest is in `/sui opt`, Combat text) |
 | `/sui damage none` | No combat text at all, or back |
-| `/sui jewelry` | The jewelry your class has found, with the values seen |
+| `/sui damage side` | The numbers beside the hero, or over the enemies |
+| `/sui damage icons` | Source icons and damage meter colors on the numbers, or not |
+| `/sui collection` | The Jewelry Collection (also its button on the character pane) |
 | `/sui pins` | Prints what the minimap's cache and lair pins read, to check them |
-| `/sui chat 12` | Chat text size, 8 to 18 |
+| `/sui chat 10` | Chat text size, 8 to 18 |
 | `/splates all` | Plates on every enemy, or only on elites, guardians and bosses |
 | `/splates names` | Names only on elites, guardians and bosses, or on every plate |
 | `/splates none` | No nameplates (the default), or back |
@@ -77,11 +84,11 @@ Unit frames and the action bar, in one centered row under the hero:
 - The experience bar as a thin strip under the row.
 - A square minimap, zoomed with the mouse wheel.
 - The micro buttons in the bottom right corner, hidden until the mouse reaches them.
-- A flat, dark chat panel without the scroll buttons, in 12 point text. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
-- A flat character pane: the hero and the item slots on the left, the run's numbers in titled sections on the right.
+- A flat, dark chat panel without the scroll buttons, in 10 point text. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
+- A flat character pane in the hero's class color: the hero and the item slots on the left, the run's numbers in titled sections on the right. The numbers can stand on their own, with the pane or always shown, resized by their corner; each class picks which of them show and in what order.
 - A flat, dark tooltip with smaller type. An ability's tooltip is laid out again.
 - Friz Quadrata on every piece of interface text, chat and nameplates included, or a face of your own (see Font below).
-- Damage numbers beside the hero, in place of the game's own: the hits dealt rising on the left, the crits on the right, the heals rising from under the hero and the hits taken falling below it. Or over the enemies, the game's own, or none at all.
+- Combat text in place of the game's own: beside the hero, each hit with its source's icon (a weapon for melee and shots) in its damage meter color, the crits on the right, the heals rising and the hits taken falling below. Where, how far, the look and what shows are all yours to set; or the game's own, or none at all.
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the game's own clock.
 - A run panel on the left, under the loot list: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
 - A damage meter under the build list, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, or the damage to bosses in the last boss fight.
@@ -93,7 +100,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike, in the build list's look.
 - A thin white outline around whatever the mouse is on: a button, a bar, a buff. The nameplates, the chat, the minimap and the run tracker go without.
 - An options panel (`/sui opt`, or the S button by the minimap), in tabs of their own color: every panel on or off, the combat numbers, the nameplates, every look, a size for the whole interface and one for each part, and a move mode, always at the bottom, that unlocks every piece over a grid they snap to.
-- A jewelry book (the ring button by the minimap, or `/sui jewelry`): every neck, ring and trinket your class has worn on this game, with the range seen of each bonus. One book per class, shared by every character and account on the game. A slim list to read at a glance, even in a fight.
+- A Jewelry Collection (its button on the character pane, or `/sui collection`): every amulet, ring and trinket of the game's codex, found or still to find, with the range seen of each bonus and what each gives by rarity; your class's own amulets by spell, in your class's color. One collection for the whole game folder, shared by every character and account on it. Compact, to read at a glance in a fight.
 
 Left click a frame to target it, right click for its menu. Hold Alt to outline every movable piece: the action bar, the player and target frames, the buffs, the kills and gold line, the panels. Drag any of them; each keeps its place. `/sui center` puts the action bar back; the option "Unit frames move with the action bar" joins the two frames to it.
 
@@ -101,12 +108,13 @@ Commands:
 
 | Command | What it does |
 |---|---|
-| `/sui damage side` | Damage numbers beside the hero (the default): hits on the left, crits on the right, heals rising and damage taken falling below; again for over the enemies |
-| `/sui damage` | Switches between the addon's damage numbers and the game's own |
+| `/sui damage` | Switches between the addon's combat text and the game's own; every other choice is in `/sui opt`, Combat text |
 | `/sui damage none` | No combat text at all; again to bring it back |
-| `/sui jewelry` | The jewelry book: every neck, ring and trinket your class has worn on this game, with the values seen |
+| `/sui damage side` | The numbers beside the hero (the default), or over the enemies |
+| `/sui damage icons` | Source icons and damage meter colors on the numbers (the default), or not |
+| `/sui collection` | The Jewelry Collection: every amulet, ring and trinket found on this game, and what is left to find |
 | `/sui pins` | Prints what the minimap's cache and lair pins read, to check them |
-| `/sui chat 12` | Chat text size, 8 to 18 (default 12) |
+| `/sui chat 10` | Chat text size, 8 to 18 (default 10) |
 | `/sui run` | Shows or hides the run panel |
 | `/sui tracker` | Shows or hides the run tracker under the minimap |
 | `/sui meter` | Switches between the addon's damage meter (the default) and the game's own |
@@ -137,6 +145,8 @@ Azeroth Survivors shares its run with addons: its clock, phase, kills, bosses, g
 The run tracker, the damage meter, the boss bars and the kills and gold line put the game's own clock, meter, boss bars and box away while they are on. That is a game setting, saved by the game: `/sui tracker`, `/sui meter`, `/sui bosses` and `/sui tally` bring them back, and so do the "Show ..." checkboxes in the game's Options, Interface. Do that before removing the addon, or the game's own will stay hidden.
 
 ## Install
+
+Two ways, the same result: the installer, or the zip by hand. The installer is optional.
 
 ### With the installer (easiest)
 
@@ -175,6 +185,20 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v2.9, 2026-10-16
+
+**Survivor UI**
+- **Jewelry Collection** (was the jewelry book): every one of the codex's 39 shared amulets, rings and trinkets, the ones still to find by name, each with what it gives at every rarity; and your class's legendary amulets by spell, in your class's color and icon. Group titles are progress bars with what you wear now (`Rings - 2/2`), a green `E` marks what is worn, and it opens from its own button on the character pane, beside it. One collection for the whole game folder, every class and account filling it.
+- **Combat text, rebuilt from scratch:** three modes (Survivor, the game's own, none at all) and Survivor's own settings: beside the hero or over the enemies, the distance and how far the numbers rise, crits in their own column, source icons, damage meter colors, the text size, and whether damage over time, heals and damage taken show. A `Survivor defaults` button sets it back. The default now: beside the hero, with icons and the meter's colors, the type 15% smaller.
+- **Weapon icons:** melee shows the weapon in hand, shots the ranged weapon, in the damage meter and the combat text.
+- **Character pane:** the hero's class color on the name line and the border; always in front of the panels; the Skills, Honor and other tabs put away; 15% smaller by default (its own size in Size). The numbers on their own take the panels' look when always shown and resize by their corner; a new Character tab picks, per class, which numbers show.
+- **Size:** the minimap and a whole center bar slider join the parts.
+- **Smaller:** the options window, tooltips and right click menus (20%), the minimap buttons, the chat text (10 by default).
+- Bags no longer open (B); the old experience bar stays away while the run tracker is on.
+
+**Both**
+- Every file names its author and license.
 
 ### v2.8, 2026-10-16
 

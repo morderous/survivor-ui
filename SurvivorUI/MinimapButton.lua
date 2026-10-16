@@ -1,13 +1,13 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: a square button outside the minimap's bottom left corner, with
 -- the addon's own icon (Art\SurvivorIcon.tga), that opens the options with
 -- configuration mode on (the grid laid out, every piece unlocked); right click
--- opens them without it. Other buttons stack over it, upward, in the same
--- square look: the jewelry book's (a ring), then the game's battleground
--- button (the crossed swords).
+-- opens them without it. Other minimap buttons stack over it, upward, in the
+-- same square look: the game's battleground button (the crossed swords).
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIcon"
-local SIZE = 22
+local SIZE = 16              -- the stock 22, smaller
 
 -- A square, flat frame around an icon: a black edge, gold under the mouse.
 local function Square(frame, icon)
@@ -84,35 +84,6 @@ button:SetScript("OnLeave", function()
 end)
 
 ------------------------------------------------------------------------------
--- The jewelry book (Jewelry.lua): over ours.
-
-local jewels = CreateFrame("Button", "SurvivorUIJewelryButton", Minimap or UIParent)
-jewels:SetFrameStrata("MEDIUM")
-jewels:SetFrameLevel(button:GetFrameLevel())
-jewels:SetPoint("BOTTOM", button, "TOP", 0, 5)
-jewels.icon = jewels:CreateTexture(nil, "ARTWORK")
--- Ours too: the S button's frame, a gold ring with a cut gem.
-jewels.icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\JewelryIcon")
-jewels.ownIcon = jewels.icon
-Square(jewels, jewels.icon)
-jewels:SetScript("OnClick", function()
-	if SurvivorUI_ToggleJewelry then
-		SurvivorUI_ToggleJewelry()
-	end
-end)
-jewels:SetScript("OnEnter", function()
-	Lit(this, true)
-	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
-	GameTooltip:SetText("Jewelry found", 1, 0.82, 0)
-	GameTooltip:AddLine("Every neck, ring and trinket your class has worn on this game, with the values seen", 1, 1, 1, 1)
-	GameTooltip:Show()
-end)
-jewels:SetScript("OnLeave", function()
-	Lit(this, false)
-	GameTooltip:Hide()
-end)
-
-------------------------------------------------------------------------------
 -- The game's battleground button: square, beside ours. The stock code shows it
 -- and hides it as queues come and go; only its look and place change.
 
@@ -127,9 +98,9 @@ local function RestyleBattlefield()
 		border:SetAlpha(0)
 	end
 	Square(frame, getglobal("MiniMapBattlefieldIcon"))
-	-- On top of the stack outside the minimap.
+	-- Over ours, in the stack outside the minimap.
 	frame:ClearAllPoints()
-	frame:SetPoint("BOTTOM", jewels, "TOP", 0, 5)
+	frame:SetPoint("BOTTOM", button, "TOP", 0, 5)
 	if not frame.squareHooked then
 		frame.squareHooked = true
 		local stockEnter, stockLeave = frame:GetScript("OnEnter"), frame:GetScript("OnLeave")

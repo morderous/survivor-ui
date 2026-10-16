@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: the run so far, in one small panel.
 --
 -- This Run: a running count of what the game totals up on the screen that

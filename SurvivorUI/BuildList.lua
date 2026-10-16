@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: the build, in the right column between the run tracker and the
 -- damage meter, the same spells side by side with what they deal.
 --

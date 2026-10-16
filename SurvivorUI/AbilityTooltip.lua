@@ -1,3 +1,4 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: the ability tooltip, laid out again.
 --
 -- The game writes an ability's tooltip itself: the name and rank, how it is
