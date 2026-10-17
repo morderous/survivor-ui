@@ -111,6 +111,100 @@ local function MergeItem(book, base, old)
 	end
 end
 
+-- A bonus kept in another language's words ("Equip: Erhöht den Schaden deiner
+-- kritischen Treffer um #%."), in English's (Locale.lua): its number stands
+-- in as a 7 while it is read, and is a # again after.
+local function EnglishPattern(pattern)
+	if not (SurvivorUI_EnglishLine and pattern) then
+		return pattern
+	end
+	local sample = string.gsub(pattern, "#", "7", 1)
+	local english = SurvivorUI_EnglishLine(sample)
+	if english == sample then
+		return pattern
+	end
+	return (string.gsub(english, "%d+%.?%d*", "#", 1))
+end
+
+-- A piece's bonuses in English, the same bonus kept once.
+local function EnglishStats(item)
+	local stats, byPattern = {}, {}
+	for each = 1, table.getn(item.stats or {}) do
+		local stat = item.stats[each]
+		local pattern = EnglishPattern(stat.pattern)
+		if pattern ~= stat.pattern then
+			stat.pattern = pattern
+			if SurvivorUI_StatOf then
+				stat.tag = SurvivorUI_StatOf((string.gsub(pattern, "#", "7"))) or stat.tag
+			end
+		end
+		local mine = byPattern[pattern]
+		if mine then
+			Widen(mine, stat)
+			for rank, values in pairs(stat.ranks or {}) do
+				mine.ranks = mine.ranks or {}
+				mine.ranks[rank] = mine.ranks[rank] or {}
+				Widen(mine.ranks[rank], values)
+			end
+		else
+			byPattern[pattern] = stat
+			table.insert(stats, stat)
+		end
+	end
+	item.stats = stats
+end
+
+-- Pieces kept under another language's name (before v2.11 kept them all in
+-- English, or with the game switched to another language) join their English
+-- one. A class's amulet keeps the name the game gives it, so two for one
+-- class and spell are one piece: they join, under the name seen last.
+local function Unify(book)
+	local items = book.items
+	local renames = {}
+	for base, item in pairs(items) do
+		EnglishStats(item)
+		if item.spell and SurvivorUI_English then
+			item.spell = SurvivorUI_English(item.spell)
+		end
+		local english = SurvivorUI_English and SurvivorUI_English(base) or base
+		if english ~= base then
+			table.insert(renames, { base, english })
+		end
+	end
+	for _, pair in pairs(renames) do
+		local old = items[pair[1]]
+		items[pair[1]] = nil
+		MergeItem(book, pair[2], old)
+	end
+	local bySpell, joins = {}, {}
+	for base, item in pairs(items) do
+		if item.spell then
+			local key = (item.class or "")..":"..Plain(item.spell)
+			local other = bySpell[key]
+			if other then
+				local keep, gone = other, base
+				if (item.last or 0) > (items[other].last or 0) then
+					keep, gone = base, other
+				end
+				table.insert(joins, { gone, keep })
+				bySpell[key] = keep
+			else
+				bySpell[key] = base
+			end
+		end
+	end
+	for _, pair in pairs(joins) do
+		local old = items[pair[1]]
+		if old and items[pair[2]] then
+			items[pair[1]] = nil
+			MergeItem(book, pair[2], old)
+			EnglishStats(items[pair[2]])
+		end
+	end
+end
+
+local unified = false
+
 -- This character's class book.
 -- The one book. The books kept by class (v2.8) and by character (before it)
 -- join it once, their legendary amulets marked with their class.
@@ -138,7 +232,29 @@ local function Book()
 		end
 		SurvivorUIJewelry.items = nil
 	end
+	-- Once a session, once the words to read them by are loaded.
+	if not unified and SurvivorUI_English then
+		unified = true
+		Unify(books.shared)
+	end
 	return books.shared
+end
+
+-- /sui collection reset: everything found is forgotten, for every class and
+-- account on this game. Asked twice, within ten seconds.
+local resetAsked = 0
+function SurvivorUI_ResetCollection()
+	if GetTime() - resetAsked > 10 then
+		resetAsked = GetTime()
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: this forgets every piece in the Jewelry Collection, for every class and account on this game. Type /sui collection reset again within 10 seconds to do it.")
+		return
+	end
+	resetAsked = 0
+	Books().shared = { items = {} }
+	if SurvivorUIJewelryPanel and SurvivorUIJewelryPanel:IsShown() then
+		SurvivorUIJewelryPanel.Draw()
+	end
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the Jewelry Collection is empty again. Pieces you wear now come back on their own.")
 end
 
 -- A piece this class can find: every one but another class's legendary
@@ -163,6 +279,15 @@ local firstLook = true          -- the pieces worn at login were found before
 
 -- A bonus line, as a pattern with its number taken out, the number and its
 -- unit: "Increases your luck by #%", 70, "%".
+-- A name or bonus line in English, whatever language the game is in (Locale.lua).
+local function English(name)
+	return SurvivorUI_English and SurvivorUI_English(name) or name
+end
+
+local function EnglishLine(text)
+	return SurvivorUI_EnglishLine and SurvivorUI_EnglishLine(text) or text
+end
+
 local function Bonus(text)
 	local _, _, number, percent = string.find(text, "(%d+%.?%d*)(%%?)")
 	if not number then
@@ -185,6 +310,9 @@ local function Record(slot, link)
 		base = string.sub(name, 1, string.len(name) - string.len(found) - 1)
 	end
 	rank = rank or "I"
+	-- Kept by its English name, as the codex has it: one collection whatever
+	-- language the game is in.
+	base = English(base)
 
 	local book = Book()
 	local item = book.items[base]
@@ -226,7 +354,7 @@ local function Record(slot, link)
 	end
 	for index = 2, scan:NumLines() do
 		local line = getglobal("SurvivorUIJewelryScanTextLeft"..index)
-		local text = line and line:GetText()
+		local text = EnglishLine(line and line:GetText())
 		local pattern, value, unit = Bonus(text or "")
 		if pattern then
 			local stat

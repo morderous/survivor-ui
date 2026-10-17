@@ -1735,6 +1735,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleJewelry then
 			SurvivorUI_ToggleJewelry()
 		end
+	elseif msg == "collection reset" then
+		if SurvivorUI_ResetCollection then
+			SurvivorUI_ResetCollection()
+		end
 	elseif msg == "pins" then
 		if SurvivorUI_PinsReport then
 			SurvivorUI_PinsReport()
@@ -1761,7 +1765,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between the quick damage numbers and the game's own")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage side  puts the damage numbers beside the hero, or back over the enemies")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui collection  the Jewelry Collection: every amulet, ring and trinket found, and what is left to find")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui collection  the Jewelry Collection: every amulet, ring and trinket found, and what is left to find; /sui collection reset  forgets it all")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 10  sets the chat text size, 8 to 18 (default 10)")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui bosses  switches the boss bars on or off; /sui bosses elites  lists elites too")

@@ -182,7 +182,13 @@ end
 
 -- The game's meter line for an ability, by the name the combat log gave it.
 local MELEE_NAMES = { "Melee", "Attack", "Auto Attack" }
+-- A name or bonus line in English, whatever language the game is in (Locale.lua).
+local function English(name)
+	return SurvivorUI_English and SurvivorUI_English(name) or name
+end
+
 local function MeterLine(ability)
+	ability = English(ability)
 	if not AZS_GetMeter then
 		return nil
 	end
@@ -193,7 +199,7 @@ local function MeterLine(ability)
 	local names = ability == "Melee" and MELEE_NAMES or { ability }
 	for index = 1, table.getn(lines) do
 		for n = 1, table.getn(names) do
-			if lines[index].name == names[n] then
+			if English(lines[index].name) == names[n] then
 				return lines[index], total
 			end
 		end
@@ -602,6 +608,7 @@ local function SpellEntry(ability)
 	if not (ability and AZS_SPELLS) then
 		return nil
 	end
+	ability = English(ability)
 	local lower = string.lower(ability)
 	local key = SPELL_KEYS[lower] or string.gsub(string.gsub(lower, "[^%a ]", ""), " ", "_")
 	for index = 1, table.getn(AZS_SPELLS) do
@@ -617,7 +624,9 @@ local function Seconds1(value)
 end
 
 local function CritTooltip(row)
-	local ability = row.ability
+	-- The meter's line by its name in the game's language; the crits by the
+	-- combat log's, in English.
+	local ability = English(row.ability)
 	local stats = ability and critStats[ability]
 	local hits = ability and hitStats[ability]
 	-- Its line in the game's damage meter, where the game shares it.

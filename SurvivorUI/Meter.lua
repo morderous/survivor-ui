@@ -409,11 +409,17 @@ end)
 ------------------------------------------------------------------------------
 -- The bars.
 
+-- A name or bonus line in English, whatever language the game is in (Locale.lua).
+local function English(name)
+	return SurvivorUI_English and SurvivorUI_English(name) or name
+end
+
 local colors = {}               -- [source] = palette entry
 local colorsGiven = 0
 local bars = {}
 
 local function ColorOf(name)
+	name = English(name)
 	if not colors[name] then
 		colorsGiven = colorsGiven + 1
 		colors[name] = PALETTE[math.mod(colorsGiven - 1, table.getn(PALETTE)) + 1]
@@ -516,6 +522,7 @@ local function WeaponIcon(name)
 end
 
 local function IconOf(name)
+	name = English(name)
 	local weapon = WeaponIcon(name)
 	if weapon then
 		return weapon
@@ -543,6 +550,7 @@ local function RankOf(name)
 	if not (name and AZS_SPELLS) then
 		return nil
 	end
+	name = English(name)
 	local lower = string.lower(name)
 	local key = SPELL_KEYS[lower] or string.gsub(string.gsub(lower, "[^%a ]", ""), " ", "_")
 	for index = 1, table.getn(AZS_SPELLS) do

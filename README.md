@@ -44,6 +44,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui damage side` | The numbers beside the hero, or over the enemies |
 | `/sui damage icons` | Source icons and damage meter colors on the numbers, or not |
 | `/sui collection` | The Jewelry Collection (also its button on the character pane) |
+| `/sui collection reset` | Forgets every piece in the Jewelry Collection (type it twice) |
 | `/sui pins` | Prints what the minimap's cache and lair pins read, to check them |
 | `/sui chat 10` | Chat text size, 8 to 18 |
 | `/splates all` | Plates on every enemy, or only on elites, guardians and bosses |
@@ -189,6 +190,17 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v2.11, 2026-10-16
+
+**Survivor UI**
+- **Every language the game speaks:** in a game set to German, French, Spanish, Portuguese, Polish, Turkish, Russian, Chinese or Korean, the game names spells, jewelry and bonuses in that language while the combat log stays in English, so several pieces matched nothing. Now each name and bonus goes back to English first, with the game's own translations:
+  - **Jewelry Collection:** found pieces match the codex, so the ones still to find tick off, and your class's amulets are known by their spell. Pieces are kept under their English names: one collection whatever language you play in.
+  - **Damage meter:** each line gets its icon, rank, color and crit card again, the white damage its weapon, and the combat text the same colors as the meter.
+  - **Build list:** jewelry bonuses get their short names again (`CRIT DMG`, `CDR`...).
+- **Jewelry Collection, one piece once:** pieces kept twice, once in another language (from before this version, or with the game's language switched), join into one on their own, their bonuses too; a class's amulets join by their spell.
+- **`/sui collection reset`:** forgets the whole collection (asked twice, within 10 seconds).
+- **Build list:** "your critical strikes deal X% more damage" reads as `CRIT DMG`, not `CRIT`.
 
 ### v2.10.2, 2026-10-16
 

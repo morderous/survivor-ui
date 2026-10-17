@@ -314,7 +314,7 @@ end
 local STAT_WORDS = {
 	{ "explode", "BOOM" }, { "duration", "DUR" },
 	{ "critical strike damage", "CRIT DMG" }, { "critical damage", "CRIT DMG" },
-	{ "damage of your critical", "CRIT DMG" },
+	{ "damage of your critical", "CRIT DMG" }, { "critical strikes deal", "CRIT DMG" },
 	{ "critical", "CRIT" }, { "crit", "CRIT" }, { "cooldown", "CDR" },
 	{ "damage reduction", "DMG RED" }, { "damage taken", "DMG RED" }, { "armor", "DMG RED" },
 	{ "area", "AREA" }, { "target", "TGT" }, { "twice", "ECHO" }, { "echo", "ECHO" },
@@ -349,6 +349,15 @@ scan:SetOwner(WorldFrame, "ANCHOR_NONE")
 -- link alone says when to read it again.
 local pieces = {}               -- [item link] = { rank, spell, tags }
 
+-- A name or bonus line in English, whatever language the game is in (Locale.lua).
+local function English(name)
+	return SurvivorUI_English and SurvivorUI_English(name) or name
+end
+
+local function EnglishLine(text)
+	return SurvivorUI_EnglishLine and SurvivorUI_EnglishLine(text) or text
+end
+
 local function ReadPiece(slot, link)
 	if pieces[link] then
 		return pieces[link]
@@ -360,6 +369,7 @@ local function ReadPiece(slot, link)
 	if rank then
 		name = string.sub(name, 1, string.len(name) - string.len(rank) - 1)
 	end
+	name = English(name)
 	-- Only a legendary amulet names a spell: one for each spell of each class.
 	local spell
 	if slot == 2 and string.find(link, "|cffff8000", 1, true) then
@@ -371,7 +381,7 @@ local function ReadPiece(slot, link)
 	local tags, seen = {}, {}
 	for index = 2, scan:NumLines() do
 		local line = getglobal("SurvivorUIScanTipTextLeft"..index)
-		local text = line and string.lower(line:GetText() or "") or ""
+		local text = line and string.lower(EnglishLine(line:GetText() or "")) or ""
 		if string.find(text, "%d") then
 			local tag = StatOf(text)
 			if tag and not seen[tag] then
