@@ -204,6 +204,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.1, 2026-10-17
+
+**Survivor UI**
+- **The cache coin turns red:** short of the next cache's price it stayed grey. The game's engine greys a texture with its colors taken out and ignores any tint put on it after, so the coin was never red; a red coin of its own, drawn as the gold one, now takes its place.
+
 ### v3.0, 2026-10-17
 
 **Survivor UI**
@@ -218,7 +223,7 @@ Newest first. The version is also in each addon's `.toc`, so it shows in the gam
 - **The game's own loot notices, put away**: while the Loot list is on, the cards the game pops up mid-screen for each piece a boss drops (Show Loot Notices on its Interface page) are hidden; switch the list off and they come back.
 - **Loot list, in the theme:** the same dark box, gold title and rows as This Run, each item in its quality's color over a faint wash and a thin line of it, in place of the solid bars (asked for by Alexth).
 - **The left column, in order:** This Run at the top, Biggest Crits under it, and the Loot list last, under the crits (or under This Run while there are none). The Loot list shows only once something has dropped: no empty box.
-- **A coin for the next cache** (new): on the run tracker, left of the clock, a gold coin (a reeded rim, a star in relief): shining when the gold you carry pays for the next cache (a glow that breathes, a spark on its rim, a burst the moment it is enough), greyed and red when it does not yet. Hover it for the price and how much is missing. The kill pace's orb moves to the clock's right, and the run's state (Choosing, Victory, lives left) up to the zone's line.
+- **A coin for the next cache** (new): on the run tracker, left of the clock, a gold coin (a reeded rim, a star in relief): shining when the gold you carry pays for the next cache (a glow that breathes, a spark on its rim, a burst the moment it is enough), red when it does not yet. Hover it for the price and how much is missing. The kill pace's orb moves to the clock's right, and the run's state (Choosing, Victory, lives left) up to the zone's line.
 - **Elites in the tracker** (new, on by default; `/sui opt`, Run tracker): under the guardians, a small orange bar for each elite alive, filled with its health; bright once it has taken a hit (the game tells of no fight but the health), dim while whole, the most hurt leftmost, and over them how many are alive and how many fighting. Hover one for its name and health; with the boss health in the tracker, a click targets it.
 - **Boss health in the tracker** (an option, in `/sui opt`, Run tracker): in place of the boss bars, a boss alive fills its line in the tracker with its health, in the fight's orange as a guardian awake, and its share, and a click on it targets it; a click on a living guardian's stretch of the guardians' bar targets it too (by name: an elite of the same name may come first). On by default; switched off, the boss bars come back, with their debuffs and elites.
 - **Combat text, smoother and shorter:** each number comes in over a tenth of its life, rising a little into place, and fades out softly over its second half; big numbers read short (`1475` as `1.5k`), as the health does. "Short numbers" in `/sui opt`, Combat text.

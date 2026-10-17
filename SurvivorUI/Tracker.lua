@@ -133,11 +133,14 @@ head.zone:SetHeight(14)
 head.state = HeadText(9, nil, "RIGHT")
 head.clock = HeadText(18, "THICKOUTLINE")
 
--- Left of the clock, a coin for the next cache (Art\Coin.tga, a gold coin
--- drawn as metal: a reeded rim, a star in relief): in its gold when the gold
--- carried pays for the cache, greyed and red when it does not yet. (Right of
--- it, the kill pace's orb: Pace.lua.)
+-- Left of the clock, a coin for the next cache, drawn as metal (a reeded
+-- rim, a star in relief): gold when the gold carried pays for the cache
+-- (Art\Coin.tga), red when it does not yet (Art\CoinRed.tga, a coin of its
+-- own: the game's engine greys a desaturated texture and drops any tint after
+-- it). (Right of it, the kill pace's orb: Pace.lua.)
 local COIN_SIZE = 18
+local COIN_GOLD = "Interface\\AddOns\\SurvivorUI\\Art\\Coin"
+local COIN_RED = "Interface\\AddOns\\SurvivorUI\\Art\\CoinRed"
 local PAYS = { 1.00, 0.82, 0.25 }
 local SHORT = { 1.00, 0.28, 0.22 }
 head.coin = CreateFrame("Frame", nil, head)
@@ -145,7 +148,7 @@ head.coin:SetWidth(COIN_SIZE)
 head.coin:SetHeight(COIN_SIZE)
 head.coin:SetPoint("RIGHT", head.clock, "LEFT", -8, 0)
 head.coin.icon = head.coin:CreateTexture(nil, "ARTWORK")
-head.coin.icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\Coin")
+head.coin.icon:SetTexture(COIN_GOLD)
 head.coin.icon:SetPoint("CENTER", head.coin, "CENTER", 0, 0)
 head.coin.icon:SetWidth(COIN_SIZE)
 head.coin.icon:SetHeight(COIN_SIZE)
@@ -653,19 +656,14 @@ local function Draw(game, phase)
 		local pays = gold >= cost
 		if pays and not coin.pays then
 			coin.paysSince = GetTime()
-			if coin.icon.SetDesaturated then
-				coin.icon:SetDesaturated(false)
-			end
-		elseif not pays then
+			coin.icon:SetTexture(COIN_GOLD)
+		elseif not pays and coin.pays ~= false then
 			coin.glow:Hide()
 			coin.spark:Hide()
+			coin.icon:SetTexture(COIN_RED)
 			coin.icon:SetWidth(COIN_SIZE)
 			coin.icon:SetHeight(COIN_SIZE)
-			-- Greyed, then red: the gold coin's own colors would fight the red.
-			if coin.icon.SetDesaturated then
-				coin.icon:SetDesaturated(true)
-			end
-			coin.icon:SetVertexColor(SHORT[1], SHORT[2], SHORT[3])
+			coin.icon:SetVertexColor(1, 1, 1)
 		end
 		coin.pays = pays
 		coin:Show()
