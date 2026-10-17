@@ -24,9 +24,9 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui` | Lists every command in the chat |
 | `/sui layout` | Puts every piece back in its first place |
 | `/sui hover` | The white outline around what the mouse is on: on or off |
-| `/sui loot` | Loot list: on or off |
-| `/sui build` | Build list: on or off |
-| `/sui crits` | Biggest Crits box: on or off (off by default) |
+| `/sui loot` | Loot list, or the game's own loot notices: on or off |
+| `/sui build` | Build list, or the game's own row of spells and jewelry: on or off |
+| `/sui crits` | Biggest Crits box: on or off (on by default) |
 | `/sui scale 0.85` | Size of the whole interface, 0.6 to 1.4. Each part has its own size in `/sui opt`, Size |
 | `/sui center` | Puts the middle block (frames and buttons) back under the hero |
 | `/sui tracker` | Run tracker under the minimap: on or off |
@@ -45,6 +45,10 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui damage icons` | Source icons and damage meter colors on the numbers, or not |
 | `/sui collection` | The Jewelry Collection (also its button on the character pane) |
 | `/sui collection reset` | Forgets every piece in the Jewelry Collection (type it twice) |
+| `/sui dots` | The counters over the action bar (DoTs, fears, totems): all on or off; one by one in `/sui opt`, Counters |
+| `/sui guardians` | The guardians' list: on or off |
+| `/sui guardians north` | Its arrows north up, or turning with the way you walk |
+| `/sui guardians bar` | The guardians as a bar in the run tracker, or a list beside it |
 | `/sui pins` | Prints what the minimap's cache and lair pins read, to check them |
 | `/sui chat 10` | Chat text size, 8 to 18 |
 | `/splates all` | Plates on every enemy, or only on elites, guardians and bosses |
@@ -97,12 +101,14 @@ Unit frames and the action bar, in one centered row under the hero:
 - A run panel on the left, under the loot list: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
 - A damage meter under the build list, in place of the game's own, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, or the damage to bosses in the last boss fight.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health and its debuffs (icons that drain to grey as they run out), at any distance. Click one to target it.
+- A DoT and fear counter over the action bar: over each damage over time spell's button, how many of it are out on the enemies, counted by their ticks; over a fear's (Psychic Scream, Intimidating Shout...), how many enemies it holds now. In the spell's damage meter color.
+- A guardians' list against the run tracker's left side, small and with no background: a line a lair, with a little arrow toward it, the guardian's name, how far it is, and asleep, awake with its health, or slain at its second and back in so many seconds. The client cannot tell which way you face, so the arrows turn with the way you walk (or point north up). Over it, the achievement "Slay four guardians before 8:00": how many fell before 8:00.
 - Caches and lairs on the minimap: a golden chest for each cache, a horned skull for each guardian's lair (grey once empty); one out of range waits on the minimap's edge, pointing the way.
 - Kills, gold and the next cache's price on a line under the experience bar, in place of the game's own box.
-- A kill pace on the run tracker, a glowing orb left of its clock: how fast the enemies die (kills a minute over the last 20 seconds), held against your own runs on the zone and modifiers at the same minute of the run, every class's (to see how your shaman does against your paladin) or this class's only. Red as slow as your slowest, yellow in between, blue near your fastest, green as fast or faster, its sparks livelier the better it goes; white until three of your runs reach that minute. Hover it for the numbers: kills a minute, the share of your fastest, your fastest, average and slowest (with their class), the enemies alive, the stretch going on, and the run's modifiers (a run is held only against runs of the very same ones). As each boss comes, a banner left of the tracker tells the stretch just ended: its kills since the boss before (or the start), their share of your best on that stretch and the place they take among your runs (`2nd of 6`), in the color of how it went.
+- A kill pace on the run tracker, a glowing orb right of its clock: how fast the enemies die (kills a minute over the last 20 seconds), held against your own runs on the zone and modifiers at the same minute of the run, every class's (to see how your shaman does against your paladin) or this class's only. Red as slow as your slowest, yellow in between, blue near your fastest, green as fast or faster, its sparks livelier the better it goes; white until three of your runs reach that minute. Hover it for the numbers: kills a minute, the share of your fastest, your fastest, average and slowest (with their class), the enemies alive, the stretch going on, and the run's modifiers (a run is held only against runs of the very same ones). As each boss comes, a banner left of the tracker tells the stretch just ended: its kills since the boss before (or the start), their share of your best on that stretch and the place they take among your runs (`2nd of 6`), in the color of how it went.
 - A build list in the right column, between the run tracker and the damage meter: every spell slot with the spell's icon, rank and share of the damage, from the highest rank down, each filled with its damage meter color; the free slots; and the jewelry, the gear a run drops: a row a slot (neck, rings, trinkets), filled with the piece's quality color, with its rank and what it gives in short. A legendary amulet names the spell it boosts in place of "Neck".
 - A loot list in the top left corner: what the run has dropped, as bars in the item's quality color, with the second it came.
-- A Biggest Crits box, off by default (`/sui crits`): every ability's biggest critical strike, in the build list's look.
+- A Biggest Crits box, on by default (`/sui crits`): every ability's biggest critical strike, in the build list's look.
 - A thin white outline around whatever the mouse is on: a button, a bar, a buff. The nameplates, the chat, the minimap and the run tracker go without.
 - An options panel (`/sui opt`, or the S button by the minimap), in tabs of their own color: every panel on or off, the combat numbers, the nameplates, every look, a size for the whole interface and one for each part, and a move mode, always at the bottom, that unlocks every piece over a grid they snap to.
 - A Jewelry Collection (its button on the character pane, or `/sui collection`): every amulet, ring and trinket of the game's codex, found or still to find, with the range seen of each bonus and what each gives by rarity; your class's own amulets by spell, in your class's color. One collection for the whole game folder, shared by every character and account on it. Compact, to read at a glance in a fight.
@@ -118,6 +124,10 @@ Commands:
 | `/sui damage side` | The numbers beside the hero (the default), or over the enemies |
 | `/sui damage icons` | Source icons and damage meter colors on the numbers (the default), or not |
 | `/sui collection` | The Jewelry Collection: every amulet, ring and trinket found on this game, and what is left to find |
+| `/sui dots` | The counters over the action bar (DoTs, fears, totems): all on or off; one by one in `/sui opt`, Counters |
+| `/sui guardians` | The guardians' list: on or off |
+| `/sui guardians north` | Its arrows north up, or turning with the way you walk |
+| `/sui guardians bar` | The guardians as a bar in the run tracker, or a list beside it |
 | `/sui pins` | Prints what the minimap's cache and lair pins read, to check them |
 | `/sui chat 10` | Chat text size, 8 to 18 (default 10) |
 | `/sui run` | Shows or hides the run panel |
@@ -126,9 +136,9 @@ Commands:
 | `/sui center` | Puts the middle block back under the hero |
 | `/sui layout` | Puts every piece back in its first place |
 | `/sui hover` | The white outline around what the mouse is on: on or off |
-| `/sui loot` | Loot list: on or off |
-| `/sui build` | Build list: on or off |
-| `/sui crits` | Biggest Crits box: on or off (off by default) |
+| `/sui loot` | Loot list, or the game's own loot notices: on or off |
+| `/sui build` | Build list, or the game's own row of spells and jewelry: on or off |
+| `/sui crits` | Biggest Crits box: on or off (on by default) |
 | `/sui scale 0.85` | Size of the whole interface, 0.6 to 1.4. Each part has its own size in `/sui opt`, Size |
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
 | `/sui bosses` | Switches the boss bars on (the default) or off |
@@ -142,6 +152,8 @@ Click the meter's title for its menu: **Damage Done** (the run's damage, with ea
 ### Font
 
 The interface uses the game's own **Friz Quadrata**. Prefer **Expressway**, the face of many retail UIs? It cannot be shipped with the addon, but if you have it (it comes with EllesmereUI and ElvUI, for one), copy it as `SurvivorUI\Fonts\Expressway.ttf` and restart the game: the addon picks it up on its own.
+
+Each piece can wear a font of its own, on its card in move mode: the game's (Friz Quadrata, Arial Narrow, Morpheus) or one of five free faces that come with the addon in `SurvivorUI\Fonts`: **Fira Sans**, **Noto Sans**, **Exo**, **Russo One** and **Cinzel Decorative**. Exo and Cinzel Decorative have no Cyrillic, and none of the five has Chinese or Korean, so the card offers each only where it can write the game's language. The **global font** (`/sui opt`, Global) puts one of them on every text of the addon's at once; a piece's own font stays its own.
 
 ### The game's addon API
 
@@ -179,6 +191,7 @@ To remove an addon, delete its folder.
 These come from the 1.12 client and cannot be worked around by an addon:
 
 - Nameplates only exist within 20 yards of the hero.
+- Inside an instance (the dungeon and raid maps) the client gives no place for the hero on the map, and the game's addon API does not send it either: there the minimap shows no caches or lairs, and the guardians no arrow or yards.
 - Debuffs can only be read from the current target, so only the target's plate shows them.
 - A debuff's time left is only known for the hero's own buffs and debuffs.
 - The game's spells and jewelry rows are drawn by the game and cannot be moved from here: the game shares no jewelry data to draw them again.
@@ -190,6 +203,35 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0, 2026-10-17
+
+**Survivor UI**
+- **Guardians** (new): a small list against the run tracker's left side, with no background. A line a lair: a little arrow toward it, the guardian's name and how far it is in yards, and asleep, awake with its health, or slain at its second and back in so many seconds (an empty lair is claimed again 20 seconds on). The client cannot tell which way you face, so the arrows turn with the way you walk, straight up ahead; standing still they keep the last way, or `/sui guardians north` points them north up as the minimap does. Over it, the achievement "Slay four guardians before 8:00": `1/4 by 8:00 · 6:41`, green once done. The nearest living guardian's arrow is larger and breathes, and every arrow has a dark shadow to stand out; walking straight at a guardian turns its arrow gold over a glow, and within 10 yards of a living one its line flashes. On or off in `/sui opt`, on the new Run tracker tab (with the tracker's own switch), or `/sui guardians`; hold Alt to move it, its own size in Size. It stands against the tracker's left side, and the kill pace's boss banner shows under it. Or, as a bar in the run tracker (`/sui guardians bar`, the default), a bar inside the tracker over its level: a stretch a lair, green while its guardian is there with its arrow in the middle (four greens, the nearest lightest), orange while you fight it, its health draining it, red once slain with the time until it is back; over it, a thin line with the 8:00 achievement, and the tracker's level and experience under it.
+- **A card for each piece, in move mode** (new): click a piece and its card opens beside it: its name with `<` and `>` for the next piece; its place from the screen's middle, to type or to nudge by one (Shift by ten); centered across or up and down at a click; its own size; shown or hidden, for the pieces that can be put away; back to its first place; and undo. Its font too, picked from a list where each face is written in itself: the game's own (Friz Quadrata, Arial Narrow, Morpheus) and five free ones that now come with the addon (Fira Sans, Noto Sans, Exo, Russo One, Cinzel Decorative); and the text's size a step at a time. The arrow keys move it, Ctrl+Z undoes, Escape closes, Done too. Every font back to default at once: `/sui opt`, Global. Pieces now show bright corner marks, and one let go near a neighbour's edge (or middle) lines up with it.
+- **Your class's color** (new): the addon's own color, gold until now, is your class's: the piece cards and their font list, move mode's marks and grid, the options' title and Global page, the chat's edge line and the minimap button's S. Prefer the gold? `/sui opt`, Global.
+- **Global tab** (new), first in `/sui opt`: what holds for the whole addon. The **global font**, new: one face for every text of the addon's at once, picked from a list where each face is written in itself (the game's, or the five free ones that now come with the addon); a piece with a font of its own keeps it, and with One font everywhere (moved here from Interface) the game's own text wears it too. Every font back to default (moved here from Layout). The addon's color: your class's, or the gold of before. The whole interface's size (moved here from Size, which keeps each part's).
+- **New defaults**, for a new install and for each "default" button: the whole interface at 0.90, the action bar at 0.85 and the whole center bar at 0.90; the boss bars against the run tracker's left side; the guardians as a bar in the run tracker and the bosses' health there too; Biggest Crits on, elites on the boss bars; the target's and the boss bars' health as `1.2M | 73%`; the combat numbers 140 from the hero, rising 170; chat text 8. What you have set yourself stays as it is.
+- **The stats a class shows by default:** every number but the damage over time ones (DoT Stacks, DoT Haste) and the bonus damage ones (Vs Elites, Execute, Vs Controlled, Vs Afflicted, Shielded, Melee, Pet Damage), which stay at nothing in most runs. Each can be switched on in `/sui opt`, Character; `Default for this class` gives this back. A class whose stats you have already switched on or off stays as you left it.
+- **Options window, tidied:** the tabs in a new order (Kill pace next to the Run tracker) and each in a color of its own; every page in titled sections; notes that wrap instead of running past the window or over the next line; checks that read as on or off in any color (a priest's white too); every text read again (no more "Mythic+ timer", the boss bars where they are now).
+- **The game's own build, put away**: while the Build list is on, the game's row of spell and jewelry icons with their cooldowns (Show Build on its Interface page) is hidden, as the game's clock, kills box and meter already were; switch the list off and it comes back.
+- **The game's own loot notices, put away**: while the Loot list is on, the cards the game pops up mid-screen for each piece a boss drops (Show Loot Notices on its Interface page) are hidden; switch the list off and they come back.
+- **Loot list, in the theme:** the same dark box, gold title and rows as This Run, each item in its quality's color over a faint wash and a thin line of it, in place of the solid bars (asked for by Alexth).
+- **The left column, in order:** This Run at the top, Biggest Crits under it, and the Loot list last, under the crits (or under This Run while there are none). The Loot list shows only once something has dropped: no empty box.
+- **A coin for the next cache** (new): on the run tracker, left of the clock, a gold coin (a reeded rim, a star in relief): shining when the gold you carry pays for the next cache (a glow that breathes, a spark on its rim, a burst the moment it is enough), greyed and red when it does not yet. Hover it for the price and how much is missing. The kill pace's orb moves to the clock's right, and the run's state (Choosing, Victory, lives left) up to the zone's line.
+- **Elites in the tracker** (new, on by default; `/sui opt`, Run tracker): under the guardians, a small orange bar for each elite alive, filled with its health; bright once it has taken a hit (the game tells of no fight but the health), dim while whole, the most hurt leftmost, and over them how many are alive and how many fighting. Hover one for its name and health; with the boss health in the tracker, a click targets it.
+- **Boss health in the tracker** (an option, in `/sui opt`, Run tracker): in place of the boss bars, a boss alive fills its line in the tracker with its health, in the fight's orange as a guardian awake, and its share, and a click on it targets it; a click on a living guardian's stretch of the guardians' bar targets it too (by name: an elite of the same name may come first). On by default; switched off, the boss bars come back, with their debuffs and elites.
+- **Combat text, smoother and shorter:** each number comes in over a tenth of its life, rising a little into place, and fades out softly over its second half; big numbers read short (`1475` as `1.5k`), as the health does. "Short numbers" in `/sui opt`, Combat text.
+- **Run tracker:** the level reads `Lv. 32`.
+- **Build list, jewelry in plain short words:** the number first with its sign, then the word: `+24% DMG`, `+1 TGT`, `-19% CDR`, `2.2% LEECH`. Bonuses that were wrong or missing now read right: a kill's heal is `+3 HP/KILL` (was `HP 3`), and a legendary amulet's leaps, splashes, bleeds and second strikes show too (`LEAP 2x36%`).
+- **Caches and lairs on the minimap in every outdoor zone:** a zone whose run fills only a corner of its map (Feralas) had no pins, and the guardians no distances: the yards a map unit spans are now found from places 0.4% of the map apart, not 5%.
+- **Known limit, the new dungeon and raid maps** (Scarlet Monastery, Blackrock Mountain, Naxxramas, Ahn'Qiraj): no caches or lairs on the minimap there, and the guardians show no arrow or yards (their names, state and timers still do). Inside an instance the 1.12 client gives addons no place for the hero on the map, as the original game never drew your arrow on a dungeon's map, and the game's addon API sends where each cache and lair is but not where the hero is: with nothing to measure from, there is no pin to place. Outdoors nothing changes. Should the game come to send the hero's place, they come back.
+- **Totem counter** (new): over each totem's button, how many of it are down, and the seconds until the next one ends. The game writes nothing as a totem goes down or ends, so each cast (its cooldown starting over) counts one totem for the time its tooltip gives: two set down at once by a talent count as one, and one that drops on its own is not seen.
+- **Counters tab** (new) in `/sui opt`: the DoT, fear and totem counters, each on or off, and what keeps each from being exact. `/sui dots` switches them all.
+- **Searing Totem, named right:** its shots come in the combat log as an "Attack" for Fire damage, so Biggest Crits listed them as "Attack" and the combat numbers showed the weapon. With the totem among your spells, a Fire "Attack" is now the Searing Totem's.
+- **DoT and fear counter** (new): over each damage over time spell's action button, how many of it are out on the enemies. The game does not say when a DoT ends on an enemy that dies, so they are counted by their ticks: each one out ticks once a second (quicker with DoT Haste), and an enemy that dies drops out on its own. Any spell that ticks counts. A fear is not written at all, only its hits, so over Psychic Scream, Intimidating Shout, Howl of Terror and Fear it is the enemies hit within the time they flee (read off the spell's tooltip, 3 seconds for Psychic Scream), bosses left out. In the spell's damage meter color; on or off in `/sui opt`, Counters, or `/sui dots`.
+- **Pickup range, in every language:** a piece giving pickup range (the Gnomish Universal Remote) seen with the game in another language showed its bonus twice in the Jewelry Collection, once in that language's words, and had no short name in the Build list: the game writes "pick up", and the addon looked for "pickup". The collection joins the two on its own.
+- **Jewelry Collection, each bonus once:** a bonus with two numbers (the Eye of the Splitting Sky's "hits leap to 2 more enemies for 30%") showed a line for every value seen; now one, `for 30-71%`. "Strikes 1 more target" and "2 more targets" are one line, `1-2 more targets`. A legendary amulet's short codex lines give way to its own once it has been worn.
 
 ### v2.11, 2026-10-16
 
@@ -477,3 +519,5 @@ If you use, adapt or build on this code, please credit Survivor UI and link the 
 Copyright (C) 2026 morderous.
 
 GNU General Public License v3.0 (GPL-3.0), from v2.7 on: you may use, change and share the addons, as long as what you share stays under the same license, with its source and this credit. See [LICENSE](LICENSE). Versions up to v2.6 were released under the MIT license.
+
+The fonts in `SurvivorUI/Fonts` are not the addon's: Fira Sans (The Mozilla Foundation and Telefonica S.A.), Noto Sans (The Noto Project Authors), Exo (The Exo Project Authors), Russo One (Jovanny Lemonad) and Cinzel Decorative (Natanael Gama) are each under the SIL Open Font License 1.1, its text beside each one (`OFL-*.txt`), shipped unchanged.

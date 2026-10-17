@@ -19,7 +19,6 @@
 -- is kept. /sui run hides it.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WIDTH = 220
@@ -269,8 +268,8 @@ local function RestorePanel()
 	if SurvivorUIDB and SurvivorUIDB.runLeft and SurvivorUIDB.runTop then
 		panel:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", SurvivorUIDB.runLeft, SurvivorUIDB.runTop)
 	else
-		-- The left side, under the loot list.
-		panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 12, -215)
+		-- The left column's top: Biggest Crits under it, the loot list last.
+		panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 12, -12)
 	end
 end
 
@@ -293,7 +292,7 @@ local function Title(text, tip)
 	handle:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 	handle.text = handle:CreateFontString(nil, "OVERLAY")
-	handle.text:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
+	handle.text:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 	handle.text:SetPoint("LEFT", handle, "LEFT", 4, 0)
 	handle.text:SetTextColor(1, 0.82, 0)
 	handle.text:SetText(text)
@@ -323,14 +322,14 @@ local function MakeRow(valueSize, valueFlags, parent)
 	row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
 
 	row.label = row:CreateFontString(nil, "OVERLAY")
-	row.label:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+	row.label:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 	row.label:SetPoint("LEFT", row, "LEFT", 5, 0)
 	row.label:SetWidth(WIDTH - 66)
 	row.label:SetHeight(11)
 	row.label:SetJustifyH("LEFT")
 
 	row.value = row:CreateFontString(nil, "OVERLAY")
-	row.value:SetFont(FONT, valueSize + FONT_BUMP, valueFlags)
+	row.value:SetFont(SurvivorUI_FONT, valueSize + FONT_BUMP, valueFlags)
 	row.value:SetPoint("RIGHT", row, "RIGHT", -5, 0)
 	return row
 end
@@ -356,7 +355,7 @@ end
 -- before the value.
 local function Note(row)
 	local note = row:CreateFontString(nil, "OVERLAY")
-	note:SetFont(FONT, 8 + FONT_BUMP, "OUTLINE")
+	note:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
 	note:SetTextColor(0.55, 0.55, 0.58)
 	return note
 end
@@ -515,7 +514,7 @@ critTip.fill:SetVertexColor(0.05, 0.05, 0.07, 0.97)
 critTip.fill:SetAllPoints(critTip)
 
 critTip.title = critTip:CreateFontString(nil, "OVERLAY")
-critTip.title:SetFont(FONT, 12 + FONT_BUMP, "OUTLINE")
+critTip.title:SetFont(SurvivorUI_FONT, 12 + FONT_BUMP, "OUTLINE")
 critTip.title:SetPoint("TOPLEFT", critTip, "TOPLEFT", 8, -8)
 
 critTip.lines = {}
@@ -532,10 +531,10 @@ local function TipLine(index, kind, label, value, color)
 		line.rule:SetPoint("BOTTOMLEFT", line, "BOTTOMLEFT", 0, 0)
 		line.rule:SetPoint("BOTTOMRIGHT", line, "BOTTOMRIGHT", 0, 0)
 		line.label = line:CreateFontString(nil, "OVERLAY")
-		line.label:SetFont(FONT, 10 + FONT_BUMP)
+		line.label:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP)
 		line.label:SetPoint("LEFT", line, "LEFT", 2, 0)
 		line.value = line:CreateFontString(nil, "OVERLAY")
-		line.value:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
+		line.value:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 		line.value:SetPoint("RIGHT", line, "RIGHT", -2, 0)
 		critTip.lines[index] = line
 	end
@@ -847,7 +846,7 @@ local function RestoreCritBox()
 end
 
 critBox.title = critBox:CreateFontString(nil, "OVERLAY")
-critBox.title:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
+critBox.title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 critBox.title:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -9)
 critBox.title:SetTextColor(1, 0.82, 0)
 critBox.title:SetText("Biggest Crits")
@@ -857,7 +856,7 @@ critReset:SetWidth(40)
 critReset:SetHeight(14)
 critReset:SetPoint("TOPRIGHT", critBox, "TOPRIGHT", -8, -8)
 critReset.text = critReset:CreateFontString(nil, "OVERLAY")
-critReset.text:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+critReset.text:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 critReset.text:SetPoint("RIGHT", critReset, "RIGHT", 0, 0)
 critReset.text:SetText("Reset")
 critReset.text:SetTextColor(0.6, 0.6, 0.6)
@@ -879,7 +878,7 @@ for index = 1, CRIT_ROWS do
 	-- damage meter color under light text, a border in that color.
 	local row = MakeRow(10, "OUTLINE", critBox)
 	row:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -TITLE_HEIGHT - 4 - (index - 1) * ROW_HEIGHT)
-	row.label:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	row.label:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 	row.icon = row:CreateTexture(nil, "ARTWORK")
 	row.icon:SetWidth(ROW_HEIGHT - 4)
 	row.icon:SetHeight(ROW_HEIGHT - 4)
@@ -1136,7 +1135,7 @@ local function Hit(message)
 	if not ability then
 		_, _, ability, _, amount = string.find(message, "^(.+) hits (.+) for (%d+)")
 	end
-	RecordHit(ability, amount)
+	RecordHit(SurvivorUI_SourceOf and SurvivorUI_SourceOf(ability, message) or ability, amount)
 end
 
 local function Crit(message)
@@ -1157,7 +1156,7 @@ local function Crit(message)
 		-- "Spirit Wolf crits Kobold Vermin for 30."
 		_, _, ability, _, amount = string.find(message, "^(.+) crits (.+) for (%d+)")
 	end
-	RecordCrit(ability, amount)
+	RecordCrit(SurvivorUI_SourceOf and SurvivorUI_SourceOf(ability, message) or ability, amount)
 end
 
 local function Dealt(message)

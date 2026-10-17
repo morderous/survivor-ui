@@ -3,27 +3,36 @@
 --
 -- A window with a column of tabs on the left, each in a color of its own, and
 -- the tab's page on the right:
---   Panels      every panel on or off
---   Combat      how the combat numbers show, or none at all
---   Nameplates  Survivor Plates: on every enemy, the important ones, or none
---   Interface   the looks the addon gives the game's interface
---   Size        the whole interface's size and each part's own
---   Layout      move mode over a grid, the frames joined to the bar, resets
--- Panels and sizes act at once; most looks need a reload, and a change to one
--- lights the Reload button at the bottom. Move mode sits beside it, on every
--- page. Escape closes it.
+--   Global       the whole addon's font, color and size
+--   Panels       every panel on or off
+--   Run tracker  the tracker under the minimap: bosses, guardians, elites
+--   Kill pace    the orb by the tracker's clock
+--   Combat text  how the combat numbers show, or none at all
+--   Counters     the numbers over the spells' buttons: DoTs, fears, totems
+--   Nameplates   Survivor Plates: on every enemy, the dangerous ones, or none
+--   Unit frames  the health numbers on the frames and the boss bars
+--   Interface    the looks the addon gives the game's interface
+--   Character    where the stats show, and which of them this class keeps
+--   Size         each part's own size
+--   Layout       move mode over a grid, the frames joined to the bar, resets
+-- Most things act at once; a look that needs a reload lights the Reload
+-- button at the bottom. Move mode sits beside it, on every page. Escape
+-- closes the window.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
-local WIDTH, HEIGHT = 640, 540
+local WIDTH, HEIGHT = 640, 580
 local SIDEBAR = 150
 local PAGE_X = SIDEBAR + 18               -- the pages' left edge
 local PAGE_WIDTH = WIDTH - PAGE_X - 18
 local ROW = 20
 local MUTED = { 0.6, 0.6, 0.65 }
 local TEXT = { 0.9, 0.9, 0.92 }
+-- The addon's own color, the class's: the title and the Global page wear it.
+-- What takes it once, as it is made, is painted again when it changes.
+local ACCENT = SurvivorUI_ACCENT or { 1, 0.82, 0 }
+local accented = {}
 
 local function DB()
 	SurvivorUIDB = SurvivorUIDB or {}
@@ -105,8 +114,11 @@ end
 
 local function Text(parent, size, color, flags)
 	local text = parent:CreateFontString(nil, "OVERLAY")
-	text:SetFont(FONT, size + 1 + FONT_BUMP, flags or "OUTLINE")
+	text:SetFont(SurvivorUI_FONT, size + 1 + FONT_BUMP, flags or "OUTLINE")
 	text:SetTextColor(color[1], color[2], color[3])
+	if color == ACCENT then
+		table.insert(accented, function() text:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3]) end)
+	end
 	return text
 end
 
@@ -127,7 +139,7 @@ sideEdge:SetPoint("TOPLEFT", panel, "TOPLEFT", SIDEBAR + 1, -1)
 sideEdge:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", SIDEBAR + 1, 1)
 sideEdge:SetWidth(1)
 
-local title = Text(panel, 15, { 1, 0.82, 0 })
+local title = Text(panel, 15, ACCENT)
 title:SetPoint("TOPLEFT", panel, "TOPLEFT", 14, -14)
 title:SetText("Survivor UI")
 
@@ -151,15 +163,18 @@ close:SetScript("OnClick", function() panel:Hide() end)
 -- Pages and their tabs.
 
 local TABS = {
-	{ key = "panels", label = "Panels", color = { 1, 0.82, 0 } },
-	{ key = "combat", label = "Combat text", color = { 1, 0.38, 0.32 } },
-	{ key = "plates", label = "Nameplates", color = { 0.38, 0.9, 0.45 } },
-	{ key = "interface", label = "Interface", color = { 0.4, 0.68, 1 } },
-	{ key = "units", label = "Unit frames", color = { 1, 0.62, 0.25 } },
-	{ key = "pace", label = "Kill pace", color = { 0.7, 1, 0.3 } },
-	{ key = "size", label = "Size", color = { 0.78, 0.52, 1 } },
-	{ key = "character", label = "Character", color = { 1, 0.5, 0.7 } },
-	{ key = "layout", label = "Layout", color = { 0.25, 0.85, 0.8 } },
+	{ key = "global", label = "Global", color = ACCENT },
+	{ key = "panels", label = "Panels", color = { 0.45, 0.60, 1.00 } },
+	{ key = "tracker", label = "Run tracker", color = { 0.30, 0.82, 0.40 } },
+	{ key = "pace", label = "Kill pace", color = { 0.78, 0.95, 0.30 } },
+	{ key = "combat", label = "Combat text", color = { 1.00, 0.38, 0.32 } },
+	{ key = "counters", label = "Counters", color = { 0.40, 0.92, 0.70 } },
+	{ key = "plates", label = "Nameplates", color = { 0.70, 0.55, 1.00 } },
+	{ key = "units", label = "Unit frames", color = { 1.00, 0.62, 0.25 } },
+	{ key = "interface", label = "Interface", color = { 0.35, 0.78, 1.00 } },
+	{ key = "character", label = "Character", color = { 1.00, 0.50, 0.70 } },
+	{ key = "size", label = "Size", color = { 0.85, 0.50, 1.00 } },
+	{ key = "layout", label = "Layout", color = { 0.25, 0.85, 0.80 } },
 }
 
 local pages, tabButtons, widgets = {}, {}, {}
@@ -204,6 +219,10 @@ for index = 1, table.getn(TABS) do
 	button.wash = Fill(button, "BACKGROUND", tab.color[1], tab.color[2], tab.color[3], 0)
 	button.wash:SetAllPoints(button)
 	button.bar = Fill(button, "BORDER", tab.color[1], tab.color[2], tab.color[3], 1)
+	if tab.color == ACCENT then
+		local bar = button.bar
+		table.insert(accented, function() bar:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 1) end)
+	end
 	button.bar:SetWidth(3)
 	button.bar:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
 	button.bar:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
@@ -234,44 +253,66 @@ end
 ------------------------------------------------------------------------------
 -- The pieces a page is made of. Each goes under the last one (page.y).
 
+-- How many lines a text wraps to at a width: measured in the face it is made
+-- in, with room to spare for a wider global font.
+local function Lines(text, width)
+	return math.max(1, math.ceil(text:GetStringWidth() / (width * 0.9)))
+end
+
 local function Header(page, text, note)
 	local header = Text(page, 13, page.color)
 	header:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 	header:SetText(text)
 	local rule = Fill(page, "ARTWORK", page.color[1], page.color[2], page.color[3], 0.35)
+	if page.color == ACCENT then
+		table.insert(accented, function() rule:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.35) end)
+	end
 	rule:SetHeight(1)
 	rule:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y - 19)
 	rule:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, page.y - 19)
-	page.y = page.y - 26
+	page.y = page.y - 27
 	if note then
 		local hint = Text(page, 9, MUTED)
 		hint:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 		hint:SetWidth(PAGE_WIDTH)
 		hint:SetJustifyH("LEFT")
 		hint:SetText(note)
-		page.y = page.y - 24
+		page.y = page.y - 13 * Lines(hint, PAGE_WIDTH) - 6
 	end
 end
 
+-- A section's title: small capitals in the page's color, over a faint line
+-- across the page.
 local function Subheader(page, text)
-	page.y = page.y - 4
-	local header = Text(page, 10, page.color)
+	page.y = page.y - 8
+	local header = Text(page, 9, page.color)
 	header:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
-	header:SetText(text)
-	page.y = page.y - 18
+	header:SetText(string.upper(text))
+	local rule = Fill(page, "ARTWORK", page.color[1], page.color[2], page.color[3], 0.15)
+	if page.color == ACCENT then
+		table.insert(accented, function() rule:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.15) end)
+	end
+	rule:SetHeight(1)
+	rule:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y - 14)
+	rule:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, page.y - 14)
+	page.y = page.y - 20
+	return header
 end
 
-local function Note(page, text, lines)
+-- Grey words across the page, as many lines as they take.
+local function Note(page, text)
 	local hint = Text(page, 9, MUTED)
 	hint:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 	hint:SetWidth(PAGE_WIDTH)
 	hint:SetJustifyH("LEFT")
 	hint:SetText(text)
-	page.y = page.y - 13 * (lines or 1) - 4
+	page.y = page.y - 13 * Lines(hint, PAGE_WIDTH) - 4
+	return hint
 end
 
--- A check: a square in the page's color when on, and its label; a note in
--- grey beside it.
+-- A check: a square with a mark in the page's color when on (it reads in any
+-- color, a priest's white too), and its label; a note in grey beside it, or
+-- under it when it does not fit.
 local function Check(page, label, isOn, toggle, note)
 	local check = CreateFrame("Button", nil, page)
 	check:SetWidth(PAGE_WIDTH)
@@ -282,18 +323,29 @@ local function Check(page, label, isOn, toggle, note)
 	check.edge = Fill(check, "BORDER", 0.3, 0.3, 0.35, 1)
 	check.edge:SetWidth(13)
 	check.edge:SetHeight(13)
-	check.edge:SetPoint("LEFT", check, "LEFT", 2, 0)
-	check.box = Fill(check, "ARTWORK", 0, 0, 0, 1)
+	check.edge:SetPoint("TOPLEFT", check, "TOPLEFT", 2, -3)
+	check.box = Fill(check, "ARTWORK", 0.06, 0.06, 0.08, 1)
 	check.box:SetPoint("TOPLEFT", check.edge, "TOPLEFT", 1, -1)
 	check.box:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -1, 1)
+	check.mark = Fill(check, "OVERLAY", 1, 1, 1, 0)
+	check.mark:SetPoint("TOPLEFT", check.edge, "TOPLEFT", 3, -3)
+	check.mark:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -3, 3)
 
 	check.label = Text(check, 11, TEXT)
 	check.label:SetPoint("LEFT", check.edge, "RIGHT", 9, 0)
 	check.label:SetText(label)
 	if note then
 		check.note = Text(check, 9, MUTED)
-		check.note:SetPoint("LEFT", check.label, "RIGHT", 8, 0)
 		check.note:SetText(note)
+		local room = PAGE_WIDTH - 24 - check.label:GetStringWidth() - 8
+		if check.note:GetStringWidth() < room * 0.9 then
+			check.note:SetPoint("LEFT", check.label, "RIGHT", 8, 0)
+		else
+			check.note:SetPoint("TOPLEFT", check.label, "BOTTOMLEFT", 0, -3)
+			check.note:SetWidth(PAGE_WIDTH - 24)
+			check.note:SetJustifyH("LEFT")
+			check:SetHeight(ROW + 13 * Lines(check.note, PAGE_WIDTH - 24))
+		end
 	end
 
 	check:SetScript("OnClick", function()
@@ -305,11 +357,11 @@ local function Check(page, label, isOn, toggle, note)
 	function check:Refresh()
 		local on = isOn()
 		if on then
-			self.box:SetVertexColor(color[1], color[2], color[3], 1)
 			self.edge:SetVertexColor(color[1], color[2], color[3], 1)
+			self.mark:SetVertexColor(color[1], color[2], color[3], 1)
 		else
-			self.box:SetVertexColor(0.1, 0.1, 0.13, 1)
 			self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+			self.mark:SetVertexColor(1, 1, 1, 0)
 		end
 		if self.hot then
 			self.label:SetTextColor(1, 1, 1)
@@ -320,12 +372,12 @@ local function Check(page, label, isOn, toggle, note)
 		end
 	end
 	table.insert(widgets, check)
-	page.y = page.y - ROW
+	page.y = page.y - check:GetHeight()
 	return check
 end
 
--- A choice of one among several: round marks in the page's color, each
--- option with a note under it.
+-- A choice of one among several: a square ring with a small dot in the
+-- page's color, each option with a note under it, wrapped as it needs.
 local function Choice(page, options, get, set)
 	-- In order: pairs() walks a table in no set order in this client.
 	for index = 1, table.getn(options) do
@@ -333,7 +385,7 @@ local function Choice(page, options, get, set)
 		local value = option[1]
 		local row = CreateFrame("Button", nil, page)
 		row:SetWidth(PAGE_WIDTH)
-		row:SetHeight(option[3] and 32 or ROW)
+		row:SetHeight(ROW)
 		row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 		local color = page.color
 
@@ -341,13 +393,13 @@ local function Choice(page, options, get, set)
 		row.ring:SetWidth(13)
 		row.ring:SetHeight(13)
 		row.ring:SetPoint("TOPLEFT", row, "TOPLEFT", 2, -4)
-		-- A ring: the edge, a dark inside, the mark in the middle.
+		-- A ring: the edge, a dark inside, the dot in the middle.
 		row.inner = Fill(row, "ARTWORK", 0.05, 0.05, 0.07, 1)
 		row.inner:SetPoint("TOPLEFT", row.ring, "TOPLEFT", 1, -1)
 		row.inner:SetPoint("BOTTOMRIGHT", row.ring, "BOTTOMRIGHT", -1, 1)
 		row.dot = Fill(row, "OVERLAY", 0, 0, 0, 1)
-		row.dot:SetPoint("TOPLEFT", row.ring, "TOPLEFT", 3, -3)
-		row.dot:SetPoint("BOTTOMRIGHT", row.ring, "BOTTOMRIGHT", -3, 3)
+		row.dot:SetPoint("TOPLEFT", row.ring, "TOPLEFT", 4, -4)
+		row.dot:SetPoint("BOTTOMRIGHT", row.ring, "BOTTOMRIGHT", -4, 4)
 
 		row.label = Text(row, 11, TEXT)
 		row.label:SetPoint("TOPLEFT", row.ring, "TOPRIGHT", 9, 0)
@@ -355,13 +407,10 @@ local function Choice(page, options, get, set)
 		if option[3] then
 			row.note = Text(row, 9, MUTED)
 			row.note:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -2)
-			-- Wrapped within the page: a long note takes two lines.
 			row.note:SetWidth(PAGE_WIDTH - 26)
 			row.note:SetJustifyH("LEFT")
 			row.note:SetText(option[3])
-			if row.note:GetStringWidth() > PAGE_WIDTH - 26 then
-				row:SetHeight(44)
-			end
+			row:SetHeight(20 + 13 * Lines(row.note, PAGE_WIDTH - 26))
 		end
 
 		row:SetScript("OnClick", function()
@@ -417,6 +466,10 @@ local function Slider(page, label, low, high, step, get, set, format)
 	slider.track:SetPoint("LEFT", slider, "LEFT", 0, 0)
 	slider.track:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
 	slider.fill = Fill(slider, "BORDER", color[1], color[2], color[3], 0.8)
+	if color == ACCENT then
+		local fill = slider.fill
+		table.insert(accented, function() fill:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.8) end)
+	end
 	slider.fill:SetHeight(4)
 	slider.fill:SetPoint("LEFT", slider, "LEFT", 0, 0)
 	local thumb = Fill(slider, "OVERLAY", 1, 1, 1, 1)
@@ -464,6 +517,12 @@ local function Button(page, text, width, x, onClick, color)
 	button:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
 	button:SetBackdropColor(color[1] * 0.18, color[2] * 0.18, color[3] * 0.18, 1)
 	button:SetBackdropBorderColor(color[1] * 0.6, color[2] * 0.6, color[3] * 0.6, 1)
+	if color == ACCENT then
+		table.insert(accented, function()
+			button:SetBackdropColor(ACCENT[1] * 0.18, ACCENT[2] * 0.18, ACCENT[3] * 0.18, 1)
+			button:SetBackdropBorderColor(ACCENT[1] * 0.6, ACCENT[2] * 0.6, ACCENT[3] * 0.6, 1)
+		end)
+	end
 	button.text = Text(button, 10, color)
 	button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
 	button.text:SetText(text)
@@ -480,31 +539,236 @@ local function Button(page, text, width, x, onClick, color)
 	return button
 end
 
+-- A font, picked from a list where each face is written in itself (EditCard's
+-- SurvivorUI_FontList, the addon's default first). get() and set(path), nil
+-- for the default.
+local function FontPicker(page, label, get, set)
+	local color = page.color
+	local holder = CreateFrame("Frame", nil, page)
+	holder:SetWidth(PAGE_WIDTH)
+	holder:SetHeight(22)
+	holder:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+	holder.label = Text(holder, 10, TEXT)
+	holder.label:SetPoint("LEFT", holder, "LEFT", 2, 0)
+	holder.label:SetText(label)
+
+	local button = CreateFrame("Button", nil, holder)
+	button:SetWidth(220)
+	button:SetHeight(22)
+	button:SetPoint("LEFT", holder, "LEFT", 140, 0)
+	button:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	button:SetBackdropColor(0, 0, 0, 0.6)
+	button:SetBackdropBorderColor(0.3, 0.3, 0.35, 1)
+	button.text = Text(button, 10, TEXT)
+	button.text:SetPoint("LEFT", button, "LEFT", 8, 0)
+	button.arrow = Text(button, 9, color)
+	button.arrow:SetPoint("RIGHT", button, "RIGHT", -7, 0)
+	button.arrow:SetText("v")
+
+	local menu = CreateFrame("Frame", nil, button)
+	menu:SetFrameLevel(button:GetFrameLevel() + 20)
+	menu:SetWidth(220)
+	menu:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, -2)
+	menu:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	menu:SetBackdropColor(0.03, 0.03, 0.05, 0.98)
+	menu:SetBackdropBorderColor(0.3, 0.3, 0.35, 1)
+	menu:Hide()
+	menu.items = {}
+
+	local function Same(a, b)
+		return (a and string.lower(a)) == (b and string.lower(b))
+	end
+	local function Faces()
+		return SurvivorUI_FontList and SurvivorUI_FontList(true) or {}
+	end
+
+	button:SetScript("OnEnter", function() this:SetBackdropBorderColor(color[1], color[2], color[3], 1) end)
+	button:SetScript("OnLeave", function() this:SetBackdropBorderColor(0.3, 0.3, 0.35, 1) end)
+	button:SetScript("OnClick", function()
+		if menu:IsShown() then
+			menu:Hide()
+			return
+		end
+		local list = Faces()
+		local chosen = get()
+		for index = 1, table.getn(list) do
+			local face = list[index]
+			local item = menu.items[index]
+			if not item then
+				item = CreateFrame("Button", nil, menu)
+				item:SetWidth(216)
+				item:SetHeight(20)
+				item:SetPoint("TOPLEFT", menu, "TOPLEFT", 2, -2 - (index - 1) * 20)
+				item.wash = Fill(item, "BACKGROUND", 1, 1, 1, 0)
+				item.wash:SetAllPoints(item)
+				item.text = item:CreateFontString(nil, "OVERLAY")
+				item.text:SetPoint("LEFT", item, "LEFT", 8, 0)
+				item:SetScript("OnEnter", function() this.wash:SetVertexColor(color[1], color[2], color[3], 0.2) end)
+				item:SetScript("OnLeave", function() this.wash:SetVertexColor(color[1], color[2], color[3], this.on and 0.12 or 0) end)
+				item:SetScript("OnClick", function()
+					set(this.path)
+					menu:Hide()
+					RefreshAll()
+				end)
+				menu.items[index] = item
+			end
+			item.path = face.path
+			item.on = Same(chosen, face.path)
+			-- Each face written in itself; the one chosen lit.
+			item.text:SetFont(face.path or SurvivorUI_DEFAULT_FONT or SurvivorUI_FONT, 12 + FONT_BUMP, "OUTLINE")
+			item.text:SetText(face.name)
+			item.text:SetTextColor(item.on and color[1] or 1, item.on and color[2] or 1, item.on and color[3] or 1)
+			item.wash:SetVertexColor(color[1], color[2], color[3], item.on and 0.12 or 0)
+			item:Show()
+		end
+		for index = table.getn(list) + 1, table.getn(menu.items) do
+			menu.items[index]:Hide()
+		end
+		menu:SetHeight(table.getn(list) * 20 + 4)
+		menu:Show()
+	end)
+
+	function holder:Refresh()
+		local list = Faces()
+		local chosen = get()
+		local name = list[1] and list[1].name or "Default"
+		for _, face in pairs(list) do
+			if face.path and Same(chosen, face.path) then
+				name = face.name
+			end
+		end
+		button.text:SetText(name)
+	end
+	table.insert(widgets, holder)
+	page.y = page.y - 28
+end
+
+------------------------------------------------------------------------------
+-- Global: the whole addon's font, color and size.
+
+local page = pages.global
+Header(page, "Global", "Settings for the whole addon: its font, its color and its size.")
+Subheader(page, "Font")
+FontPicker(page, "Global font",
+	function() return SurvivorUI_GlobalFont and SurvivorUI_GlobalFont() end,
+	function(path) if SurvivorUI_SetGlobalFont then SurvivorUI_SetGlobalFont(path) end end)
+Note(page, "Changes every text of the addon at once. A piece given a font of its own, on its card in move mode, keeps that one.")
+Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"), "the game's own windows too, after a reload")
+page.y = page.y - 6
+Button(page, "Every font back to default", 200, 0, function()
+	if SurvivorUI_ResetFonts then
+		SurvivorUI_ResetFonts()
+	end
+	RefreshAll()
+end)
+page.y = page.y - 28
+
+Subheader(page, "Color")
+Choice(page, {
+	{ "class", "Your class color", "Worn by the menus, the cards, move mode and the minimap button." },
+	{ "gold", "Gold", "The addon's color up to v2.11." },
+}, function() return DB().accent == "gold" and "gold" or "class" end,
+	function(mode) if SurvivorUI_SetAccent then SurvivorUI_SetAccent(mode) end end)
+
+Subheader(page, "Size")
+Slider(page, "Whole interface", 0.6, 1.4, 0.05,
+	function() return SurvivorUI_GetScale and SurvivorUI_GetScale() or 1 end,
+	function(value) if SurvivorUI_SetScale then SurvivorUI_SetScale(value, true) end end)
+Note(page, "Each part also has a size of its own, on top of this one: the Size tab.")
+
 ------------------------------------------------------------------------------
 -- Panels.
 
-local page = pages.panels
-Header(page, "Panels", "The addon's own panels. Each switches at once; hold Alt to move them, or use Layout.")
-Check(page, "Run tracker", OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"), "the clock and the bosses, under the minimap")
-Check(page, "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "spells, ranks and jewelry")
+page = pages.panels
+Header(page, "Panels", "Each turns on or off at once. To move one, hold Alt and drag it, or use move mode (Layout).")
+Subheader(page, "Lists")
+Check(page, "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "your spells, ranks and jewelry; off: the game's own")
 Check(page, "Damage meter", OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "off: the game's own")
 Check(page, "This Run", OnUnlessOff("runPanel"), Call("SurvivorUI_ToggleRun"), "the run's numbers")
-Check(page, "Biggest Crits", OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"))
-Check(page, "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"), "with their debuffs")
+Check(page, "Biggest Crits", OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"), "each ability's biggest critical strike")
+Check(page, "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"), "what the run dropped; off: the game's own notices")
+Subheader(page, "Boss bars")
+Check(page, "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"), "with their debuffs; away while the run tracker shows the bosses' health")
 Check(page, "Elites on the boss bars", OnlyIfOn("bossBarsElites"), Call("SurvivorUI_BossBars", "elites"))
-Check(page, "Kills and gold line", OnUnlessOff("tally"), Call("SurvivorUI_Tally"), "off: the game's own box")
-Check(page, "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"), "what the run dropped")
+Subheader(page, "On the screen")
+Check(page, "Kills and gold line", OnUnlessOff("tally"), Call("SurvivorUI_Tally"), "under the action bar; off: the game's own box")
 Check(page, "Caches and lairs on the minimap", FeatureOn("mapPins"), FeatureToggle("mapPins", true))
 
 ------------------------------------------------------------------------------
--- Combat.
+-- Run tracker: the clock, the bosses, the guardians and the elites
+-- (Tracker.lua, Guardians.lua).
+
+page = pages.tracker
+Header(page, "Run tracker", "Under the minimap: the zone, the run's clock against its length with a tick for each boss, the bosses, the guardians, the elites alive and your level.")
+Check(page, "Run tracker", OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"), "off: the game's own clock")
+
+Subheader(page, "Bosses")
+Check(page, "Boss health in the tracker", OnlyIfOn("trackerHealth"), function()
+	DB().trackerHealth = not DB().trackerHealth
+end, "in place of the boss bars; click a boss, a guardian or an elite to target it")
+
+Subheader(page, "Guardians")
+Check(page, "Guardians", OnUnlessOff("guardians"), Call("SurvivorUI_ToggleGuardians"), "each lair: which way, how far, alive or slain, and the goal of 4 by 8:00")
+Choice(page, {
+	{ "bar", "A bar in the tracker", "A stretch a lair, over the level: green with its arrow; red once slain, with the time until it is back." },
+	{ "list", "A list beside the tracker", "A line a lair: its name, SPAWNED or the time until it is back, its yards and an arrow." },
+}, function() return DB().guardiansDocked and "bar" or "list" end,
+	function(choice) DB().guardiansDocked = choice == "bar" end)
+Check(page, "Arrows north up", OnlyIfOn("guardiansNorth"), Call("SurvivorUI_ToggleGuardians", "north"), "off: they turn as you walk, straight ahead up")
+
+Subheader(page, "Elites")
+Check(page, "Elites in the tracker", OnUnlessOff("trackerElites"), function()
+	DB().trackerElites = DB().trackerElites == false
+end, "a small bar for each one alive, bright once it is hurt")
+
+------------------------------------------------------------------------------
+-- Kill pace: the orb by the run tracker's clock (Pace.lua).
+
+page = pages.pace
+Header(page, "Kill pace", "An orb right of the run tracker's clock: how fast the enemies die now, against your own runs on the same zone and modifiers at the same minute. Hover it for the numbers.")
+Check(page, "Kill pace", OnUnlessOff("pace"), Call("SurvivorUI_TogglePace"), "the orb, and This Run's Kills / min")
+
+Subheader(page, "Compared with")
+Choice(page, {
+	{ "account", "All your runs", "Every class's, on this zone and modifiers." },
+	{ "class", "This class's runs only" },
+}, function() return DB().paceClassOnly and "class" or "account" end,
+	function(choice) DB().paceClassOnly = choice == "class" or nil end)
+Slider(page, "Rate over", 10, 60, 5, function() return DB().paceWindow or 20 end,
+	function(value) DB().paceWindow = math.floor(value + 0.5) end, "%d s")
+Slider(page, "Runs needed", 1, 10, 1, function() return DB().paceMinRuns or 3 end,
+	function(value) DB().paceMinRuns = math.floor(value + 0.5) end, "%d")
+Note(page, "The orb stays white until that many of your runs have reached the same minute.")
+
+Subheader(page, "The orb")
+Choice(page, {
+	{ "full", "Full: sparks, and stars when it flies" },
+	{ "calm", "Calm: fewer sparks, no stars" },
+	{ "none", "The orb alone" },
+}, function() return DB().paceEffects or "full" end, function(choice) DB().paceEffects = choice end)
+
+Subheader(page, "Each boss's stretch")
+Check(page, "A banner as each boss comes", OnUnlessOff("paceBanner"),
+	function() DB().paceBanner = DB().paceBanner == false end, "how the stretch just ended went, left of the tracker")
+Slider(page, "Banner stays", 3, 15, 1, function() return DB().paceBannerHold or 6 end,
+	function(value) DB().paceBannerHold = math.floor(value + 0.5) end, "%d s")
+page.y = page.y - 6
+Button(page, "Forget this zone's runs", 200, 0, function()
+	if SurvivorUI_TogglePace then
+		SurvivorUI_TogglePace("reset")
+	end
+end)
+page.y = page.y - 28
+
+------------------------------------------------------------------------------
+-- Combat text.
 
 page = pages.combat
 Header(page, "Combat text")
 Choice(page, {
-	{ "survivor", "Survivor", "The addon's own numbers, set up below." },
-	{ "game", "The game's own", "The engine's floating numbers and the game's combat text." },
-	{ "none", "None at all", "No numbers and no floating combat text, ever." },
+	{ "survivor", "The addon's own  |cff8a8a90quick numbers, set up below|r" },
+	{ "game", "The game's own  |cff8a8a90the engine's floating numbers and combat text|r" },
+	{ "none", "None  |cff8a8a90no numbers at all|r" },
 }, function() return SurvivorUI_DamageMode and SurvivorUI_DamageMode() or "survivor" end,
 	function(mode) if SurvivorUI_SetDamageMode then SurvivorUI_SetDamageMode(mode) end end)
 
@@ -530,15 +794,16 @@ end
 Subheader(page, "Where")
 Choice(page, {
 	{ "sides", "Beside the hero" },
-	{ "enemies", "Over the enemies  |cff8a8a90(needs nameplates on, or they ring the hero)|r" },
+	{ "enemies", "Over the enemies", "Needs nameplates on (Nameplates tab); without them, they ring the hero." },
 }, CTGet("ctLayout"), CTSet("ctLayout"))
-Slider(page, "Distance from the hero", 60, 320, 10, CTGet("ctDistance"), CTSet("ctDistance"), "%d")
-Slider(page, "How far they rise", 80, 320, 10, CTGet("ctRise"), CTSet("ctRise"), "%d")
+Slider(page, "Distance from hero", 60, 320, 10, CTGet("ctDistance"), CTSet("ctDistance"), "%d")
+Slider(page, "How high they rise", 80, 320, 10, CTGet("ctRise"), CTSet("ctRise"), "%d")
 Check(page, "Crits in a column of their own", CTGet("ctCritColumn"), CTToggle("ctCritColumn"), "on the right")
 
 Subheader(page, "Look")
-Check(page, "Source icons", CTGet("ctIcons"), CTToggle("ctIcons"), "melee and shots show the weapon")
-Check(page, "Damage meter colors", CTGet("ctMeterColors"), CTToggle("ctMeterColors"), "names and colors from the meter")
+Check(page, "Source icons", CTGet("ctIcons"), CTToggle("ctIcons"), "the spell's icon; melee and shots show the weapon")
+Check(page, "Damage meter colors", CTGet("ctMeterColors"), CTToggle("ctMeterColors"), "each source in its color from the meter")
+Check(page, "Short numbers", CTGet("ctShort"), CTToggle("ctShort"), "1475 as 1.5k, 2,200,000 as 2.2M")
 Slider(page, "Text size", 0.5, 1.5, 0.05, CTGet("ctSize"), CTSet("ctSize"))
 
 Subheader(page, "What shows")
@@ -546,19 +811,40 @@ Check(page, "Damage over time", CTGet("ctPeriodic"), CTToggle("ctPeriodic"))
 Check(page, "Heals", CTGet("ctHeals"), CTToggle("ctHeals"))
 Check(page, "Damage taken", CTGet("ctTaken"), CTToggle("ctTaken"))
 page.y = page.y - 6
-Button(page, "Survivor defaults", 200, 0, function()
+Button(page, "Combat text back to default", 220, 0, function()
 	if SurvivorUI_CTDefaults then
 		SurvivorUI_CTDefaults()
 	end
 	RefreshAll()
 end)
-page.y = page.y - 30
+page.y = page.y - 28
+
+------------------------------------------------------------------------------
+-- Counters: the numbers over the spells' buttons (DotCounter.lua).
+
+page = pages.counters
+Header(page, "Counters", "A number over a spell's button: how many of it are out right now, in the spell's damage meter color.")
+local function Flip(key)
+	return function() DB()[key] = DB()[key] == false end
+end
+Subheader(page, "Damage over time")
+Check(page, "DoTs", OnUnlessOff("dotCounter"), Flip("dotCounter"), "how many of each are ticking on the enemies")
+Subheader(page, "Fear")
+Check(page, "Fears", OnUnlessOff("fearCounter"), Flip("fearCounter"), "how many enemies each one holds")
+Subheader(page, "Totems")
+Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, and the seconds until the next one ends")
+
+Subheader(page, "How close they are")
+Note(page, "The game tells none of these outright: each is worked out from the combat log and your spells' cooldowns, so it can be off now and then.")
+Note(page, "DoTs: counted by their ticks over the last two seconds, so a number eases in and out, and one on an enemy that dies stays up to two seconds.")
+Note(page, "Fears: the game writes a fear's hit but not its end, so each enemy hit counts for the fear's full time, even when it breaks early or dies.")
+Note(page, "Totems: nothing is written as a totem goes down or ends, so each cast (its cooldown starting over) counts one totem for the time its tooltip gives. Two set down at once by a talent count as one, and one that drops on its own (the Searing Totem every 14 sec) is not seen.")
 
 ------------------------------------------------------------------------------
 -- Nameplates.
 
 page = pages.plates
-Header(page, "Nameplates", "Survivor Plates' plates over the enemies, within 20 yards of the hero.")
+Header(page, "Nameplates", "Survivor Plates: a plate over each enemy within 20 yards of the hero.")
 if PlatesThere() then
 	local function PlatesMode()
 		local db = SurvivorPlatesDB or {}
@@ -570,9 +856,9 @@ if PlatesThere() then
 		return "all"
 	end
 	Choice(page, {
-		{ "all", "On every enemy", "Every enemy gets a plate." },
-		{ "important", "Elites, guardians and bosses", "The dangerous ones only: a cleaner screen." },
-		{ "none", "None", "No nameplates: the boss bars show bosses, guardians and elites (the default)." },
+		{ "all", "On every enemy", "Every enemy near you gets a plate." },
+		{ "important", "Elites, guardians and bosses", "Only the dangerous ones: a cleaner screen." },
+		{ "none", "None (the default)", "No plates: the run tracker shows the bosses, guardians and elites." },
 	}, PlatesMode, function(mode)
 		local db = SurvivorPlatesDB or {}
 		if (mode == "none") ~= (db.hidden == true) then
@@ -582,38 +868,39 @@ if PlatesThere() then
 			Plates("all")
 		end
 	end)
-	page.y = page.y - 6
+	Subheader(page, "Look")
 	Check(page, "Names on every plate", function() return SurvivorPlatesDB and SurvivorPlatesDB.names == true end,
-		function() Plates("names") end, "off: on elites, guardians and bosses only")
-	page.y = page.y - 8
+		function() Plates("names") end, "off: only on elites, guardians and bosses")
 	Slider(page, "Plate size", 0.6, 2, 0.05,
 		function() return SurvivorPlates_GetScale and SurvivorPlates_GetScale() or 1 end,
 		function(value) if SurvivorPlates_SetScale then SurvivorPlates_SetScale(value) end end)
 else
-	Note(page, "Survivor Plates is not installed. It comes in the same download as Survivor UI.", 2)
+	Note(page, "Survivor Plates is not installed. It comes in the same download as Survivor UI.")
 end
 
 ------------------------------------------------------------------------------
 -- Interface.
 
 page = pages.interface
-Header(page, "Interface", "The looks the addon gives the game's interface. Most take hold after a reload.")
-Check(page, "White outline under the mouse", OnUnlessOff("hover"), Call("SurvivorUI_ToggleHover"))
-Check(page, "Cooldown numbers on the buttons", FeatureOn("cooldownNumbers"), FeatureToggle("cooldownNumbers"))
+Header(page, "Interface", "How the addon restyles the game's own interface. Most of these take hold after a reload.")
+Subheader(page, "Action bar")
+Check(page, "Cooldown numbers on the buttons", FeatureOn("cooldownNumbers"), FeatureToggle("cooldownNumbers"), "OmniCC, when installed, does it instead")
 Check(page, "Hide key labels on the buttons", FeatureOn("hideKeys"), FeatureToggle("hideKeys"))
-Check(page, "Ability tooltip, laid out again", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"))
-Check(page, "Character pane", FeatureOn("characterPane"), FeatureToggle("characterPane"))
-Check(page, "Square minimap", FeatureOn("minimap"), FeatureToggle("minimap"))
-Check(page, "Flat chat", FeatureOn("chat"), FeatureToggle("chat"))
+Subheader(page, "Windows")
+Check(page, "Character pane, restyled", FeatureOn("characterPane"), FeatureToggle("characterPane"), "the stats in sections; off: the game's own pane")
+Check(page, "Ability tooltips, laid out again", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"))
 Check(page, "Flat tooltips", FeatureOn("tooltip"), FeatureToggle("tooltip"))
-Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"))
+Check(page, "Flat chat", FeatureOn("chat"), FeatureToggle("chat"))
+Subheader(page, "Screen")
+Check(page, "Square minimap", FeatureOn("minimap"), FeatureToggle("minimap"))
 Check(page, "Menu buttons in the corner, on hover", FeatureOn("microMenu"), FeatureToggle("microMenu"))
+Check(page, "White outline under the mouse", OnUnlessOff("hover"), Call("SurvivorUI_ToggleHover"), "around the frame or button the mouse is on")
 
 ------------------------------------------------------------------------------
 -- Unit frames: the player's and the target's frames, and the boss bars.
 
 page = pages.units
-Header(page, "Unit frames", "Your frame, your target's and the boss bars at the top of the screen.")
+Header(page, "Unit frames", "Your frame, your target's and the boss bars.")
 -- The health on the frames and the boss bars: one row each, its four looks
 -- side by side, always short (1.1k, 2.2M).
 local HEALTH_LOOKS = {
@@ -645,8 +932,8 @@ local function HealthRow(label, key, default)
 		option.inner:SetPoint("TOPLEFT", option.ring, "TOPLEFT", 1, -1)
 		option.inner:SetPoint("BOTTOMRIGHT", option.ring, "BOTTOMRIGHT", -1, 1)
 		option.dot = Fill(option, "OVERLAY", 0, 0, 0, 1)
-		option.dot:SetPoint("TOPLEFT", option.ring, "TOPLEFT", 3, -3)
-		option.dot:SetPoint("BOTTOMRIGHT", option.ring, "BOTTOMRIGHT", -3, 3)
+		option.dot:SetPoint("TOPLEFT", option.ring, "TOPLEFT", 4, -4)
+		option.dot:SetPoint("BOTTOMRIGHT", option.ring, "BOTTOMRIGHT", -4, 4)
 		option.label = Text(option, 10, TEXT)
 		option.label:SetPoint("TOPLEFT", option.ring, "TOPRIGHT", 6, 0)
 		option.label:SetText(look[2])
@@ -674,73 +961,33 @@ local function HealthRow(label, key, default)
 	page.y = page.y - ROW - 2
 end
 Subheader(page, "Health numbers")
-Note(page, "Percent, the health left, both, or the health left and the percent; always short.")
+Note(page, "The percent, the health left, the health left of the whole, or the health left and the percent. Always short: 1.2M for 1,200,000.")
 HealthRow("Player", "playerHealth", "absolutePercent")
-HealthRow("Target", "targetHealth", "percent")
-HealthRow("Boss bars", "bossHealth", "percent")
-
-------------------------------------------------------------------------------
--- Kill pace: the orb by the run tracker's clock (Pace.lua).
-
-page = pages.pace
-Header(page, "Kill pace", "An orb by the run tracker's clock: how fast the enemies die, against your own runs with the same modifiers at the same minute. Hover it for the numbers.")
-Check(page, "Kill pace", OnUnlessOff("pace"), Call("SurvivorUI_TogglePace"), "on the run tracker, and This Run's Kills / min")
-
-Subheader(page, "Held against")
-Choice(page, {
-	{ "account", "Every class: all your runs on the zone" },
-	{ "class", "This class only" },
-}, function() return DB().paceClassOnly and "class" or "account" end,
-	function(choice) DB().paceClassOnly = choice == "class" or nil end)
-Slider(page, "Rate over (sec)", 10, 60, 5, function() return DB().paceWindow or 20 end,
-	function(value) DB().paceWindow = math.floor(value + 0.5) end, "%d")
-Slider(page, "Runs to compare", 1, 10, 1, function() return DB().paceMinRuns or 3 end,
-	function(value) DB().paceMinRuns = math.floor(value + 0.5) end, "%d")
-
-Subheader(page, "The orb")
-Choice(page, {
-	{ "full", "Full: sparks, and stars when it flies" },
-	{ "calm", "Calm: fewer sparks, no stars" },
-	{ "none", "The orb alone" },
-}, function() return DB().paceEffects or "full" end, function(choice) DB().paceEffects = choice end)
-
-Subheader(page, "Boss stretches")
-Check(page, "Banner as each boss comes", OnUnlessOff("paceBanner"),
-	function() DB().paceBanner = DB().paceBanner == false end, "the stretch just ended, left of the tracker")
-Slider(page, "Banner stays (sec)", 3, 15, 1, function() return DB().paceBannerHold or 6 end,
-	function(value) DB().paceBannerHold = math.floor(value + 0.5) end, "%d")
-page.y = page.y - 6
-Button(page, "Forget this zone's runs", 200, 0, function()
-	if SurvivorUI_TogglePace then
-		SurvivorUI_TogglePace("reset")
-	end
-end)
-page.y = page.y - 30
+HealthRow("Target", "targetHealth", "absolutePercent")
+HealthRow("Boss bars", "bossHealth", "absolutePercent")
 
 ------------------------------------------------------------------------------
 -- Character: where the run's numbers go, and which of them this class shows.
 
 page = pages.character
 Header(page, "Character pane & stats")
+Subheader(page, "Where the stats show")
 Choice(page, {
 	{ "attached", "In the character pane" },
 	{ "detached", "On their own, with the character pane" },
 	{ "always", "On their own, always shown" },
 }, function() return SurvivorUI_StatsMode and SurvivorUI_StatsMode() or "attached" end,
 	function(mode) if SurvivorUI_SetStatsMode then SurvivorUI_SetStatsMode(mode) end end)
-page.y = page.y - 4
 
-
--- The class whose choices these are.
-local classLine = Text(page, 10, page.color)
-classLine:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+-- The class whose choices these are, named in the section's title.
+local classTitle = Subheader(page, "Stats for this class")
 local classWidget = {}
 function classWidget:Refresh()
-	local name = UnitClass and UnitClass("player") or "this class"
-	classLine:SetText("Stats for "..(name or "this class").."  |cff8a8a90each class keeps its own; off is never shown|r")
+	local name = UnitClass and UnitClass("player")
+	classTitle:SetText(string.upper("Stats for "..(name or "this class")))
 end
 table.insert(widgets, classWidget)
-page.y = page.y - 18
+Note(page, "Each class keeps its own. A stat switched off never shows. To change their order, drag a stat or a group's title in the stats panel, in move mode or holding Alt.")
 
 -- Every number, by group, in two columns: on shows, off never does.
 local function StatCheck(x, y, width, label, color)
@@ -806,7 +1053,6 @@ for index = 1, table.getn(groups) do
 	columnY[column] = y - 6
 end
 page.y = math.min(columnY[1], math.min(columnY[2], columnY[3])) - 4
-Note(page, "To change their order: in move mode (or holding Alt), drag a stat or a group's title in the stats panel.", 2)
 Button(page, "Default for this class", 200, 0, function()
 	if SurvivorUI_ResetStatOrder then
 		SurvivorUI_ResetStatOrder()
@@ -818,11 +1064,7 @@ end)
 -- Size.
 
 page = pages.size
-Header(page, "Size", "All sizes the whole interface; each part has its own on top of it. They act at once.")
-Slider(page, "All", 0.6, 1.4, 0.05,
-	function() return SurvivorUI_GetScale and SurvivorUI_GetScale() or 1 end,
-	function(value) if SurvivorUI_SetScale then SurvivorUI_SetScale(value, true) end end)
-Subheader(page, "Each part")
+Header(page, "Size", "Each part's own size, on top of the whole interface's (the Global tab). Changes act at once.")
 if SurvivorUI_ScaleParts then
 	local parts = SurvivorUI_ScaleParts()
 	for index = 1, table.getn(parts) do
@@ -834,7 +1076,7 @@ if SurvivorUI_ScaleParts then
 	end
 end
 page.y = page.y - 6
-Button(page, "Every part back to 1", 180, 0, function()
+Button(page, "Every part back to default", 200, 0, function()
 	if SurvivorUI_ResetPartScales then
 		SurvivorUI_ResetPartScales()
 	end
@@ -845,8 +1087,8 @@ end)
 -- Layout.
 
 page = pages.layout
-Header(page, "Layout", "Where everything sits. Move mode, at the bottom of this window, unlocks every piece over a grid; one let go snaps to it. Outside it, hold Alt and drag any piece.")
-page.y = page.y - 16
+Header(page, "Layout", "Move mode, the button at the bottom of this window, unlocks every piece over a grid: one let go snaps to the grid, or to a neighbour's edge. Click a piece for its card: its place, size and font, shown or hidden, reset and undo.")
+Subheader(page, "Action bar")
 Check(page, "Player and target frames move with the action bar",
 	function() return SurvivorUI_LinkFrames and SurvivorUI_LinkFrames() end,
 	function()
@@ -854,11 +1096,12 @@ Check(page, "Player and target frames move with the action bar",
 			SurvivorUI_SetLinkFrames(not SurvivorUI_LinkFrames())
 		end
 	end)
-page.y = page.y - 10
-local half = PAGE_WIDTH / 2 - 4
-Button(page, "Center the action bar", half, 0, Call("SurvivorUI_CenterRow"))
-Button(page, "Every piece back in place", half, half + 8, Call("SurvivorUI_ResetLayout"))
-page.y = page.y - 30
+page.y = page.y - 6
+Button(page, "Center the action bar", 220, 0, Call("SurvivorUI_CenterRow"))
+page.y = page.y - 28
+Subheader(page, "Reset")
+Button(page, "Every piece back in place", 220, 0, Call("SurvivorUI_ResetLayout"))
+page.y = page.y - 28
 
 ------------------------------------------------------------------------------
 -- The bottom: the reload, and who made it.
@@ -927,7 +1170,7 @@ end
 table.insert(widgets, reloadButton)
 
 local credit = panel:CreateFontString(nil, "OVERLAY")
-credit:SetFont(FONT, 9, "")
+credit:SetFont(SurvivorUI_FONT, 9, "")
 credit:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12, 12)
 credit:SetWidth(SIDEBAR - 18)
 credit:SetJustifyH("LEFT")
@@ -958,7 +1201,7 @@ panel:SetScript("OnShow", function()
 	if not OnScreen() then
 		SurvivorUI_ResetOptionsPlace()
 	end
-	ShowPage(current or "panels")
+	ShowPage(current or "global")
 end)
 -- Closing the panel ends move mode.
 panel:SetScript("OnHide", function()
@@ -984,4 +1227,17 @@ function SurvivorUI_OpenOptionsMoving()
 		SurvivorUI_SetEditMode(true)
 	end
 	ShowPage("layout")
+end
+
+-- A new class color: what took it once takes it again; the rest reads it as
+-- it refreshes.
+if SurvivorUI_OnAccent then
+	SurvivorUI_OnAccent(function()
+		for index = 1, table.getn(accented) do
+			accented[index]()
+		end
+		if panel:IsShown() then
+			RefreshAll()
+		end
+	end)
 end

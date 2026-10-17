@@ -1,5 +1,5 @@
 -- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
--- Survivor UI: the kill pace, a glowing orb left of the run tracker's clock.
+-- Survivor UI: the kill pace, a glowing orb right of the run tracker's clock.
 --
 -- How fast the enemies die, as kills a minute over the run's last 20 seconds,
 -- held against your own runs on the same zone and run modifiers, at the same
@@ -35,7 +35,6 @@
 -- (or every class's again), /sui pace reset forgets the runs it holds against.
 
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WINDOW = 20   -- run seconds the rate is read over, unless set
@@ -484,20 +483,26 @@ banner:SetWidth(300)
 banner:SetHeight(30)
 banner:Hide()
 banner.title = banner:CreateFontString(nil, "OVERLAY")
-banner.title:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+banner.title:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 banner.title:SetJustifyH("RIGHT")
 banner.title:SetPoint("TOPRIGHT", banner, "TOPRIGHT", 0, 0)
 banner.title:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
 banner.line = banner:CreateFontString(nil, "OVERLAY")
-banner.line:SetFont(FONT, 12 + FONT_BUMP, "OUTLINE")
+banner.line:SetFont(SurvivorUI_FONT, 12 + FONT_BUMP, "OUTLINE")
 banner.line:SetJustifyH("RIGHT")
 banner.line:SetPoint("TOPRIGHT", banner.title, "BOTTOMRIGHT", 0, -2)
 
--- Left of the tracker, level with the orb.
+-- Left of the tracker, level with the orb; under the guardians' list when it
+-- stands there (Guardians.lua).
 local function PlaceBanner()
 	local tracker = getglobal("SurvivorUITracker")
+	local guardians = getglobal("SurvivorUIGuardians")
 	banner:ClearAllPoints()
-	if tracker and tracker:IsShown() then
+	if guardians and guardians:IsShown() and guardians:GetAlpha() > 0 then
+		banner:SetParent(tracker or UIParent)
+		banner:SetFrameLevel((tracker or UIParent):GetFrameLevel() + 3)
+		banner:SetPoint("TOPRIGHT", guardians, "BOTTOMRIGHT", 0, -8)
+	elseif tracker and tracker:IsShown() then
 		banner:SetParent(tracker)
 		banner:SetFrameLevel(tracker:GetFrameLevel() + 3)
 		local _, orbY = frame:GetCenter()
@@ -821,18 +826,19 @@ function SurvivorUI_TogglePace(argument)
 	end
 	settings.pace = not settings.pace
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.pace
-		and "the kill pace is on, left of the run tracker's clock."
+		and "the kill pace is on, right of the run tracker's clock."
 		or "the kill pace is off."))
 end
 
--- On the run tracker, left of its clock: it moves, sizes and hides with it.
+-- On the run tracker, right of its clock (the cache's coin is on its left):
+-- it moves, sizes and hides with it.
 local function Place()
 	local tracker = getglobal("SurvivorUITracker")
 	frame:ClearAllPoints()
 	if tracker and tracker.clock then
 		frame:SetParent(tracker)
 		frame:SetFrameLevel(tracker:GetFrameLevel() + 3)
-		frame:SetPoint("RIGHT", tracker.clock, "LEFT", -8, 0)
+		frame:SetPoint("LEFT", tracker.clock, "RIGHT", 8, 0)
 	else
 		frame:SetPoint("CENTER", UIParent, "CENTER", 0, -200)
 	end

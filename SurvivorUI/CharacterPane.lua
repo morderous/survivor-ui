@@ -9,7 +9,6 @@
 -- AZS_STATS table, fed by the server. This file only reads that table.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 if not PaperDollFrame or not CharacterFrame then
@@ -194,7 +193,7 @@ for index = 1, 5 do
 
 		local text = getglobal(name.."Text")
 		if text then
-			text:SetFont(FONT, 11 + FONT_BUMP)
+			text:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP)
 		end
 		table.insert(tabs, tab)
 		-- Only the character's own page: skills, honor and the rest are not
@@ -312,12 +311,12 @@ ownFill:SetAllPoints(stats)
 
 -- The headline: the damage bonus, with the hero's health under it.
 local headline = stats:CreateFontString(nil, "OVERLAY")
-headline:SetFont(FONT, 20 + FONT_BUMP, "OUTLINE")
+headline:SetFont(SurvivorUI_FONT, 20 + FONT_BUMP, "OUTLINE")
 headline:SetPoint("TOP", stats, "TOP", 0, -14)
 headline:SetTextColor(0.72, 0.45, 1)
 
 local headlineCaption = stats:CreateFontString(nil, "OVERLAY")
-headlineCaption:SetFont(FONT, 10 + FONT_BUMP)
+headlineCaption:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP)
 headlineCaption:SetPoint("TOP", headline, "BOTTOM", 0, -3)
 
 -- Always shown, the numbers take the look of the panels that stay on the
@@ -327,7 +326,7 @@ local PANEL_WIDTH = 220
 local PANEL_ROW = 16
 local PANEL_HEADER = 14
 local panelTitle = stats:CreateFontString(nil, "OVERLAY")
-panelTitle:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
+panelTitle:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 panelTitle:SetPoint("TOPLEFT", stats, "TOPLEFT", 8, -9)
 panelTitle:SetTextColor(1, 0.82, 0)
 panelTitle:SetText("Stats")
@@ -439,9 +438,27 @@ local function SavedSize()
 	return DB()[key]
 end
 
+-- What a class hides unless the player chose otherwise: the damage over time
+-- and bonus damage numbers. Each class takes its own copy the first time.
+local DEFAULT_HIDDEN = {
+	["DoT Stacks"] = true, ["DoT Haste"] = true,
+	["Vs Elites"] = true, ["Execute"] = true, ["Vs Controlled"] = true, ["Vs Afflicted"] = true,
+	["Shielded"] = true, ["Melee"] = true, ["Pet Damage"] = true,
+}
+
+local function HiddenSet()
+	local mine = ClassStats()
+	if not mine.hidden then
+		mine.hidden = {}
+		for label in pairs(DEFAULT_HIDDEN) do
+			mine.hidden[label] = true
+		end
+	end
+	return mine.hidden
+end
+
 local function Hidden(label)
-	local hidden = ClassStats().hidden
-	return hidden and hidden[label]
+	return HiddenSet()[label]
 end
 
 -- Arranging: in move mode, or with Alt held.
@@ -462,7 +479,8 @@ local function SaveOrder(ordered)
 	ClassStats().order = saved
 end
 
--- For the options: this class back to the first order, every number on.
+-- For the options: this class back to the first order, with the numbers
+-- shown by default (DEFAULT_HIDDEN off).
 function SurvivorUI_ResetStatOrder()
 	local mine = ClassStats()
 	mine.order, mine.hidden = nil, nil
@@ -478,9 +496,7 @@ function SurvivorUI_StatShown(label)
 end
 
 function SurvivorUI_SetStatShown(label, shown)
-	local mine = ClassStats()
-	mine.hidden = mine.hidden or {}
-	mine.hidden[label] = (not shown) or nil
+	HiddenSet()[label] = (not shown) or nil
 end
 
 ------------------------------------------------------------------------------
@@ -634,7 +650,7 @@ local function Header(index)
 		header:SetWidth(STATS_WIDTH - 24)
 		header:SetHeight(HEADER_HEIGHT)
 		header.text = header:CreateFontString(nil, "OVERLAY")
-		header.text:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+		header.text:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 		header.text:SetPoint("CENTER", header, "CENTER", 0, -2)
 		header.left = Line(header, 1, 1, 1)
 		header.left:SetHeight(1)
@@ -684,16 +700,16 @@ local function Row(index)
 		row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
 		row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
 		row.grip = row:CreateFontString(nil, "OVERLAY")
-		row.grip:SetFont(FONT, 9 + FONT_BUMP)
+		row.grip:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP)
 		row.grip:SetPoint("LEFT", row, "LEFT", 0, 0)
 		row.grip:SetTextColor(1, 0.82, 0)
 		row.grip:SetText("::")
 		row.label = row:CreateFontString(nil, "OVERLAY")
-		row.label:SetFont(FONT, 11 + FONT_BUMP)
+		row.label:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP)
 		row.label:SetPoint("LEFT", row, "LEFT", 2, 0)
 		row.label:SetTextColor(0.82, 0.82, 0.82)
 		row.value = row:CreateFontString(nil, "OVERLAY")
-		row.value:SetFont(FONT, 11 + FONT_BUMP)
+		row.value:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP)
 		row.value:SetPoint("RIGHT", row, "RIGHT", -2, 0)
 		rows[index] = row
 	end
@@ -792,8 +808,8 @@ UpdateStats = function()
 				local face = fontSize..(panelLook and "o" or "")
 				if row.face ~= face then
 					row.face = face
-					row.label:SetFont(FONT, fontSize + FONT_BUMP, panelLook and "OUTLINE" or "")
-					row.value:SetFont(FONT, fontSize + FONT_BUMP, panelLook and "OUTLINE" or "")
+					row.label:SetFont(SurvivorUI_FONT, fontSize + FONT_BUMP, panelLook and "OUTLINE" or "")
+					row.value:SetFont(SurvivorUI_FONT, fontSize + FONT_BUMP, panelLook and "OUTLINE" or "")
 				end
 				-- The panels' look: the row washed in its group's color, label too.
 				if panelLook then

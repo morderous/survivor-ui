@@ -14,7 +14,6 @@
 -- hides it and brings the game's clock back.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WIDTH = 220
@@ -111,7 +110,7 @@ head:SetScript("OnDragStop", function() head:StopMovingOrSizing() SavePlace() en
 
 local function HeadText(size, flags, justify)
 	local text = head:CreateFontString(nil, "OVERLAY")
-	text:SetFont(FONT, size + FONT_BUMP, flags or "OUTLINE")
+	text:SetFont(SurvivorUI_FONT, size + FONT_BUMP, flags or "OUTLINE")
 	text:SetJustifyH(justify or "CENTER")
 	return text
 end
@@ -129,9 +128,98 @@ local function HeadBar(height)
 	return bar
 end
 
-head.zone = HeadText(12)
-head.state = HeadText(9)
+head.zone = HeadText(12, nil, "LEFT")
+head.zone:SetHeight(14)
+head.state = HeadText(9, nil, "RIGHT")
 head.clock = HeadText(18, "THICKOUTLINE")
+
+-- Left of the clock, a coin for the next cache (Art\Coin.tga, a gold coin
+-- drawn as metal: a reeded rim, a star in relief): in its gold when the gold
+-- carried pays for the cache, greyed and red when it does not yet. (Right of
+-- it, the kill pace's orb: Pace.lua.)
+local COIN_SIZE = 18
+local PAYS = { 1.00, 0.82, 0.25 }
+local SHORT = { 1.00, 0.28, 0.22 }
+head.coin = CreateFrame("Frame", nil, head)
+head.coin:SetWidth(COIN_SIZE)
+head.coin:SetHeight(COIN_SIZE)
+head.coin:SetPoint("RIGHT", head.clock, "LEFT", -8, 0)
+head.coin.icon = head.coin:CreateTexture(nil, "ARTWORK")
+head.coin.icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\Coin")
+head.coin.icon:SetPoint("CENTER", head.coin, "CENTER", 0, 0)
+head.coin.icon:SetWidth(COIN_SIZE)
+head.coin.icon:SetHeight(COIN_SIZE)
+-- Its shine, the kill pace orb's glow and spark (Pace.lua) in gold.
+head.coin.glow = head.coin:CreateTexture(nil, "BACKGROUND")
+head.coin.glow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
+head.coin.glow:SetBlendMode("ADD")
+head.coin.glow:SetVertexColor(1, 0.78, 0.20)
+head.coin.glow:SetPoint("CENTER", head.coin, "CENTER", 0, 0)
+head.coin.glow:Hide()
+head.coin.spark = head.coin:CreateTexture(nil, "OVERLAY")
+head.coin.spark:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceSpark")
+head.coin.spark:SetBlendMode("ADD")
+head.coin.spark:SetVertexColor(1, 0.95, 0.70)
+head.coin.spark:SetPoint("CENTER", head.coin, "TOPRIGHT", -3, -3)
+head.coin.spark:Hide()
+head.coin:EnableMouse(true)
+head.coin:SetScript("OnEnter", function()
+	local gold = Num(AZS_RUN and AZS_RUN.gold)
+	local cost = Num(AZS_RUN and AZS_RUN.chest)
+	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
+	GameTooltip:SetText("Next cache", PAYS[1], PAYS[2], PAYS[3])
+	GameTooltip:AddDoubleLine("It costs", Short(cost).." gold", 0.8, 0.8, 0.8, 1, 1, 1)
+	GameTooltip:AddDoubleLine("You carry", Short(gold).." gold", 0.8, 0.8, 0.8, 1, 1, 1)
+	if gold >= cost then
+		GameTooltip:AddLine("Enough to open it.", 0.55, 0.85, 0.55)
+	else
+		GameTooltip:AddLine(Short(cost - gold).." gold short.", SHORT[1], SHORT[2], SHORT[3])
+	end
+	GameTooltip:Show()
+end)
+head.coin:SetScript("OnLeave", function() GameTooltip:Hide() end)
+head.coin:Hide()
+
+-- While the cache can be paid the coin shines: a gold glow breathes behind
+-- it and it brightens with the glow, a spark twinkles on its rim now and
+-- then, and the moment the gold is first enough, a burst: the glow and the
+-- coin swell, then settle into the breath.
+local SHINE_BREATH = 1.4            -- seconds a breath takes
+local SPARK_EVERY = 2.2             -- seconds between two twinkles
+local BURST = 0.7                   -- seconds the burst takes
+head.coin:SetScript("OnUpdate", function()
+	local coin = this
+	if not coin.pays then
+		return
+	end
+	local now = GetTime()
+	local since = now - (coin.paysSince or now)
+	local burst = since < BURST and (1 - since / BURST) or 0
+	local wave = (math.sin(now * 6.283 / SHINE_BREATH) + 1) / 2
+	local size = COIN_SIZE * (2.4 + 0.6 * wave + 2.6 * burst)
+	coin.glow:SetWidth(size)
+	coin.glow:SetHeight(size)
+	coin.glow:SetAlpha(math.min(1, 0.45 + 0.45 * wave + burst))
+	coin.glow:Show()
+	local grow = COIN_SIZE * (1 + 0.4 * burst)
+	coin.icon:SetWidth(grow)
+	coin.icon:SetHeight(grow)
+	local bright = 0.8 + 0.2 * wave
+	coin.icon:SetVertexColor(bright, bright, bright)
+	-- The twinkle: a quick flare on the rim, in the first fifth of its turn.
+	local turn = math.mod(now, SPARK_EVERY) / SPARK_EVERY
+	local twinkle = turn < 0.2 and math.sin(turn / 0.2 * 3.1416) or 0
+	twinkle = math.max(twinkle, burst)
+	if twinkle > 0.01 then
+		local spark = COIN_SIZE * (0.6 + 0.9 * twinkle)
+		coin.spark:SetWidth(spark)
+		coin.spark:SetHeight(spark)
+		coin.spark:SetAlpha(twinkle)
+		coin.spark:Show()
+	else
+		coin.spark:Hide()
+	end
+end)
 head.timeline = HeadBar(8)
 head.timeline:SetStatusBarColor(0.30, 0.80, 0.35, 1)
 head.level = HeadText(9)
@@ -184,18 +272,73 @@ local function LiveBoss(name)
 end
 
 -- A boss line: the name on the left, the second it comes on the right.
+-- A thin white outline, shown under the mouse on what a click can target.
+local function Outline(frame)
+	local edges = {}
+	for _, side in pairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+		local edge = frame:CreateTexture(nil, "OVERLAY")
+		edge:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+		edge:SetVertexColor(1, 1, 1, 0.9)
+		if side == "TOP" or side == "BOTTOM" then
+			edge:SetHeight(1)
+			edge:SetPoint(side.."LEFT", frame, side.."LEFT", 0, 0)
+			edge:SetPoint(side.."RIGHT", frame, side.."RIGHT", 0, 0)
+		else
+			edge:SetWidth(1)
+			edge:SetPoint("TOP"..side, frame, "TOP"..side, 0, 0)
+			edge:SetPoint("BOTTOM"..side, frame, "BOTTOM"..side, 0, 0)
+		end
+		edge:Hide()
+		table.insert(edges, edge)
+	end
+	frame:SetScript("OnEnter", function()
+		if this.target then
+			for _, edge in pairs(edges) do
+				edge:Show()
+			end
+		end
+	end)
+	frame:SetScript("OnLeave", function()
+		for _, edge in pairs(edges) do
+			edge:Hide()
+		end
+	end)
+end
+
+-- With the health in the tracker (/sui opt, Run tracker), a boss alive fills
+-- its line with its health, and a click targets it.
+local function TrackerHealth()
+	return SurvivorUIDB and SurvivorUIDB.trackerHealth
+end
+
 local function BossLine(index)
 	local line = head.bosses[index]
 	if not line then
 		line = CreateFrame("Frame", nil, head)
 		line:SetWidth(WIDTH)
 		line:SetHeight(13)
+		line.backing = line:CreateTexture(nil, "BACKGROUND")
+		line.backing:SetTexture(FLAT)
+		line.backing:SetAllPoints(line)
+		line.backing:SetVertexColor(0.12, 0.12, 0.15, 0.9)
+		line.backing:Hide()
+		line.fill = line:CreateTexture(nil, "BORDER")
+		line.fill:SetTexture(FLAT)
+		line.fill:SetPoint("TOPLEFT", line, "TOPLEFT", 0, 0)
+		line.fill:SetHeight(13)
+		line.fill:Hide()
+		line:SetScript("OnMouseUp", function()
+			if this.target and TargetByName then
+				TargetByName(this.target, true)
+			end
+		end)
+		Outline(line)
 		line.name = line:CreateFontString(nil, "OVERLAY")
-		line.name:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+		line.name:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 		line.name:SetPoint("LEFT", line, "LEFT", 0, 0)
 		line.name:SetJustifyH("LEFT")
 		line.time = line:CreateFontString(nil, "OVERLAY")
-		line.time:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+		line.time:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 		line.time:SetPoint("RIGHT", line, "RIGHT", 0, 0)
 		line.time:SetJustifyH("RIGHT")
 		head.bosses[index] = line
@@ -217,6 +360,10 @@ local function FillBossLine(line, entry, index, seconds, isNext)
 	end
 
 	line.name:SetText(name)
+	line.fill:Hide()
+	line.backing:Hide()
+	line.target = nil
+	line:EnableMouse(false)
 	if state == "dead" then
 		local color = STATE_COLORS.dead
 		line.name:SetTextColor(color[1], color[2], color[3])
@@ -243,6 +390,21 @@ local function FillBossLine(line, entry, index, seconds, isNext)
 		end
 		line.time:SetText("|cffff8c40"..share.."|r"..Clock(at))
 		line.time:SetTextColor(1, 1, 1)
+		-- In place of its boss bar: its health filling the line, the line a
+		-- button that targets it.
+		if TrackerHealth() and unit then
+			local hp, hpm = Num(Field(unit, "hp", 4)), Num(Field(unit, "hpm", 5))
+			line.backing:Show()
+			line.fill:SetWidth(math.max(1, WIDTH * (hpm > 0 and hp / hpm or 0)))
+			-- In the fight's orange, as a guardian awake in the guardians' bar.
+			line.fill:SetVertexColor(1.00, 0.55, 0.15, 0.85)
+			line.fill:Show()
+			line.name:SetTextColor(1, 1, 1)
+			-- Its share alone.
+			line.time:SetText(string.format("%d%%", (hpm > 0 and hp / hpm or 0) * 100 + 0.5))
+			line.target = name
+			line:EnableMouse(true)
+		end
 	else
 		local color = isNext and STATE_COLORS.next or WAITING
 		line.name:SetTextColor(color[1], color[2], color[3])
@@ -254,6 +416,155 @@ local function FillBossLine(line, entry, index, seconds, isNext)
 		line.time:SetTextColor(color[1], color[2], color[3])
 	end
 	line:Show()
+end
+
+------------------------------------------------------------------------------
+-- The elites alive (AZS_UNITS), under the guardians: a small bar each, its
+-- health in the fight's orange. The game tells of no fight but the health, so
+-- one that has taken a hit is bright, one still whole dim. Eight fit: the
+-- hurt first, the lowest leftmost, then the ones seen longest; the rest only
+-- in the count. With the health in the tracker a click targets one, as on a
+-- boss's line.
+
+local ELITE_SLOTS, ELITE_GAP, ELITE_HEIGHT = 8, 2, 7
+local ELITE_TOP, ELITE_LINE = 6, 12     -- room over the row, and its line of words
+local ELITE_COLOR = { 1.00, 0.55, 0.15 }
+
+local function TrackerElites()
+	return not (SurvivorUIDB and SurvivorUIDB.trackerElites == false)
+end
+
+head.eliteTitle = HeadText(9, nil, "LEFT")
+head.eliteTitle:SetTextColor(0.55, 0.55, 0.58)
+head.eliteTitle:SetText("Elites")
+head.eliteCount = HeadText(9, nil, "RIGHT")
+head.elites = {}
+local eliteSince = {}               -- [unit id] = the GetTime() it was first seen alive
+
+local function EliteSlot(index)
+	local slot = head.elites[index]
+	if slot then
+		return slot
+	end
+	slot = CreateFrame("Button", nil, head)
+	slot:SetHeight(ELITE_HEIGHT)
+	slot.backing = slot:CreateTexture(nil, "BACKGROUND")
+	slot.backing:SetTexture(FLAT)
+	slot.backing:SetAllPoints(slot)
+	slot.backing:SetVertexColor(0.12, 0.12, 0.15, 0.9)
+	slot.fill = slot:CreateTexture(nil, "BORDER")
+	slot.fill:SetTexture(FLAT)
+	slot.fill:SetPoint("TOPLEFT", slot, "TOPLEFT", 0, 0)
+	slot.fill:SetHeight(ELITE_HEIGHT)
+	slot:SetScript("OnClick", function()
+		if this.target and TargetByName then
+			TargetByName(this.target, true)
+		end
+	end)
+	Outline(slot)
+	-- Its name and health under the mouse, with the outline when it targets.
+	local edgesOn, edgesOff = slot:GetScript("OnEnter"), slot:GetScript("OnLeave")
+	slot:SetScript("OnEnter", function()
+		edgesOn()
+		if this.name then
+			GameTooltip:SetOwner(this, "ANCHOR_LEFT")
+			GameTooltip:SetText(this.name, ELITE_COLOR[1], ELITE_COLOR[2], ELITE_COLOR[3])
+			GameTooltip:AddLine(this.health, 1, 1, 1)
+			GameTooltip:Show()
+		end
+	end)
+	slot:SetScript("OnLeave", function()
+		edgesOff()
+		GameTooltip:Hide()
+	end)
+	head.elites[index] = slot
+	return slot
+end
+
+local function EliteRow(y)
+	if not TrackerElites() then
+		head.eliteTitle:Hide()
+		head.eliteCount:Hide()
+		for index = 1, table.getn(head.elites) do
+			head.elites[index]:Hide()
+		end
+		return y
+	end
+	local alive, present = {}, {}
+	local now = GetTime()
+	local units = AZS_UNITS or {}
+	for index = 1, table.getn(units) do
+		local unit = units[index]
+		if Field(unit, "kind", 1) == "elite" then
+			local hp, hpm = Num(Field(unit, "hp", 4)), Num(Field(unit, "hpm", 5))
+			if hp > 0 then
+				local id = tostring(Field(unit, "id", 2) or Field(unit, "name", 3))
+				present[id] = true
+				eliteSince[id] = eliteSince[id] or now
+				table.insert(alive, { id = id, name = Field(unit, "name", 3), hp = hp, hpm = hpm,
+					share = hpm > 0 and math.min(1, hp / hpm) or 1, since = eliteSince[id] })
+			end
+		end
+	end
+	for id in pairs(eliteSince) do
+		if not present[id] then
+			eliteSince[id] = nil
+		end
+	end
+	-- The hurt first, the lowest leftmost; then the ones seen longest. Each
+	-- keeps its place from one drawing to the next.
+	table.sort(alive, function(a, b)
+		if a.share ~= b.share then
+			return a.share < b.share
+		elseif a.since ~= b.since then
+			return a.since < b.since
+		end
+		return a.id < b.id
+	end)
+	local total, hurt = table.getn(alive), 0
+	for index = 1, total do
+		if alive[index].share < 1 then
+			hurt = hurt + 1
+		end
+	end
+	if total == 0 then
+		head.eliteCount:SetText("|cff8a8a8anone|r")
+	elseif hurt > 0 then
+		head.eliteCount:SetText("|cffffffff"..total.." alive|r  ·  |cffff8c26"..hurt.." fighting|r")
+	else
+		head.eliteCount:SetText("|cffffffff"..total.." alive|r")
+	end
+	head.eliteTitle:ClearAllPoints()
+	head.eliteTitle:SetPoint("TOPLEFT", head, "TOPLEFT", 0, y - ELITE_TOP)
+	head.eliteTitle:Show()
+	head.eliteCount:ClearAllPoints()
+	head.eliteCount:SetPoint("TOPRIGHT", head, "TOPRIGHT", 0, y - ELITE_TOP)
+	head.eliteCount:Show()
+	y = y - ELITE_TOP - ELITE_LINE
+	local each = (WIDTH - (ELITE_SLOTS - 1) * ELITE_GAP) / ELITE_SLOTS
+	for index = 1, ELITE_SLOTS do
+		local slot = EliteSlot(index)
+		slot:SetWidth(each)
+		slot:ClearAllPoints()
+		slot:SetPoint("TOPLEFT", head, "TOPLEFT", (index - 1) * (each + ELITE_GAP), y)
+		local elite = alive[index]
+		if elite then
+			slot.fill:SetWidth(math.max(1, each * elite.share))
+			slot.fill:SetVertexColor(ELITE_COLOR[1], ELITE_COLOR[2], ELITE_COLOR[3], elite.share < 1 and 0.9 or 0.35)
+			slot.fill:Show()
+			slot.name = elite.name
+			slot.health = SurvivorUI_HealthText and SurvivorUI_HealthText(elite.hp, elite.hpm, "absolutePercent")
+				or string.format("%d%%", elite.share * 100 + 0.5)
+			slot.target = TrackerHealth() and elite.name or nil
+			slot:EnableMouse(true)
+		else
+			slot.fill:Hide()
+			slot.name, slot.target = nil, nil
+			slot:EnableMouse(false)
+		end
+		slot:Show()
+	end
+	return y - ELITE_HEIGHT
 end
 
 ------------------------------------------------------------------------------
@@ -276,12 +587,10 @@ local function Draw(game, phase)
 	end
 
 	local y = 0
-	head.zone:SetText(zoneName)
-	head.zone:SetTextColor(1, 0.82, 0)
-	y = Put(head.zone, y, 15)
 
-	-- How the run stands: won, fallen or endless, and the lives left, small in
-	-- the top right corner, so it takes no line of its own.
+	-- How the run stands: won, fallen or endless, and the lives left, small on
+	-- the zone's line, right of its name: the clock's sides hold the coin and
+	-- the kill pace.
 	local parts = {}
 	if phase == "victory" then
 		table.insert(parts, "|cff4dd94dVictory|r")
@@ -300,8 +609,20 @@ local function Draw(game, phase)
 	end
 	head.state:SetText(table.concat(parts, "  "))
 	head.state:ClearAllPoints()
-	head.state:SetPoint("TOPRIGHT", head, "TOPRIGHT", 0, -20)
+	head.state:SetPoint("TOPRIGHT", head, "TOPRIGHT", 0, y - 2)
 	head.state:Show()
+	-- The zone's name on the left, cut short before the state if need be.
+	local room = WIDTH
+	if table.getn(parts) > 0 then
+		room = WIDTH - head.state:GetStringWidth() - 10
+	end
+	head.zone:SetText(zoneName)
+	head.zone:SetTextColor(1, 0.82, 0)
+	head.zone:SetWidth(room)
+	head.zone:ClearAllPoints()
+	head.zone:SetPoint("TOPLEFT", head, "TOPLEFT", 0, y)
+	head.zone:Show()
+	y = y - 15
 
 	-- Elapsed / the zone's full length, the time to victory. In endless mode,
 	-- once chosen, the elapsed time alone.
@@ -324,6 +645,34 @@ local function Draw(game, phase)
 		head.clock:SetTextColor(1, 1, 1)
 	end
 	y = Put(head.clock, y - 1, 24)
+	-- The cache's coin, when the game tells its price: it shines (its own
+	-- OnUpdate) while the gold pays for the cache, red and still while not.
+	local gold, cost = Num(game.gold), Num(game.chest)
+	local coin = head.coin
+	if cost > 0 then
+		local pays = gold >= cost
+		if pays and not coin.pays then
+			coin.paysSince = GetTime()
+			if coin.icon.SetDesaturated then
+				coin.icon:SetDesaturated(false)
+			end
+		elseif not pays then
+			coin.glow:Hide()
+			coin.spark:Hide()
+			coin.icon:SetWidth(COIN_SIZE)
+			coin.icon:SetHeight(COIN_SIZE)
+			-- Greyed, then red: the gold coin's own colors would fight the red.
+			if coin.icon.SetDesaturated then
+				coin.icon:SetDesaturated(true)
+			end
+			coin.icon:SetVertexColor(SHORT[1], SHORT[2], SHORT[3])
+		end
+		coin.pays = pays
+		coin:Show()
+	else
+		coin.pays = nil
+		coin:Hide()
+	end
 	-- Room over the timeline for each coming boss's countdown.
 	y = y - 10
 
@@ -371,7 +720,7 @@ local function Draw(game, phase)
 		-- Over a boss still to come, small and yellow, the time until it does.
 		if not tick.label then
 			tick.label = head.timeline:CreateFontString(nil, "OVERLAY")
-			tick.label:SetFont(FONT, 8 + FONT_BUMP, "OUTLINE")
+			tick.label:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
 		end
 		-- The next boss's countdown in orange, the later ones in yellow.
 		if isNext then
@@ -430,9 +779,15 @@ local function Draw(game, phase)
 		nextLine:Hide()
 		y = y - 13
 	end
-	-- The level, and how far to the next.
+	-- The guardians' bar, when it stands here (Guardians.lua).
+	if SurvivorUI_GuardianBar then
+		y = SurvivorUI_GuardianBar(head, y)
+	end
+	-- The elites alive, under it.
+	y = EliteRow(y)
+	-- The level, and how far to the next, at the bottom.
 	local xp, xpNeeded = Num(game.xp), Num(game.xpn)
-	head.level:SetText("|cffbf8cffLevel "..Num(game.lvl).."|r")
+	head.level:SetText("|cffbf8cffLv. "..Num(game.lvl).."|r")
 	y = Put(head.level, y - 2, 13)
 	head.xp:SetValue(xpNeeded > 0 and xp / xpNeeded or 0)
 	y = Put(head.xp, y, 6)

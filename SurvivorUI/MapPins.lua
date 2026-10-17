@@ -34,10 +34,11 @@ local function Playing()
 end
 
 -- A map coordinate as a share of the map, 0 to 1, whether the game sends it
--- that way or in percent.
+-- that way or in percent. A map the client has none of (an instance's) comes
+-- as -1: no place on it.
 local function Share(value)
 	value = tonumber(value)
-	if not value then
+	if not value or value < 0 then
 		return nil
 	end
 	if value > 1.5 then
@@ -66,15 +67,17 @@ local function Places()
 	return list
 end
 
+-- Two places this far apart on the map at least (a share of it): a run can
+-- fill only a corner of a big zone's map (Feralas: its lairs lie within 3% of
+-- it), and the game gives four decimals, so even that close they tell the
+-- yards to a fraction of a percent. The farthest pair found so far is kept,
+-- and a farther one, once shared, betters it.
+local NEAREST = 0.004
+
 local function Span()
 	local zone = (AZS_ZONE and AZS_ZONE.zname) or "?"
-	local known = spans[zone]
-	if known and known.across and known.down then
-		return known
-	end
-	known = known or {}
+	local known = spans[zone] or { baseAcross = 0, baseDown = 0 }
 	local places = Places()
-	local bestAcross, bestDown = 0, 0
 	for a = 1, table.getn(places) do
 		for b = a + 1, table.getn(places) do
 			local p, q = places[a], places[b]
@@ -82,23 +85,20 @@ local function Span()
 			local px, qx, py, qy = tonumber(p.x), tonumber(q.x), tonumber(p.y), tonumber(q.y)
 			if pmx and qmx and pmy and qmy and px and qx and py and qy then
 				local dmx, dmy = math.abs(pmx - qmx), math.abs(pmy - qmy)
-				if dmx > bestAcross and dmx > 0.05 then
-					bestAcross = dmx
-					known.across = math.abs(py - qy) / dmx
+				if dmx > known.baseAcross and dmx > NEAREST then
+					known.baseAcross = dmx
+					known.foundAcross = math.abs(py - qy) / dmx
 				end
-				if dmy > bestDown and dmy > 0.05 then
-					bestDown = dmy
-					known.down = math.abs(px - qx) / dmy
+				if dmy > known.baseDown and dmy > NEAREST then
+					known.baseDown = dmy
+					known.foundDown = math.abs(px - qx) / dmy
 				end
 			end
 		end
 	end
 	-- A map is drawn to scale: one side found gives the other.
-	if known.across and not known.down then
-		known.down = known.across * 2 / 3
-	elseif known.down and not known.across then
-		known.across = known.down * 3 / 2
-	end
+	known.across = known.foundAcross or (known.foundDown and known.foundDown * 3 / 2)
+	known.down = known.foundDown or (known.foundAcross and known.foundAcross * 2 / 3)
 	spans[zone] = known
 	if known.across and known.down then
 		return known
@@ -151,6 +151,11 @@ local function HeroPlace()
 	end
 	return x, y
 end
+
+-- The guardians' panel (Guardians.lua) finds its way the same way.
+SurvivorUI_HeroPlace = HeroPlace
+SurvivorUI_MapSpan = Span
+SurvivorUI_MapShare = Share
 
 local function Place(pin, mx, my, heroX, heroY, span)
 	local half = Minimap:GetWidth() / 2
@@ -237,6 +242,8 @@ end)
 function SurvivorUI_PinsReport()
 	local say = function(text) DEFAULT_CHAT_FRAME:AddMessage("|cffffd100Survivor UI|r "..text) end
 	local heroX, heroY = HeroPlace()
+	say("zone: "..tostring(AZS_ZONE and AZS_ZONE.zone).." (map "..tostring(AZS_ZONE and AZS_ZONE.map)
+		.."); the client's: "..tostring(GetRealZoneText and GetRealZoneText()))
 	say("hero on the map: "..(heroX and string.format("%.3f, %.3f", heroX, heroY) or "unknown"))
 	say("caches: "..table.getn(AZS_CHESTS or {})..", lairs: "..table.getn(AZS_GetLairs and AZS_GetLairs() or {}))
 	local span = Span()
@@ -248,5 +255,9 @@ function SurvivorUI_PinsReport()
 	local first = (AZS_CHESTS or {})[1]
 	if first then
 		say("first cache: x "..tostring(first.x)..", y "..tostring(first.y)..", map "..tostring(first.mx)..", "..tostring(first.my))
+	end
+	local lair = (AZS_GetLairs and AZS_GetLairs() or {})[1]
+	if lair then
+		say("first lair: x "..tostring(lair.x)..", y "..tostring(lair.y)..", map "..tostring(lair.mx)..", "..tostring(lair.my))
 	end
 end

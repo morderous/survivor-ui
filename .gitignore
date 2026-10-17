@@ -1,5 +1,16 @@
-# Test fonts that may not be redistributed
-SurvivorUI/Fonts/
+# Fonts that may not be redistributed (Expressway, put there by hand) stay out;
+# only the free ones shipped with the addon, and their licenses, are kept
+SurvivorUI/Fonts/*
+!SurvivorUI/Fonts/FiraSans-Medium.ttf
+!SurvivorUI/Fonts/OFL-FiraSans.txt
+!SurvivorUI/Fonts/NotoSans-Medium.ttf
+!SurvivorUI/Fonts/OFL-NotoSans.txt
+!SurvivorUI/Fonts/Exo-SemiBold.ttf
+!SurvivorUI/Fonts/OFL-Exo.txt
+!SurvivorUI/Fonts/RussoOne-Regular.ttf
+!SurvivorUI/Fonts/OFL-RussoOne.txt
+!SurvivorUI/Fonts/CinzelDecorative-Bold.ttf
+!SurvivorUI/Fonts/OFL-CinzelDecorative.txt
 # A face kept for local development only
 SurvivorUI/Media/
 # The installer is built by installer\build.bat and attached to releases

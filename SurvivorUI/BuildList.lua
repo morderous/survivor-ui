@@ -17,7 +17,6 @@
 -- and drag to move; /sui build hides it.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WIDTH = 224
@@ -100,13 +99,13 @@ local function RestorePlace()
 end
 
 list.title = list:CreateFontString(nil, "OVERLAY")
-list.title:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
+list.title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 list.title:SetPoint("TOPLEFT", list, "TOPLEFT", 7, -6)
 list.title:SetTextColor(1, 0.82, 0)
 list.title:SetText("Build")
 
 list.count = list:CreateFontString(nil, "OVERLAY")
-list.count:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+list.count:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 list.count:SetPoint("TOPRIGHT", list, "TOPRIGHT", -7, -7)
 
 local rows = {}
@@ -157,19 +156,19 @@ local function Row(index)
 	row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
 	row.name = row:CreateFontString(nil, "OVERLAY")
-	row.name:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	row.name:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 	row.name:SetPoint("LEFT", row, "LEFT", ROW_HEIGHT + 2, 0)
 	row.name:SetWidth(WIDTH - ROW_HEIGHT - 70)
 	row.name:SetHeight(12)
 	row.name:SetJustifyH("LEFT")
 
 	row.share = row:CreateFontString(nil, "OVERLAY")
-	row.share:SetFont(FONT, 8 + FONT_BUMP, "OUTLINE")
+	row.share:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
 	row.share:SetPoint("RIGHT", row, "RIGHT", -44, 0)
 	row.share:SetTextColor(0.6, 0.6, 0.6)
 
 	row.rank = row:CreateFontString(nil, "OVERLAY")
-	row.rank:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+	row.rank:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 	row.rank:SetPoint("RIGHT", row, "RIGHT", -4, 0)
 
 	-- The spell's card, as on the damage meter: beside the list, on its left.
@@ -207,8 +206,8 @@ end
 local function Bold(row, bold)
 	if row.bold ~= bold then
 		row.bold = bold
-		row.name:SetFont(FONT, 9 + FONT_BUMP + (bold and 1 or 0), "OUTLINE")
-		row.rank:SetFont(FONT, 10 + FONT_BUMP + (bold and 1 or 0), "OUTLINE")
+		row.name:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP + (bold and 1 or 0), "OUTLINE")
+		row.rank:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP + (bold and 1 or 0), "OUTLINE")
 	end
 end
 
@@ -312,17 +311,56 @@ end
 
 -- Words in a tooltip line and their short names, the more specific first.
 local STAT_WORDS = {
-	{ "explode", "BOOM" }, { "duration", "DUR" },
+	{ "explode", "BOOM" }, { "leap", "LEAP" }, { "splash", "SPLASH" }, { "burn and bleed", "BLEED" },
+	{ "strike again", "AGAIN" }, { "duration", "DUR" },
+	{ "you kill restores", "HP/KILL" }, { "kill heals", "HP/KILL" }, { "each kill", "HP/KILL" },
+	{ "damage dealt heals", "LEECH" }, { "of all damage dealt", "LEECH" }, { "leech", "LEECH" },
 	{ "critical strike damage", "CRIT DMG" }, { "critical damage", "CRIT DMG" },
 	{ "damage of your critical", "CRIT DMG" }, { "critical strikes deal", "CRIT DMG" },
 	{ "critical", "CRIT" }, { "crit", "CRIT" }, { "cooldown", "CDR" },
 	{ "damage reduction", "DMG RED" }, { "damage taken", "DMG RED" }, { "armor", "DMG RED" },
 	{ "area", "AREA" }, { "target", "TGT" }, { "twice", "ECHO" }, { "echo", "ECHO" },
 	{ "movement", "SPD" }, { "speed", "SPD" }, { "per second", "REGEN" }, { "regen", "REGEN" },
-	{ "health", "HP" }, { "pickup", "PICK" }, { "experience", "XP" }, { "gold", "GOLD" },
-	{ "luck", "LUCK" }, { "leech", "LEECH" }, { "heal", "HEAL" }, { "thorns", "THORNS" },
+	{ "health", "HP" }, { "pickup", "PICK" }, { "pick up", "PICK" }, { "experience", "XP" }, { "gold", "GOLD" },
+	{ "luck", "LUCK" }, { "heal", "HEAL" }, { "thorns", "THORNS" },
 	{ "live", "LIFE" }, { "damage", "DMG" },
 }
+
+-- A line's number as it reads, with its sign: "+24%", "-19%". A line that
+-- gives more without a sign ("strikes 1 more target", "increases ... by 24%")
+-- gets a +. A leap's count and its share: "2x36%".
+local MORE_WORDS = { "more", "increase", "improve", "restore", "heals" }
+local function Value(tag, text)
+	local _, _, value = string.find(text, "([%+%-]?%d+%.?%d*%%?)")
+	if not value then
+		return nil
+	end
+	if tag == "LEAP" then
+		local _, last = string.find(text, value, 1, true)
+		local _, _, share = string.find(text, "(%d+%.?%d*%%)", (last or 0) + 1)
+		return share and (value.."x"..share) or value
+	end
+	local first = string.sub(value, 1, 1)
+	if first ~= "+" and first ~= "-" then
+		for _, word in pairs(MORE_WORDS) do
+			if string.find(text, word, 1, true) then
+				return "+"..value
+			end
+		end
+	end
+	return value
+end
+
+-- How a bonus reads in the list: the number first, then its word; a leap the
+-- other way round, its two numbers together.
+local function Tagged(tag, value)
+	if not value then
+		return tag
+	elseif tag == "LEAP" then
+		return tag.." "..value
+	end
+	return value.." "..tag
+end
 
 -- The short name a tooltip line gives: the first word of the list it names,
 -- in the list's order, so "+29% critical strike damage" is CRIT DMG, not CRIT.
@@ -386,9 +424,7 @@ local function ReadPiece(slot, link)
 			local tag = StatOf(text)
 			if tag and not seen[tag] then
 				seen[tag] = true
-				-- With the line's number, its sign dropped: "CRIT DMG 86%".
-				local _, _, value = string.find(text, "[%+%-]?(%d+%.?%d*%%?)")
-				table.insert(tags, value and (tag.." "..value) or tag)
+				table.insert(tags, Tagged(tag, Value(tag, text)))
 			end
 		end
 	end
@@ -397,7 +433,7 @@ local function ReadPiece(slot, link)
 end
 
 list.gearTitle = list:CreateFontString(nil, "OVERLAY")
-list.gearTitle:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+list.gearTitle:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 list.gearTitle:SetPoint("TOPLEFT", list, "TOPLEFT", 7, -GEAR_TOP)
 list.gearTitle:SetTextColor(1, 0.82, 0)
 list.gearTitle:SetText("Gear")
@@ -435,10 +471,10 @@ for index = 1, table.getn(GEAR_SLOTS) do
 	end
 
 	line.label = line:CreateFontString(nil, "OVERLAY")
-	line.label:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	line.label:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 	line.label:SetPoint("LEFT", line, "LEFT", 4, 0)
 	line.tags = line:CreateFontString(nil, "OVERLAY")
-	line.tags:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	line.tags:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 	line.tags:SetPoint("RIGHT", line, "RIGHT", -4, 0)
 
 	line:EnableMouse(true)
@@ -495,7 +531,7 @@ local function FitTags(line, text)
 	line.tagText = labelWidth > 0 and key or nil
 	local room = WIDTH - 8 - labelWidth - 10
 	for size = 9, 6, -1 do
-		line.tags:SetFont(FONT, size + FONT_BUMP, "OUTLINE")
+		line.tags:SetFont(SurvivorUI_FONT, size + FONT_BUMP, "OUTLINE")
 		if line.tags:GetStringWidth() <= room then
 			break
 		end
@@ -553,15 +589,40 @@ watcher:SetScript("OnUpdate", function()
 	end
 end)
 
+-- The game's own build, its row of spells and jewelry with their cooldowns:
+-- away while this list is on. The setting is the game's and is saved, so the
+-- addon remembers that it was the one to turn it off.
+local function ApplyGameHud()
+	if not (AZS_SetHudShown and AZS_IsHudShown) then
+		return
+	end
+	local settings = Settings()
+	if settings.buildList then
+		if AZS_IsHudShown("build") then
+			AZS_SetHudShown("build", false)
+			settings.hidGameBuild = true
+		end
+	elseif settings.hidGameBuild then
+		AZS_SetHudShown("build", true)
+		settings.hidGameBuild = nil
+	end
+end
+
 function SurvivorUI_ToggleBuild()
 	local settings = Settings()
 	settings.buildList = not settings.buildList
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: build list "..(settings.buildList and "shown." or "hidden."))
+	ApplyGameHud()
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.buildList
+		and "build list shown; the game's own row of spells is put away."
+		or "build list hidden; the game's own row of spells is back."))
 end
 
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
-loader:SetScript("OnEvent", RestorePlace)
+loader:SetScript("OnEvent", function()
+	RestorePlace()
+	ApplyGameHud()
+end)
 
 if SurvivorUI_RegisterMover then
 	SurvivorUI_RegisterMover(list, "Build", SavePlace, nil, RestorePlace)

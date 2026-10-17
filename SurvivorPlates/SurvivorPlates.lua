@@ -31,6 +31,7 @@ local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 -- Survivor UI's face when it is installed: a player's own Expressway, else its
 -- Barlow Condensed, else Friz Quadrata. This addon loads first, so it tries
 -- them itself, each on a probe, since a face that does not load leaves none.
+-- Survivor UI's global font, once it is there, takes the place of all three.
 local FONT = "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = 0              -- Barlow Condensed reads small: one point up
 local FACES = {
@@ -197,8 +198,8 @@ local function ApplyKind(overlay, kind)
 	overlay.bar:SetHeight(style.height * scale)
 	overlay.marker:SetHeight(style.height * scale)
 	overlay.marker:SetPoint("LEFT", overlay.bar, "LEFT", style.width * scale * EXECUTE_RANGE, 0)
-	overlay.name:SetFont(FONT, style.nameSize * scale + FONT_BUMP, "OUTLINE")
-	overlay.health:SetFont(FONT, math.max(8, (style.height - 1) * scale) + FONT_BUMP, "OUTLINE")
+	overlay.name:SetFont(SurvivorUI_FONT or FONT, style.nameSize * scale + FONT_BUMP, "OUTLINE")
+	overlay.health:SetFont(SurvivorUI_FONT or FONT, math.max(8, (style.height - 1) * scale) + FONT_BUMP, "OUTLINE")
 
 	overlay.named = settings.names or kind ~= "normal"
 	if overlay.named and not overlay.put then
@@ -253,7 +254,7 @@ local function UpdatePlateDebuffs(overlay, isTarget)
 				icon.texture:SetAllPoints(icon)
 				icon.texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 				icon.count = icon:CreateFontString(nil, "OVERLAY")
-				icon.count:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+				icon.count:SetFont(SurvivorUI_FONT or FONT, 9 + FONT_BUMP, "OUTLINE")
 				icon.count:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
 				icons[index] = icon
 			end

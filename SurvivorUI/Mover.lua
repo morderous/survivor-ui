@@ -9,9 +9,14 @@
 --
 -- Every other movable piece registers here too (SurvivorUI_RegisterMover), so
 -- Alt outlines them all at once. /sui layout puts everything back.
+--
+-- In move mode a click on a piece opens its card (EditCard.lua): its place to
+-- the unit, its size, shown or hidden, back to its first place, undo. A piece
+-- let go there lands on the grid, or lines up with a neighbour's edge when one
+-- is near.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
+local ACCENT = SurvivorUI_ACCENT or { 1, 0.82, 0 }   -- the addon's own color, the class's
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local DEFAULT_Y = -150          -- the row's place under the screen's center
 
@@ -82,8 +87,9 @@ grid.lines = {}
 local function GridLine(vertical, offset, bright)
 	local line = grid:CreateTexture(nil, "ARTWORK")
 	line:SetTexture(FLAT)
+	line.bright = bright
 	if bright then
-		line:SetVertexColor(1, 0.82, 0, 0.45)
+		line:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.45)
 	else
 		line:SetVertexColor(1, 1, 1, 0.08)
 	end
@@ -120,9 +126,27 @@ local function BuildGrid()
 	end
 end
 
+local EDGE = 6                  -- a neighbour's edge this near pulls a piece to it
+
+-- The nearest of a neighbour's lines to one of ours, along one axis: the
+-- shift that lines them up, or nil when none is within EDGE.
+local function Pull(mine, theirs)
+	local best
+	for _, a in pairs(mine) do
+		for _, b in pairs(theirs) do
+			local shift = b - a
+			if math.abs(shift) <= EDGE and (not best or math.abs(shift) < math.abs(best)) then
+				best = shift
+			end
+		end
+	end
+	return best
+end
+
 -- A piece let go in configuration mode lands on the nearest SNAP step, its top
--- left corner counted from the screen's corner, in the screen's own units.
-local function Snap(frame)
+-- left corner counted from the screen's corner, in the screen's own units; then
+-- a neighbour's edge (or middle) near one of its own pulls it into line.
+local function Snap(frame, own)
 	if not editing then
 		return
 	end
@@ -133,6 +157,22 @@ local function Snap(frame)
 	local ratio = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
 	local x = math.floor(left * ratio / SNAP + 0.5) * SNAP
 	local y = math.floor(top * ratio / SNAP + 0.5) * SNAP
+	local width, height = (frame:GetWidth() or 0) * ratio, (frame:GetHeight() or 0) * ratio
+	local pullX, pullY
+	for _, other in pairs(handles) do
+		if other ~= own and other:IsShown() and other:GetLeft() then
+			local l, r, t, b = other:GetLeft(), other:GetRight(), other:GetTop(), other:GetBottom()
+			local dx = Pull({ x, x + width, x + width / 2 }, { l, r, (l + r) / 2 })
+			local dy = Pull({ y, y - height, y - height / 2 }, { t, b, (t + b) / 2 })
+			if dx and (not pullX or math.abs(dx) < math.abs(pullX)) then
+				pullX = dx
+			end
+			if dy and (not pullY or math.abs(dy) < math.abs(pullY)) then
+				pullY = dy
+			end
+		end
+	end
+	x, y = x + (pullX or 0), y + (pullY or 0)
 	frame:ClearAllPoints()
 	frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / ratio, y / ratio)
 end
@@ -147,12 +187,16 @@ local function MakeHandle(label)
 	handle.fill = handle:CreateTexture(nil, "BACKGROUND")
 	handle.fill:SetTexture(FLAT)
 	handle.fill:SetAllPoints(handle)
-	handle.fill:SetVertexColor(1, 0.82, 0, 0.08)
+	handle.fill:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.08)
 
+	-- A faint outline, and bright marks at the corners.
+	handle.marks = {}
+	handle.outline = {}
 	for _, side in pairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
 		local line = handle:CreateTexture(nil, "BORDER")
 		line:SetTexture(FLAT)
-		line:SetVertexColor(1, 0.82, 0, 0.7)
+		line:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.3)
+		table.insert(handle.outline, line)
 		if side == "TOP" or side == "BOTTOM" then
 			line:SetHeight(1)
 			line:SetPoint(side.."LEFT", handle, side.."LEFT", 0, 0)
@@ -163,12 +207,31 @@ local function MakeHandle(label)
 			line:SetPoint("BOTTOM"..side, handle, "BOTTOM"..side, 0, 0)
 		end
 	end
+	for _, corner in pairs({ "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" }) do
+		for _, across in pairs({ true, false }) do
+			local mark = handle:CreateTexture(nil, "ARTWORK")
+			mark:SetTexture(FLAT)
+			mark:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.95)
+			mark:SetWidth(across and 9 or 2)
+			mark:SetHeight(across and 2 or 9)
+			mark:SetPoint(corner, handle, corner, 0, 0)
+			table.insert(handle.marks, mark)
+		end
+	end
 
 	handle.label = handle:CreateFontString(nil, "OVERLAY")
-	handle.label:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
+	handle.label:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 	handle.label:SetPoint("TOP", handle, "TOP", 0, -4)
-	handle.label:SetTextColor(1, 0.82, 0)
+	handle.label:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
 	handle.label:SetText(label)
+	handle.name = label
+
+	-- In move mode a click picks the piece for its card (EditCard.lua).
+	handle:SetScript("OnMouseUp", function()
+		if editing and SurvivorUI_EditSelect then
+			SurvivorUI_EditSelect(this)
+		end
+	end)
 
 	table.insert(handles, handle)
 	return handle
@@ -181,39 +244,65 @@ function SurvivorUI_RegisterMover(frame, label, save, mover, default)
 	mover = mover or frame
 	local handle = MakeHandle(label)
 	handle.default = default
+	handle.mover, handle.save = mover, save
 	handle:SetAllPoints(frame)
 	handle:SetScript("OnDragStart", function()
+		if SurvivorUI_EditBefore then
+			SurvivorUI_EditBefore(this)
+		end
 		dragging = this
 		mover:StartMoving()
 	end)
 	handle:SetScript("OnDragStop", function()
 		dragging = nil
 		mover:StopMovingOrSizing()
-		Snap(mover)
+		Snap(mover, this)
 		if save then
 			save()
 		end
+		if editing and SurvivorUI_EditSelect then
+			SurvivorUI_EditSelect(this)
+		end
 	end)
 	return handle
+end
+
+-- Every piece that moves, for the card: { handle, ... }, each with its name,
+-- what it moves (mover), how it saves (save) and its first place (default).
+function SurvivorUI_MoverHandles()
+	return handles
 end
 
 -- The action bar: the buttons and the experience bar under them. The player
 -- and target frames, the buffs and the kills and gold line move on their own,
 -- below; left where they are, they follow the bar.
 local middle = MakeHandle("Action bar  -  /sui center puts it back")
+middle.name = "Action bar"
+middle.mover, middle.save = row, Save
+middle.default = function()
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.rowX, SurvivorUIDB.rowY = nil, nil
+	Place(0, DEFAULT_Y)
+end
 middle:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 4)
 middle:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 4, -12)
 middle.label:ClearAllPoints()
 middle.label:SetPoint("BOTTOM", middle, "TOP", 0, 3)
 middle:SetScript("OnDragStart", function()
+	if SurvivorUI_EditBefore then
+		SurvivorUI_EditBefore(this)
+	end
 	dragging = this
 	row:StartMoving()
 end)
 middle:SetScript("OnDragStop", function()
 	dragging = nil
 	row:StopMovingOrSizing()
-	Snap(row)
+	Snap(row, this)
 	Save()
+	if editing and SurvivorUI_EditSelect then
+		SurvivorUI_EditSelect(this)
+	end
 end)
 
 -- The buffs and the kills and gold line: their own handles. Left where they
@@ -423,16 +512,18 @@ local PARTS = {
 		places = { { "bossLeft", "bossTop", "TOPLEFT" } } },
 	{ key = "loot", label = "Loot list", frames = { "SurvivorUILoot" },
 		places = { { "lootLeft", "lootTop", "TOPLEFT" } } },
+	{ key = "guardians", label = "Guardians", frames = { "SurvivorUIGuardians" },
+		places = { { "guardiansLeft", "guardiansTop", "TOPLEFT" } } },
 	-- The whole center at once: the bar, the frames, the buffs and the kills
 	-- line, each still with its own size on top.
-	{ key = "middle", label = "Whole center bar", frames = {}, places = {}, members = "middle" },
+	{ key = "middle", label = "Whole center bar", frames = {}, places = {}, members = "middle", default = 0.9 },
 	-- The buttons belong to the game's bar, hung on the row: sized with it.
 	{ key = "bar", label = "Action bar", group = "middle", frames = { "SurvivorUIRow", "MainMenuExpBar",
 		"ActionButton1", "ActionButton2", "ActionButton3", "ActionButton4", "ActionButton5", "ActionButton6",
 		"ActionButton7", "ActionButton8", "ActionButton9", "ActionButton10", "ActionButton11", "ActionButton12",
 		"BonusActionButton1", "BonusActionButton2", "BonusActionButton3", "BonusActionButton4", "BonusActionButton5", "BonusActionButton6",
 		"BonusActionButton7", "BonusActionButton8", "BonusActionButton9", "BonusActionButton10", "BonusActionButton11", "BonusActionButton12" },
-		places = {}, extra = { "rowX", "rowY" }, restore = function() Restore() end },
+		places = {}, extra = { "rowX", "rowY" }, restore = function() Restore() end, default = 0.85 },
 	{ key = "frames", label = "Player and target", group = "middle", frames = { "SurvivorUIPlayer", "SurvivorUITarget" },
 		places = { { "playerLeft", "playerTop", "TOPLEFT", "SurvivorUIPlayer" }, { "targetLeft", "targetTop", "TOPLEFT", "SurvivorUITarget" } } },
 	{ key = "buffs", label = "Buffs", group = "middle", frames = { "SurvivorUIBuffs" },
@@ -454,6 +545,9 @@ local function Clamp(value)
 	return math.max(SCALE_MIN, math.min(SCALE_MAX, value))
 end
 
+-- The whole interface's size a new install starts with.
+local DEFAULT_SCALE = 0.9
+
 local function PartScales()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.partScale = SurvivorUIDB.partScale or {}
@@ -462,9 +556,22 @@ end
 
 -- A part's size on screen: the whole interface's times its group's (the
 -- whole center bar) times its own.
+local function Own(key)
+	local set = PartScales()[key]
+	if set then
+		return set
+	end
+	for index = 1, table.getn(PARTS) do
+		if PARTS[index].key == key then
+			return PARTS[index].default or 1
+		end
+	end
+	return 1
+end
+
 local function Effective(part)
-	local group = part.group and (PartScales()[part.group] or 1) or 1
-	return Clamp((SurvivorUIDB and SurvivorUIDB.panelScale or 1) * group * (PartScales()[part.key] or part.default or 1))
+	local group = part.group and Own(part.group) or 1
+	return Clamp((SurvivorUIDB and SurvivorUIDB.panelScale or DEFAULT_SCALE) * group * Own(part.key))
 end
 
 -- A moved piece keeps its place as a point in its own size's units: the same
@@ -558,7 +665,7 @@ function SurvivorUI_GetScale(key)
 		local part = FindPart(key)
 		return PartScales()[key] or (part and part.default) or 1
 	end
-	return SurvivorUIDB.panelScale or 1
+	return SurvivorUIDB.panelScale or DEFAULT_SCALE
 end
 
 -- A part's size on screen, the whole interface's times its own.
@@ -599,7 +706,7 @@ function SurvivorUI_SetScale(value, quiet)
 	SurvivorUIDB = SurvivorUIDB or {}
 	value = tonumber(value)
 	if not value then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: interface at "..(SurvivorUIDB.panelScale or 1).."; /sui scale 0.85 sets it, 0.6 to 1.4. Each part has its own size in /sui opt.")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: interface at "..(SurvivorUIDB.panelScale or DEFAULT_SCALE).."; /sui scale 0.85 sets it, 0.6 to 1.4. Each part has its own size in /sui opt.")
 		return
 	end
 	local froms = {}
@@ -615,7 +722,7 @@ function SurvivorUI_SetScale(value, quiet)
 	end
 end
 
--- Every part back to its own size 1 (the whole interface's stays).
+-- Every part back to its own default size (the whole interface's stays).
 function SurvivorUI_ResetPartScales()
 	for _, part in pairs(PARTS) do
 		SurvivorUI_SetPartScale(part.key, part.default or 1)
@@ -658,6 +765,9 @@ function SurvivorUI_SetEditMode(on)
 		grid:Show()
 	else
 		grid:Hide()
+		if SurvivorUI_EditSelect then
+			SurvivorUI_EditSelect(nil)
+		end
 	end
 end
 
@@ -670,6 +780,7 @@ local PLACES = {
 	"meterRight", "meterBottom", "bossLeft", "bossTop", "lootLeft", "lootTop",
 	"chatLeft", "chatBottom", "mapRight", "mapTop", "tipRight", "tipBottom", "critsLeft", "critsBottom", "critsTop", "buildLeft", "buildTop",
 	"buffsLeft", "buffsBottom", "tallyLeft", "tallyTop", "playerLeft", "playerTop", "targetLeft", "targetTop",
+	"guardiansLeft", "guardiansTop",
 }
 
 -- A new layout starts everyone from the first places once: the pieces moved
@@ -718,3 +829,25 @@ end
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", Restore)
+
+-- A new class color: the grid's middle lines and every handle take it.
+if SurvivorUI_OnAccent then
+	SurvivorUI_OnAccent(function()
+		for _, line in pairs(grid.lines) do
+			if line.bright then
+				line:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.45)
+			end
+		end
+		for index = 1, table.getn(handles) do
+			local handle = handles[index]
+			handle.fill:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.08)
+			for _, line in pairs(handle.outline) do
+				line:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.3)
+			end
+			for _, mark in pairs(handle.marks) do
+				mark:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.95)
+			end
+			handle.label:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
+		end
+	end)
+end

@@ -1,15 +1,18 @@
 -- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: a square button outside the minimap's bottom left corner, with
--- the addon's own icon (Art\SurvivorIcon.tga), that opens the options with
+-- the addon's own icon in the class's color (Art\SurvivorIconWhite.tga,
+-- tinted), that opens the options with
 -- configuration mode on (the grid laid out, every piece unlocked); right click
 -- opens them without it. Other minimap buttons stack over it, upward, in the
 -- same square look: the game's battleground button (the crossed swords).
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIcon"
+local ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIconWhite"
 local SIZE = 16              -- the stock 22, smaller
+local ACCENT = SurvivorUI_ACCENT or { 1, 0.82, 0 }   -- the addon's own color, the class's
 
--- A square, flat frame around an icon: a black edge, gold under the mouse.
+-- A square, flat frame around an icon: a black edge, the addon's color under
+-- the mouse.
 local function Square(frame, icon)
 	frame:SetWidth(SIZE)
 	frame:SetHeight(SIZE)
@@ -33,7 +36,7 @@ end
 local function Lit(frame, lit)
 	if frame.squareEdge then
 		if lit then
-			frame.squareEdge:SetVertexColor(1, 0.82, 0, 1)
+			frame.squareEdge:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 1)
 		else
 			frame.squareEdge:SetVertexColor(0, 0, 0, 1)
 		end
@@ -56,6 +59,9 @@ button.icon = button:CreateTexture(nil, "ARTWORK")
 button.icon:SetTexture(ICON)
 button.ownIcon = button.icon
 Square(button, button.icon)
+if SurvivorUI_OnAccent then
+	SurvivorUI_OnAccent(function() button.icon:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3]) end)
+end
 
 button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 button:SetScript("OnClick", function()
@@ -73,7 +79,7 @@ end)
 button:SetScript("OnEnter", function()
 	Lit(this, true)
 	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
-	GameTooltip:SetText("Survivor UI", 1, 0.82, 0)
+	GameTooltip:SetText("Survivor UI", ACCENT[1], ACCENT[2], ACCENT[3])
 	GameTooltip:AddLine("Click: options, with the grid to move things", 1, 1, 1)
 	GameTooltip:AddLine("Right click: options only", 0.7, 0.7, 0.7)
 	GameTooltip:Show()

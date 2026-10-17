@@ -56,7 +56,9 @@ for index = 1, table.getn(FACES) do
 		break
 	end
 end
-local FONT = SurvivorUI_FONT
+-- The face found as the files ran: the global font's default (the options,
+-- Global).
+SurvivorUI_DEFAULT_FONT = SurvivorUI_FONT
 local FONT_BUMP = SurvivorUI_FONT_BUMP
 
 local BAR_BUTTONS = { 1, 2, 3, 4, 5, 6, 12 }     -- 12 is the = key
@@ -71,7 +73,7 @@ local HEALTH_HEIGHT = BUTTON_SIZE - POWER_HEIGHT - 1
 
 local ENEMY = { 0.80, 0.22, 0.22 }
 
-local CHAT_SIZE = 10                            -- default; /sui chat N changes it
+local CHAT_SIZE = 8                             -- default; /sui chat N changes it
 
 -- Saved between sessions; the /sui command at the end of the file changes them.
 -- Every look the addon gives the game's interface can be switched off in the
@@ -136,6 +138,79 @@ function SurvivorUI_ClassColor(class)
 	return 1, 0.82, 0
 end
 
+-- The Searing Totem's shots come in the combat log as an "Attack" for Fire
+-- damage ("Your Attack hits Scarlet Monk for 168 Fire damage."), while the
+-- game's meter names them right: with the totem among the hero's spells, a
+-- Fire "Attack" is the totem's. SurvivorUI_SourceOf(name, line) gives the
+-- name a hit's source goes by.
+local searingSeen, searingHas
+local function HasSearing()
+	if AZS_SPELLS_UPDATED and AZS_SPELLS_UPDATED ~= searingSeen then
+		searingSeen = AZS_SPELLS_UPDATED
+		searingHas = false
+		for index = 1, table.getn(AZS_SPELLS or {}) do
+			local entry = AZS_SPELLS[index]
+			if (entry.key or entry[1]) == "searing_totem" then
+				searingHas = true
+			end
+		end
+	end
+	return searingHas
+end
+
+function SurvivorUI_SourceOf(name, line)
+	if name == "Attack" and line and string.find(line, " Fire damage", 1, true) and HasSearing() then
+		return "Searing Totem"
+	end
+	return name
+end
+
+-- The addon's own color, worn by its menus, its cards and its marks: the
+-- hero's class color (gold until the class is known). One table, changed in
+-- place, so whoever holds it reads the color of the moment;
+-- SurvivorUI_OnAccent(paint) paints now and again on each change, for the
+-- colors set once, as a frame is made.
+SurvivorUI_ACCENT = { 1, 0.82, 0 }
+local accentPainters = {}
+
+function SurvivorUI_OnAccent(paint)
+	table.insert(accentPainters, paint)
+	paint()
+end
+
+function SurvivorUI_UpdateAccent()
+	local r, g, b = 1, 0.82, 0
+	if not (SurvivorUIDB and SurvivorUIDB.accent == "gold") then
+		local _, class = UnitClass("player")
+		if not class then
+			return
+		end
+		r, g, b = SurvivorUI_ClassColor(class)
+	end
+	local accent = SurvivorUI_ACCENT
+	if accent[1] == r and accent[2] == g and accent[3] == b then
+		return
+	end
+	accent[1], accent[2], accent[3] = r, g, b
+	for index = 1, table.getn(accentPainters) do
+		accentPainters[index]()
+	end
+end
+
+-- The class's color ("class") or the gold of before ("gold"): the options,
+-- Global.
+function SurvivorUI_SetAccent(mode)
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.accent = mode == "gold" and "gold" or nil
+	SurvivorUI_UpdateAccent()
+end
+
+local accentWatch = CreateFrame("Frame")
+accentWatch:RegisterEvent("PLAYER_LOGIN")
+accentWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
+accentWatch:SetScript("OnEvent", SurvivorUI_UpdateAccent)
+SurvivorUI_UpdateAccent()
+
 local POWER_COLORS = {
 	[0] = { 0.25, 0.50, 1.00 },   -- mana
 	[1] = { 0.85, 0.20, 0.20 },   -- rage
@@ -177,7 +252,7 @@ end
 
 local function Text(parent, size, point, x, y)
 	local text = parent:CreateFontString(nil, "OVERLAY")
-	text:SetFont(FONT, size + FONT_BUMP, "OUTLINE")
+	text:SetFont(SurvivorUI_FONT, size + FONT_BUMP, "OUTLINE")
 	text:SetPoint(point, parent, point, x, y)
 	return text
 end
@@ -347,7 +422,7 @@ local function UpdateUnitFrame(frame)
 	if unit == "player" then
 		style = SurvivorUIDB and SurvivorUIDB.playerHealth or "absolutePercent"
 	else
-		style = SurvivorUIDB and SurvivorUIDB.targetHealth or "percent"
+		style = SurvivorUIDB and SurvivorUIDB.targetHealth or "absolutePercent"
 		if AZS_TARGET and AZS_TARGET.name == UnitName(unit) and (tonumber(AZS_TARGET.hpm) or 0) > 0 then
 			hp, hpm = AZS_TARGET.hp, AZS_TARGET.hpm
 		elseif healthMax == 100 then
@@ -883,7 +958,7 @@ local function StyleChat()
 			Hide(name.."BottomButton")
 
 			-- Plain text with a soft shadow in place of the stock look.
-			chat:SetFont(FONT, Settings().chatSize)
+			chat:SetFont(SurvivorUI_FONT, Settings().chatSize)
 			chat:SetShadowColor(0, 0, 0, 1)
 			chat:SetShadowOffset(1, -1)
 
@@ -899,10 +974,13 @@ local function StyleChat()
 				fill:SetTexture(FLAT)
 				fill:SetVertexColor(0.04, 0.04, 0.06, 0.55)
 				fill:SetAllPoints(panel)
-				-- An accent line down the left edge.
+				-- An accent line down the left edge, in the addon's color.
 				local accent = panel:CreateTexture(nil, "BORDER")
 				accent:SetTexture(FLAT)
-				accent:SetVertexColor(1, 0.82, 0, 0.8)
+				SurvivorUI_OnAccent(function()
+					local color = SurvivorUI_ACCENT
+					accent:SetVertexColor(color[1], color[2], color[3], 0.8)
+				end)
 				accent:SetWidth(2)
 				accent:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
 				accent:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 0)
@@ -918,7 +996,7 @@ local function StyleChat()
 			end
 			local tabText = getglobal(name.."TabText")
 			if tabText then
-				tabText:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
+				tabText:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 			end
 		end
 	end
@@ -947,10 +1025,10 @@ end
 -- Friz Quadrata for most things, others for chat, numbers, quest and mail text.
 
 -- Read by the engine when the world loads, for the text it draws itself.
-STANDARD_TEXT_FONT = FONT
-UNIT_NAME_FONT = FONT
-NAMEPLATE_FONT = FONT
-DAMAGE_TEXT_FONT = FONT
+STANDARD_TEXT_FONT = SurvivorUI_FONT
+UNIT_NAME_FONT = SurvivorUI_FONT
+NAMEPLATE_FONT = SurvivorUI_FONT
+DAMAGE_TEXT_FONT = SurvivorUI_FONT
 
 local FONT_OBJECTS = {
 	"GameFontNormal", "GameFontHighlight", "GameFontDisable", "GameFontGreen", "GameFontRed", "GameFontBlack", "GameFontWhite",
@@ -980,11 +1058,171 @@ local function ApplyFonts()
 			end
 			local size = object.survivorSize
 			if size and size > 0 then
-				object:SetFont(FONT, size + FONT_BUMP, object.survivorFlags)
+				object:SetFont(SurvivorUI_FONT, size + FONT_BUMP, object.survivorFlags)
 			end
 		end
 	end
 end
+
+------------------------------------------------------------------------------
+-- The global font (the options, Global): one face for every text of the
+-- addon's and, with One font everywhere, the game's. The saved choice arrives
+-- after the files have run, so the texts made by then are put in it once; the
+-- ones made later read SurvivorUI_FONT as they are made. A piece's own font,
+-- set on its card in move mode, stays its own.
+
+local fontProbe = UIParent:CreateFontString(nil, "OVERLAY")
+
+local function PathLoads(path)
+	fontProbe:SetFont(SurvivorUI_DEFAULT_FONT, 12)
+	fontProbe:SetFont(path, 12)
+	local got = fontProbe:GetFont()
+	return got ~= nil and string.lower(got) == string.lower(path)
+end
+
+-- A frame of the addon's: under one named SurvivorUI..., or under none with a
+-- name up to the screen (a mover's handle).
+local function Ours(frame)
+	local at = frame
+	while at do
+		if at == UIParent then
+			return true
+		elseif at == WorldFrame then
+			return false
+		end
+		local name = at:GetName()
+		if name then
+			return string.find(name, "^SurvivorUI") ~= nil
+		end
+		at = at:GetParent()
+	end
+	return false
+end
+
+local function EveryFrame(visit)
+	if EnumerateFrames then
+		local frame = EnumerateFrames()
+		while frame do
+			visit(frame)
+			frame = EnumerateFrames(frame)
+		end
+		return
+	end
+	local function Down(frame)
+		visit(frame)
+		local children = { frame:GetChildren() }
+		for index = 1, table.getn(children) do
+			Down(children[index])
+		end
+	end
+	Down(UIParent)
+	Down(WorldFrame)
+end
+
+-- Text boxes, the chat and the like carry their face themselves.
+local OWN_FACE = { EditBox = true, ScrollingMessageFrame = true, MessageFrame = true }
+
+-- Every text in the old face takes the new one: the whole interface's with
+-- One font everywhere, or when the old face is not the game's own (none but
+-- the addon wears it then); else only the addon's.
+local function Wear(face)
+	local old = string.lower(SurvivorUI_FONT)
+	if old == string.lower(face) then
+		return
+	end
+	SurvivorUI_FONT = face
+	local everything = Feature("fonts") or not string.find(old, "frizqt__", 1, true)
+	if Feature("fonts") then
+		STANDARD_TEXT_FONT, UNIT_NAME_FONT, NAMEPLATE_FONT, DAMAGE_TEXT_FONT = face, face, face, face
+	end
+	EveryFrame(function(frame)
+		if not (everything or Ours(frame)) then
+			return
+		end
+		local kind = frame.GetObjectType and frame:GetObjectType()
+		if kind and OWN_FACE[kind] and frame.GetFont then
+			local path, size, flags = frame:GetFont()
+			if path and size and string.lower(path) == old then
+				frame:SetFont(face, size, flags)
+			end
+		end
+		local regions = { frame:GetRegions() }
+		for index = 1, table.getn(regions) do
+			local region = regions[index]
+			if region.GetObjectType and region:GetObjectType() == "FontString" then
+				local path, size, flags = region:GetFont()
+				if path and size and string.lower(path) == old then
+					region:SetFont(face, size, flags)
+					-- A piece's card keeps its size steps by the face it last saw.
+					if region.suiPath then
+						region.suiPath = region:GetFont()
+					end
+				end
+			end
+		end
+	end)
+	if Feature("fonts") then
+		ApplyFonts()
+	end
+end
+
+-- The default global font: the face found as the files ran, the game's Friz
+-- Quadrata (it writes every language the game speaks) unless one of one's own
+-- was dropped in (Expressway).
+function SurvivorUI_DefaultFont()
+	return SurvivorUI_DEFAULT_FONT
+end
+
+function SurvivorUI_DefaultFontName()
+	local face = string.lower(SurvivorUI_DefaultFont())
+	if string.find(face, "expressway", 1, true) then
+		return "Expressway"
+	elseif string.find(face, "barlow", 1, true) then
+		return "Barlow Condensed"
+	end
+	return "Friz Quadrata"
+end
+
+-- path nil: the default face. Saved, and worn at once.
+function SurvivorUI_SetGlobalFont(path)
+	Settings().globalFont = path
+	if path and PathLoads(path) then
+		Wear(path)
+	else
+		Wear(SurvivorUI_DefaultFont())
+	end
+end
+
+function SurvivorUI_GlobalFont()
+	return SurvivorUIDB and SurvivorUIDB.globalFont
+end
+
+-- What a new install starts with besides each file's own defaults, put in
+-- where nothing is set yet; the toggles keep false for off.
+local DEFAULTS = {
+	critBox = true,             -- Biggest Crits
+	bossBarsElites = true,      -- elites on the boss bars
+	guardiansDocked = true,     -- the guardians as a bar in the run tracker
+	trackerHealth = true,       -- the bosses' health in the run tracker
+	jewelryWithPane = true,     -- the Jewelry Collection beside the character pane
+}
+
+local globalFont = CreateFrame("Frame")
+globalFont:RegisterEvent("ADDON_LOADED")
+globalFont:SetScript("OnEvent", function()
+	if arg1 ~= "SurvivorUI" then
+		return
+	end
+	local settings = Settings()
+	for key, value in pairs(DEFAULTS) do
+		if settings[key] == nil then
+			settings[key] = value
+		end
+	end
+	if settings.globalFont then
+		SurvivorUI_SetGlobalFont(settings.globalFont)
+	end
+end)
 
 ------------------------------------------------------------------------------
 -- Tooltip: a flat dark box with a hairline border, a slim health bar along its
@@ -1056,15 +1294,15 @@ local function StyleTooltips()
 
 	local header = getglobal("GameTooltipHeaderText")
 	if header then
-		header:SetFont(FONT, 13 + FONT_BUMP)
+		header:SetFont(SurvivorUI_FONT, 13 + FONT_BUMP)
 	end
 	local body = getglobal("GameTooltipText")
 	if body then
-		body:SetFont(FONT, 11 + FONT_BUMP)
+		body:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP)
 	end
 	local small = getglobal("GameTooltipTextSmall")
 	if small then
-		small:SetFont(FONT, 10 + FONT_BUMP)
+		small:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP)
 	end
 
 	local bar = getglobal("GameTooltipStatusBar")
@@ -1162,9 +1400,9 @@ end
 -- choices of the earlier versions carry over.
 
 local CT_DEFAULTS = {
-	ctLayout = "sides", ctDistance = 160, ctRise = 190, ctCritColumn = true,
+	ctLayout = "sides", ctDistance = 140, ctRise = 170, ctCritColumn = true,
 	ctIcons = true, ctMeterColors = true, ctSize = 0.85,
-	ctPeriodic = true, ctHeals = true, ctTaken = true,
+	ctPeriodic = true, ctHeals = true, ctTaken = true, ctShort = true,
 }
 
 local function CT()
@@ -1180,6 +1418,13 @@ local function CT()
 		db.ctIcons = db.damageModern and true or false
 		db.ctMeterColors = db.damageModern and true or false
 	end
+	-- 2: short numbers, on.
+	if db.ctVersion < 2 then
+		db.ctVersion = 2
+		if db.ctShort == nil then
+			db.ctShort = true
+		end
+	end
 	return db
 end
 
@@ -1188,7 +1433,7 @@ local function Face(text, size, flags)
 	local key = size..flags..share
 	if text.faceKey ~= key then
 		text.faceKey = key
-		text:SetFont(FONT, math.max(6, math.floor(size * share + 0.5)), flags)
+		text:SetFont(SurvivorUI_FONT, math.max(6, math.floor(size * share + 0.5)), flags)
 	end
 end
 
@@ -1278,11 +1523,20 @@ local function Dress(text, dealt, crit, source)
 	return colored
 end
 
+-- A hit's number, short when chosen (1475 as 1.5k), as the health reads.
+local function Amount(amount)
+	if CT().ctShort and SurvivorUI_Abbrev and tonumber(amount) then
+		return SurvivorUI_Abbrev(amount)
+	end
+	return amount
+end
+
 local function SpawnSide(kind, amount, crit, periodic, source)
 	local text = DamageText()
 	if not text then
 		return
 	end
+	amount = Amount(amount)
 	local dealt = kind == "dealt"
 	local ct = CT()
 	-- The crits in a column of their own, on the right, or with the rest.
@@ -1341,7 +1595,7 @@ local function SpawnSide(kind, amount, crit, periodic, source)
 	end
 	text.drift = 0
 	text.rise = (column.reach or ct.ctRise or SIDE_RISE) * column.rise
-	text:SetAlpha(1)
+	text:SetAlpha(0)
 	text:Show()
 	damageLive = damageLive + 1
 end
@@ -1360,6 +1614,7 @@ local function SpawnDamage(target, amount, crit, periodic, source)
 		return
 	end
 	text.side = nil
+	amount = Amount(amount)
 
 	-- Over one of the enemies with that name, else in a ring around the hero.
 	local x, y
@@ -1419,10 +1674,14 @@ local function SpawnDamage(target, amount, crit, periodic, source)
 		-- A hit the hero took falls instead, apart from the ones it deals.
 		text.rise = -text.rise
 	end
-	text:SetAlpha(1)
+	text:SetAlpha(0)
 	text:Show()
 	damageLive = damageLive + 1
 end
+
+-- In and out: alpha only, and a little lift; a font size set frame by frame
+-- would cost (v2.3's stutter).
+local FADE_IN, FADE_OUT, FADE_LIFT = 0.10, 0.50, 10
 
 damageLayer:SetScript("OnUpdate", function()
 	if damageLive == 0 then
@@ -1444,13 +1703,25 @@ damageLayer:SetScript("OnUpdate", function()
 				text.icon:Hide()
 				damageLive = damageLive - 1
 			else
-				-- Fast at first, slowing as it tops out; fading over the last third.
-				-- Beside the hero, a steadier scroll, so a column reads.
+				-- Fast at first, slowing as it tops out. Beside the hero, a
+				-- steadier scroll, so a column reads.
 				local eased = text.side and (1 - (1 - t) * (1 - t) * 0.5 - 0.5 * (1 - t)) or (1 - (1 - t) * (1 - t))
+				-- It comes in over the first tenth, from a little short of its
+				-- start; it goes over the second half, slowly, then quicker.
+				local alpha, lift = 1, 0
+				if t < FADE_IN then
+					local part = t / FADE_IN
+					alpha = part * part * (3 - 2 * part)
+					lift = (1 - alpha) * FADE_LIFT
+				elseif t > FADE_OUT then
+					local part = (t - FADE_OUT) / (1 - FADE_OUT)
+					alpha = 1 - part * part
+				end
+				local down = text.rise < 0 and -1 or 1
 				text:ClearAllPoints()
-				text:SetPoint("CENTER", UIParent, "BOTTOMLEFT", text.x + text.drift * eased, text.y + text.rise * eased)
-				text:SetAlpha(t > 0.66 and (1 - t) / 0.34 or 1)
-				text.icon:SetAlpha(text:GetAlpha())
+				text:SetPoint("CENTER", UIParent, "BOTTOMLEFT", text.x + text.drift * eased, text.y + text.rise * eased - down * lift)
+				text:SetAlpha(alpha)
+				text.icon:SetAlpha(alpha)
 			end
 		end
 	end
@@ -1471,19 +1742,19 @@ end
 local function ParseDamage(message)
 	local _, _, who, target, amount = string.find(message, "^(.-) crits (.+) for (%d+)")
 	if target then
-		return target, amount, true, false, SourceOf(who)
+		return target, amount, true, false, SurvivorUI_SourceOf(SourceOf(who), message)
 	end
 	_, _, who, target, amount = string.find(message, "^(.-) crit (.+) for (%d+)")
 	if target then
-		return target, amount, true, false, SourceOf(who)
+		return target, amount, true, false, SurvivorUI_SourceOf(SourceOf(who), message)
 	end
 	_, _, who, target, amount = string.find(message, "^(.-) hits (.+) for (%d+)")
 	if target then
-		return target, amount, false, false, SourceOf(who)
+		return target, amount, false, false, SurvivorUI_SourceOf(SourceOf(who), message)
 	end
 	_, _, who, target, amount = string.find(message, "^(.-) hit (.+) for (%d+)")
 	if target then
-		return target, amount, false, false, SourceOf(who)
+		return target, amount, false, false, SurvivorUI_SourceOf(SourceOf(who), message)
 	end
 	-- "Kobold Vermin suffers 12 Fire damage from your Flame Shock."
 	local spell
@@ -1739,6 +2010,14 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ResetCollection then
 			SurvivorUI_ResetCollection()
 		end
+	elseif msg == "dots" then
+		if SurvivorUI_ToggleDots then
+			SurvivorUI_ToggleDots()
+		end
+	elseif msg == "guardians" or msg == "guardians north" or msg == "guardians bar" then
+		if SurvivorUI_ToggleGuardians then
+			SurvivorUI_ToggleGuardians(argument)
+		end
 	elseif msg == "pins" then
 		if SurvivorUI_PinsReport then
 			SurvivorUI_PinsReport()
@@ -1764,6 +2043,8 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui opt  opens the options: every piece on or off, panel size, and a move mode with a grid")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between the quick damage numbers and the game's own")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage side  puts the damage numbers beside the hero, or back over the enemies")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui dots  shows or hides the counters over the action bar: DoTs, fears and totems")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui guardians  shows or hides the guardians' list; /sui guardians north  points its arrows north up; /sui guardians bar  makes it a bar in the run tracker")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui collection  the Jewelry Collection: every amulet, ring and trinket found, and what is left to find; /sui collection reset  forgets it all")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 10  sets the chat text size, 8 to 18 (default 10)")

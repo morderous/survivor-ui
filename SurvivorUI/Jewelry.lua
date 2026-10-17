@@ -15,7 +15,6 @@
 -- list to read at a glance, even in a fight.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local SLOTS = { [2] = "Neck", [11] = "Ring", [12] = "Ring", [13] = "Trinket", [14] = "Trinket" }
@@ -70,12 +69,6 @@ local function SpellClass(spell)
 	return spell and spellClass[Plain(spell)]
 end
 
--- Two records of a bonus (or a rank's), as one: the lowest and highest of both.
-local function Widen(into, from)
-	into.min = math.min(into.min or from.min, from.min)
-	into.max = math.max(into.max or from.max, from.max)
-end
-
 -- A piece written in an earlier book (by character, or by class in v2.8)
 -- joins the one book.
 local function MergeItem(book, base, old)
@@ -91,67 +84,165 @@ local function MergeItem(book, base, old)
 	for rank in pairs(old.ranks or {}) do
 		item.ranks[rank] = true
 	end
+	-- Its bonuses join as they are: the same one is kept once as the book is
+	-- read (Canon).
 	for each = 1, table.getn(old.stats or {}) do
-		local stat = old.stats[each]
-		local mine
-		for other = 1, table.getn(item.stats) do
-			if item.stats[other].pattern == stat.pattern then
-				mine = item.stats[other]
-			end
-		end
-		if mine then
-			Widen(mine, stat)
-			for rank, values in pairs(stat.ranks or {}) do
-				mine.ranks[rank] = mine.ranks[rank] or {}
-				Widen(mine.ranks[rank], values)
-			end
-		else
-			table.insert(item.stats, stat)
-		end
+		table.insert(item.stats, old.stats[each])
 	end
 end
 
--- A bonus kept in another language's words ("Equip: Erhöht den Schaden deiner
--- kritischen Treffer um #%."), in English's (Locale.lua): its number stands
--- in as a 7 while it is read, and is a # again after.
-local function EnglishPattern(pattern)
-	if not (SurvivorUI_EnglishLine and pattern) then
-		return pattern
-	end
-	local sample = string.gsub(pattern, "#", "7", 1)
-	local english = SurvivorUI_EnglishLine(sample)
-	if english == sample then
-		return pattern
-	end
-	return (string.gsub(english, "%d+%.?%d*", "#", 1))
+local function EnglishLine(text)
+	return SurvivorUI_EnglishLine and SurvivorUI_EnglishLine(text) or text
 end
 
--- A piece's bonuses in English, the same bonus kept once.
-local function EnglishStats(item)
-	local stats, byPattern = {}, {}
-	for each = 1, table.getn(item.stats or {}) do
+-- A bonus line's pattern, every number a # ("Equip: Lightning Bolt's hits
+-- leap to # more enemies for #%."), and its numbers in order.
+local function Bonus(text)
+	local values = {}
+	local pattern = string.gsub(text or "", "%d+%.?%d*", function(number)
+		table.insert(values, tonumber(number))
+		return "#"
+	end)
+	if table.getn(values) == 0 then
+		return nil
+	end
+	local _, _, percent = string.find(text, "%d+%.?%d*(%%?)")
+	return pattern, values, percent
+end
+
+-- A pattern's words, to tell bonuses apart: "1 more target" and "2 more
+-- targets" are the same one.
+local function Key(pattern)
+	local key = string.lower(pattern or "").." "
+	key = string.gsub(key, "(%a)ies([^%a])", "%1y%2")
+	key = string.gsub(key, "(%a)s([^%a])", "%1%2")
+	return key
+end
+
+-- A sighting's numbers on a bonus (or on one of its ranks): the lowest and
+-- highest of each; the first's also as min and max.
+local function Note(into, values)
+	into.values = into.values or {}
+	for index = 1, table.getn(values) do
+		local value = values[index]
+		local seen = into.values[index] or {}
+		seen.min = math.min(seen.min or value, value)
+		seen.max = math.max(seen.max or value, value)
+		into.values[index] = seen
+	end
+	into.min = math.min(into.min or values[1], values[1])
+	into.max = math.max(into.max or values[1], values[1])
+end
+
+local function Digits(value)
+	if value == math.floor(value) then
+		return string.format("%d", value)
+	end
+	return tostring(value)
+end
+
+-- A bonus's line again, its numbers put back: each one's lowest, or highest.
+-- One kept before v3.0 has only its first number as a #, in min and max.
+local function Line(stat, high)
+	local index = 0
+	return (string.gsub(stat.pattern, "#", function()
+		index = index + 1
+		local seen = stat.values and stat.values[index]
+		local value
+		if seen then
+			value = high and seen.max or seen.min
+		elseif index == 1 then
+			value = high and stat.max or stat.min
+		end
+		return Digits(value or 0)
+	end))
+end
+
+-- A legendary amulet's own lines all start "Equip:"; the short ones the codex
+-- gave it (seed_class_amulets.py) give way once those are known.
+local function Settle(item)
+	local own = false
+	for each = 1, table.getn(item.stats) do
 		local stat = item.stats[each]
-		local pattern = EnglishPattern(stat.pattern)
-		if pattern ~= stat.pattern then
-			stat.pattern = pattern
-			if SurvivorUI_StatOf then
-				stat.tag = SurvivorUI_StatOf((string.gsub(pattern, "#", "7"))) or stat.tag
+		if not stat.seed and string.find(stat.pattern, "^Equip:") then
+			own = true
+		end
+	end
+	if not own then
+		return
+	end
+	local kept = {}
+	for each = 1, table.getn(item.stats) do
+		local stat = item.stats[each]
+		if not (stat.seed or (item.spell and not string.find(stat.pattern, "^Equip:"))) then
+			table.insert(kept, stat)
+		end
+	end
+	item.stats = kept
+end
+
+-- A piece's bonuses in English, every number a #, the same bonus once. Those
+-- kept another way (in another language's words, or before v3.0 with only
+-- their first number a #) are read again from their lowest and highest.
+local function Canon(item)
+	local stats, byKey = {}, {}
+	local function Into(text, seed)
+		local pattern, values, unit = Bonus(text)
+		if not pattern then
+			return nil
+		end
+		local key = Key(pattern)
+		local stat = byKey[key]
+		if not stat then
+			stat = { pattern = pattern, unit = unit, ranks = {}, seed = seed,
+				tag = SurvivorUI_StatOf and SurvivorUI_StatOf(text) or nil }
+			byKey[key] = stat
+			table.insert(stats, stat)
+		else
+			stat.seed = stat.seed and seed
+			-- "2 more targets" over "1 more target".
+			if string.len(pattern) > string.len(stat.pattern) then
+				stat.pattern = pattern
 			end
 		end
-		local mine = byPattern[pattern]
-		if mine then
-			Widen(mine, stat)
-			for rank, values in pairs(stat.ranks or {}) do
-				mine.ranks = mine.ranks or {}
-				mine.ranks[rank] = mine.ranks[rank] or {}
-				Widen(mine.ranks[rank], values)
+		return stat, values
+	end
+	for each = 1, table.getn(item.stats or {}) do
+		local old = item.stats[each]
+		if old.pattern and not string.find(old.pattern, "#") then
+			-- A line with no number (the codex's "Chains lose nothing").
+			local key = Key(old.pattern)
+			if not byKey[key] then
+				byKey[key] = old
+				table.insert(stats, old)
 			end
-		else
-			byPattern[pattern] = stat
-			table.insert(stats, stat)
+		elseif old.pattern then
+			-- Read in English once; a line already English needs no more.
+			local low = Line(old, false)
+			local english = EnglishLine(low)
+			local foreign = english ~= low
+			local high = Line(old, true)
+			for _, text in pairs({ english, foreign and EnglishLine(high) or high }) do
+				local stat, values = Into(text, old.seed)
+				if stat then
+					Note(stat, values)
+				end
+			end
+			for rank, seen in pairs(old.ranks or {}) do
+				local own = { pattern = old.pattern, values = seen.values, min = seen.min, max = seen.max }
+				for _, top in pairs({ false, true }) do
+					local text = Line(own, top)
+					local stat, values = Into(foreign and EnglishLine(text) or text, old.seed)
+					if stat then
+						stat.ranks[rank] = stat.ranks[rank] or {}
+						Note(stat.ranks[rank], values)
+					end
+				end
+			end
 		end
 	end
 	item.stats = stats
+	Settle(item)
 end
 
 -- Pieces kept under another language's name (before v2.11 kept them all in
@@ -162,7 +253,6 @@ local function Unify(book)
 	local items = book.items
 	local renames = {}
 	for base, item in pairs(items) do
-		EnglishStats(item)
 		if item.spell and SurvivorUI_English then
 			item.spell = SurvivorUI_English(item.spell)
 		end
@@ -198,8 +288,10 @@ local function Unify(book)
 		if old and items[pair[2]] then
 			items[pair[1]] = nil
 			MergeItem(book, pair[2], old)
-			EnglishStats(items[pair[2]])
 		end
+	end
+	for _, item in pairs(items) do
+		Canon(item)
 	end
 end
 
@@ -284,18 +376,6 @@ local function English(name)
 	return SurvivorUI_English and SurvivorUI_English(name) or name
 end
 
-local function EnglishLine(text)
-	return SurvivorUI_EnglishLine and SurvivorUI_EnglishLine(text) or text
-end
-
-local function Bonus(text)
-	local _, _, number, percent = string.find(text, "(%d+%.?%d*)(%%?)")
-	if not number then
-		return nil
-	end
-	local pattern = string.gsub(text, "%d+%.?%d*", "#", 1)
-	return pattern, tonumber(number), percent
-end
 
 local function Record(slot, link)
 	local _, _, color, name = string.find(link, "|cff(%x%x%x%x%x%x).-%[(.-)%]")
@@ -355,11 +435,12 @@ local function Record(slot, link)
 	for index = 2, scan:NumLines() do
 		local line = getglobal("SurvivorUIJewelryScanTextLeft"..index)
 		local text = EnglishLine(line and line:GetText())
-		local pattern, value, unit = Bonus(text or "")
+		local pattern, values, unit = Bonus(text or "")
 		if pattern then
+			local key = Key(pattern)
 			local stat
 			for each = 1, table.getn(item.stats) do
-				if item.stats[each].pattern == pattern then
+				if Key(item.stats[each].pattern) == key then
 					stat = item.stats[each]
 				end
 			end
@@ -367,15 +448,16 @@ local function Record(slot, link)
 				stat = { pattern = pattern, unit = unit, ranks = {},
 					tag = SurvivorUI_StatOf and SurvivorUI_StatOf(text) or nil }
 				table.insert(item.stats, stat)
+			elseif string.len(pattern) > string.len(stat.pattern) then
+				stat.pattern = pattern
 			end
-			stat.min = math.min(stat.min or value, value)
-			stat.max = math.max(stat.max or value, value)
-			local byRank = stat.ranks[rank] or {}
-			byRank.min = math.min(byRank.min or value, value)
-			byRank.max = math.max(byRank.max or value, value)
-			stat.ranks[rank] = byRank
+			stat.seed = nil
+			Note(stat, values)
+			stat.ranks[rank] = stat.ranks[rank] or {}
+			Note(stat.ranks[rank], values)
 		end
 	end
+	Settle(item)
 	return base, true
 end
 
@@ -475,7 +557,7 @@ panel:Hide()
 
 local function Text(parent, size, color)
 	local text = parent:CreateFontString(nil, "OVERLAY")
-	text:SetFont(FONT, size + FONT_BUMP, "OUTLINE")
+	text:SetFont(SurvivorUI_FONT, size + FONT_BUMP, "OUTLINE")
 	text:SetTextColor(color[1], color[2], color[3])
 	return text
 end
@@ -631,7 +713,17 @@ local function ShowTip(row)
 		GameTooltip:AddLine("Found "..item.found.." time"..(item.found == 1 and "" or "s")..", the values seen:", 0.7, 0.7, 0.7)
 		for each = 1, table.getn(item.stats) do
 			local stat = item.stats[each]
-			GameTooltip:AddLine("  "..(string.gsub(stat.pattern, "#", Range(stat.min, stat.max, ""))), 0.3, 1, 0.4, 1)
+			-- Each number as the lowest and highest seen.
+			local index = 0
+			local text = string.gsub(stat.pattern, "#", function()
+				index = index + 1
+				local seen = stat.values and stat.values[index]
+				if seen then
+					return Range(seen.min, seen.max, "")
+				end
+				return Range(stat.min or 0, stat.max or 0, "")
+			end)
+			GameTooltip:AddLine("  "..text, 0.3, 1, 0.4, 1)
 		end
 	else
 		GameTooltip:AddLine("Not found yet", 0.55, 0.55, 0.6)
@@ -1077,7 +1169,7 @@ end
 
 function SurvivorUI_SetJewelryWithPane(on)
 	SurvivorUIDB = SurvivorUIDB or {}
-	SurvivorUIDB.jewelryWithPane = on and true or nil
+	SurvivorUIDB.jewelryWithPane = on and true or false
 	local pane = getglobal("SurvivorUICharacter")
 	if pane and pane:IsVisible() then
 		if on then

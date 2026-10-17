@@ -41,6 +41,13 @@ local function Languages()
 	return LOCALE
 end
 
+-- The game's language as LocaleData names it ("de", "ru", "zh"...): nil for
+-- English, or until the hero's race has told.
+function SurvivorUI_Language()
+	Languages()
+	return language
+end
+
 local names = {}     -- the answers so far
 function SurvivorUI_English(name)
 	if not name or name == "" then

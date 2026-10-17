@@ -15,7 +15,6 @@
 -- /sui meter brings it back. Needs the API; without it nothing shows.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WIDTH = 228
@@ -188,7 +187,7 @@ titleButton.wash:SetAllPoints(titleButton)
 titleButton.wash:SetVertexColor(1, 0.82, 0, 0)
 
 meter.title = titleButton:CreateFontString(nil, "OVERLAY")
-meter.title:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
+meter.title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 meter.title:SetPoint("LEFT", titleButton, "LEFT", 3, 0)
 meter.title:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
 meter.title:SetText("Damage Done")
@@ -293,7 +292,7 @@ for index = 1, table.getn(VIEWS) do
 	row.mark:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 3)
 
 	row.text = row:CreateFontString(nil, "OVERLAY")
-	row.text:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+	row.text:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 	row.text:SetPoint("LEFT", row, "LEFT", 8, 0)
 	row.text:SetText(VIEWS[index].title)
 
@@ -349,13 +348,13 @@ titleButton:SetScript("OnDragStop", StopMove)
 FitTitle()
 Lit(false)
 meter.total = meter:CreateFontString(nil, "OVERLAY")
-meter.total:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+meter.total:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 meter.total:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -42, -6)
 meter.total:SetTextColor(0.7, 0.7, 0.7)
 
 -- A view with nothing in it yet says so.
 meter.empty = meter:CreateFontString(nil, "OVERLAY")
-meter.empty:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+meter.empty:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 meter.empty:SetPoint("TOPLEFT", meter, "TOPLEFT", 8, -24)
 meter.empty:SetTextColor(0.55, 0.55, 0.6)
 meter.empty:Hide()
@@ -365,7 +364,7 @@ reset:SetWidth(32)
 reset:SetHeight(12)
 reset:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -5, -5)
 reset.text = reset:CreateFontString(nil, "OVERLAY")
-reset.text:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+reset.text:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 reset.text:SetPoint("RIGHT", reset, "RIGHT", 0, 0)
 reset.text:SetText("Reset")
 reset.text:SetTextColor(0.6, 0.6, 0.6)
@@ -585,6 +584,16 @@ function SurvivorUI_MeterColor(name)
 	return ColorOf(name)
 end
 
+-- The action button a spell sits on (the DoT counter, DotCounter.lua): its
+-- place in the game's spell list is its slot, the racial on the = key.
+function SurvivorUI_SpellButton(name)
+	if not name then
+		return nil
+	end
+	local index, racial = SpellIndex(English(name))
+	return index and getglobal("ActionButton"..(racial and 12 or index))
+end
+
 -- A source's share of the meter's damage as shown, 0 to 1, or nil.
 local shares = {}
 function SurvivorUI_MeterShare(name)
@@ -608,7 +617,7 @@ local function Bar(index)
 	bar.backing:SetAllPoints(bar)
 
 	bar.name = bar:CreateFontString(nil, "OVERLAY")
-	bar.name:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	bar.name:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 	-- The source's icon, square at the bar's left end.
 	bar.icon = bar:CreateTexture(nil, "OVERLAY")
 	bar.icon:SetWidth(BAR_HEIGHT)
@@ -625,13 +634,13 @@ local function Bar(index)
 
 	-- "(proc)", smaller, right after the name.
 	bar.tag = bar:CreateFontString(nil, "OVERLAY")
-	bar.tag:SetFont(FONT, 7 + FONT_BUMP, "OUTLINE")
+	bar.tag:SetFont(SurvivorUI_FONT, 7 + FONT_BUMP, "OUTLINE")
 	bar.tag:SetTextColor(0.78, 0.91, 1)
 	bar.tag:SetText("(proc)")
 	bar.tag:Hide()
 
 	bar.value = bar:CreateFontString(nil, "OVERLAY")
-	bar.value:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	bar.value:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 	bar.value:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
 	bar.value:SetTextColor(1, 1, 1)
 

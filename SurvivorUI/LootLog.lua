@@ -1,17 +1,17 @@
 -- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: loot log.
 --
--- A small list in the top left corner of what the run has dropped, newest on
--- top, each with the run second it came. The game's addon API says nothing
+-- A small list of what the run has dropped, newest on top, each with the run
+-- second it came: the left column's last, under This Run and Biggest Crits,
+-- and only once something has dropped. The game's addon API says nothing
 -- about loot, so this reads the chat window's "You receive loot: [item]" lines.
 --
 -- Hover an item for its tooltip. Hold Alt and drag to move; /sui loot hides it.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
-local WIDTH = 200
+local WIDTH = 220               -- the rows, as This Run's
 local MAX_LINES = 8
 
 local function Settings()
@@ -37,17 +37,22 @@ local function Clock(seconds)
 end
 
 ------------------------------------------------------------------------------
--- The frame: a small title, then a flat bar per item in its quality's color,
--- like the boss bars, with the name inside and the run second on the right.
+-- The frame, in This Run's manner (RunPanel.lua): a dark box, a gold title,
+-- then a row per item, its name and the run second in its quality's color
+-- over a faint wash of it, a thin line of it under each.
 
-local BAR_HEIGHT = 18
-local BAR_GAP = 3
+local ROW_HEIGHT = 18
+local TITLE_HEIGHT = 24
+local TOP = 4                   -- room over the title, and under the last row
 local EPIC = { 0.64, 0.21, 0.93 }
 
 local log = CreateFrame("Frame", "SurvivorUILoot", UIParent)
-log:SetWidth(WIDTH)
-log:SetHeight(16)
+log:SetWidth(WIDTH + 16)
+log:SetHeight(TOP + TITLE_HEIGHT + TOP)
 log:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 12, -12)
+log:SetBackdrop({ bgFile = FLAT })
+-- The left column's shade, This Run's.
+log:SetBackdropColor(0.04, 0.04, 0.07, 0.55)
 log:SetMovable(true)
 log:EnableMouse(true)
 log:RegisterForDrag("LeftButton")
@@ -59,20 +64,38 @@ local function SavePlace()
 	settings.lootTop = math.floor(log:GetTop() + 0.5)
 end
 
+-- Its first place, the left column's last: under Biggest Crits, or under
+-- This Run while the crits are away, or the top left corner with neither
+-- (RunPanel.lua). Followed as they come and go, until the list is moved.
+local function DefaultPlace(again)
+	local crits, run = getglobal("SurvivorUICrits"), getglobal("SurvivorUIRun")
+	local under = UIParent
+	if crits and crits:IsShown() then
+		under = crits
+	elseif run and run:IsShown() then
+		under = run
+	end
+	if under == log.under and not again then
+		return
+	end
+	log.under = under
+	log:ClearAllPoints()
+	if under == UIParent then
+		log:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 12, -12)
+	else
+		log:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -10)
+	end
+end
+
 log:SetScript("OnDragStart", function() if IsAltKeyDown() then log:StartMoving() end end)
 log:SetScript("OnDragStop", function() log:StopMovingOrSizing() SavePlace() end)
 
 log.title = log:CreateFontString(nil, "OVERLAY")
-log.title:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
-log.title:SetPoint("TOPLEFT", log, "TOPLEFT", 1, 0)
-log.title:SetTextColor(0.75, 0.75, 0.75)
+log.title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
+log.title:SetPoint("LEFT", log, "TOPLEFT", 8, -TOP - (TITLE_HEIGHT - 6) / 2)
+log.title:SetTextColor(1, 0.82, 0)
 log.title:SetText("Loot")
 
-log.empty = log:CreateFontString(nil, "OVERLAY")
-log.empty:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
-log.empty:SetPoint("TOPLEFT", log, "TOPLEFT", 1, -14)
-log.empty:SetTextColor(0.5, 0.5, 0.5)
-log.empty:SetText("Nothing yet")
 
 local entries = {}              -- newest first: { item, name, color, count, new, at }
 local bars = {}
@@ -84,31 +107,30 @@ local function Bar(index)
 	end
 	bar = CreateFrame("Button", nil, log)
 	bar:SetWidth(WIDTH)
-	bar:SetHeight(BAR_HEIGHT)
-	bar:SetPoint("TOPLEFT", log, "TOPLEFT", 0, -15 - (index - 1) * (BAR_HEIGHT + BAR_GAP))
+	bar:SetHeight(ROW_HEIGHT)
+	bar:SetPoint("TOPLEFT", log, "TOPLEFT", 8, -TOP - TITLE_HEIGHT - (index - 1) * ROW_HEIGHT)
 
-	bar.border = bar:CreateTexture(nil, "BACKGROUND")
-	bar.border:SetTexture(FLAT)
-	bar.border:SetVertexColor(0, 0, 0, 1)
-	bar.border:SetPoint("TOPLEFT", bar, "TOPLEFT", -1, 1)
-	bar.border:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 1, -1)
+	bar.wash = bar:CreateTexture(nil, "BACKGROUND")
+	bar.wash:SetTexture(FLAT)
+	bar.wash:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, -1)
+	bar.wash:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 1)
 
-	bar.fill = bar:CreateTexture(nil, "BORDER")
-	bar.fill:SetTexture(FLAT)
-	bar.fill:SetAllPoints(bar)
+	bar.rule = bar:CreateTexture(nil, "BORDER")
+	bar.rule:SetTexture(FLAT)
+	bar.rule:SetHeight(1)
+	bar.rule:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
+	bar.rule:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 0)
 
 	bar.name = bar:CreateFontString(nil, "OVERLAY")
-	bar.name:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+	bar.name:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 	bar.name:SetPoint("LEFT", bar, "LEFT", 5, 0)
 	bar.name:SetWidth(WIDTH - 48)
-	bar.name:SetHeight(12)
+	bar.name:SetHeight(11)
 	bar.name:SetJustifyH("LEFT")
-	bar.name:SetTextColor(1, 1, 1)
 
 	bar.at = bar:CreateFontString(nil, "OVERLAY")
-	bar.at:SetFont(FONT, 9 + FONT_BUMP, "OUTLINE")
+	bar.at:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 	bar.at:SetPoint("RIGHT", bar, "RIGHT", -5, 0)
-	bar.at:SetTextColor(0.85, 0.85, 0.85)
 
 	bar:SetScript("OnEnter", function()
 		if this.item then
@@ -143,7 +165,11 @@ local function Draw()
 		local bar = Bar(index)
 		local color = QualityColor(entry.color)
 		bar.item = entry.item
-		bar.fill:SetVertexColor(color[1], color[2], color[3], 0.75)
+		-- In its quality's color, as This Run's rows are in theirs.
+		bar.name:SetTextColor(color[1], color[2], color[3])
+		bar.at:SetTextColor(color[1], color[2], color[3])
+		bar.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
+		bar.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
 		local text = entry.name
 		if entry.count and entry.count > 1 then
 			text = text.."  x"..entry.count
@@ -158,13 +184,7 @@ local function Draw()
 	for index = count + 1, table.getn(bars) do
 		bars[index]:Hide()
 	end
-	if count == 0 then
-		log.empty:Show()
-		log:SetHeight(26)
-	else
-		log.empty:Hide()
-		log:SetHeight(15 + count * (BAR_HEIGHT + BAR_GAP))
-	end
+	log:SetHeight(TOP + TITLE_HEIGHT + math.max(1, count) * ROW_HEIGHT + TOP)
 end
 ------------------------------------------------------------------------------
 -- Reading the chat. The game's loot line does not come as the stock loot
@@ -292,9 +312,11 @@ watcher:SetScript("OnUpdate", function()
 	end
 	lastSeconds = seconds
 
-	local phase = AZS_GetPhase and AZS_GetPhase()
-	local inRun = phase and phase ~= "ready"
-	if Settings().lootLog and (inRun or table.getn(entries) > 0) then
+	if not Settings().lootLeft then
+		DefaultPlace()
+	end
+	-- Shown once something has dropped, and kept until a new run starts.
+	if Settings().lootLog and table.getn(entries) > 0 then
 		if not log:IsShown() then
 			Draw()
 			log:Show()
@@ -304,16 +326,37 @@ watcher:SetScript("OnUpdate", function()
 	end
 end)
 
+-- The game's own loot notices, the cards a boss's drop pops up mid-screen:
+-- away while this list is on. The setting is the game's and is saved, so the
+-- addon remembers that it was the one to turn it off.
+local function ApplyGameHud()
+	if not (AZS_SetHudShown and AZS_IsHudShown) then
+		return
+	end
+	local settings = Settings()
+	if settings.lootLog then
+		if AZS_IsHudShown("loot") then
+			AZS_SetHudShown("loot", false)
+			settings.hidGameLoot = true
+		end
+	elseif settings.hidGameLoot then
+		AZS_SetHudShown("loot", true)
+		settings.hidGameLoot = nil
+	end
+end
+
 function SurvivorUI_ToggleLoot()
 	local settings = Settings()
 	settings.lootLog = not settings.lootLog
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: loot log "..(settings.lootLog and "shown." or "hidden."))
+	ApplyGameHud()
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.lootLog
+		and "loot list shown; the game's own loot notices are put away."
+		or "loot list hidden; the game's own loot notices are back."))
 end
 
 if SurvivorUI_RegisterMover then
 	SurvivorUI_RegisterMover(log, "Loot", SavePlace, nil, function()
-		log:ClearAllPoints()
-		log:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 12, -12)
+		DefaultPlace(true)
 	end)
 end
 
@@ -321,9 +364,13 @@ local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", function()
 	Watch(DEFAULT_CHAT_FRAME)
+	ApplyGameHud()
 	local settings = Settings()
 	if settings.lootLeft then
+		log.under = nil
 		log:ClearAllPoints()
 		log:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", settings.lootLeft, settings.lootTop)
+	else
+		DefaultPlace(true)
 	end
 end)

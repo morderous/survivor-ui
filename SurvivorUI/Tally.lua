@@ -7,7 +7,6 @@
 -- place inside the middle block, so they move with it, and the game's box is
 -- put away. /sui tally brings the game's box back.
 
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local row = getglobal("SurvivorUIRow")
@@ -43,7 +42,7 @@ holder:SetPoint("TOP", row, "BOTTOM", 0, -12)
 holder:SetMovable(true)
 
 local line = holder:CreateFontString("SurvivorUITally", "OVERLAY")
-line:SetFont(FONT, 11 + FONT_BUMP, "OUTLINE")
+line:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 line:SetPoint("CENTER", holder, "CENTER", 0, 0)
 line:Hide()
 

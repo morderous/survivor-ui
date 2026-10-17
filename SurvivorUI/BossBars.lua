@@ -14,7 +14,6 @@
 -- /sui bosses. Needs the game's addon API (AZS_UNITS); without it nothing shows.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
-local FONT = SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local BAR_WIDTH = 220
@@ -69,8 +68,20 @@ local holder = CreateFrame("Frame", "SurvivorUIBosses", UIParent)
 holder:SetWidth(BAR_WIDTH)
 -- Room for four bars: the area Alt outlines, though only the bars show.
 holder:SetHeight(4 * (BAR_HEIGHT + BAR_GAP))
-holder:SetPoint("TOP", UIParent, "TOP", 0, -90)
 holder:SetMovable(true)
+
+-- Its first place: against the run tracker's left side, tops level (the top
+-- of the screen's middle, with no tracker).
+local function DefaultPlace()
+	holder:ClearAllPoints()
+	local tracker = getglobal("SurvivorUITracker")
+	if tracker then
+		holder:SetPoint("TOPRIGHT", tracker, "TOPLEFT", -8, 0)
+	else
+		holder:SetPoint("TOP", UIParent, "TOP", 0, -90)
+	end
+end
+DefaultPlace()
 
 local function SavePlace()
 	local settings = Settings()
@@ -83,6 +94,8 @@ local function RestorePlace()
 	if settings.bossLeft then
 		holder:ClearAllPoints()
 		holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", settings.bossLeft, settings.bossTop)
+	else
+		DefaultPlace()
 	end
 end
 
@@ -115,7 +128,7 @@ local function Bar(index)
 	bar.health:SetMinMaxValues(0, 1)
 
 	bar.name = bar.health:CreateFontString(nil, "OVERLAY")
-	bar.name:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+	bar.name:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 	bar.name:SetPoint("LEFT", bar, "LEFT", 5, 0)
 	bar.name:SetWidth(BAR_WIDTH - 50)
 	bar.name:SetHeight(12)
@@ -123,7 +136,7 @@ local function Bar(index)
 	bar.name:SetTextColor(1, 1, 1)
 
 	bar.value = bar.health:CreateFontString(nil, "OVERLAY")
-	bar.value:SetFont(FONT, 10 + FONT_BUMP, "OUTLINE")
+	bar.value:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 	bar.value:SetPoint("RIGHT", bar, "RIGHT", -5, 0)
 	bar.value:SetTextColor(1, 1, 1)
 
@@ -209,11 +222,11 @@ local function DebuffIcon(bar, index)
 	icon.line:SetPoint("BOTTOMRIGHT", icon.art, "TOPRIGHT", 0, 0)
 
 	icon.time = icon:CreateFontString(nil, "OVERLAY")
-	icon.time:SetFont(FONT, 8 + FONT_BUMP, "OUTLINE")
+	icon.time:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
 	icon.time:SetPoint("CENTER", icon, "CENTER", 0, 0)
 	icon.time:SetTextColor(1, 1, 1)
 	icon.stacks = icon:CreateFontString(nil, "OVERLAY")
-	icon.stacks:SetFont(FONT, 7 + FONT_BUMP, "OUTLINE")
+	icon.stacks:SetFont(SurvivorUI_FONT, 7 + FONT_BUMP, "OUTLINE")
 	icon.stacks:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 2, -1)
 	icon.stacks:SetTextColor(1, 0.85, 0.3)
 
@@ -330,7 +343,7 @@ local function Fill(bar, unit)
 	end
 	-- As the option reads it (/sui opt, Unit frames): 73%, 1.2M, 1.2M / 3.4M or 1.2M | 73%.
 	if SurvivorUI_HealthText then
-		bar.value:SetText(SurvivorUI_HealthText(hp, hpm, Settings().bossHealth or "percent"))
+		bar.value:SetText(SurvivorUI_HealthText(hp, hpm, Settings().bossHealth or "absolutePercent"))
 	else
 		bar.value:SetText(math.floor(share * 100 + 0.5).."%")
 	end
@@ -360,7 +373,9 @@ end
 local function Update()
 	local settings = Settings()
 	local shown = 0
-	if settings.bossBars and Playing() then
+	-- The tracker shows the health in their place (/sui opt, Run tracker): the
+	-- bars stay away, and so do the game's own.
+	if settings.bossBars and Playing() and not settings.trackerHealth then
 		local picked = {}
 		for index = 1, table.getn(AZS_UNITS) do
 			local unit = AZS_UNITS[index]
@@ -435,7 +450,6 @@ end)
 
 if SurvivorUI_RegisterMover then
 	SurvivorUI_RegisterMover(holder, "Boss bars", SavePlace, nil, function()
-		holder:ClearAllPoints()
-		holder:SetPoint("TOP", UIParent, "TOP", 0, -90)
+		DefaultPlace()
 	end)
 end
