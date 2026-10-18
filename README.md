@@ -208,6 +208,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.3, 2026-10-18
+
+**Survivor UI**
+- **The kills and gold line stays centred once moved:** a line moved by hand was kept by its left edge, so, as wide as its numbers since v3.0.2, it drifted to the right as they grew (reported by Amarolk). It is kept by its middle now; a place saved before is read once as its middle.
+
+**Installer 1.1.1**
+- Unzips only the `SurvivorUI` and `SurvivorPlates` folders, as it says: the release zip's license, at its top, was left loose in the `AddOns` folder.
+
 ### Installer 1.1, 2026-10-17
 
 - **Waits in the tray and tells of updates**: minimized, the installer goes to the tray by the clock instead of the taskbar, and asks GitHub for a new release every half hour. When one newer than the installed addons is out, a green arrow shows on its tray icon and on its taskbar button's corner, and a note says so once; a click on the note or the icon opens it, ready to update. Right click the tray icon for Open, Check for updates now (which brings it forward and installs a newer release at once), Install and Exit. With the latest installed, a green "Up to date" badge stands where the install button was. Opened again while it runs, the one running comes forward.

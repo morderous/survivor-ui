@@ -37,7 +37,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Survivor UI Installer")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.1.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.1.1.0")]
 
 namespace SurvivorInstaller
 {
@@ -794,8 +794,11 @@ namespace SurvivorInstaller
                     foreach (ZipArchiveEntry entry in archive.Entries)
                     {
                         string target = Path.GetFullPath(Path.Combine(root, entry.FullName));
-                        // Only inside the AddOns folder, only the addon folders.
+                        // Only inside the AddOns folder, only the addon folders: the
+                        // zip's own files at its top (the license) stay out.
                         if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
+                        string[] parts = entry.FullName.Split('/', '\\');
+                        if (parts.Length < 2 || Array.IndexOf(AddonFolders, parts[0]) < 0) continue;
                         if (entry.Name == "") { Directory.CreateDirectory(target); continue; }
                         Directory.CreateDirectory(Path.GetDirectoryName(target));
                         entry.ExtractToFile(target, true);

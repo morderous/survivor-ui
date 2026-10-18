@@ -567,7 +567,7 @@ local PARTS = {
 	{ key = "buffs", label = "Buffs", group = "middle", frames = { "SurvivorUIBuffs" },
 		places = { { "buffsLeft", "buffsBottom", "BOTTOMLEFT" } } },
 	{ key = "tally", label = "Kills and gold", group = "middle", frames = { "SurvivorUITallyFrame" },
-		places = { { "tallyLeft", "tallyTop", "TOPLEFT" } } },
+		places = { { "tallyX", "tallyTop", "TOP" } } },
 	-- The minimap with all it holds: the zone's name, the pins and the buttons.
 	{ key = "minimap", label = "Minimap", frames = { "MinimapCluster" },
 		places = { { "mapRight", "mapTop", "TOPRIGHT" } } },
@@ -817,7 +817,7 @@ local PLACES = {
 	"rowX", "rowY", "runLeft", "runTop", "runBottom", "trackerRight", "trackerTop",
 	"meterRight", "meterBottom", "bossLeft", "bossTop", "lootLeft", "lootTop",
 	"chatLeft", "chatBottom", "mapRight", "mapTop", "tipRight", "tipBottom", "critsLeft", "critsBottom", "critsTop", "buildLeft", "buildTop",
-	"buffsLeft", "buffsBottom", "tallyLeft", "tallyTop", "playerLeft", "playerTop", "targetLeft", "targetTop",
+	"buffsLeft", "buffsBottom", "tallyLeft", "tallyX", "tallyTop", "playerLeft", "playerTop", "targetLeft", "targetTop",
 	"guardiansLeft", "guardiansTop", "recordLeft", "recordTop",
 	"dealtLeft", "dealtTop", "critLeft", "critTop", "takenLeft", "takenTop", "healLeft", "healTop",
 	"mapButtonX", "mapButtonY",

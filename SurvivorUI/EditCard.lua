@@ -40,7 +40,7 @@ local PIECES = {
 	["Loot"] = { part = "loot", places = { "lootLeft", "lootTop" }, key = "lootLog", toggle = "SurvivorUI_ToggleLoot" },
 	["This Run"] = { part = "run", places = { "runLeft", "runTop", "runBottom" }, key = "runPanel", toggle = "SurvivorUI_ToggleRun" },
 	["Biggest Crits"] = { part = "crits", places = { "critsLeft", "critsTop", "critsBottom" }, key = "critBox", offUnlessOn = true, toggle = "SurvivorUI_ToggleCrits" },
-	["Kills & gold"] = { part = "tally", places = { "tallyLeft", "tallyTop" }, key = "tally", toggle = "SurvivorUI_Tally" },
+	["Kills & gold"] = { part = "tally", places = { "tallyLeft", "tallyX", "tallyTop" }, key = "tally", toggle = "SurvivorUI_Tally" },
 	["Guardians"] = { part = "guardians", places = { "guardiansLeft", "guardiansTop" }, key = "guardians", toggle = "SurvivorUI_ToggleGuardians" },
 	["New best crit"] = { places = { "recordLeft", "recordTop" }, key = "ctRecord", toggle = "SurvivorUI_ToggleRecord", noFont = true },
 	["Damage numbers"] = { places = { "dealtLeft", "dealtTop" }, noFont = true },

@@ -285,19 +285,34 @@ function SurvivorUI_Tally()
 end
 
 -- Its place: under the minimap or the action bar, following it, until moved.
-local function SavePlace()
-	SurvivorUIDB = SurvivorUIDB or {}
-	SurvivorUIDB.tallyLeft = math.floor(holder:GetLeft() + 0.5)
-	SurvivorUIDB.tallyTop = math.floor(holder:GetTop() + 0.5)
-end
+-- Moved, it is kept by the middle of its top, so it stays centred there as the
+-- numbers grow (the holder is as wide as what it shows). A place saved before
+-- by the left edge, when the holder was 320 wide, is read once as its middle.
+local OLD_HALF = 160
 
 local function RestorePlace()
 	holder:ClearAllPoints()
-	if SurvivorUIDB and SurvivorUIDB.tallyLeft and SurvivorUIDB.tallyTop then
-		holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", SurvivorUIDB.tallyLeft, SurvivorUIDB.tallyTop)
+	local db = SurvivorUIDB
+	if db and db.tallyLeft and db.tallyTop and not db.tallyX then
+		db.tallyX = db.tallyLeft + OLD_HALF
+	end
+	if db then
+		db.tallyLeft = nil
+	end
+	if db and db.tallyX and db.tallyTop then
+		holder:SetPoint("TOP", UIParent, "BOTTOMLEFT", db.tallyX, db.tallyTop)
 	else
 		DefaultPlace()
 	end
+end
+
+local function SavePlace()
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.tallyX = math.floor(holder:GetLeft() + holder:GetWidth() / 2 + 0.5)
+	SurvivorUIDB.tallyTop = math.floor(holder:GetTop() + 0.5)
+	SurvivorUIDB.tallyLeft = nil
+	-- Seated by its middle at once: a drag leaves it held by its corner.
+	RestorePlace()
 end
 
 -- Its place for the options (Panels): "minimap", "bar" or "off". A place
@@ -317,7 +332,7 @@ function SurvivorUI_SetTallyPlace(place)
 	else
 		settings.tally = true
 		settings.tallyPlace = place
-		settings.tallyLeft, settings.tallyTop = nil, nil
+		settings.tallyLeft, settings.tallyX, settings.tallyTop = nil, nil, nil
 		RestorePlace()
 	end
 	ApplyGameHud()
