@@ -492,11 +492,17 @@ local function Look()
 	end
 end
 
+-- The collection on unless switched off as a whole (the Modules tab): off,
+-- nothing is looked at, kept or shown.
+local function Enabled()
+	return not (SurvivorUIDB and SurvivorUIDB.jewelry == false)
+end
+
 local watcher = CreateFrame("Frame")
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 watcher:RegisterEvent("UNIT_INVENTORY_CHANGED")
 watcher:SetScript("OnEvent", function()
-	if event == "UNIT_INVENTORY_CHANGED" and arg1 ~= "player" then
+	if (event == "UNIT_INVENTORY_CHANGED" and arg1 ~= "player") or not Enabled() then
 		return
 	end
 	Look()
@@ -506,7 +512,7 @@ end)
 local elapsed = 0
 watcher:SetScript("OnUpdate", function()
 	elapsed = elapsed + arg1
-	if elapsed >= 2 then
+	if elapsed >= 2 and Enabled() then
 		elapsed = 0
 		Look()
 	end
@@ -1152,6 +1158,10 @@ panel:SetScript("OnShow", function()
 end)
 
 function SurvivorUI_ToggleJewelry()
+	if not Enabled() then
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the Jewelry Collection is off (/sui opt, Modules).")
+		return
+	end
 	if panel:IsShown() then
 		panel:Hide()
 	else
@@ -1237,6 +1247,34 @@ paneWatch:SetScript("OnUpdate", function()
 		return
 	end
 	paneElapsed = 0
+	-- Off as a whole: no button, no collection.
+	if not Enabled() then
+		if paneButton and paneButton:IsShown() then
+			paneButton:Hide()
+		end
+		if panel:IsShown() then
+			docked = false
+			panel:Hide()
+		end
+		paneShown = nil
+		return
+	elseif paneButton and not paneButton:IsShown() then
+		paneButton:Show()
+	end
+	-- Off as a whole: no button, no collection.
+	if not Enabled() then
+		if paneButton and paneButton:IsShown() then
+			paneButton:Hide()
+		end
+		if panel:IsShown() then
+			docked = false
+			panel:Hide()
+		end
+		paneShown = nil
+		return
+	elseif paneButton and not paneButton:IsShown() then
+		paneButton:Show()
+	end
 	local characterPane = getglobal("SurvivorUICharacter")
 	local shown = characterPane and characterPane:IsVisible() and true or false
 	if shown == paneShown then

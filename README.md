@@ -208,6 +208,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.4, 2026-10-18
+
+**Survivor UI**
+- **Time to the next level** (asked by Floowi): the pace of your experience over the last 45 seconds of the run (its own clock, which stops while you pause or choose a card), the levels gained counted across, tells when the next level comes, once 10 seconds are in. Beside the level at the run tracker's foot (`Lv. 12  next in 0:42`), and on the new XP bar.
+- **XP bar** (new, Panels): your level and experience as a bar of its own, at the top of the screen and movable, with no backing: the experience and its share, the bar marked at every 20%, and under it the time to the next level (`Next lv. in 0:15`) and the experience a minute. Off until chosen; the time to the next level on or off on its own.
+- **Modules** (new tab, `/sui opt`): each part of SurvivorUI on or off as a whole, in one place, two columns, hover one for what it does: the run tracker, kill pace, guardians, boss bars, caches on the minimap, kills and gold line, XP bar, loot list, combat text, damage meter, This Run, Biggest Crits, counters, character pane, build list, Jewelry Collection, ability tooltips, flat tooltips, flat chat, square minimap, menu buttons, white outline and nameplates. Off, a part does not run at all, and the Default comes back where there is one; those that restyle the game's own windows take hold after a reload (marked *). The other tabs keep only how each part shows, their sections saying "off in Modules" while it is off. The counters and the Jewelry Collection have a switch of their own now.
+- **The tracker's XP bar, as chosen** (Run tracker, XP bar): the level and the bar at its foot on or off, and the time to the next level beside the level on or off. Both can show with the XP bar of its own.
+
 ### v3.0.3, 2026-10-18
 
 **Survivor UI**

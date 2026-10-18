@@ -4,6 +4,7 @@
 -- A window with a column of tabs on the left, each in a color of its own, and
 -- the tab's page on the right:
 --   Global       the whole addon's font, color and size
+--   Modules      each part on or off as a whole
 --   Panels       every panel on or off
 --   Run tracker  the tracker under the minimap: bosses, guardians, elites
 --   Kill pace    the orb by the tracker's clock
@@ -190,6 +191,7 @@ close:SetScript("OnClick", function() panel:Hide() end)
 
 local TABS = {
 	{ key = "global", label = "Global", color = ACCENT },
+	{ key = "modules", label = "Modules", color = { 0.95, 0.80, 0.35 } },
 	{ key = "panels", label = "Panels", color = { 0.45, 0.60, 1.00 } },
 	{ key = "tracker", label = "Run tracker", color = { 0.30, 0.82, 0.40 } },
 	{ key = "pace", label = "Kill pace", color = { 0.78, 0.95, 0.30 } },
@@ -215,7 +217,7 @@ end
 -- Each tab's pieces, movable while it is open (Mover.lua), by their names in
 -- move mode; the tabs left out move none (Move UI moves every piece).
 local TAB_PIECES = {
-	panels = { "This Run", "Biggest Crits", "Loot", "Build", "Damage meter", "Boss bars", "Kills & gold", "Run tracker" },
+	panels = { "This Run", "Biggest Crits", "Loot", "Build", "Damage meter", "Boss bars", "Kills & gold", "Run tracker", "XP bar" },
 	tracker = { "Run tracker", "Guardians" },
 	combat = { "Damage numbers", "Crit numbers", "Damage taken", "Healing", "New best crit" },
 	units = { "Player frame", "Target frame", "Buffs" },
@@ -832,25 +834,181 @@ Slider(page, "Whole interface", 0.6, 1.4, 0.05,
 Note(page, "Each part also has a size of its own, on top of this one: the Size tab.")
 
 ------------------------------------------------------------------------------
+-- Modules: each part of SurvivorUI on or off as a whole. Off, it does not
+-- run, and the Default comes back where there is one; the other tabs keep only
+-- how each part shows. Two columns; hover one for what it does.
+
+-- A section's title, saying so while its part is off in Modules.
+local function Section(page, text, isOn)
+	local header = Subheader(page, text)
+	local widget = {}
+	function widget:Refresh()
+		local off = isOn and not isOn()
+		header:SetText(string.upper(text)..(off and "  |cff8a8a95(off in Modules)|r" or ""))
+	end
+	table.insert(widgets, widget)
+	return header
+end
+
+local function DamageOn()
+	return SurvivorUI_DamageMode and SurvivorUI_DamageMode() == "survivor"
+end
+
+local function PlatesOn()
+	return PlatesThere() and not (SurvivorPlatesDB and SurvivorPlatesDB.hidden)
+end
+
+-- A module's tick: its name (* after a reload), what it does on hover.
+local function ModuleCheck(page, x, y, item)
+	local label, isOn, toggle, tip, reload, usable = item[1], item[2], item[3], item[4], item[5], item[6]
+	local color = page.color
+	local check = CreateFrame("Button", nil, page)
+	check:SetWidth(PAGE_WIDTH / 2 - 6)
+	check:SetHeight(ROW)
+	check:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+	check.edge = Fill(check, "BORDER", 0.3, 0.3, 0.35, 1)
+	check.edge:SetWidth(13)
+	check.edge:SetHeight(13)
+	check.edge:SetPoint("LEFT", check, "LEFT", 2, 0)
+	check.box = Fill(check, "ARTWORK", 0, 0, 0, 1)
+	check.box:SetPoint("TOPLEFT", check.edge, "TOPLEFT", 1, -1)
+	check.box:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -1, 1)
+	check.label = Text(check, 11, TEXT)
+	check.label:SetPoint("LEFT", check.edge, "RIGHT", 9, 0)
+	check.label:SetText(label..(reload and "  |cff8a8a95*|r" or ""))
+	check:SetScript("OnClick", function()
+		if usable and not usable() then
+			return
+		end
+		toggle()
+		RefreshAll()
+	end)
+	check:SetScript("OnEnter", function()
+		this.hot = true
+		this:Refresh()
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		GameTooltip:SetText(label, color[1], color[2], color[3])
+		GameTooltip:AddLine(tip, 1, 1, 1, 1)
+		if usable and not usable() then
+			GameTooltip:AddLine("Not installed: it comes in the same download.", 1, 0.45, 0.4, 1)
+		elseif reload then
+			GameTooltip:AddLine("Takes hold after a reload.", 0.6, 0.6, 0.65, 1)
+		end
+		GameTooltip:Show()
+	end)
+	check:SetScript("OnLeave", function()
+		this.hot = nil
+		this:Refresh()
+		GameTooltip:Hide()
+	end)
+	function check:Refresh()
+		local on = isOn()
+		if on then
+			self.box:SetVertexColor(color[1], color[2], color[3], 1)
+			self.edge:SetVertexColor(color[1], color[2], color[3], 1)
+		else
+			self.box:SetVertexColor(0.1, 0.1, 0.13, 1)
+			self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+		end
+		if self.hot then
+			self.label:SetTextColor(1, 1, 1)
+		elseif on then
+			self.label:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+		else
+			self.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+		end
+	end
+	table.insert(widgets, check)
+end
+
+page = pages.modules
+Header(page, "Modules", "Each part of SurvivorUI on or off as a whole: off, it does not run at all, and the Default comes back where there is one. Hover one for what it does; * after a reload.")
+
+local MODULES = {
+	{ "Run", {
+		{ "Run tracker", OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"),
+			"Under the minimap: the zone, the run's clock, the bosses, the guardians, the elites and your level. Off: the Default clock." },
+		{ "Kill pace", OnUnlessOff("pace"), Call("SurvivorUI_TogglePace"),
+			"The orb by the tracker's clock: how fast the enemies die, against your own runs. It sits on the run tracker." },
+		{ "Guardians", OnUnlessOff("guardians"), Call("SurvivorUI_ToggleGuardians"),
+			"Each lair: which way, how far, alive or slain, as a bar in the tracker or a list beside it." },
+		{ "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"),
+			"The bosses and the awake guardians with their debuffs, apart from the tracker." },
+		{ "Caches on the minimap", FeatureOn("mapPins"), FeatureToggle("mapPins", true),
+			"A chest for each cache and a skull for each lair, on the minimap." },
+		{ "Kills and gold line", OnUnlessOff("tally"), Call("SurvivorUI_Tally"),
+			"Your kills, your gold and the next cache's price. Off: the Default box." },
+		{ "XP bar", OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"),
+			"Your level and experience as a bar of its own, with the time to the next level." },
+		{ "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"),
+			"What the run dropped. Off: the Default loot notices." },
+	} },
+	{ "Combat", {
+		{ "Combat text", DamageOn, function()
+				if SurvivorUI_SetDamageMode then
+					SurvivorUI_SetDamageMode(DamageOn() and "game" or "survivor")
+				end
+			end,
+			"SurvivorUI's combat numbers, set in the Combat text tab. Off: Default's." },
+		{ "Damage meter", OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"),
+			"Each source's damage, its crits on hover, the healing and the boss damage. Off: the Default meter." },
+		{ "This Run", OnUnlessOff("runPanel"), Call("SurvivorUI_ToggleRun"),
+			"The run's numbers, as the game's victory screen gives them." },
+		{ "Biggest Crits", OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"),
+			"Each ability's biggest critical strike this run." },
+		{ "Counters", OnUnlessOff("counters"), Flip("counters"),
+			"Over the spells' buttons: the DoTs ticking, the enemies feared, the totems down." },
+	} },
+	{ "Character", {
+		{ "Character pane", FeatureOn("characterPane"), FeatureToggle("characterPane"),
+			"The character pane laid out again, the stats in sections. Off: the Default pane.", true },
+		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
+			"Your spells, their ranks and your jewelry. Off: the Default row of spells." },
+		{ "Jewelry Collection", OnUnlessOff("jewelry"), Flip("jewelry"),
+			"Every amulet, ring and trinket found, and what is left to find." },
+		{ "Ability tooltips", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"),
+			"A spell's tooltip laid out again: its school, cooldown, upgrades.", true },
+	} },
+	{ "Interface", {
+		{ "Flat tooltips", FeatureOn("tooltip"), FeatureToggle("tooltip"),
+			"Dark, flat tooltips, with a health bar.", true },
+		{ "Flat chat", FeatureOn("chat"), FeatureToggle("chat"),
+			"The chat without its frame.", true },
+		{ "Square minimap", FeatureOn("minimap"), FeatureToggle("minimap"),
+			"The minimap square, its buttons tidied.", true },
+		{ "Menu buttons on hover", FeatureOn("microMenu"), FeatureToggle("microMenu"),
+			"The game's menu buttons in the corner, shown on hover.", true },
+		{ "White outline", OnUnlessOff("hover"), Call("SurvivorUI_ToggleHover"),
+			"Around the frame or button the mouse is on." },
+		{ "Nameplates", PlatesOn, function() Plates("none") end,
+			"Survivor Plates: a plate over the enemies near you, set in the Nameplates tab.", nil, PlatesThere },
+	} },
+}
+
+for group = 1, table.getn(MODULES) do
+	Subheader(page, MODULES[group][1])
+	local items = MODULES[group][2]
+	for index = 1, table.getn(items) do
+		local column = math.mod(index - 1, 2)
+		ModuleCheck(page, column * (PAGE_WIDTH / 2), page.y, items[index])
+		if column == 1 or index == table.getn(items) then
+			page.y = page.y - ROW - 2
+		end
+	end
+end
+
+------------------------------------------------------------------------------
 -- Panels.
 
 page = pages.panels
-Header(page, "Panels", "Each turns on or off at once. While this tab is open, drag a panel to move it, or click it for its card.")
-Subheader(page, "Lists")
-Check(page, "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "your spells, ranks and jewelry; off: Default")
-Check(page, "Damage meter", OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "off: Default")
-Check(page, "This Run", OnUnlessOff("runPanel"), Call("SurvivorUI_ToggleRun"), "the run's numbers")
-Check(page, "Biggest Crits", OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"), "each ability's biggest critical strike")
-Check(page, "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"), "what the run dropped; off: Default notices")
-Subheader(page, "Boss bars")
-Check(page, "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"), "the bosses and awake guardians, with their debuffs; apart from the run tracker")
+Header(page, "Panels", "How each panel shows; each one on or off in the Modules tab. While this tab is open, drag a panel to move it, or click it for its card.")
+Section(page, "Boss bars", OnUnlessOff("bossBars"))
 Check(page, "Elites on the boss bars", OnlyIfOn("bossBarsElites"), Call("SurvivorUI_BossBars", "elites"))
-Subheader(page, "Kills and gold line")
+Section(page, "Kills and gold line", OnUnlessOff("tally"))
 Inline(page, nil, {
 	{ "minimap", "Under the minimap" },
 	{ "bar", "Under the action bar" },
-	{ "off", "Off" },
-}, function() return SurvivorUI_TallyPlace and SurvivorUI_TallyPlace() or "minimap" end,
+}, function() return DB().tallyPlace == "bar" and "bar" or "minimap" end,
 	function(place) if SurvivorUI_SetTallyPlace then SurvivorUI_SetTallyPlace(place) end end)
 Inline(page, nil, {
 	{ "killsGold", "Kills, gold" },
@@ -862,19 +1020,17 @@ Check(page, "Gold and cache apart", OnlyIfOn("tallySplit"), function()
 	DB().tallySplit = not DB().tallySplit
 end, "the coin with your gold, the chest with the next cache's price")
 Check(page, "Coin shines when you can pay", OnUnlessOff("trackerCoinShine"), Flip("trackerCoinShine"), "the same switch as the tracker's coin")
-Note(page, "Off: the Default kills and gold box.")
-Subheader(page, "On the screen")
-Check(page, "Caches and lairs on the minimap", FeatureOn("mapPins"), FeatureToggle("mapPins", true))
+Section(page, "XP bar", OnlyIfOn("xpBar"))
+Check(page, "Time to the next level", OnUnlessOff("xpBarEta"), Flip("xpBarEta"), "and the experience a minute, from the recent pace")
 
 ------------------------------------------------------------------------------
 -- Run tracker: the clock, the bosses, the guardians and the elites
 -- (Tracker.lua, Guardians.lua).
 
 page = pages.tracker
-Header(page, "Run tracker", "Under the minimap: the zone, the run's clock against its length, the bosses, the guardians, the elites alive and your level. Each part on its own, apart from the boss bars (Panels).")
-Check(page, "Run tracker", OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"), "off: Default clock")
+Header(page, "Run tracker", "Under the minimap: the zone, the run's clock against its length, the bosses, the guardians, the elites alive and your level. Each part on its own, apart from the boss bars; the tracker itself and the guardians on or off in the Modules tab.")
 
-Subheader(page, "Bosses")
+Section(page, "Bosses", OnUnlessOff("tracker"))
 Check(page, "Boss health", OnlyIfOn("trackerHealth"), function()
 	DB().trackerHealth = not DB().trackerHealth
 	if SurvivorUI_ApplyBossHud then
@@ -887,8 +1043,7 @@ Inline(page, "Health shows as", {
 	{ "absolute", "1.2M" },
 }, function() return DB().trackerHealthLook or "percent" end, function(look) DB().trackerHealthLook = look end)
 
-Subheader(page, "Guardians")
-Check(page, "Guardians", OnUnlessOff("guardians"), Call("SurvivorUI_ToggleGuardians"), "each lair: which way, how far, alive or slain; click one to target")
+Section(page, "Guardians", OnUnlessOff("guardians"))
 Choice(page, {
 	{ "bar", "A bar in the tracker", "A stretch a lair, over the level, red once slain with its time back." },
 	{ "list", "A list beside the tracker", "A line a lair: its name, its state, its yards and an arrow." },
@@ -896,7 +1051,7 @@ Choice(page, {
 	function(choice) DB().guardiansDocked = choice == "bar" end)
 Check(page, "Arrows north up", OnlyIfOn("guardiansNorth"), Call("SurvivorUI_ToggleGuardians", "north"), "off: they turn with you, straight ahead up")
 
-Subheader(page, "Elites")
+Section(page, "Elites", OnUnlessOff("tracker"))
 Check(page, "Elites", OnUnlessOff("trackerElites"), Flip("trackerElites"), "a small bar for each one alive, bright once hurt; click one to target")
 Slider(page, "Bars shown", 4, 12, 1, function() return DB().trackerElitesMax or 8 end,
 	function(value) DB().trackerElitesMax = math.floor(value + 0.5) end, "%d")
@@ -904,20 +1059,23 @@ Check(page, "Only while one is alive", OnlyIfOn("trackerElitesHide"), function()
 	DB().trackerElitesHide = not DB().trackerElitesHide
 end, "off: the row keeps its room")
 
-Subheader(page, "Cache coin")
+Section(page, "Cache coin", OnUnlessOff("tracker"))
 Check(page, "Coin on the tracker", OnlyIfOn("trackerCoin"), function()
 	DB().trackerCoin = not DB().trackerCoin
 end, "left of the clock: gold when you can pay, red when not")
 Check(page, "Shine when you can pay", OnUnlessOff("trackerCoinShine"), Flip("trackerCoinShine"), "the tracker's coin and the kills and gold line's")
+
+Section(page, "XP bar", OnUnlessOff("tracker"))
+Check(page, "Level and experience", OnUnlessOff("trackerXp"), Flip("trackerXp"), "the bar at the tracker's foot")
+Check(page, "Time to the next level", OnUnlessOff("trackerXpEta"), Flip("trackerXpEta"), "beside the level, from the recent pace")
 
 ------------------------------------------------------------------------------
 -- Kill pace: the orb by the run tracker's clock (Pace.lua).
 
 page = pages.pace
 Header(page, "Kill pace", "An orb right of the run tracker's clock: how fast the enemies die now, against your own runs on the same zone and modifiers at the same minute. Hover it for the numbers.")
-Check(page, "Kill pace", OnUnlessOff("pace"), Call("SurvivorUI_TogglePace"), "the orb, and This Run's Kills / min")
 
-Subheader(page, "Compared with")
+Section(page, "Compared with", OnUnlessOff("pace"))
 Choice(page, {
 	{ "account", "All your runs", "Every class's, on this zone and modifiers." },
 	{ "class", "This class's runs only" },
@@ -929,14 +1087,14 @@ Slider(page, "Runs needed", 1, 10, 1, function() return DB().paceMinRuns or 3 en
 	function(value) DB().paceMinRuns = math.floor(value + 0.5) end, "%d")
 Note(page, "The orb stays white until that many of your runs have reached the same minute.")
 
-Subheader(page, "The orb")
+Section(page, "The orb", OnUnlessOff("pace"))
 Choice(page, {
 	{ "full", "Full: sparks, and stars when it flies" },
 	{ "calm", "Calm: fewer sparks, no stars" },
 	{ "none", "The orb alone" },
 }, function() return DB().paceEffects or "full" end, function(choice) DB().paceEffects = choice end)
 
-Subheader(page, "Each boss's stretch")
+Section(page, "Each boss's stretch", OnUnlessOff("pace"))
 Check(page, "A banner as each boss comes", OnUnlessOff("paceBanner"),
 	function() DB().paceBanner = DB().paceBanner == false end, "how the stretch just ended went, left of the tracker")
 Slider(page, "Banner stays", 3, 15, 1, function() return DB().paceBannerHold or 6 end,
@@ -953,14 +1111,19 @@ page.y = page.y - 28
 -- Combat text.
 
 page = pages.combat
-Header(page, "Combat text")
-Inline(page, nil, {
-	{ "survivor", "SurvivorUI" },
-	{ "game", "Default" },
-	{ "none", "None" },
-}, function() return SurvivorUI_DamageMode and SurvivorUI_DamageMode() or "survivor" end,
-	function(mode) if SurvivorUI_SetDamageMode then SurvivorUI_SetDamageMode(mode) end end)
-Note(page, "None turns every combat number off, Default's too.")
+Header(page, "Combat text", "SurvivorUI's combat numbers; on or off in the Modules tab (off: Default's).")
+Check(page, "No combat numbers at all", function() return SurvivorUI_DamageMode and SurvivorUI_DamageMode() == "none" end,
+	function()
+		if not (SurvivorUI_DamageMode and SurvivorUI_SetDamageMode) then
+			return
+		end
+		if SurvivorUI_DamageMode() == "none" then
+			SurvivorUI_SetDamageMode(DB().damageBefore or "survivor")
+		else
+			DB().damageBefore = SurvivorUI_DamageMode()
+			SurvivorUI_SetDamageMode("none")
+		end
+	end, "not even Default's")
 
 -- Survivor's settings: each a setting of SurvivorUI.lua's (SurvivorUI_CT).
 local function CTGet(key)
@@ -981,7 +1144,7 @@ local function CTSet(key)
 	end
 end
 
-Subheader(page, "Where")
+Section(page, "Where", DamageOn)
 Inline(page, nil, {
 	{ "sides", "Beside the hero" },
 	{ "enemies", "Over the enemies" },
@@ -991,7 +1154,7 @@ Slider(page, "How high they rise", 80, 320, 10, CTGet("ctRise"), CTSet("ctRise")
 Check(page, "Crits in a separate column", CTGet("ctCritColumn"), CTToggle("ctCritColumn"), "on the right")
 Note(page, "Drag a column while this tab is open, or click it for its card; moved, it stays put whatever the distance. Over the enemies needs nameplates.")
 
-Subheader(page, "Look")
+Section(page, "Look", DamageOn)
 InlineChecks(page, {
 	{ "Source icons", CTGet("ctIcons"), CTToggle("ctIcons") },
 	{ "Meter colors", CTGet("ctMeterColors"), CTToggle("ctMeterColors") },
@@ -1000,7 +1163,7 @@ InlineChecks(page, {
 Slider(page, "Text size", 0.5, 1.5, 0.05, CTGet("ctSize"), CTSet("ctSize"))
 Slider(page, "Crit size", 0.6, 1.6, 0.05, CTGet("ctCritSize"), CTSet("ctCritSize"))
 
-Subheader(page, "What shows")
+Section(page, "What shows", DamageOn)
 InlineChecks(page, {
 	{ "Damage over time", CTGet("ctPeriodic"), CTToggle("ctPeriodic") },
 	{ "Heals", CTGet("ctHeals"), CTToggle("ctHeals") },
@@ -1016,7 +1179,7 @@ InlineChecks(page, {
 Slider(page, "Add up within", 50, 500, 25, CTGet("ctAddWindow"), CTSet("ctAddWindow"), "%d ms")
 Note(page, "One source's hits that close: one number, their sum and count (1.2k x3).")
 
-Subheader(page, "New best crit")
+Section(page, "New best crit", DamageOn)
 Check(page, "Held still when a best is beaten", CTGet("ctRecord"), CTToggle("ctRecord"), "bigger and gold, beside the Biggest Crits")
 Inline(page, "A best is", {
 	{ "ability", "per ability" },
@@ -1044,14 +1207,14 @@ page.y = page.y - 28
 
 page = pages.counters
 Header(page, "Counters", "A number over a spell's button: how many of it are out right now, in the spell's damage meter color.")
-Subheader(page, "Damage over time")
+Section(page, "Damage over time", OnUnlessOff("counters"))
 Check(page, "DoTs", OnUnlessOff("dotCounter"), Flip("dotCounter"), "how many of each are ticking on the enemies")
-Subheader(page, "Fear")
+Section(page, "Fear", OnUnlessOff("counters"))
 Check(page, "Fears", OnUnlessOff("fearCounter"), Flip("fearCounter"), "how many enemies each one holds")
-Subheader(page, "Totems")
+Section(page, "Totems", OnUnlessOff("counters"))
 Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, and the seconds until the next one ends")
 
-Subheader(page, "How close they are")
+Section(page, "How close they are", OnUnlessOff("counters"))
 Note(page, "The game tells none of these outright: each is worked out from the combat log and your spells' cooldowns, so it can be off now and then.")
 Note(page, "DoTs: counted by their ticks over the last two seconds, so a number eases in and out, and one on an enemy that dies stays up to two seconds.")
 Note(page, "Fears: the game writes a fear's hit but not its end, so each enemy hit counts for the fear's full time, even when it breaks early or dies.")
@@ -1061,31 +1224,23 @@ Note(page, "Totems: nothing is written as a totem goes down or ends, so each cas
 -- Nameplates.
 
 page = pages.plates
-Header(page, "Nameplates", "Survivor Plates: a plate over each enemy within 20 yards of the hero.")
+Header(page, "Nameplates", "Survivor Plates: a plate over each enemy within 20 yards of the hero; on or off in the Modules tab (off by default: the run tracker shows the bosses, guardians and elites).")
 if PlatesThere() then
 	local function PlatesMode()
 		local db = SurvivorPlatesDB or {}
-		if db.hidden then
-			return "none"
-		elseif db.important then
-			return "important"
-		end
-		return "all"
+		return db.important and "important" or "all"
 	end
+	Section(page, "Which enemies", PlatesOn)
 	Choice(page, {
 		{ "all", "On every enemy", "Every enemy near you gets a plate." },
 		{ "important", "Elites, guardians and bosses", "Only the dangerous ones: a cleaner screen." },
-		{ "none", "None (the default)", "No plates: the run tracker shows the bosses, guardians and elites." },
 	}, PlatesMode, function(mode)
 		local db = SurvivorPlatesDB or {}
-		if (mode == "none") ~= (db.hidden == true) then
-			Plates("none")
-		end
-		if mode ~= "none" and (mode == "important") ~= (db.important == true) then
+		if (mode == "important") ~= (db.important == true) then
 			Plates("all")
 		end
 	end)
-	Subheader(page, "Look")
+	Section(page, "Look", PlatesOn)
 	Check(page, "Names on every plate", function() return SurvivorPlatesDB and SurvivorPlatesDB.names == true end,
 		function() Plates("names") end, "off: only on elites, guardians and bosses")
 	Slider(page, "Plate size", 0.6, 2, 0.05,
@@ -1099,19 +1254,10 @@ end
 -- Interface.
 
 page = pages.interface
-Header(page, "Interface", "How SurvivorUI restyles the Default interface. Most of these take hold after a reload.")
+Header(page, "Interface", "How SurvivorUI's action bar looks; these take hold after a reload. The other restyles (tooltips, chat, minimap, menu buttons, the outline) are on or off in the Modules tab.")
 Subheader(page, "Action bar")
 Check(page, "Cooldown numbers on the buttons", FeatureOn("cooldownNumbers"), FeatureToggle("cooldownNumbers"), "OmniCC, when installed, does it instead")
 Check(page, "Hide key labels on the buttons", FeatureOn("hideKeys"), FeatureToggle("hideKeys"))
-Subheader(page, "Windows")
-Check(page, "Character pane, restyled", FeatureOn("characterPane"), FeatureToggle("characterPane"), "the stats in sections; off: Default pane")
-Check(page, "Ability tooltips, laid out again", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"))
-Check(page, "Flat tooltips", FeatureOn("tooltip"), FeatureToggle("tooltip"))
-Check(page, "Flat chat", FeatureOn("chat"), FeatureToggle("chat"))
-Subheader(page, "Screen")
-Check(page, "Square minimap", FeatureOn("minimap"), FeatureToggle("minimap"))
-Check(page, "Menu buttons in the corner, on hover", FeatureOn("microMenu"), FeatureToggle("microMenu"))
-Check(page, "White outline under the mouse", OnUnlessOff("hover"), Call("SurvivorUI_ToggleHover"), "around the frame or button the mouse is on")
 
 ------------------------------------------------------------------------------
 -- Unit frames: the player's and the target's frames, and the boss bars.

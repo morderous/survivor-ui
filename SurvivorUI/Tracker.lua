@@ -820,12 +820,25 @@ local function Draw(game, phase)
 	end
 	-- The elites alive, under it.
 	y = EliteRow(y)
-	-- The level, and how far to the next, at the bottom.
-	local xp, xpNeeded = Num(game.xp), Num(game.xpn)
-	head.level:SetText("|cffbf8cffLv. "..Num(game.lvl).."|r")
-	y = Put(head.level, y - 2, 13)
-	head.xp:SetValue(xpNeeded > 0 and xp / xpNeeded or 0)
-	y = Put(head.xp, y, 6)
+	-- The level, and how far to the next, at the bottom; the time to the next
+	-- level beside it (XpBar.lua). Each as chosen (Run tracker, XP bar).
+	if not (SurvivorUIDB and SurvivorUIDB.trackerXp == false) then
+		local xp, xpNeeded = Num(game.xp), Num(game.xpn)
+		local level = "|cffbf8cffLv. "..Num(game.lvl).."|r"
+		if not (SurvivorUIDB and SurvivorUIDB.trackerXpEta == false) and SurvivorUI_XpNextText then
+			local nextIn = SurvivorUI_XpNextText()
+			if nextIn then
+				level = level.."  |cff9a9a9a"..nextIn.."|r"
+			end
+		end
+		head.level:SetText(level)
+		y = Put(head.level, y - 2, 13)
+		head.xp:SetValue(xpNeeded > 0 and xp / xpNeeded or 0)
+		y = Put(head.xp, y, 6)
+	else
+		head.level:Hide()
+		head.xp:Hide()
+	end
 
 	head:SetHeight(-y)
 end

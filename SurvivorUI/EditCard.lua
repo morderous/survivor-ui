@@ -48,6 +48,7 @@ local PIECES = {
 	["Damage taken"] = { places = { "takenLeft", "takenTop" }, key = "ctTaken", toggle = "SurvivorUI_ToggleTakenNumbers", noFont = true },
 	["Healing"] = { places = { "healLeft", "healTop" }, key = "ctHeals", toggle = "SurvivorUI_ToggleHealNumbers", noFont = true },
 	["Minimap button"] = { places = { "mapButtonX", "mapButtonY" }, noFont = true },
+	["XP bar"] = { places = { "xpBarX", "xpBarTop" }, key = "xpBar", offUnlessOn = true, toggle = "SurvivorUI_ToggleXpBar" },
 }
 
 local selected          -- the handle (Mover.lua) whose card is open

@@ -45,9 +45,11 @@ local function Settings()
 	return SurvivorUIDB
 end
 
--- Each counter, on unless switched off: dotCounter, fearCounter, totemCounter.
+-- Each counter, on unless switched off: dotCounter, fearCounter, totemCounter;
+-- none while the counters are off as a whole (the Modules tab).
 local function On(key)
-	return Settings()[key] ~= false
+	local settings = Settings()
+	return settings.counters ~= false and settings[key] ~= false
 end
 
 local ticks = {}        -- [spell] = { the GetTime() of each DoT tick, oldest first }
@@ -103,6 +105,9 @@ for _, name in pairs({ "CHAT_MSG_SPELL_PERIODIC_CREATURE_DAMAGE", "CHAT_MSG_SPEL
 	events:RegisterEvent(name)
 end
 events:SetScript("OnEvent", function()
+	if Settings().counters == false then
+		return
+	end
 	local message = arg1 or ""
 	if event == "CHAT_MSG_SPELL_SELF_DAMAGE" then
 		-- "Your Psychic Scream hits Kobold Vermin for 9 Shadow damage." (or crits)
@@ -249,6 +254,13 @@ frame:SetScript("OnUpdate", function()
 	end
 	local elapsed = wait
 	wait = 0
+	-- Off as a whole: nothing counted, nothing shown.
+	if Settings().counters == false then
+		for _, badge in pairs(badges) do
+			badge:Hide()
+		end
+		return
+	end
 	local now = GetTime()
 	local on = On("dotCounter")
 	local lit = {}

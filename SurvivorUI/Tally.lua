@@ -330,7 +330,6 @@ function SurvivorUI_SetTallyPlace(place)
 	if place == "off" then
 		settings.tally = false
 	else
-		settings.tally = true
 		settings.tallyPlace = place
 		settings.tallyLeft, settings.tallyX, settings.tallyTop = nil, nil, nil
 		RestorePlace()
