@@ -9,6 +9,7 @@ cd /d "%~dp0"
   /resource:SurvivorInstaller.ico,SurvivorInstaller.ico ^
   /resource:SurvivorUpdate.ico,SurvivorUpdate.ico ^
   /resource:UpdateOverlay.ico,UpdateOverlay.ico ^
+  /resource:Logo.png,Logo.png ^
   /reference:System.Windows.Forms.dll /reference:System.Drawing.dll ^
   /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll ^
   /reference:System.Web.Extensions.dll ^

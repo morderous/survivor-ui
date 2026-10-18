@@ -933,7 +933,8 @@ local function MakeView(alone)
 			if DB().statsLeft and DB().statsTop then
 				stats:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", DB().statsLeft, DB().statsTop)
 			else
-				stats:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", ART_LEFT + ART_WIDTH + 8, ART_TOP)
+				-- First at the top of the screen, right of This Run.
+				stats:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 256, -13)
 			end
 		end
 

@@ -499,12 +499,20 @@ end
 local gameRestores = {}
 if ChatFrame1 then
 	local save, restore = Keep(ChatFrame1, "chatLeft", "chatBottom", "BOTTOM")
-	SurvivorUI_RegisterMover(ChatFrame1, "Chat", save, nil, function()
-		-- The stock chat's first place.
+	-- Its first place: low in the bottom left corner (since v3.0.6; the stock
+	-- one stood higher, 32, 95).
+	local function ChatDefault()
 		ChatFrame1:ClearAllPoints()
-		ChatFrame1:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 32, 95)
+		ChatFrame1:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 8, 40)
+	end
+	SurvivorUI_RegisterMover(ChatFrame1, "Chat", save, nil, ChatDefault)
+	table.insert(gameRestores, function()
+		if SurvivorUIDB and SurvivorUIDB.chatLeft then
+			restore()
+		else
+			ChatDefault()
+		end
 	end)
-	table.insert(gameRestores, restore)
 end
 if MinimapCluster then
 	local save, restore = Keep(MinimapCluster, "mapRight", "mapTop", "TOP")

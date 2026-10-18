@@ -77,7 +77,9 @@ local function DefaultPlace()
 	holder:ClearAllPoints()
 	local tracker = getglobal("SurvivorUITracker")
 	if tracker then
-		holder:SetPoint("TOPRIGHT", tracker, "TOPLEFT", -8, 0)
+		-- Left of the run tracker, a little under its top (its first place
+		-- since v3.0.6).
+		holder:SetPoint("TOPRIGHT", tracker, "TOPLEFT", -8, -55)
 	else
 		holder:SetPoint("TOP", UIParent, "TOP", 0, -90)
 	end
@@ -421,7 +423,7 @@ local function ApplyGameHud()
 	end
 	local settings = Settings()
 	-- Away while these bars or the run tracker show the bosses' health.
-	if settings.bossBars or settings.trackerHealth then
+	if settings.bossBars or settings.trackerHealth or settings.noGameBosses then
 		if AZS_IsHudShown("bosses") then
 			AZS_SetHudShown("bosses", false)
 			settings.hidGameBosses = true
@@ -431,6 +433,10 @@ local function ApplyGameHud()
 		settings.hidGameBosses = nil
 	end
 end
+
+-- For the options: off, the Default one, or nothing ("When off").
+SurvivorUI_GameHud = SurvivorUI_GameHud or {}
+SurvivorUI_GameHud.bosses = ApplyGameHud
 
 -- For the options' Run tracker tab, as its boss health is switched.
 SurvivorUI_ApplyBossHud = ApplyGameHud
@@ -443,7 +449,7 @@ function SurvivorUI_BossBars(argument)
 	else
 		settings.bossBars = not settings.bossBars
 		ApplyGameHud()
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.bossBars and "boss bars on; the Default ones are put away." or "boss bars off; the Default ones are back."))
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.bossBars and "boss bars on; the Default ones are put away." or (settings.noGameBosses and "boss bars off, and the Default ones stay away." or "boss bars off; the Default ones are back.")))
 	end
 	Update()
 end

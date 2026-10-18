@@ -837,7 +837,8 @@ local function Draw(game, phase)
 			end
 		end
 		head.level:SetText(level)
-		y = Put(head.level, y - 2, 13)
+		-- A little room over it: the guardians' bar or the elites end right there.
+		y = Put(head.level, y - 6, 13)
 		head.xp:SetValue(xpNeeded > 0 and xp / xpNeeded or 0)
 		y = Put(head.xp, y, 6)
 	else
@@ -940,7 +941,7 @@ local function ApplyGameHud()
 		return
 	end
 	local settings = Settings()
-	if settings.tracker then
+	if settings.tracker or settings.noGameClock then
 		if AZS_IsHudShown("clock") then
 			AZS_SetHudShown("clock", false)
 			settings.hidGameClock = true
@@ -951,13 +952,17 @@ local function ApplyGameHud()
 	end
 end
 
+-- For the options: off, the Default one, or nothing ("When off").
+SurvivorUI_GameHud = SurvivorUI_GameHud or {}
+SurvivorUI_GameHud.clock = ApplyGameHud
+
 function SurvivorUI_ToggleTracker()
 	local settings = Settings()
 	settings.tracker = not settings.tracker
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.tracker
 		and "run tracker on; the Default clock is put away."
-		or "run tracker off; the Default clock is back."))
+		or (settings.noGameClock and "run tracker off, and the Default clock stays away." or "run tracker off; the Default clock is back.")))
 end
 
 local loader = CreateFrame("Frame")

@@ -158,9 +158,73 @@ local function HasSearing()
 	return searingHas
 end
 
+-- The combat log can also name a spell at more length than the game's own
+-- lists ("Fire Nova Totem" for the build's and the meter's Fire Nova): a name
+-- that begins with one of the build's spells or the meter's lines, and a word
+-- more, goes by that one, so its color, icon and crits are the same
+-- everywhere. Found ones are kept; a name with none is asked again in a
+-- while, as spells come during a run.
+local KEY_NAMES = {
+	sw_pain = "Shadow Word: Pain", pw_shield = "Power Word: Shield",
+	demo_shout = "Demoralizing Shout", hunters_mark = "Hunter's Mark",
+}
+local shortOf, shortMissed = {}, {}
+
+-- A spell's name from its key in the game's list, as the build list names it.
+local function KeyName(key)
+	if KEY_NAMES[key] then
+		return KEY_NAMES[key]
+	end
+	local name = string.gsub(key or "", "_", " ")
+	return (string.gsub(name, "(%a)([%w']*)", function(first, rest) return string.upper(first)..rest end))
+end
+
+local function ShortName(name)
+	local known = shortOf[name]
+	if known then
+		return known
+	end
+	if shortMissed[name] and GetTime() - shortMissed[name] < 5 then
+		return name
+	end
+	local best, exact
+	local function Try(candidate)
+		if not candidate or candidate == "" then
+			return
+		end
+		if candidate == name then
+			exact = true
+		elseif string.sub(name, 1, string.len(candidate) + 1) == candidate.." "
+			and (not best or string.len(candidate) > string.len(best)) then
+			best = candidate
+		end
+	end
+	for index = 1, table.getn(AZS_SPELLS or {}) do
+		local entry = AZS_SPELLS[index]
+		Try(KeyName(entry.key or entry[1]))
+	end
+	for index = 1, table.getn(AZS_METER or {}) do
+		local lineName = AZS_METER[index].name
+		Try(SurvivorUI_English and SurvivorUI_English(lineName) or lineName)
+	end
+	if exact then
+		shortOf[name] = name
+		return name
+	end
+	if best then
+		shortOf[name] = best
+		return best
+	end
+	shortMissed[name] = GetTime()
+	return name
+end
+
 function SurvivorUI_SourceOf(name, line)
 	if name == "Attack" and line and string.find(line, " Fire damage", 1, true) and HasSearing() then
 		return "Searing Totem"
+	end
+	if name then
+		return ShortName(name)
 	end
 	return name
 end
@@ -984,8 +1048,40 @@ local function HideMicroButtons()
 end
 
 ------------------------------------------------------------------------------
--- Chat: a flat dark panel, no scroll buttons, no tab art. The mouse wheel
--- scrolls; with Shift held it jumps to the top or the bottom.
+-- Chat: no scroll buttons, no tab art, the text on the world itself; a flat
+-- dark panel behind it only if asked for (the options, Chat: Background, with
+-- the addon's color down its left edge). The mouse wheel scrolls; with Shift
+-- held it jumps to the top or the bottom.
+
+-- The panel's strength, 0 (none, the default) to 1.
+local function ChatBackground()
+	return tonumber(Settings().chatBackground) or 0
+end
+
+local function ApplyChatBackground()
+	local strength = ChatBackground()
+	for index = 1, 7 do
+		local chat = getglobal("ChatFrame"..index)
+		local panel = chat and chat.survivorPanel
+		if panel then
+			panel.fill:SetVertexColor(0.04, 0.04, 0.06, strength)
+			if strength > 0 then
+				panel.accent:Show()
+			else
+				panel.accent:Hide()
+			end
+		end
+	end
+end
+
+function SurvivorUI_ChatBackground()
+	return ChatBackground()
+end
+
+function SurvivorUI_SetChatBackground(strength)
+	Settings().chatBackground = strength
+	ApplyChatBackground()
+end
 
 local function ChatWheel()
 	if arg1 > 0 then
@@ -1029,8 +1125,8 @@ local function StyleChat()
 				panel:SetFrameLevel(math.max(0, chat:GetFrameLevel() - 1))
 				local fill = panel:CreateTexture(nil, "BACKGROUND")
 				fill:SetTexture(FLAT)
-				fill:SetVertexColor(0.04, 0.04, 0.06, 0.55)
 				fill:SetAllPoints(panel)
+				panel.fill = fill
 				-- An accent line down the left edge, in the addon's color.
 				local accent = panel:CreateTexture(nil, "BORDER")
 				accent:SetTexture(FLAT)
@@ -1041,6 +1137,7 @@ local function StyleChat()
 				accent:SetWidth(2)
 				accent:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
 				accent:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 0)
+				panel.accent = accent
 				chat.survivorPanel = panel
 			end
 
@@ -1057,6 +1154,8 @@ local function StyleChat()
 			end
 		end
 	end
+
+	ApplyChatBackground()
 
 	-- The edit box: a flat field under the chat.
 	local edit = getglobal("ChatFrameEditBox")
@@ -1579,9 +1678,9 @@ local function ColumnDefault(kind)
 		-- bar row (150 below).
 		return x, y - 15
 	elseif kind == "dealt" then
-		return x - (CT().ctDistance or 160), y
+		return x - (CT().ctDistance or 170), y
 	elseif kind == "crit" then
-		return x + (CT().ctDistance or 160), y
+		return x + (CT().ctDistance or 170), y
 	end
 	return x + SIDE_COLUMNS[kind].x, y + SIDE_COLUMNS[kind].y
 end
@@ -1998,9 +2097,9 @@ local function PlaceRecord()
 	local crits = getglobal("SurvivorUICrits")
 	local right = crits and crits:GetRight()
 	if right and right + recordShown:GetWidth() < UIParent:GetWidth() then
-		recordShown:SetPoint("TOPLEFT", crits, "TOPRIGHT", 1, -30)
+		recordShown:SetPoint("TOPLEFT", crits, "TOPRIGHT", 8, -12)
 	elseif right then
-		recordShown:SetPoint("TOPRIGHT", crits, "TOPLEFT", -1, -30)
+		recordShown:SetPoint("TOPRIGHT", crits, "TOPLEFT", -8, -12)
 	else
 		recordShown:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 223, -274)
 	end

@@ -912,12 +912,103 @@ local function PlatesOn()
 	return PlatesThere() and not (SurvivorPlatesDB and SurvivorPlatesDB.hidden)
 end
 
--- A module's tick: its name (* after a reload), what it does on hover.
+-- The parts the game has its own of, the Default: its HUD's part, its name,
+-- and what else of SurvivorUI's keeps it away (the run tracker's boss health).
+local GAME = {
+	clock = { key = "noGameClock", hud = "clock", name = "clock" },
+	bosses = { key = "noGameBosses", hud = "bosses", name = "boss bars", also = "trackerHealth" },
+	tally = { key = "noGameTally", hud = "tally", name = "kills and gold box" },
+	build = { key = "noGameBuild", hud = "build", name = "row of spells" },
+	loot = { key = "noGameLoot", hud = "loot", name = "loot notices" },
+	meter = { key = "noGameMeter", hud = "meter", name = "damage meter" },
+}
+
+-- The Default shows while SurvivorUI's is off, and it is wanted.
+local function GameShown(game, oursOn)
+	return not oursOn() and not DB()[game.key] and not (game.also and DB()[game.also])
+end
+
+-- Ticked on: SurvivorUI's goes (and what else stood in), the Default comes;
+-- ticked off: it goes, and with SurvivorUI's off, neither shows.
+local function GameToggle(game, oursOn, oursToggle)
+	if GameShown(game, oursOn) then
+		DB()[game.key] = true
+	else
+		DB()[game.key] = nil
+		if oursOn() then
+			oursToggle()
+		end
+		if game.also then
+			DB()[game.also] = false
+		end
+	end
+	local apply = SurvivorUI_GameHud and SurvivorUI_GameHud[game.hud]
+	if apply then
+		apply()
+	end
+end
+
+-- The Default's tick: a small square and its name, what it is on hover.
+local function GameTick(page, x, y, width, label, game, oursOn, oursToggle)
+	local color = page.color
+	local tick = CreateFrame("Button", nil, page)
+	tick:SetWidth(width)
+	tick:SetHeight(ROW)
+	tick:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+	tick.edge = Fill(tick, "BORDER", 0.3, 0.3, 0.35, 1)
+	tick.edge:SetWidth(11)
+	tick.edge:SetHeight(11)
+	tick.edge:SetPoint("LEFT", tick, "LEFT", 2, 0)
+	tick.box = Fill(tick, "ARTWORK", 0.06, 0.06, 0.08, 1)
+	tick.box:SetPoint("TOPLEFT", tick.edge, "TOPLEFT", 1, -1)
+	tick.box:SetPoint("BOTTOMRIGHT", tick.edge, "BOTTOMRIGHT", -1, 1)
+	tick.mark = Fill(tick, "OVERLAY", 1, 1, 1, 0)
+	tick.mark:SetPoint("TOPLEFT", tick.edge, "TOPLEFT", 3, -3)
+	tick.mark:SetPoint("BOTTOMRIGHT", tick.edge, "BOTTOMRIGHT", -3, 3)
+	tick.label = Text(tick, 10, TEXT)
+	tick.label:SetPoint("LEFT", tick.edge, "RIGHT", 6, 0)
+	tick.label:SetText(label)
+	tick:SetScript("OnClick", function()
+		GameToggle(game, oursOn, oursToggle)
+		RefreshAll()
+	end)
+	tick:SetScript("OnEnter", function()
+		this.hot = true
+		this:Refresh()
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		GameTooltip:SetText("Default "..game.name, color[1], color[2], color[3])
+		GameTooltip:AddLine("The game's own "..game.name..", shown while SurvivorUI's is off. Ticked, SurvivorUI's goes"
+			..(game.also and " (and the run tracker's boss health)" or "").."; untick both for neither.", 1, 1, 1, 1)
+		GameTooltip:Show()
+	end)
+	tick:SetScript("OnLeave", function()
+		this.hot = nil
+		this:Refresh()
+		GameTooltip:Hide()
+	end)
+	function tick:Refresh()
+		local on = GameShown(game, oursOn)
+		self.edge:SetVertexColor(on and color[1] or 0.3, on and color[2] or 0.3, on and color[3] or 0.35, 1)
+		self.mark:SetVertexColor(color[1], color[2], color[3], on and 1 or 0)
+		if self.hot then
+			self.label:SetTextColor(1, 1, 1)
+		elseif on then
+			self.label:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+		else
+			self.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+		end
+	end
+	table.insert(widgets, tick)
+	return tick
+end
+
+-- A module's tick: its name (* after a reload), what it does on hover; for a
+-- part the game has its own of, the Default's tick beside it.
 local function ModuleCheck(page, x, y, item)
-	local label, isOn, toggle, tip, reload, usable = item[1], item[2], item[3], item[4], item[5], item[6]
+	local label, isOn, toggle, tip, reload, usable, game = item[1], item[2], item[3], item[4], item[5], item[6], item[7]
 	local color = page.color
 	local check = CreateFrame("Button", nil, page)
-	check:SetWidth(PAGE_WIDTH / 2 - 6)
+	check:SetWidth(PAGE_WIDTH / 2 - (game and 84 or 6))
 	check:SetHeight(ROW)
 	check:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
 	check.edge = Fill(check, "BORDER", 0.3, 0.3, 0.35, 1)
@@ -973,31 +1064,34 @@ local function ModuleCheck(page, x, y, item)
 		end
 	end
 	table.insert(widgets, check)
+	if game then
+		GameTick(page, x + PAGE_WIDTH / 2 - 80, y, 74, "Default", game, isOn, toggle)
+	end
 end
 
 page = pages.modules
-Header(page, "Modules", "Each part of SurvivorUI on or off as a whole: off, it does not run at all, and the Default comes back where there is one. Hover one for what it does; * after a reload.")
+Header(page, "Modules", "Each part of SurvivorUI on or off as a whole: off, it does not run at all. Where the game has its own, Default beside it is the game's: SurvivorUI's puts it away, and with both unticked neither shows. Hover one for what it does; * after a reload.")
 
 local MODULES = {
 	{ "Run", {
 		{ "Run tracker", OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"),
-			"Under the minimap: the zone, the run's clock, the bosses, the guardians, the elites and your level. Off: the Default clock." },
+			"Under the minimap: the zone, the run's clock, the bosses, the guardians, the elites and your level. It puts the Default clock away.", nil, nil, GAME.clock },
 		{ "Kill pace", OnUnlessOff("pace"), Call("SurvivorUI_TogglePace"),
 			"The orb by the tracker's clock: how fast the enemies die, against your own runs. It sits on the run tracker." },
 		{ "Guardians", OnUnlessOff("guardians"), Call("SurvivorUI_ToggleGuardians"),
 			"Each lair: which way, how far, alive or slain, as a bar in the tracker, a list beside it or a count." },
 		{ "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"),
-			"The bosses and the awake guardians with their debuffs, apart from the tracker." },
+			"The bosses and the awake guardians with their debuffs, apart from the tracker. They put the Default bars away.", nil, nil, GAME.bosses },
 		{ "Caches on the minimap", FeatureOn("mapPins"), FeatureToggle("mapPins", true),
 			"A chest for each cache and a skull for each lair, on the minimap." },
 		{ "Kills and gold line", OnUnlessOff("tally"), Call("SurvivorUI_Tally"),
-			"Your kills, your gold and the next cache's price. Off: the Default box." },
+			"Your kills, your gold and the next cache's price. It puts the Default box away.", nil, nil, GAME.tally },
 		{ "XP bar", OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"),
 			"Your level and experience as a bar of its own, with the time to the next level." },
 		{ "Level Up! button", OnUnlessOff("levelUp"), Call("SurvivorUI_ToggleLevelUp"),
 			"With Store Level-Ups on, a button over the action bar for the levels waiting. Off: the game's button." },
 		{ "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"),
-			"What the run dropped. Off: the Default loot notices." },
+			"What the run dropped. It puts the Default loot notices away.", nil, nil, GAME.loot },
 	} },
 	{ "Combat", {
 		{ "Combat text", DamageOn, function()
@@ -1007,7 +1101,7 @@ local MODULES = {
 			end,
 			"SurvivorUI's combat numbers, set in the Combat text tab. Off: Default's." },
 		{ "Damage meter", OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"),
-			"Each source's damage, its crits on hover, the healing and the boss damage. Off: the Default meter." },
+			"Each source's damage, its crits on hover, the healing and the boss damage. It puts the Default meter away.", nil, nil, GAME.meter },
 		{ "This Run", OnUnlessOff("runPanel"), Call("SurvivorUI_ToggleRun"),
 			"The run's numbers, as the game's victory screen gives them." },
 		{ "Biggest Crits", OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"),
@@ -1021,7 +1115,7 @@ local MODULES = {
 		{ "Stats panel", OnlyIfOn("statsPanel"), Call("SurvivorUI_ToggleStatsPanel"),
 			"The run's numbers as a panel on the screen all the time, apart from the character pane." },
 		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
-			"Your spells, their ranks and your jewelry. Off: the Default row of spells." },
+			"Your spells, their ranks and your jewelry. It puts the Default row of spells away.", nil, nil, GAME.build },
 		{ "Jewelry Collection", OnUnlessOff("jewelry"), Flip("jewelry"),
 			"Every amulet, ring and trinket found, and what is left to find." },
 		{ "Ability tooltips", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"),
@@ -1204,11 +1298,11 @@ end
 -- A panel's tab opens with the same head: whether it is on (Modules), Back to
 -- its place, and its size; each where the panel has one.
 
-local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads)
+local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads, game)
 	-- The switch: the part on or off, the same as its tick in Modules.
 	local color = page.color
 	local switch = CreateFrame("Button", nil, page)
-	switch:SetWidth(220)
+	switch:SetWidth(game and 84 or 220)
 	switch:SetHeight(ROW)
 	switch:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y - 2)
 	switch.edge = Fill(switch, "BORDER", 0.3, 0.3, 0.35, 1)
@@ -1260,6 +1354,10 @@ local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads)
 			end
 		end)
 	end
+	-- A part the game has its own of: its Default's tick, beside the switch.
+	if game then
+		GameTick(page, 92, page.y - 2, 210, "Default  |cff8a8a95(the game's own)|r", game, isOn or function() return true end, toggle)
+	end
 	page.y = page.y - 30
 	if partKey then
 		Slider(page, "Size", 0.5, 2, 0.05,
@@ -1274,7 +1372,7 @@ end
 
 page = pages.tracker
 Header(page, "Run tracker", "Under the minimap: the zone, the run's clock against its length, the bosses, the guardians, the elites alive and your level, each part on its own.")
-PanelHead(page, OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"), "tracker", "Run tracker")
+PanelHead(page, OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"), "tracker", "Run tracker", nil, GAME.clock)
 
 Subheader(page, "Bosses")
 Check(page, "Boss health", OnlyIfOn("trackerHealth"), function()
@@ -1377,9 +1475,10 @@ page.y = page.y - 28
 
 page = pages.bosses
 Header(page, "Boss bars", "At the top of the screen: the bosses and the awake guardians, with their debuffs, apart from the run tracker.")
-PanelHead(page, OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"), "bosses", "Boss bars")
+PanelHead(page, OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"), "bosses", "Boss bars", nil, GAME.bosses)
 Subheader(page, "What shows")
 Check(page, "Elites on the boss bars", OnlyIfOn("bossBarsElites"), Call("SurvivorUI_BossBars", "elites"))
+Note(page, "Only the run tracker's own bosses? Untick these and their Default, and keep the tracker's Boss health on (Run tracker tab): with it on, the Default bars stay away anyway.")
 HealthRow("Health", "bossHealth", "absolutePercent")
 
 ------------------------------------------------------------------------------
@@ -1387,7 +1486,7 @@ HealthRow("Health", "bossHealth", "absolutePercent")
 
 page = pages.tally
 Header(page, "Kills & gold", "Your kills, your gold and the next cache's price, in one line. Off: the Default box.")
-PanelHead(page, OnUnlessOff("tally"), Call("SurvivorUI_Tally"), "tally", "Kills and gold line")
+PanelHead(page, OnUnlessOff("tally"), Call("SurvivorUI_Tally"), "tally", "Kills and gold line", nil, GAME.tally)
 Subheader(page, "Where")
 Inline(page, nil, {
 	{ "minimap", "Under the minimap" },
@@ -1438,8 +1537,17 @@ Note(page, "The levels waiting also show by your level, in the run tracker and o
 -- Loot list (LootLog.lua).
 
 page = pages.loot
-Header(page, "Loot list", "What the run dropped, a bar a piece in its quality's color, with the second it came. Off: the Default loot notices.")
-PanelHead(page, OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"), "loot", "Loot list")
+Header(page, "Loot list", "What the run dropped, a bar a piece in its quality's color, with the second it came.")
+PanelHead(page, OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"), "loot", "Loot list", nil, GAME.loot)
+Subheader(page, "Look")
+Inline(page, "Rows", {
+	{ "wash", "A faint wash" },
+	{ "fill", "Filled with its color" },
+}, function() return DB().lootFill and "fill" or "wash" end, function(choice) DB().lootFill = choice == "fill" or nil end)
+Check(page, "Quality beside the name", OnUnlessOff("lootQuality"), Flip("lootQuality"), "small, in brackets: (rare), (epic), (legendary)")
+Check(page, "Background behind the list", OnUnlessOff("lootBackground"), Flip("lootBackground"), "off: the rows on the world itself")
+Slider(page, "Lines shown", 3, 15, 1, function() return DB().lootLines or 8 end,
+	function(value) DB().lootLines = math.floor(value + 0.5) end, "%d")
 
 ------------------------------------------------------------------------------
 -- Combat text.
@@ -1535,7 +1643,7 @@ page.y = page.y - 28
 
 page = pages.meter
 Header(page, "Damage meter", "Each source's damage and its share, its crits on hover; its title's menu for the healing or the last boss fight. Off: the Default meter.")
-PanelHead(page, OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "meter", "Damage meter")
+PanelHead(page, OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "meter", "Damage meter", nil, GAME.meter)
 Subheader(page, "What shows")
 Check(page, "Damage a second right now", OnUnlessOff("meterNow"), Flip("meterNow"), "under the run's, over the last 5 seconds, as the game's meter has it")
 
@@ -1569,7 +1677,7 @@ Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how ma
 
 page = pages.build
 Header(page, "Build list", "Your spells with their icons and ranks, the free slots and the jewelry you wear. Off: the Default row of spells.")
-PanelHead(page, OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "build", "Build list")
+PanelHead(page, OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "build", "Build list", nil, GAME.build)
 Subheader(page, "Beside each spell")
 InlineChecks(page, {
 	{ "Range", function() return DB().buildRange ~= false and DB().buildShows ~= "cooldown" end, function()
@@ -1744,11 +1852,23 @@ SizeGrid(page, {
 -- Chat.
 
 page = pages.chat
-Header(page, "Chat", "The chat window: flat, its buttons on hover (Flat chat, in the Modules tab), and its text's size.")
+Header(page, "Chat", "The chat window: flat, its buttons on hover (Flat chat, in the Modules tab), its text's size, and what reaches it.")
 PanelHead(page, FeatureOn("chat"), FeatureToggle("chat"), nil, "Chat", true)
 Slider(page, "Text size", 8, 18, 1,
 	function() return SurvivorUI_ChatSize and SurvivorUI_ChatSize() or 8 end,
 	function(value) if SurvivorUI_SetChatSize then SurvivorUI_SetChatSize(value) end end, "%d")
+Slider(page, "Background", 0, 100, 5,
+	function() return math.floor((SurvivorUI_ChatBackground and SurvivorUI_ChatBackground() or 0) * 100 + 0.5) end,
+	function(value) if SurvivorUI_SetChatBackground then SurvivorUI_SetChatBackground(value / 100) end end, "%d%%")
+Note(page, "0%: the text on the world itself. Up from there, a dark panel behind it, the addon's color down its left edge. With Flat chat on.")
+
+Subheader(page, "Chat filter")
+Note(page, "What a run fills the chat with, kept away, in every language; the alerts stay: a new spell, an upgrade's news, the run's end. New lines only.")
+Check(page, "Level-ups", OnUnlessOff("chatFilterLevels"), Flip("chatFilterLevels"), "\"you have reached level 12\" and its gains: the XP bar shows the level")
+Check(page, "What the banners show", OnUnlessOff("chatFilterBanners"), Flip("chatFilterBanners"), "the horde's moves, a boss or a guardian coming or slain, shown mid-screen by the game; keep them if its Show Banners is off")
+Check(page, "Boss yells", OnUnlessOff("chatFilterYells"), Flip("chatFilterYells"), "\"Hogger yells: Grrr... fresh meat!\"")
+Check(page, "Loot, while the loot list is on", OnUnlessOff("chatFilterLoot"), Flip("chatFilterLoot"), "the list has it")
+Check(page, "The Combat Log window", OnUnlessOff("chatFilterCombat"), Flip("chatFilterCombat"), "fed 13 lines a second, opened or not; SurvivorUI reads the fight from the game's own events, never from it")
 
 ------------------------------------------------------------------------------
 -- Nameplates.

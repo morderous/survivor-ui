@@ -21,6 +21,9 @@ local WIDTH = 228
 local BAR_HEIGHT = 16
 local BAR_GAP = 2
 local MAX_LINES = 10
+-- The bars start under the title and the strip of numbers (total, dps, now).
+local STRIP_TOP, STRIP_HEIGHT = 20, 14
+local BARS_TOP = STRIP_TOP + STRIP_HEIGHT + 2
 
 -- One color per source, handed out in the order they first show: twelve hues
 -- spread around the wheel, each next one far from the last, so neighbours in
@@ -81,7 +84,7 @@ end
 
 local meter = CreateFrame("Frame", "SurvivorUIMeter", UIParent)
 meter:SetWidth(WIDTH + 8)
-meter:SetHeight(24 + MAX_LINES * (BAR_HEIGHT + BAR_GAP))
+meter:SetHeight(BARS_TOP + 4 + MAX_LINES * (BAR_HEIGHT + BAR_GAP))
 meter:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -12, 40)
 meter:SetBackdrop({ bgFile = FLAT })
 -- The right column's one shade, as the tracker and the run panel wear it.
@@ -102,7 +105,7 @@ local shownLines = MAX_LINES
 local function SetLines(count)
 	if count ~= shownLines then
 		shownLines = count
-		meter:SetHeight(24 + count * (BAR_HEIGHT + BAR_GAP))
+		meter:SetHeight(BARS_TOP + 4 + count * (BAR_HEIGHT + BAR_GAP))
 	end
 end
 
@@ -144,7 +147,7 @@ local function Fit()
 	Seat(above:GetName(), "TOPRIGHT", above, "BOTTOMRIGHT", shift, -10)
 	-- The piece above has a size of its own: its bottom read in the meter's units.
 	local room = above:GetBottom() * above:GetEffectiveScale() / meter:GetEffectiveScale() - 10 - 8
-	local fit = math.floor((room - 24) / (BAR_HEIGHT + BAR_GAP))
+	local fit = math.floor((room - BARS_TOP - 4) / (BAR_HEIGHT + BAR_GAP))
 	SetLines(math.max(3, math.min(MAX_LINES, fit)))
 end
 
@@ -347,20 +350,13 @@ titleButton:SetScript("OnDragStart", StartMove)
 titleButton:SetScript("OnDragStop", StopMove)
 FitTitle()
 Lit(false)
-meter.total = meter:CreateFontString(nil, "OVERLAY")
-meter.total:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
-meter.total:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -42, -6)
-meter.total:SetTextColor(0.7, 0.7, 0.7)
-
--- Under it, the damage a second right now (the options, Damage meter): the
--- total line moves up to make room, and the bars start lower. With it on,
--- each number is named: "total 238.8k" over "719 dps  now 2.5k", the two
--- rates together as the game's meter has them.
-meter.now = meter:CreateFontString(nil, "OVERLAY")
-meter.now:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
-meter.now:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -42, -14)
-meter.now:SetTextColor(0.7, 0.7, 0.7)
-meter.now:Hide()
+-- Under the title, the numbers, each named, in cells across the meter: NOW a
+-- second over the last few seconds (the options, Damage meter), green while
+-- above the average, orange while below; DPS that a second on average; and
+-- TOTAL the view's whole. Hover them for what each is.
+local WHITE = { 1, 1, 1 }
+local NOW_UP = { 0.45, 0.95, 0.5 }
+local NOW_DOWN = { 1, 0.6, 0.3 }
 
 local function NowOn()
 	return Settings().meterNow ~= false
@@ -369,46 +365,80 @@ end
 -- The seconds of the run's clock "now" is measured over.
 local NOW_WINDOW = 5
 
--- What each number is, under the mouse; dragged, the meter moves.
-local totals = CreateFrame("Frame", nil, meter)
-totals:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -40, -1)
-totals:SetWidth(112)
-totals:SetHeight(22)
-totals:EnableMouse(true)
-totals:RegisterForDrag("LeftButton")
-totals:SetScript("OnDragStart", StartMove)
-totals:SetScript("OnDragStop", StopMove)
-totals:SetScript("OnEnter", function()
+local strip = CreateFrame("Frame", nil, meter)
+strip:SetPoint("TOPLEFT", meter, "TOPLEFT", 4, -STRIP_TOP)
+strip:SetWidth(WIDTH)
+strip:SetHeight(STRIP_HEIGHT)
+strip:EnableMouse(true)
+strip:RegisterForDrag("LeftButton")
+strip:SetScript("OnDragStart", StartMove)
+strip:SetScript("OnDragStop", StopMove)
+strip.wash = strip:CreateTexture(nil, "BACKGROUND")
+strip.wash:SetTexture(FLAT)
+strip.wash:SetAllPoints(strip)
+strip.wash:SetVertexColor(1, 1, 1, 0.04)
+
+local function Cell()
+	local cell = {}
+	cell.label = strip:CreateFontString(nil, "OVERLAY")
+	cell.label:SetFont(SurvivorUI_FONT, 7 + FONT_BUMP, "OUTLINE")
+	cell.label:SetTextColor(0.58, 0.58, 0.64)
+	cell.value = strip:CreateFontString(nil, "OVERLAY")
+	cell.value:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
+	cell.value:SetPoint("LEFT", cell.label, "RIGHT", 4, 0)
+	return cell
+end
+strip.cells = { Cell(), Cell(), Cell() }
+
+-- Each cell in its share of the width; three with NOW, two without.
+local function LayCells(count)
+	if strip.count == count then
+		return
+	end
+	strip.count = count
+	local each = WIDTH / count
+	for index = 1, 3 do
+		local cell = strip.cells[index]
+		cell.label:ClearAllPoints()
+		if index <= count then
+			cell.label:SetPoint("LEFT", strip, "LEFT", (index - 1) * each + 6, 0)
+			cell.label:Show()
+			cell.value:Show()
+		else
+			cell.label:Hide()
+			cell.value:Hide()
+		end
+	end
+end
+
+local function SetCell(index, label, value, color)
+	local cell = strip.cells[index]
+	cell.label:SetText(label)
+	cell.value:SetText(value)
+	cell.value:SetTextColor(color[1], color[2], color[3])
+end
+
+strip:SetScript("OnEnter", function()
 	local healing = this.view == "healing"
 	local what = healing and "healing" or "damage"
-	local unit = healing and "hps" or "dps"
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
 	GameTooltip:SetText(healing and "Healing Done" or (this.view == "boss" and "Boss Damage" or "Damage Done"), 1, 0.82, 0)
-	GameTooltip:AddDoubleLine("total", "the "..(this.view == "boss" and "last boss fight's" or "run's").." "..what..(this.view == "damage" and ", since Reset" or ""), 1, 1, 1, 0.8, 0.8, 0.8)
-	GameTooltip:AddDoubleLine(unit, "that a second, on average", 1, 1, 1, 0.8, 0.8, 0.8)
 	if NowOn() then
-		GameTooltip:AddDoubleLine("now", "a second over the last "..NOW_WINDOW.." seconds", 1, 1, 1, 0.8, 0.8, 0.8)
+		GameTooltip:AddDoubleLine("NOW", "a second over the last "..NOW_WINDOW.." seconds", NOW_UP[1], NOW_UP[2], NOW_UP[3], 0.8, 0.8, 0.8)
+	end
+	GameTooltip:AddDoubleLine(healing and "HPS" or "DPS", "a second on average", GOLD[1], GOLD[2], GOLD[3], 0.8, 0.8, 0.8)
+	GameTooltip:AddDoubleLine("TOTAL", "the "..(this.view == "boss" and "last boss fight's" or "run's").." "..what..(this.view == "damage" and ", since Reset" or ""), 1, 1, 1, 0.8, 0.8, 0.8)
+	if NowOn() then
+		GameTooltip:AddLine("NOW is green while above the average, orange while below.", 0.6, 0.6, 0.65, 1)
 	end
 	GameTooltip:Show()
 end)
-totals:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-local nowLaidOut
-local function LayOutNow(on)
-	if nowLaidOut == on then
-		return
-	end
-	nowLaidOut = on
-	meter.total:ClearAllPoints()
-	meter.total:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -42, on and -3 or -6)
-	meter.empty:ClearAllPoints()
-	meter.empty:SetPoint("TOPLEFT", meter, "TOPLEFT", 8, on and -28 or -24)
-end
+strip:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 -- A view with nothing in it yet says so.
 meter.empty = meter:CreateFontString(nil, "OVERLAY")
 meter.empty:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
-meter.empty:SetPoint("TOPLEFT", meter, "TOPLEFT", 8, -24)
+meter.empty:SetPoint("TOPLEFT", meter, "TOPLEFT", 8, -BARS_TOP - 2)
 meter.empty:SetTextColor(0.55, 0.55, 0.6)
 meter.empty:Hide()
 
@@ -695,6 +725,32 @@ function SurvivorUI_MeterShare(name)
 	return shares[name]
 end
 
+-- The numbers' columns, from the bar's right end: the share, then the amount.
+local SHARE_WIDTH = 30
+local AMOUNT_WIDTH = 44
+local AMOUNT_RIGHT = SHARE_WIDTH + 6
+local NAME_ROOM = WIDTH - BAR_HEIGHT - 4 - (AMOUNT_RIGHT + AMOUNT_WIDTH + 2) - 4
+
+-- The edge around the bar's filled part only: its top and bottom as long as
+-- the fill, its right side at the fill's end (edges: top, bottom, left, right).
+local function PlaceEdges(bar, share)
+	local width = math.max(2, math.floor(WIDTH * share + 0.5))
+	if bar.edgeWidth == width then
+		return
+	end
+	bar.edgeWidth = width
+	local top, bottom, right = bar.edges[1], bar.edges[2], bar.edges[4]
+	top:ClearAllPoints()
+	top:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+	top:SetWidth(width)
+	bottom:ClearAllPoints()
+	bottom:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
+	bottom:SetWidth(width)
+	right:ClearAllPoints()
+	right:SetPoint("TOPLEFT", bar, "TOPLEFT", width - 1, 0)
+	right:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", width - 1, 0)
+end
+
 local function Bar(index)
 	local bar = bars[index]
 	if bar then
@@ -706,10 +762,37 @@ local function Bar(index)
 	bar:SetStatusBarTexture(FLAT)
 	bar:SetMinMaxValues(0, 1)
 
+	-- The build list's look: a dark base the whole width, the color over it to
+	-- the source's share in an edge of the color (around the filled part
+	-- only: PlaceEdges), and the amount and the share in columns of their
+	-- own, between dividers.
 	bar.backing = bar:CreateTexture(nil, "BACKGROUND")
 	bar.backing:SetTexture(FLAT)
-	bar.backing:SetVertexColor(0.10, 0.10, 0.13, 0.9)
+	bar.backing:SetVertexColor(0.05, 0.05, 0.07, 0.92)
 	bar.backing:SetAllPoints(bar)
+	bar.edges = {}
+	for _, side in pairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+		local line = bar:CreateTexture(nil, "OVERLAY")
+		line:SetTexture(FLAT)
+		if side == "TOP" or side == "BOTTOM" then
+			line:SetHeight(1)
+			line:SetPoint(side.."LEFT", bar, side.."LEFT", 0, 0)
+			line:SetPoint(side.."RIGHT", bar, side.."RIGHT", 0, 0)
+		else
+			line:SetWidth(1)
+			line:SetPoint("TOP"..side, bar, "TOP"..side, 0, 0)
+			line:SetPoint("BOTTOM"..side, bar, "BOTTOM"..side, 0, 0)
+		end
+		table.insert(bar.edges, line)
+	end
+	for _, from in pairs({ AMOUNT_RIGHT + AMOUNT_WIDTH + 2, SHARE_WIDTH + 2 }) do
+		local divider = bar:CreateTexture(nil, "OVERLAY")
+		divider:SetTexture(FLAT)
+		divider:SetVertexColor(1, 1, 1, 0.14)
+		divider:SetWidth(1)
+		divider:SetPoint("TOP", bar, "TOPRIGHT", -from, 0)
+		divider:SetPoint("BOTTOM", bar, "BOTTOMRIGHT", -from, 0)
+	end
 
 	bar.name = bar:CreateFontString(nil, "OVERLAY")
 	bar.name:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
@@ -721,8 +804,8 @@ local function Bar(index)
 	bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
 	bar.name:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 4, 0)
-	-- Room for the numbers on the right: damage and share.
-	bar.name:SetWidth(WIDTH - 76 - BAR_HEIGHT)
+	-- Room for the numbers' columns on the right.
+	bar.name:SetWidth(NAME_ROOM)
 	bar.name:SetHeight(12)
 	bar.name:SetJustifyH("LEFT")
 	bar.name:SetTextColor(1, 1, 1)
@@ -736,8 +819,13 @@ local function Bar(index)
 
 	bar.value = bar:CreateFontString(nil, "OVERLAY")
 	bar.value:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
-	bar.value:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
+	bar.value:SetPoint("RIGHT", bar, "RIGHT", -AMOUNT_RIGHT, 0)
 	bar.value:SetTextColor(1, 1, 1)
+
+	bar.share = bar:CreateFontString(nil, "OVERLAY")
+	bar.share:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
+	bar.share:SetPoint("RIGHT", bar, "RIGHT", -3, 0)
+	bar.share:SetTextColor(0.85, 0.85, 0.85)
 
 	-- The crit card sits beside the whole meter, on its left, tops together.
 	bar.cardFrame = meter
@@ -837,18 +925,18 @@ local function Draw()
 	else
 		lines, total, dps = OtherLines(VIEWS[view].get)
 	end
-	local unit = key == "healing" and "hps" or "dps"
 	local nowOn = NowOn()
-	LayOutNow(nowOn)
-	totals.view = key
+	LayCells(nowOn and 3 or 2)
+	strip.view = key
+	local unit = key == "healing" and "HPS" or "DPS"
 	if nowOn then
 		local now = NowRate(key, total)
-		meter.total:SetText("|cff8a8a95total|r  |cffffffff"..Short(total).."|r")
-		meter.now:SetText("|cffffffff"..Short(dps).."|r "..unit.."   |cff8a8a95now|r |cffffffff"..Short(now or 0).."|r")
-		meter.now:Show()
+		SetCell(1, "NOW", now and Short(now) or "...", not now and WHITE or (now >= dps and NOW_UP or NOW_DOWN))
+		SetCell(2, unit, Short(dps), GOLD)
+		SetCell(3, "TOTAL", Short(total), WHITE)
 	else
-		meter.total:SetText(Short(total).."  |cffffffff"..Short(dps).."|r "..unit)
-		meter.now:Hide()
+		SetCell(1, unit, Short(dps), GOLD)
+		SetCell(2, "TOTAL", Short(total), WHITE)
 	end
 	reset:SetAlpha(key == "damage" and 1 or 0)
 	reset:EnableMouse(key == "damage")
@@ -861,7 +949,7 @@ local function Draw()
 
 	local count = math.min(shownLines, table.getn(lines))
 	local top = count > 0 and lines[1].dmg or 0
-	local firstBar = nowOn and 24 or 20
+	local firstBar = BARS_TOP
 	for index = 1, count do
 		local line = lines[index]
 		local name = line.name
@@ -871,8 +959,13 @@ local function Draw()
 
 		bar:ClearAllPoints()
 		bar:SetPoint("TOPLEFT", meter, "TOPLEFT", 4, -firstBar - (index - 1) * (BAR_HEIGHT + BAR_GAP))
-		bar:SetValue(top > 0 and line.dmg / top or 0)
-		bar:SetStatusBarColor(color[1], color[2], color[3], 0.85)
+		local share = top > 0 and line.dmg / top or 0
+		bar:SetValue(share)
+		bar:SetStatusBarColor(color[1], color[2], color[3], 0.45)
+		for _, edge in pairs(bar.edges) do
+			edge:SetVertexColor(color[1], color[2], color[3], 0.6)
+		end
+		PlaceEdges(bar, share)
 		bar.ability = key == "damage" and name or nil
 		bar.view, bar.line = key, line
 		bar.color = color
@@ -890,15 +983,23 @@ local function Draw()
 			bar.icon:SetTexture(OWN_ICON)
 			bar.icon:SetTexCoord(0, 1, 0, 1)
 		end
-		bar.name:SetText(index..". "..name..(rank and rank > 0 and "  |cffbdbdbd"..Roman(rank).."|r" or ""))
+		-- With "(proc)" after it, the name gives it room: neither runs into
+		-- the numbers, a long name ends in "..." first.
+		local room = NAME_ROOM - (proc and 30 or 0)
+		if bar.room ~= room then
+			bar.room = room
+			bar.name:SetWidth(room)
+		end
+		bar.name:SetText(name..(rank and rank > 0 and "  |cffbdbdbd"..Roman(rank).."|r" or ""))
 		if proc then
 			bar.tag:ClearAllPoints()
-			bar.tag:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 4 + bar.name:GetStringWidth() + 4, 0)
+			bar.tag:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 4 + math.min(bar.name:GetStringWidth(), room) + 3, 0)
 			bar.tag:Show()
 		else
 			bar.tag:Hide()
 		end
-		bar.value:SetText(Short(line.dmg).."  |cffb0b0b0"..math.floor(line.share * 100 + 0.5).."%|r")
+		bar.value:SetText(Short(line.dmg))
+		bar.share:SetText(math.floor(line.share * 100 + 0.5).."%")
 		bar:Show()
 	end
 	for index = count + 1, table.getn(bars) do
@@ -947,7 +1048,7 @@ local function ApplyGameHud()
 		return
 	end
 	local settings = Settings()
-	if settings.meter then
+	if settings.meter or settings.noGameMeter then
 		if AZS_IsHudShown("meter") then
 			AZS_SetHudShown("meter", false)
 			settings.hidGameMeter = true
@@ -958,13 +1059,17 @@ local function ApplyGameHud()
 	end
 end
 
+-- For the options: off, the Default one, or nothing ("When off").
+SurvivorUI_GameHud = SurvivorUI_GameHud or {}
+SurvivorUI_GameHud.meter = ApplyGameHud
+
 function SurvivorUI_ToggleMeter()
 	local settings = Settings()
 	settings.meter = not settings.meter
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.meter
 		and "damage meter on; the Default meter is put away."
-		or "damage meter off; the Default one is back, with its healing and boss damage."))
+		or (settings.noGameMeter and "damage meter off, and the Default one stays away." or "damage meter off; the Default one is back, with its healing and boss damage.")))
 end
 
 -- The game's tooltip for units and the world: it opens at an anchor of its own

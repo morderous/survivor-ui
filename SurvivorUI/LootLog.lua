@@ -6,7 +6,11 @@
 -- and only once something has dropped. The game's addon API says nothing
 -- about loot, so this reads the chat window's "You receive loot: [item]" lines.
 --
--- Hover an item for its tooltip. Hold Alt and drag to move; /sui loot hides it.
+-- Hover an item for its tooltip, once the hero has worn it in a run (the
+-- game's loot line has no details). Hold Alt and drag to move; /sui loot
+-- hides it.
+-- Its tab in the options: the rows in a faint wash of their quality's color or
+-- filled with it, the quality small beside the name, how many lines.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
@@ -97,6 +101,52 @@ log.title:SetTextColor(1, 0.82, 0)
 log.title:SetText("Loot")
 
 
+------------------------------------------------------------------------------
+-- The pieces the hero has worn in a run, by name, with their links: the game's
+-- loot line names a drop without its details, so its tooltip comes from here
+-- once the piece has been worn. Kept for the account, in SurvivorUIDB, since a
+-- piece found on one hero is worn on another; a line with a link adds it too.
+
+local function Known()
+	local db = Settings()
+	db.itemLinks = db.itemLinks or {}
+	return db.itemLinks
+end
+
+local EVERY_SLOT = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 }
+-- The jewelry: neck, rings, trinkets, the only pieces a run changes.
+local JEWELRY_SLOTS = { 2, 11, 12, 13, 14 }
+
+local function LearnWorn(slots)
+	if not (GetInventoryItemLink and SurvivorUIDB) then
+		return
+	end
+	local known = Known()
+	for index = 1, table.getn(slots) do
+		local link = GetInventoryItemLink("player", slots[index])
+		if link then
+			local _, _, item = string.find(link, "|H(item:[%d:%-]+)|h")
+			local _, _, name = string.find(link, "%[(.-)%]")
+			if item and name then
+				known[name] = item
+			end
+		end
+	end
+end
+
+-- Every piece once, as the run begins: the gear stays as it is through a run.
+-- Then only the jewelry, as it changes.
+local learner = CreateFrame("Frame")
+learner:RegisterEvent("PLAYER_ENTERING_WORLD")
+learner:RegisterEvent("UNIT_INVENTORY_CHANGED")
+learner:SetScript("OnEvent", function()
+	if event == "PLAYER_ENTERING_WORLD" then
+		LearnWorn(EVERY_SLOT)
+	elseif arg1 == "player" then
+		LearnWorn(JEWELRY_SLOTS)
+	end
+end)
+
 local entries = {}              -- newest first: { item, name, color, count, new, at }
 local bars = {}
 
@@ -110,12 +160,19 @@ local function Bar(index)
 	bar:SetHeight(ROW_HEIGHT)
 	bar:SetPoint("TOPLEFT", log, "TOPLEFT", 8, -TOP - TITLE_HEIGHT - (index - 1) * ROW_HEIGHT)
 
-	bar.wash = bar:CreateTexture(nil, "BACKGROUND")
+	-- Filled, each row a solid bar in a black edge, as up to v2.10.
+	bar.border = bar:CreateTexture(nil, "BACKGROUND")
+	bar.border:SetTexture(FLAT)
+	bar.border:SetVertexColor(0, 0, 0, 1)
+	bar.border:SetAllPoints(bar)
+	bar.border:Hide()
+
+	bar.wash = bar:CreateTexture(nil, "BORDER")
 	bar.wash:SetTexture(FLAT)
 	bar.wash:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, -1)
 	bar.wash:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 1)
 
-	bar.rule = bar:CreateTexture(nil, "BORDER")
+	bar.rule = bar:CreateTexture(nil, "ARTWORK")
 	bar.rule:SetTexture(FLAT)
 	bar.rule:SetHeight(1)
 	bar.rule:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
@@ -132,12 +189,26 @@ local function Bar(index)
 	bar.at:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 	bar.at:SetPoint("RIGHT", bar, "RIGHT", -5, 0)
 
+	-- "(epic)", small, after the name.
+	bar.quality = bar:CreateFontString(nil, "OVERLAY")
+	bar.quality:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
+
+	-- Its tooltip: the line's link, or the one kept from wearing it; else its
+	-- name and quality, and that its details come once it has been worn.
 	bar:SetScript("OnEnter", function()
-		if this.item then
-			GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-			GameTooltip:SetHyperlink(this.item)
-			GameTooltip:Show()
+		local link = this.item or (this.itemName and Known()[this.itemName])
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		if link then
+			GameTooltip:SetHyperlink(link)
+		else
+			local color = this.color or { 1, 1, 1 }
+			GameTooltip:SetText(this.itemName or "?", color[1], color[2], color[3])
+			if this.qualityName then
+				GameTooltip:AddLine(string.upper(string.sub(this.qualityName, 1, 1))..string.sub(this.qualityName, 2), color[1], color[2], color[3])
+			end
+			GameTooltip:AddLine("Not yet seen equipped in a run: its details show here once you have worn it in one.", 0.62, 0.62, 0.68, 1)
 		end
+		GameTooltip:Show()
 	end)
 	bar:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	bar:RegisterForDrag("LeftButton")
@@ -158,17 +229,48 @@ local function QualityColor(hex)
 	return { Part(3), Part(5), Part(7) }
 end
 
+-- The quality by its color, as the game's links have them.
+local QUALITIES = {
+	ff9d9d9d = "poor", ffffffff = "common", ff1eff00 = "uncommon", ff0070dd = "rare",
+	ffa335ee = "epic", ffff8000 = "legendary", ffe6cc80 = "artifact",
+}
+
 local function Draw()
-	local count = math.min(MAX_LINES, table.getn(entries))
+	local settings = Settings()
+	-- Its background, unless switched off (the options, Loot list).
+	local back = settings.lootBackground ~= false
+	if log.back ~= back then
+		log.back = back
+		log:SetBackdropColor(0.04, 0.04, 0.07, back and 0.55 or 0)
+	end
+	local filled = settings.lootFill
+	local count = math.min(settings.lootLines or MAX_LINES, table.getn(entries))
 	for index = 1, count do
 		local entry = entries[index]
 		local bar = Bar(index)
 		local color = QualityColor(entry.color)
 		bar.item = entry.item
-		-- In its quality's color, as This Run's rows are in theirs.
-		bar.name:SetTextColor(color[1], color[2], color[3])
-		bar.at:SetTextColor(color[1], color[2], color[3])
-		bar.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
+		bar.itemName = entry.name
+		bar.color = color
+		bar.qualityName = QUALITIES[string.lower(entry.color or "")]
+		-- In its quality's color, as This Run's rows are in theirs; or filled
+		-- with it, strong, in a black edge, the words white over it, as the
+		-- list was up to v2.10.
+		if filled then
+			bar.name:SetTextColor(1, 1, 1)
+			bar.at:SetTextColor(0.88, 0.88, 0.88)
+			bar.quality:SetTextColor(0.92, 0.92, 0.92)
+			bar.wash:SetVertexColor(color[1], color[2], color[3], 0.75)
+			bar.border:Show()
+			bar.rule:Hide()
+		else
+			bar.name:SetTextColor(color[1], color[2], color[3])
+			bar.at:SetTextColor(color[1], color[2], color[3])
+			bar.quality:SetTextColor(color[1] * 0.8, color[2] * 0.8, color[3] * 0.8)
+			bar.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
+			bar.border:Hide()
+			bar.rule:Show()
+		end
 		bar.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
 		local text = entry.name
 		if entry.count and entry.count > 1 then
@@ -177,7 +279,22 @@ local function Draw()
 		if entry.new then
 			text = text.."  |cff7dff7dnew|r"
 		end
+		-- The quality after the name, the name giving it room.
+		local quality = settings.lootQuality ~= false and QUALITIES[string.lower(entry.color or "")]
+		local room = WIDTH - 48 - (quality and 54 or 0)
+		if bar.room ~= room then
+			bar.room = room
+			bar.name:SetWidth(room)
+		end
 		bar.name:SetText(text)
+		bar.quality:ClearAllPoints()
+		if quality then
+			bar.quality:SetPoint("LEFT", bar, "LEFT", 5 + math.min(bar.name:GetStringWidth(), room) + 4, 0)
+			bar.quality:SetText("("..quality..")")
+			bar.quality:Show()
+		else
+			bar.quality:Hide()
+		end
 		bar.at:SetText(entry.at and Clock(entry.at) or "")
 		bar:Show()
 	end
@@ -252,6 +369,9 @@ local function Add(message)
 	end
 	lastAdded, lastAddedAt = rest, now
 
+	if item then
+		Known()[name] = item
+	end
 	table.insert(entries, 1, {
 		item = item, name = name, color = color, count = tonumber(count),
 		new = IsNew(rest),
@@ -294,6 +414,11 @@ local function Watch(frame)
 	local stock = frame.AddMessage
 	frame.AddMessage = function(self, text, r, g, b, id, hold)
 		Seen(text)
+		-- Read, a loot line can stay out of the chat: the list has it
+		-- (the options, Chat; ChatFilter.lua).
+		if text and Settings().lootLog and SurvivorUI_ChatFilter and SurvivorUI_ChatFilter("Loot") and Received(text) then
+			return
+		end
 		return stock(self, text, r, g, b, id, hold)
 	end
 end
@@ -320,8 +445,9 @@ watcher:SetScript("OnUpdate", function()
 	end
 	-- Shown once something has dropped, and kept until a new run starts.
 	if Settings().lootLog and table.getn(entries) > 0 then
+		-- Drawn again at each look, for a setting changed in the options.
+		Draw()
 		if not log:IsShown() then
-			Draw()
 			log:Show()
 		end
 	elseif log:IsShown() then
@@ -337,7 +463,7 @@ local function ApplyGameHud()
 		return
 	end
 	local settings = Settings()
-	if settings.lootLog then
+	if settings.lootLog or settings.noGameLoot then
 		if AZS_IsHudShown("loot") then
 			AZS_SetHudShown("loot", false)
 			settings.hidGameLoot = true
@@ -348,13 +474,17 @@ local function ApplyGameHud()
 	end
 end
 
+-- For the options: off, the Default one, or nothing ("When off").
+SurvivorUI_GameHud = SurvivorUI_GameHud or {}
+SurvivorUI_GameHud.loot = ApplyGameHud
+
 function SurvivorUI_ToggleLoot()
 	local settings = Settings()
 	settings.lootLog = not settings.lootLog
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.lootLog
 		and "loot list shown; the Default loot notices are put away."
-		or "loot list hidden; the Default loot notices are back."))
+		or (settings.noGameLoot and "loot list hidden, and the Default loot notices stay away." or "loot list hidden; the Default loot notices are back.")))
 end
 
 if SurvivorUI_RegisterMover then

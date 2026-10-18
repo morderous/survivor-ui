@@ -264,7 +264,7 @@ local function ApplyGameHud()
 		return
 	end
 	local settings = Settings()
-	if settings.tally then
+	if settings.tally or settings.noGameTally then
 		if AZS_IsHudShown("tally") then
 			AZS_SetHudShown("tally", false)
 			settings.hidGameTally = true
@@ -275,13 +275,17 @@ local function ApplyGameHud()
 	end
 end
 
+-- For the options: off, the Default one, or nothing ("When off").
+SurvivorUI_GameHud = SurvivorUI_GameHud or {}
+SurvivorUI_GameHud.tally = ApplyGameHud
+
 function SurvivorUI_Tally()
 	local settings = Settings()
 	settings.tally = not settings.tally
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.tally
 		and "the kills and gold line is on; the Default box is put away."
-		or "the Default kills and gold box is back."))
+		or (settings.noGameTally and "the kills and gold line is off, and the Default box stays away." or "the Default kills and gold box is back.")))
 end
 
 -- Its place: under the minimap or the action bar, following it, until moved.

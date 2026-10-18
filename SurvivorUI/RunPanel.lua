@@ -548,7 +548,10 @@ critTip.title:SetPoint("TOPLEFT", critTip, "TOPLEFT", 8, -8)
 critTip.lines = {}
 
 -- kind: "row" label and value, "head" a section title over a heavier rule.
-local function TipLine(index, kind, label, value, color)
+-- A line of the card at y from its top; its height comes back. "head" a
+-- section's title, "row" a label and its value, "text" words wrapped across
+-- the card (a trait's description).
+local function TipLine(index, kind, label, value, color, y)
 	local line = critTip.lines[index]
 	if not line then
 		line = CreateFrame("Frame", nil, critTip)
@@ -564,11 +567,32 @@ local function TipLine(index, kind, label, value, color)
 		line.value = line:CreateFontString(nil, "OVERLAY")
 		line.value:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 		line.value:SetPoint("RIGHT", line, "RIGHT", -2, 0)
+		line.text = line:CreateFontString(nil, "OVERLAY")
+		line.text:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP)
+		line.text:SetPoint("TOPLEFT", line, "TOPLEFT", 2, -3)
+		line.text:SetWidth(TIP_WIDTH - 4)
+		line.text:SetJustifyH("LEFT")
+		line.text:SetTextColor(0.85, 0.85, 0.85)
 		critTip.lines[index] = line
 	end
 
 	line:ClearAllPoints()
-	line:SetPoint("TOPLEFT", critTip, "TOPLEFT", 8, -26 - (index - 1) * TIP_ROW)
+	line:SetPoint("TOPLEFT", critTip, "TOPLEFT", 8, -y)
+	if kind == "text" then
+		line.label:SetText("")
+		line.value:SetText("")
+		line.text:SetText(label)
+		local lines = math.max(1, math.ceil(line.text:GetStringWidth() / ((TIP_WIDTH - 4) * 0.92)))
+		line.text:SetHeight(lines * 11)
+		line.text:Show()
+		line:SetHeight(lines * 11 + 6)
+		line.rule:SetHeight(1)
+		line.rule:SetVertexColor(color[1], color[2], color[3], 0.12)
+		line:Show()
+		return lines * 11 + 6
+	end
+	line.text:Hide()
+	line:SetHeight(TIP_ROW)
 	line.label:SetText(label)
 	line.value:SetText(value or "")
 	if kind == "head" then
@@ -582,6 +606,7 @@ local function TipLine(index, kind, label, value, color)
 		line.rule:SetVertexColor(color[1], color[2], color[3], 0.22)
 	end
 	line:Show()
+	return TIP_ROW
 end
 
 local critHovered = nil
@@ -669,10 +694,10 @@ local function CritTooltip(row)
 	critTip.title:SetText(ability)
 	critTip.title:SetTextColor(color[1], color[2], color[3])
 
-	local count = 0
+	local count, y = 0, 26
 	local function Add(kind, label, value)
 		count = count + 1
-		TipLine(count, kind, label, value, color)
+		y = y + TipLine(count, kind, label, value, color, y)
 	end
 
 	-- Its rank and cooldown, from the game: the action bar's own count is gone
@@ -692,6 +717,22 @@ local function CritTooltip(row)
 			Add("row", "Active", up and up > 0.05 and Seconds1(up).." left" or "not now")
 		end
 	end
+	-- The racial: the race's traits too, as the game told them at a run's
+	-- start (BuildList.lua).
+	if row.racial then
+		local race, traits = nil, nil
+		if SurvivorUI_Racials then
+			race, traits = SurvivorUI_Racials()
+		end
+		Add("head", (race or "Race").."'s traits", "")
+		if traits and table.getn(traits) > 0 then
+			for _, trait in pairs(traits) do
+				Add("text", "|cffffd100"..trait.name.."|r  "..trait.text)
+			end
+		else
+			Add("text", "Read from the chat as a run begins: start one to see them.")
+		end
+	end
 	if meter then
 		Add("head", "Damage done", Short(Num(meter.dmg)))
 		Add("row", "Share of all", math.floor(Num(meter.share) * 100 + 0.5).."%")
@@ -700,6 +741,9 @@ local function CritTooltip(row)
 			Add("row", "A talent's or amulet's own", "proc")
 		end
 	end
+	-- A racial with no damage of its own: no empty crits and hits.
+	local quiet = row.racial and not stats and not hits and not meter
+	if not quiet then
 	Add("head", "Critical strikes", stats and stats.count or 0)
 	if stats then
 		Add("row", "Biggest", Short(critBest[ability]))
@@ -719,12 +763,13 @@ local function CritTooltip(row)
 	else
 		Add("row", "None seen", "")
 	end
+	end
 
 	for index = count + 1, table.getn(critTip.lines) do
 		critTip.lines[index]:Hide()
 	end
 
-	critTip:SetHeight(26 + count * TIP_ROW + 8)
+	critTip:SetHeight(y + 8)
 	-- Beside the whole window the row belongs to, top edges together, on its
 	-- left: the right column sits at the screen's edge.
 	critTip:ClearAllPoints()
@@ -909,6 +954,14 @@ for index = 1, CRIT_ROWS do
 	-- damage meter color under light text, a border in that color.
 	local row = MakeRow(10, "OUTLINE", critBox)
 	row:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -TITLE_HEIGHT - 4 - (index - 1) * ROW_HEIGHT)
+	-- A dark base under the row's color, drawn by the box under the row: the
+	-- color reads the same over any ground, as the build list's.
+	row.base = critBox:CreateTexture(nil, "ARTWORK")
+	row.base:SetTexture(FLAT)
+	row.base:SetVertexColor(0.05, 0.05, 0.07, 0.92)
+	row.base:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+	row.base:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
+	row.base:Hide()
 	row.label:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 	row.icon = row:CreateTexture(nil, "ARTWORK")
 	row.icon:SetWidth(ROW_HEIGHT - 4)
@@ -931,6 +984,13 @@ for index = 1, CRIT_ROWS do
 		end
 		table.insert(row.edges, line)
 	end
+	-- The value in a column of its own, as the build list's numbers.
+	row.divider = row:CreateTexture(nil, "OVERLAY")
+	row.divider:SetTexture(FLAT)
+	row.divider:SetVertexColor(1, 1, 1, 0.14)
+	row.divider:SetWidth(1)
+	row.divider:SetPoint("TOP", row, "TOPRIGHT", -46, 0)
+	row.divider:SetPoint("BOTTOM", row, "BOTTOMRIGHT", -46, 0)
 	-- The box sits on the left of the screen: its cards open on its right.
 	row.cardFrame = critBox
 	row.cardRight = true
@@ -983,9 +1043,11 @@ local function DrawCrits()
 				row.icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIcon")
 				row.icon:SetTexCoord(0, 1, 0, 1)
 			end
+			row.base:Show()
 			row:Show()
 		else
 			row.ability = nil
+			row.base:Hide()
 			row:Hide()
 		end
 	end

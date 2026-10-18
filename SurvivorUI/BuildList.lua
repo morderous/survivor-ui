@@ -116,7 +116,7 @@ list.count:SetPoint("TOPRIGHT", list, "TOPRIGHT", -7, -7)
 -- and between dividers. Laid out from the right edge; the name takes the
 -- rest.
 
-local COLUMN_WIDTH = { rank = 20, cd = 30, range = 34 }
+local COLUMN_WIDTH = { rank = 24, cd = 30, range = 34 }
 local columns                   -- [key] = { right, width, divider }, the ones shown
 local columnsKey
 local nameRoom = WIDTH - ROW_HEIGHT - 70
@@ -187,6 +187,17 @@ for _, key in pairs({ "rank", "cd", "range" }) do
 	rules.lines[key] = line
 end
 
+-- A column's name, centered over it, never wrapped.
+local function PlaceLabel(label, column)
+	label:ClearAllPoints()
+	if column then
+		label:SetPoint("CENTER", head, "RIGHT", -column.right - column.width / 2, 0)
+		label:Show()
+	else
+		label:Hide()
+	end
+end
+
 local function PlaceHead()
 	for key, line in pairs(rules.lines) do
 		local column = columns[key]
@@ -199,9 +210,9 @@ local function PlaceHead()
 			line:Hide()
 		end
 	end
-	PlaceText(head.range, columns.range)
-	PlaceText(head.cd, columns.cd)
-	PlaceText(head.rank, columns.rank)
+	PlaceLabel(head.range, columns.range)
+	PlaceLabel(head.cd, columns.cd)
+	PlaceLabel(head.rank, columns.rank)
 end
 
 local function PlaceRow(row)
@@ -222,6 +233,14 @@ local function Row(index)
 	row:SetWidth(WIDTH)
 	row:SetHeight(ROW_HEIGHT)
 	row:SetPoint("TOPLEFT", list, "TOPLEFT", 6, -TITLE_HEIGHT - HEAD_HEIGHT - (index - 1) * ROW_HEIGHT)
+	-- A dark base under a spell's color, drawn by the list under the row: the
+	-- color reads the same over any ground, as Biggest Crits'.
+	row.base = list:CreateTexture(nil, "ARTWORK")
+	row.base:SetTexture(FLAT)
+	row.base:SetVertexColor(0.05, 0.05, 0.07, 0.92)
+	row.base:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+	row.base:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
+	row.base:Hide()
 
 	row.wash = row:CreateTexture(nil, "BACKGROUND")
 	row.wash:SetTexture(FLAT)
@@ -326,6 +345,11 @@ end
 -- or the racial only a faint wash, the text in the color.
 local function Paint(row, color, alpha, filled)
 	if filled then
+		row.base:Show()
+	else
+		row.base:Hide()
+	end
+	if filled then
 		row.name:SetTextColor(1, 1, 1)
 		row.rank:SetTextColor(1, 1, 1)
 		row.range:SetTextColor(0.9, 0.9, 0.9)
@@ -405,6 +429,8 @@ local function Fill(row, entry, actionSlot, isRacial)
 	local name = SpellName(key)
 	local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(name) or { 0.8, 0.8, 0.8 }
 	row.ability, row.color = name, color
+	-- The racial's card tells the race's traits too (RunPanel.lua).
+	row.racial = isRacial
 	row.icon:SetTexture(GetActionTexture and GetActionTexture(actionSlot) or nil)
 	row.icon:SetAlpha(1)
 	row.name:SetText(isRacial and name.."  |cff8a8a8a(racial)|r" or name)
@@ -417,7 +443,7 @@ local function Fill(row, entry, actionSlot, isRacial)
 end
 
 local function Empty(row)
-	row.ability, row.color = nil, nil
+	row.ability, row.color, row.racial = nil, nil, nil
 	row.icon:SetTexture(FLAT)
 	row.icon:SetVertexColor(0.15, 0.15, 0.18)
 	row.icon:SetAlpha(0.8)
@@ -428,6 +454,82 @@ local function Empty(row)
 	Paint(row, MUTED, 0.6)
 	row:Show()
 end
+
+------------------------------------------------------------------------------
+-- The race's traits, as the game tells them in the chat as a run begins:
+-- "- Berserking: every 35 sec, cooldowns recover 30% faster for 10 sec",
+-- "- Regeneration: +1.5 health per second". Read before the run starts (its
+-- lines come then), kept by race for the account, a new run's list in place
+-- of the last; for the racial's card (RunPanel.lua: SurvivorUI_Racials).
+
+local function Racials()
+	local db = Settings()
+	db.racials = db.racials or {}
+	return db.racials
+end
+
+local function RaceKey()
+	local _, race = UnitRace("player")
+	return race or "?"
+end
+
+local function ReadRacial(text)
+	if not text then
+		return
+	end
+	local phase = AZS_GetPhase and AZS_GetPhase()
+	if phase and phase ~= "ready" then
+		return
+	end
+	local plain = string.gsub(text, "|c%x%x%x%x%x%x%x%x", "")
+	plain = string.gsub(plain, "|r", "")
+	local _, _, name, desc = string.find(plain, "^%- ([^:]+): (.+)$")
+	if not name then
+		return
+	end
+	local racials = Racials()
+	local key = RaceKey()
+	local entry = racials[key]
+	-- A list older than a minute is a run before: this one starts it again.
+	local now = time and time() or GetTime()
+	if not entry or math.abs(now - (entry.at or 0)) > 60 then
+		entry = { at = now, traits = {} }
+		racials[key] = entry
+	end
+	for _, trait in pairs(entry.traits) do
+		if trait.name == name then
+			trait.text = desc
+			return
+		end
+	end
+	table.insert(entry.traits, { name = name, text = desc })
+end
+
+-- The race's name and its traits, nil until a run has told them.
+function SurvivorUI_Racials()
+	local entry = Racials()[RaceKey()]
+	return UnitRace("player"), entry and entry.traits
+end
+
+-- By the system's line, and by the chat window's, for a line no event brings.
+local racialWatch = CreateFrame("Frame")
+racialWatch:RegisterEvent("CHAT_MSG_SYSTEM")
+racialWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
+racialWatch:SetScript("OnEvent", function()
+	if event == "PLAYER_ENTERING_WORLD" then
+		local frame = DEFAULT_CHAT_FRAME
+		if frame and not frame.survivorRacialWatched then
+			frame.survivorRacialWatched = true
+			local stock = frame.AddMessage
+			frame.AddMessage = function(self, text, r, g, b, id, hold)
+				ReadRacial(text)
+				return stock(self, text, r, g, b, id, hold)
+			end
+		end
+		return
+	end
+	ReadRacial(arg1)
+end)
 
 local function Draw()
 	-- The columns as chosen; changed, every row laid out again.
@@ -482,6 +584,7 @@ local function Draw()
 	if count >= 1 then
 		Fill(racialRow, spells[count], RACIAL_SLOT, true)
 	else
+		racialRow.base:Hide()
 		racialRow:Hide()
 	end
 	list.count:SetText((slotted >= SLOTS and "|cffff8080" or "|cffd0d0d0")..math.min(slotted, SLOTS).." / "..SLOTS.."|r")
@@ -787,7 +890,7 @@ local function ApplyGameHud()
 		return
 	end
 	local settings = Settings()
-	if settings.buildList then
+	if settings.buildList or settings.noGameBuild then
 		if AZS_IsHudShown("build") then
 			AZS_SetHudShown("build", false)
 			settings.hidGameBuild = true
@@ -798,13 +901,17 @@ local function ApplyGameHud()
 	end
 end
 
+-- For the options: off, the Default one, or nothing ("When off").
+SurvivorUI_GameHud = SurvivorUI_GameHud or {}
+SurvivorUI_GameHud.build = ApplyGameHud
+
 function SurvivorUI_ToggleBuild()
 	local settings = Settings()
 	settings.buildList = not settings.buildList
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.buildList
 		and "build list shown; the Default row of spells is put away."
-		or "build list hidden; the Default row of spells is back."))
+		or (settings.noGameBuild and "build list hidden, and the Default row of spells stays away." or "build list hidden; the Default row of spells is back.")))
 end
 
 local loader = CreateFrame("Frame")

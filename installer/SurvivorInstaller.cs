@@ -1,4 +1,4 @@
-// Survivor UI Installer: installs and updates Survivor UI and Survivor Plates
+// Survivor UI Launcher (the installer): installs and updates Survivor UI and Survivor Plates
 // from the latest GitHub release, into Azeroth Survivors' AddOns folder.
 //
 // What it does, and nothing else:
@@ -18,14 +18,16 @@
 //   - "Start with Windows, in the tray" (a tick in the window and in the
 //     tray's menu): a line in the user's own Run key starts it with --tray,
 //     in the tray without a window, to look for updates;
-//   - "Beta builds" (a tick in the window and in the tray's menu): the test
-//     builds that come before a release, GitHub's pre-releases, taken when
-//     newer than the release; a warning first, since they may have more bugs
-//     than usual and update more often. Unticked, the release is offered
-//     again ("Back to"). A version with "-beta" stands below its release;
+//   - two buttons, each with its version: the release (large, gold) and the
+//     beta, the test build before a release (GitHub's pre-release), when one
+//     newer than the release is out; a warning first, since a beta may have
+//     more bugs than usual and updates more often. A beta installed follows
+//     the betas (and the release once it is newer); the release's button
+//     takes it back. A version with "-beta" stands below its release;
 //   - updates itself: a release's SurvivorUI-Installer.zip carries its
-//     version in the asset's label ("Installer 1.3.0"). A newer one is
-//     offered at the top of the window and in the tray; with "Update the
+//     version in the asset's label ("Installer 1.3.0"). At the top right,
+//     its version and Check for updates; a newer one lights a green arrow
+//     and the button turns to it, in the tray too; with "Update the
 //     installer by itself" (on by default) it is taken at once: the running
 //     exe renamed aside, the new one put in its place and started.
 //
@@ -48,9 +50,9 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-[assembly: System.Reflection.AssemblyTitle("Survivor UI Installer")]
+[assembly: System.Reflection.AssemblyTitle("Survivor UI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.3.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.3.1.0")]
 
 namespace SurvivorInstaller
 {
@@ -160,6 +162,8 @@ namespace SurvivorInstaller
         static readonly Color TextColor = Color.FromArgb(230, 230, 230);
         static readonly Color Muted = Color.FromArgb(150, 150, 160);
         static readonly Color BetaColor = Color.FromArgb(255, 170, 70);
+        static readonly Color StableFill = Color.FromArgb(222, 172, 18);
+        static readonly Color StableText = Color.FromArgb(34, 26, 4);
         static readonly Color LauncherDim = Color.FromArgb(28, 120, 52);
         static readonly Color LauncherLit = Color.FromArgb(58, 190, 88);
 
@@ -174,14 +178,17 @@ namespace SurvivorInstaller
         readonly Label upToDate = new Label();
         readonly CheckBox startBox = new CheckBox();
         readonly LinkLabel openLink = new LinkLabel();
-        readonly CheckBox betaBox = new CheckBox();
+        readonly Button betaButton = new Button();
         readonly CheckBox selfBox = new CheckBox();
         readonly Label versionLabel = new Label();
-        readonly Button launcherButton = new Button();
+        readonly Button selfButton = new Button();
+        readonly Panel arrowMark = new Panel();
         readonly ToolTip tips = new ToolTip();
         Release updatingTo;         // the installer being downloaded, while it is
+        bool checkingByHand;        // Check for updates clicked: the answer said
 
-        Release latest;
+        Release stable, pre;        // the newest release and the newest beta
+        Release latest;             // the one followed: the release, or a newer beta once one is installed
 
         // The tray, and the half hourly look at GitHub.
         const int CheckEvery = 30 * 60 * 1000;
@@ -197,16 +204,13 @@ namespace SurvivorInstaller
         bool installing;
         bool startHidden;           // started with Windows: the window stays away until asked for
         readonly ToolStripMenuItem startItem = new ToolStripMenuItem("Start with Windows");
-        readonly ToolStripMenuItem betaItem = new ToolStripMenuItem("Beta builds");
         readonly ToolStripMenuItem playItem = new ToolStripMenuItem("Play");
         bool exiting;               // the tray's Exit: the window closes for good
-        readonly ToolStripMenuItem selfItem = new ToolStripMenuItem("Update the installer");
+        readonly ToolStripMenuItem selfItem = new ToolStripMenuItem("Update the launcher");
         static readonly Version OwnVersion = Assembly.GetExecutingAssembly().GetName().Version;
         Release selfRelease;        // the release with a newer installer, while one is out
         bool selfUpdating;
         string toldOfSelf;          // the installer version the tray's note last told of
-        bool beta;                  // the beta channel: GitHub's pre-releases taken too
-        bool settingBeta;           // the tick set by the code, not by the user
 
         // Starting with Windows: a line of the user's own Run key, the exe's
         // path with --tray. Nothing else is written.
@@ -246,10 +250,16 @@ namespace SurvivorInstaller
             }
         }
 
-        // The beta channel is on while this file is there.
-        static string BetaPath
+        // Up to 1.3 the beta channel was a tick, kept as this file; a beta
+        // installed now says it.
+        static void ForgetBetaTick()
         {
-            get { return Path.Combine(Path.GetDirectoryName(ConfigPath), "beta-channel.txt"); }
+            try
+            {
+                string old = Path.Combine(Path.GetDirectoryName(ConfigPath), "beta-channel.txt");
+                if (File.Exists(old)) File.Delete(old);
+            }
+            catch { }
         }
 
         // The installer updates itself unless this file is there.
@@ -269,23 +279,7 @@ namespace SurvivorInstaller
             try
             {
                 if (on) { if (File.Exists(SelfOffPath)) File.Delete(SelfOffPath); }
-                else File.WriteAllText(SelfOffPath, "The installer does not update itself while this file is here.");
-            }
-            catch { }
-        }
-
-        static bool BetaOn()
-        {
-            try { return File.Exists(BetaPath); }
-            catch { return false; }
-        }
-
-        static void SetBeta(bool on)
-        {
-            try
-            {
-                if (on) File.WriteAllText(BetaPath, "The installer offers beta builds while this file is here.");
-                else if (File.Exists(BetaPath)) File.Delete(BetaPath);
+                else File.WriteAllText(SelfOffPath, "The launcher does not update itself while this file is here.");
             }
             catch { }
         }
@@ -293,8 +287,8 @@ namespace SurvivorInstaller
         public MainForm(bool inTray, bool updated)
         {
             startHidden = inTray;
-            this.Text = "Survivor UI Installer";
-            ClientSize = new Size(560, 512);
+            this.Text = "Survivor UI Launcher";
+            ClientSize = new Size(560, 524);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -304,57 +298,87 @@ namespace SurvivorInstaller
             LoadIcons();
             if (appIcon != null) Icon = appIcon;
 
+            // The emblem, the shield with the S, beside the name.
+            PictureBox logo = new PictureBox();
+            logo.Location = new Point(16, 12);
+            logo.Size = new Size(48, 48);
+            logo.SizeMode = PictureBoxSizeMode.Zoom;
+            logo.Image = EmbeddedImage("Logo.png");
+            Controls.Add(logo);
+
             Label title = new Label();
-            title.Text = "Survivor UI";
+            title.Text = "Survivor UI Launcher";
             title.Font = new Font("Segoe UI", 15f, FontStyle.Bold);
             title.ForeColor = Gold;
             title.AutoSize = true;
-            title.Location = new Point(18, 14);
+            title.Location = new Point(68, 12);
             Controls.Add(title);
 
             Label subtitle = new Label();
-            subtitle.Text = "The interface for Azeroth Survivors";
+            subtitle.Text = "Play Azeroth Survivors with Survivor UI";
+            subtitle.UseMnemonic = false;
             subtitle.ForeColor = Muted;
             subtitle.AutoSize = true;
-            subtitle.Location = new Point(20, 48);
+            subtitle.Location = new Point(70, 44);
             Controls.Add(subtitle);
 
-            // Its own update: a green button at the top right while a newer
-            // installer is out, breathing so it is seen; its version under it.
-            launcherButton.Text = "Launcher update";
-            launcherButton.FlatStyle = FlatStyle.Flat;
-            launcherButton.FlatAppearance.BorderColor = Color.FromArgb(150, 240, 160);
-            launcherButton.FlatAppearance.BorderSize = 1;
-            launcherButton.ForeColor = Color.White;
-            launcherButton.BackColor = LauncherDim;
-            launcherButton.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            launcherButton.Cursor = Cursors.Hand;
-            launcherButton.Location = new Point(380, 12);
-            launcherButton.Size = new Size(160, 30);
-            launcherButton.Visible = false;
-            launcherButton.Click += delegate { UpdateSelf(); };
-            Controls.Add(launcherButton);
+            // Its own version at the top right, Check for updates under it; a
+            // newer launcher out: a green arrow by the version, and the button
+            // turns to it, green, breathing so it is seen.
+            arrowMark.Location = new Point(376, 13);
+            arrowMark.Size = new Size(16, 18);
+            arrowMark.Visible = false;
+            arrowMark.Paint += delegate (object sender, PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                float w = arrowMark.Width - 1, h = arrowMark.Height - 1;
+                PointF[] shape = {
+                    new PointF(w * 0.32f, 0.5f), new PointF(w * 0.68f, 0.5f), new PointF(w * 0.68f, h * 0.44f),
+                    new PointF(w * 0.98f, h * 0.44f), new PointF(w * 0.5f, h), new PointF(w * 0.02f, h * 0.44f),
+                    new PointF(w * 0.32f, h * 0.44f) };
+                using (Brush fill = new SolidBrush(Color.FromArgb(58, 214, 92))) e.Graphics.FillPolygon(fill, shape);
+                using (Pen edge = new Pen(Color.FromArgb(6, 32, 12), 1f)) e.Graphics.DrawPolygon(edge, shape);
+            };
+            Controls.Add(arrowMark);
+
+            versionLabel.AutoSize = false;
+            versionLabel.Location = new Point(396, 14);
+            versionLabel.Size = new Size(150, 18);
+            versionLabel.TextAlign = ContentAlignment.MiddleLeft;
+            Controls.Add(versionLabel);
+
+            selfButton.FlatStyle = FlatStyle.Flat;
+            selfButton.Cursor = Cursors.Hand;
+            selfButton.Location = new Point(396, 36);
+            selfButton.Size = new Size(144, 26);
+            selfButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            selfButton.Click += delegate
+            {
+                if (selfRelease != null)
+                {
+                    UpdateSelf();
+                    return;
+                }
+                checkingByHand = true;
+                ShowOwnVersion();
+                Status("Asking GitHub for updates...");
+                CheckNow();
+            };
+            Controls.Add(selfButton);
             System.Windows.Forms.Timer breathe = new System.Windows.Forms.Timer();
             breathe.Interval = 50;
             double breath = 0;
             breathe.Tick += delegate
             {
-                if (!launcherButton.Visible || !launcherButton.Enabled) return;
+                if (selfRelease == null || selfUpdating) return;
                 breath += 0.12;
                 double t = (Math.Sin(breath) + 1) / 2;
-                launcherButton.BackColor = Color.FromArgb(
+                selfButton.BackColor = Color.FromArgb(
                     (int)(LauncherDim.R + (LauncherLit.R - LauncherDim.R) * t),
                     (int)(LauncherDim.G + (LauncherLit.G - LauncherDim.G) * t),
                     (int)(LauncherDim.B + (LauncherLit.B - LauncherDim.B) * t));
             };
             breathe.Start();
-
-            versionLabel.AutoSize = false;
-            versionLabel.Location = new Point(250, 46);
-            versionLabel.Size = new Size(290, 16);
-            versionLabel.TextAlign = ContentAlignment.MiddleRight;
-            versionLabel.Font = new Font("Segoe UI", 8.5f);
-            Controls.Add(versionLabel);
             ShowOwnVersion();
 
             installedLabel.AutoSize = true;
@@ -388,7 +412,7 @@ namespace SurvivorInstaller
 
             // Where the game should be, under the box.
             Label hint = new Label();
-            hint.Text = "Recommended: " + GameExe + " inside the game's benilla-config folder, usually\n" + CommonGameFolder;
+            hint.Text = "Recommended: the game's " + GameExe + " in its benilla-config folder,\nusually " + CommonGameFolder;
             hint.Font = new Font("Segoe UI", 8f);
             hint.ForeColor = Muted;
             hint.AutoSize = true;
@@ -444,15 +468,21 @@ namespace SurvivorInstaller
             notesBox.Text = "Asking GitHub for the latest release...";
             Controls.Add(notesBox);
 
-            Style(installButton, "Install / Update");
-            installButton.Location = new Point(20, 396);
-            installButton.Size = new Size(160, 36);
-            installButton.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+            // The release: large and gold, its version on it; the badge in its
+            // place while it is the one installed.
+            installButton.Text = "Install";
+            installButton.FlatStyle = FlatStyle.Flat;
+            installButton.FlatAppearance.BorderColor = Color.FromArgb(255, 226, 120);
+            installButton.BackColor = StableFill;
+            installButton.ForeColor = StableText;
+            installButton.Cursor = Cursors.Hand;
+            installButton.Location = new Point(20, 394);
+            installButton.Size = new Size(260, 40);
+            installButton.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             installButton.Enabled = false;
-            installButton.Click += delegate { Install(); };
+            installButton.Click += delegate { if (stable != null) Install(stable); };
             Controls.Add(installButton);
 
-            // In the install button's place while the latest is installed.
             upToDate.Location = installButton.Location;
             upToDate.Size = installButton.Size;
             upToDate.TextAlign = ContentAlignment.MiddleCenter;
@@ -463,6 +493,29 @@ namespace SurvivorInstaller
             upToDate.Visible = false;
             Controls.Add(upToDate);
 
+            // The beta: smaller, orange, its version on it; a warning first.
+            betaButton.Text = "No beta right now";
+            betaButton.FlatStyle = FlatStyle.Flat;
+            betaButton.FlatAppearance.BorderColor = Color.FromArgb(150, 96, 36);
+            betaButton.BackColor = Color.FromArgb(44, 30, 14);
+            betaButton.ForeColor = BetaColor;
+            betaButton.Cursor = Cursors.Hand;
+            betaButton.Location = new Point(20, 442);
+            betaButton.Size = new Size(260, 28);
+            betaButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            betaButton.Enabled = false;
+            betaButton.Click += delegate { InstallBeta(); };
+            Controls.Add(betaButton);
+
+            Label betaNote = new Label();
+            betaNote.Text = "Betas come before a release: more bugs than usual, updated more often.";
+            betaNote.Font = new Font("Segoe UI", 8f);
+            betaNote.ForeColor = Muted;
+            betaNote.AutoSize = false;
+            betaNote.Location = new Point(20, 473);
+            betaNote.Size = new Size(270, 30);
+            Controls.Add(betaNote);
+
             // Play: the game by the AddOns folder, started; the installer steps
             // into the tray.
             playButton.Text = "\u25B6  Play";
@@ -471,8 +524,8 @@ namespace SurvivorInstaller
             playButton.BackColor = Color.FromArgb(24, 52, 30);
             playButton.ForeColor = Color.FromArgb(125, 232, 140);
             playButton.Cursor = Cursors.Hand;
-            playButton.Location = new Point(380, 396);
-            playButton.Size = new Size(160, 36);
+            playButton.Location = new Point(380, 394);
+            playButton.Size = new Size(160, 40);
             playButton.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
             playButton.Click += delegate { Play(); };
             Controls.Add(playButton);
@@ -481,7 +534,7 @@ namespace SurvivorInstaller
             // the tray's menu.
             startBox.Text = "Start with Windows, in the tray";
             startBox.AutoSize = true;
-            startBox.Location = new Point(20, 442);
+            startBox.Location = new Point(300, 446);
             startBox.ForeColor = TextColor;
             startBox.FlatStyle = FlatStyle.Flat;
             startBox.Cursor = Cursors.Hand;
@@ -499,9 +552,9 @@ namespace SurvivorInstaller
             if (startBox.Checked) SetStartWithWindows(true);
 
             // Its own updates: taken by itself unless unticked.
-            selfBox.Text = "Update the installer by itself";
+            selfBox.Text = "Update the launcher by itself";
             selfBox.AutoSize = true;
-            selfBox.Location = new Point(300, 442);
+            selfBox.Location = new Point(300, 472);
             selfBox.ForeColor = TextColor;
             selfBox.FlatStyle = FlatStyle.Flat;
             selfBox.Cursor = Cursors.Hand;
@@ -510,38 +563,26 @@ namespace SurvivorInstaller
             {
                 SetSelfAuto(selfBox.Checked);
                 Status(selfBox.Checked
-                    ? "The installer will update itself when a new one is out."
-                    : "The installer will only tell you when a new one is out.");
+                    ? "The launcher will update itself when a new one is out."
+                    : "The launcher will only tell you when a new one is out.");
                 if (selfBox.Checked && selfRelease != null) UpdateSelf();
             };
             Controls.Add(selfBox);
 
-            // Beta builds: the test builds before a release, a warning first;
-            // the same tick as the tray's menu.
-            beta = BetaOn();
-            betaBox.Text = "Beta builds: before a release, more bugs than usual, updated more often";
-            betaBox.AutoSize = true;
-            betaBox.Location = new Point(20, 466);
-            betaBox.ForeColor = TextColor;
-            betaBox.FlatStyle = FlatStyle.Flat;
-            betaBox.Cursor = Cursors.Hand;
-            betaBox.Checked = beta;
-            betaBox.CheckedChanged += delegate { BetaChanged(); };
-            Controls.Add(betaBox);
-
-            statusLabel.Location = new Point(20, 490);
+            statusLabel.Location = new Point(20, 502);
             statusLabel.Size = new Size(520, 20);
             statusLabel.ForeColor = Muted;
             Controls.Add(statusLabel);
 
             SetUpTray();
+            ForgetBetaTick();
 
             folderBox.Text = FindAddonsFolder() ?? "";
             if (folderBox.Text == "") Status("Click \"Find game...\" and pick " + GameExe + ".");
             ShowInstalled();
 
             // Just updated: the old exe, set aside, goes once it has closed.
-            if (updated) Status("The installer is now " + Short(OwnVersion) + ".");
+            if (updated) Status("The launcher is now " + Short(OwnVersion) + ".");
             CleanUpOld(updated);
 
             Shown += delegate { CheckNow(); };
@@ -562,6 +603,21 @@ namespace SurvivorInstaller
             overlayIcon = Embedded("UpdateOverlay.ico", SystemInformation.SmallIconSize);
         }
 
+        // A picture built into the exe (build.bat), whole.
+        static Image EmbeddedImage(string name)
+        {
+            try
+            {
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name))
+                {
+                    if (stream == null) return null;
+                    using (Image image = Image.FromStream(stream))
+                        return new Bitmap(image);
+                }
+            }
+            catch { return null; }
+        }
+
         static Icon Embedded(string name, Size size)
         {
             try
@@ -575,7 +631,7 @@ namespace SurvivorInstaller
         void SetUpTray()
         {
             tray.Icon = trayIcon ?? SystemIcons.Application;
-            tray.Text = "Survivor UI Installer";
+            tray.Text = "Survivor UI Launcher";
             ContextMenuStrip menu = new ContextMenuStrip();
             menu.Items.Add("Open", null, delegate { FromTray(); });
             playItem.Click += delegate { Play(); };
@@ -588,7 +644,7 @@ namespace SurvivorInstaller
                 CheckNow();
             });
             installItem.Enabled = false;
-            installItem.Click += delegate { FromTray(); Install(); };
+            installItem.Click += delegate { FromTray(); if (latest != null) Install(latest); };
             menu.Items.Add(installItem);
             selfItem.Visible = false;
             selfItem.Click += delegate { UpdateSelf(); };
@@ -597,10 +653,6 @@ namespace SurvivorInstaller
             startItem.Checked = StartsWithWindows();
             startItem.Click += delegate { startBox.Checked = !startBox.Checked; };
             menu.Items.Add(startItem);
-            betaItem.CheckOnClick = false;
-            betaItem.Checked = BetaOn();
-            betaItem.Click += delegate { FromTray(); betaBox.Checked = !betaBox.Checked; };
-            menu.Items.Add(betaItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, delegate { exiting = true; Close(); });
             tray.ContextMenuStrip = menu;
@@ -631,7 +683,7 @@ namespace SurvivorInstaller
             if (!toldOfTray && !updateWaiting)
             {
                 toldOfTray = true;
-                tray.ShowBalloonTip(5000, "Survivor UI Installer",
+                tray.ShowBalloonTip(5000, "Survivor UI Launcher",
                     "Still here, in the tray: a green arrow shows when an update is out. To quit it, right click this icon and choose Exit.", ToolTipIcon.Info);
             }
         }
@@ -712,32 +764,16 @@ namespace SurvivorInstaller
             ShowOverlay();
         }
 
-        // The beta tick: a warning when ticked, then the latest beta asked for
-        // and installed at once; unticked, the release asked for again.
-        void BetaChanged()
+        // The beta's button: a warning, then the beta installed; from then on
+        // the installer follows the betas.
+        void InstallBeta()
         {
-            if (settingBeta) return;
-            if (betaBox.Checked)
-            {
-                DialogResult go = MessageBox.Show(this,
-                    "Beta builds come before a release, to be tested: they may have more bugs than usual, and they update more often.\n\n" +
-                    "Install the latest beta now? Untick \"Beta builds\" any time to go back to the release.",
-                    "Survivor UI beta", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (go != DialogResult.Yes)
-                {
-                    settingBeta = true;
-                    betaBox.Checked = false;
-                    settingBeta = false;
-                    return;
-                }
-            }
-            beta = betaBox.Checked;
-            SetBeta(beta);
-            betaItem.Checked = beta;
-            toldOf = null;
-            installWhenNewer = beta;
-            Status(beta ? "Asking GitHub for the latest beta..." : "Asking GitHub for the latest release...");
-            CheckNow();
+            if (pre == null || pre.ZipUrl == null) return;
+            DialogResult go = MessageBox.Show(this,
+                "Beta builds come before a release, to be tested: they may have more bugs than usual, and they update more often.\n\n" +
+                "Install " + pre.Tag + "? From then on the launcher follows the betas; the release's button takes you back.",
+                "Survivor UI beta", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (go == DialogResult.Yes) Install(pre);
         }
 
         // --- The notes, larger ------------------------------------------------
@@ -817,25 +853,42 @@ namespace SurvivorInstaller
         void ShowUpdateState()
         {
             string installed = InstalledVersion(folderBox.Text);
+            installedLabel.Text = "Installed:  " + (installed != null ? "v" + installed : "not installed");
+            installedLabel.ForeColor = installed != null ? TextColor : Muted;
+            // A beta installed follows the betas, the release once it is newer.
+            bool betaOut = pre != null && pre.ZipUrl != null && (stable == null || Newer(pre.Tag, stable.Tag));
+            latest = installed != null && IsBeta(installed) && betaOut ? pre : (stable ?? (betaOut ? pre : null));
             bool known = latest != null && latest.ZipUrl != null;
-            bool newer = known && installed != null && Newer(latest.Tag, installed);
-            // Off the beta channel with a beta installed: the release again.
-            bool back = known && installed != null && !newer && !beta && IsBeta(installed) && !latest.Beta;
-            updateWaiting = newer || back;
+            updateWaiting = known && installed != null && Newer(latest.Tag, installed);
             bool current = known && installed != null && !updateWaiting;
             tray.Icon = updateWaiting ? (trayUpdateIcon ?? tray.Icon) : (trayIcon ?? tray.Icon);
             tray.Text = updateWaiting ? Trim("Survivor UI " + latest.Tag + " is out: click to update", 63)
-                : current ? "Survivor UI Installer: up to date" : "Survivor UI Installer";
+                : current ? "Survivor UI Launcher: up to date" : "Survivor UI Launcher";
             installItem.Enabled = updateWaiting && !installing;
             bool playable = !installing && GameFor(folderBox.Text) != null;
             playButton.Enabled = playable;
             playItem.Enabled = playable;
-            installItem.Text = updateWaiting ? (back ? "Back to " : "Install ") + latest.Tag : current ? "Up to date (" + latest.Tag + ")" : "Install the update";
-            latestLabel.ForeColor = updateWaiting ? Color.FromArgb(90, 220, 110) : known && latest.Beta ? BetaColor : Gold;
-            installButton.Text = installed == null ? "Install" : back ? "Back to " + latest.Tag : updateWaiting ? "Update to " + latest.Tag : "Install / Update";
-            installButton.Visible = !current;
-            upToDate.Text = current ? "\u2713  Up to date" : "";
-            upToDate.Visible = current;
+            installItem.Text = updateWaiting ? "Install " + latest.Tag : current ? "Up to date (" + latest.Tag + ")" : "Install the update";
+            latestLabel.Text = stable != null ? "Latest:  " + stable.Tag : "Latest:  unknown";
+            latestLabel.ForeColor = updateWaiting && !latest.Beta ? Color.FromArgb(90, 220, 110) : Gold;
+
+            // The release's button: its version, and what installing it does.
+            bool stableKnown = stable != null && stable.ZipUrl != null;
+            bool onStable = stableKnown && installed != null && Same(stable.Tag, installed);
+            installButton.Text = !stableKnown ? "Install"
+                : installed == null ? "Install " + stable.Tag
+                : Newer(stable.Tag, installed) ? "Update to " + stable.Tag
+                : IsBeta(installed) ? "Back to stable " + stable.Tag
+                : "Install " + stable.Tag;
+            installButton.Visible = !onStable;
+            installButton.Enabled = stableKnown && !installing;
+            upToDate.Text = onStable ? "\u2713  Up to date  \u00B7  " + stable.Tag : "";
+            upToDate.Visible = onStable;
+
+            // The beta's button: its version, or none newer than the release.
+            bool onBeta = betaOut && installed != null && Same(pre.Tag, installed);
+            betaButton.Text = !betaOut ? "No beta right now" : onBeta ? "\u2713  Beta " + pre.Tag + " installed" : "Install beta " + pre.Tag;
+            betaButton.Enabled = betaOut && !onBeta && !installing;
             ShowOverlay();
             // Asked from the tray: a newer one installed at once, or said so.
             if (installWhenNewer && latest != null)
@@ -843,7 +896,7 @@ namespace SurvivorInstaller
                 installWhenNewer = false;
                 if (updateWaiting && !installing)
                 {
-                    Install();
+                    Install(latest);
                     return;
                 }
                 if (current) Status("Survivor UI " + latest.Tag + " is the latest: up to date.");
@@ -854,6 +907,12 @@ namespace SurvivorInstaller
                 tray.ShowBalloonTip(6000, "Survivor UI " + latest.Tag + " is out",
                     (latest.Beta ? "A beta build: more bugs than usual. " : "") + "Click to see what's new and update.", ToolTipIcon.Info);
             }
+        }
+
+        // The same version: neither newer than the other.
+        static bool Same(string a, string b)
+        {
+            return !Newer(a, b) && !Newer(b, a);
         }
 
         static string Trim(string text, int most)
@@ -1017,25 +1076,19 @@ namespace SurvivorInstaller
                     if (isPre) pre = release; else stable = release;
                     if (stable != null && pre != null) break;
                 }
-                Release chosen = stable;
-                if (beta && pre != null && (stable == null || Newer(pre.Tag, stable.Tag))) chosen = pre;
-                if (chosen == null) throw new Exception("GitHub lists no release");
-                // The newest installer among the releases this channel follows.
-                Release newestInstaller = null;
-                foreach (Release candidate in new Release[] { stable, beta ? pre : null })
-                {
-                    if (candidate == null || candidate.InstallerVersion == null) continue;
-                    if (newestInstaller == null || candidate.InstallerVersion > newestInstaller.InstallerVersion)
-                        newestInstaller = candidate;
-                }
-                BeginInvoke(new Action<Release>(ShowLatest), chosen);
-                BeginInvoke(new Action<Release>(ShowSelfUpdate), newestInstaller);
+                if (stable == null && pre == null) throw new Exception("GitHub lists no release");
+                BeginInvoke(new Action<Release, Release>(ShowReleases), stable, pre);
             }
             catch (Exception error)
             {
                 BeginInvoke(new Action(delegate
                 {
                     installWhenNewer = false;
+                    if (checkingByHand)
+                    {
+                        checkingByHand = false;
+                        ShowOwnVersion();
+                    }
                     // Known already: kept, and asked again in half an hour.
                     if (latest != null)
                     {
@@ -1079,16 +1132,34 @@ namespace SurvivorInstaller
             return release;
         }
 
-        void ShowLatest(Release release)
+        // GitHub's answer: the buttons, the notes of the one followed, and the
+        // newest launcher among the releases it follows.
+        void ShowReleases(Release newStable, Release newPre)
         {
-            latest = release;
-            latestLabel.Text = (release.Beta ? "Latest beta:  " : "Latest:  ") + release.Tag;
-            notesBox.Text = (release.Beta
-                ? "BETA BUILD, before a release: more bugs than usual may be in it, and it updates more often. Untick \"Beta builds\" to go back to the release.\r\n\r\n"
-                : "") + Plain(release.Notes);
-            installButton.Enabled = release.ZipUrl != null;
-            if (release.ZipUrl == null) Status("The latest release has no zip to install.");
+            stable = newStable;
+            pre = newPre;
             ShowUpdateState();
+            if (latest != null)
+            {
+                notesBox.Text = (latest.Beta
+                    ? "BETA BUILD, before a release: more bugs than usual may be in it, and it updates more often. The release's button takes you back.\r\n\r\n"
+                    : "") + Plain(latest.Notes);
+                if (latest.ZipUrl == null) Status("The latest release has no zip to install.");
+            }
+            Release newestInstaller = null;
+            foreach (Release candidate in new Release[] { stable, latest != null && latest.Beta ? pre : null })
+            {
+                if (candidate == null || candidate.InstallerVersion == null) continue;
+                if (newestInstaller == null || candidate.InstallerVersion > newestInstaller.InstallerVersion)
+                    newestInstaller = candidate;
+            }
+            bool byHand = checkingByHand;
+            checkingByHand = false;
+            ShowSelfUpdate(newestInstaller);
+            // Asked by hand: the answer said, for the launcher and the addons.
+            if (byHand && selfRelease == null && !selfUpdating)
+                Status("The launcher " + Short(OwnVersion) + " is up to date; " +
+                    (updateWaiting ? "Survivor UI " + latest.Tag + " is out." : "so is Survivor UI."));
         }
 
         // GitHub's markdown, readable as plain text.
@@ -1135,19 +1206,33 @@ namespace SurvivorInstaller
             return version.Build > 0 ? version.Major + "." + version.Minor + "." + version.Build : version.Major + "." + version.Minor;
         }
 
-        // The top right: the installer's version, and the Launcher update
-        // button while a newer one is out (or being taken).
+        // The top right: the launcher's version, a green arrow by it while a
+        // newer one is out (or being taken), and the button: Check for
+        // updates, or the update itself.
         void ShowOwnVersion()
         {
             Release pending = selfUpdating ? updatingTo : selfRelease;
-            launcherButton.Visible = pending != null;
-            launcherButton.Enabled = pending != null && !selfUpdating;
-            launcherButton.Text = selfUpdating ? "Updating..." : "Launcher update";
-            if (!launcherButton.Enabled) launcherButton.BackColor = LauncherDim;
-            versionLabel.Text = "Installer " + Short(OwnVersion) + (pending != null ? "  \u2192  " + Short(pending.InstallerVersion) : "");
+            arrowMark.Visible = pending != null;
+            versionLabel.Text = "Launcher " + Short(OwnVersion) + (pending != null ? "  \u2192  " + Short(pending.InstallerVersion) : "");
             versionLabel.ForeColor = pending != null ? Color.FromArgb(110, 225, 125) : Muted;
             if (pending != null)
-                tips.SetToolTip(launcherButton, "Installer " + Short(pending.InstallerVersion) + " is out: click to update it. It starts again by itself.");
+            {
+                selfButton.Text = selfUpdating ? "Updating..." : "Update to " + Short(pending.InstallerVersion);
+                selfButton.Enabled = !selfUpdating;
+                selfButton.ForeColor = Color.White;
+                selfButton.FlatAppearance.BorderColor = Color.FromArgb(150, 240, 160);
+                if (selfUpdating) selfButton.BackColor = LauncherDim;
+                tips.SetToolTip(selfButton, "Launcher " + Short(pending.InstallerVersion) + " is out: click to update it. It starts again by itself.");
+            }
+            else
+            {
+                selfButton.Text = checkingByHand ? "Checking..." : "Check for updates";
+                selfButton.Enabled = !checkingByHand;
+                selfButton.ForeColor = Gold;
+                selfButton.BackColor = Color.FromArgb(40, 36, 24);
+                selfButton.FlatAppearance.BorderColor = Color.FromArgb(90, 80, 40);
+                tips.SetToolTip(selfButton, "Asks GitHub now for a new launcher and a new Survivor UI.");
+            }
         }
 
         // A newer installer out: offered, or taken at once when it updates itself.
@@ -1157,7 +1242,7 @@ namespace SurvivorInstaller
             bool available = selfRelease != null;
             selfItem.Visible = available;
             selfItem.Enabled = available && !selfUpdating;
-            if (available) selfItem.Text = "Update the installer to " + Short(selfRelease.InstallerVersion);
+            if (available) selfItem.Text = "Update the launcher to " + Short(selfRelease.InstallerVersion);
             ShowOwnVersion();
             if (!available) return;
             if (selfBox.Checked)
@@ -1169,8 +1254,8 @@ namespace SurvivorInstaller
             if (toldOfSelf != version)
             {
                 toldOfSelf = version;
-                tray.ShowBalloonTip(6000, "Survivor UI Installer " + Short(selfRelease.InstallerVersion) + " is out",
-                    "Click \"Launcher update\" at the top of the window, or in the tray's menu.", ToolTipIcon.Info);
+                tray.ShowBalloonTip(6000, "Survivor UI Launcher " + Short(selfRelease.InstallerVersion) + " is out",
+                    "Click \"Update to " + Short(selfRelease.InstallerVersion) + "\" at the top of the window, or in the tray's menu.", ToolTipIcon.Info);
             }
         }
 
@@ -1180,7 +1265,7 @@ namespace SurvivorInstaller
             // Not in the middle of installing the addons: after it.
             if (installing)
             {
-                Status("The installer updates itself once the addons are installed.");
+                Status("The launcher updates itself once the addons are installed.");
                 return;
             }
             selfUpdating = true;
@@ -1189,7 +1274,7 @@ namespace SurvivorInstaller
             updatingTo = release;
             selfRelease = null;
             ShowOwnVersion();
-            Status("Downloading the installer " + Short(release.InstallerVersion) + "...");
+            Status("Downloading the launcher " + Short(release.InstallerVersion) + "...");
             new Thread(delegate () { DoUpdateSelf(release); }) { IsBackground = true }.Start();
         }
 
@@ -1246,7 +1331,7 @@ namespace SurvivorInstaller
                     selfRelease = release;
                     selfItem.Enabled = true;
                     ShowOwnVersion();
-                    Status("The installer could not update itself: " + error.Message + ". Download it again from GitHub.");
+                    Status("The launcher could not update itself: " + error.Message + ". Download it again from GitHub.");
                 }));
             }
             finally
@@ -1266,7 +1351,7 @@ namespace SurvivorInstaller
             {
                 tries++;
                 if (updated && tries == 1 && !Visible)
-                    tray.ShowBalloonTip(5000, "Survivor UI Installer", "Updated to " + Short(OwnVersion) + ".", ToolTipIcon.Info);
+                    tray.ShowBalloonTip(5000, "Survivor UI Launcher", "Updated to " + Short(OwnVersion) + ".", ToolTipIcon.Info);
                 bool gone = true;
                 try { if (File.Exists(OldPath)) File.Delete(OldPath); }
                 catch { gone = false; }
@@ -1277,10 +1362,10 @@ namespace SurvivorInstaller
 
         // --- Install ----------------------------------------------------------
 
-        void Install()
+        void Install(Release release)
         {
             string addons = folderBox.Text.Trim();
-            if (addons == "" || latest == null) { Status("Pick the game first."); return; }
+            if (addons == "" || release == null) { Status("Pick the game first."); return; }
             if (!Directory.Exists(Path.GetDirectoryName(addons.TrimEnd('\\'))))
             {
                 MessageBox.Show(this, "That folder does not look like the game's: " + addons, "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1289,12 +1374,12 @@ namespace SurvivorInstaller
             if (installing) return;
             installing = true;
             installButton.Enabled = false;
+            betaButton.Enabled = false;
             browseButton.Enabled = false;
             installItem.Enabled = false;
             playButton.Enabled = false;
             playItem.Enabled = false;
-            Status("Downloading " + latest.ZipName + "...");
-            Release release = latest;
+            Status("Downloading " + release.ZipName + "...");
             new Thread(delegate () { DoInstall(addons, release); }) { IsBackground = true }.Start();
         }
 
@@ -1360,7 +1445,6 @@ namespace SurvivorInstaller
                 BeginInvoke(new Action(delegate
                 {
                     installing = false;
-                    installButton.Enabled = true;
                     browseButton.Enabled = true;
                     ShowUpdateState();
                     if (selfRelease != null && selfBox.Checked) UpdateSelf();
