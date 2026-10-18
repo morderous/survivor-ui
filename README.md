@@ -180,7 +180,7 @@ Two ways, the same result: the installer, or the zip by hand. The installer is o
    The installer puts the addons in that folder's `AddOns` and shows the path under "Game's AddOns folder": check that it ends in `benilla-config\AddOns`. (Or put the installer in the game's folder and it finds the game by itself.)
 4. Click **Install / Update**, and restart the game if it was open.
 
-Open it again any time to update: it always offers the latest release, with its notes. It only touches the `SurvivorUI` and `SurvivorPlates` folders in the game's `AddOns` folder. Its source is in [`installer/`](installer), built with the C# compiler that comes with Windows (`installer\build.bat`).
+Open it again any time to update: it always offers the latest release, with its notes. Or leave it running: minimized, it waits in the tray (by the clock), asks GitHub for a new release every half hour, and when one is out a **green arrow** shows on its tray icon and on its taskbar button, with a note once; click the tray icon to open it, right click it for Check for updates, Install, Start with Windows and Exit. Tick "Start with Windows, in the tray" and it starts with Windows, straight into the tray. It only touches the `SurvivorUI` and `SurvivorPlates` folders in the game's `AddOns` folder. Its source is in [`installer/`](installer), built with the C# compiler that comes with Windows (`installer\build.bat`).
 
 ### By hand
 
@@ -207,6 +207,15 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### Installer 1.1, 2026-10-17
+
+- **Waits in the tray and tells of updates**: minimized, the installer goes to the tray by the clock instead of the taskbar, and asks GitHub for a new release every half hour. When one newer than the installed addons is out, a green arrow shows on its tray icon and on its taskbar button's corner, and a note says so once; a click on the note or the icon opens it, ready to update. Right click the tray icon for Open, Check for updates now (which brings it forward and installs a newer release at once), Install and Exit. With the latest installed, a green "Up to date" badge stands where the install button was. Opened again while it runs, the one running comes forward.
+- **Start with Windows, in the tray**: a tick in the window, beside the install button, and the same in the tray's menu; on, it starts with Windows straight into the tray and looks for an update. It writes one line in your own startup list (the Run key of your user), and takes it away when unticked.
+- **Open folder** is now a link under "Find game...", by the folder it opens, in place of the button beside Install.
+- **Read larger**, by "What's new": the latest release's notes in a large window that reads well, the headings in gold, a bullet for each item.
+- The window's title is Survivor UI alone.
+- **Its own icon**: the addons' gold S, on the exe, the window and the tray.
 
 ### v3.0.2, 2026-10-17
 
