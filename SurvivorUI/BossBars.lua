@@ -30,8 +30,9 @@ local KINDS = {
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
+	-- Off on a new install: the run tracker shows the bosses already.
 	if SurvivorUIDB.bossBars == nil then
-		SurvivorUIDB.bossBars = true
+		SurvivorUIDB.bossBars = false
 	end
 	return SurvivorUIDB
 end
@@ -373,9 +374,9 @@ end
 local function Update()
 	local settings = Settings()
 	local shown = 0
-	-- The tracker shows the health in their place (/sui opt, Run tracker): the
-	-- bars stay away, and so do the game's own.
-	if settings.bossBars and Playing() and not settings.trackerHealth then
+	-- Apart from the run tracker: shown whether it shows the bosses' health or
+	-- not.
+	if settings.bossBars and Playing() then
 		local picked = {}
 		for index = 1, table.getn(AZS_UNITS) do
 			local unit = AZS_UNITS[index]
@@ -417,7 +418,8 @@ local function ApplyGameHud()
 		return
 	end
 	local settings = Settings()
-	if settings.bossBars then
+	-- Away while these bars or the run tracker show the bosses' health.
+	if settings.bossBars or settings.trackerHealth then
 		if AZS_IsHudShown("bosses") then
 			AZS_SetHudShown("bosses", false)
 			settings.hidGameBosses = true
@@ -428,6 +430,9 @@ local function ApplyGameHud()
 	end
 end
 
+-- For the options' Run tracker tab, as its boss health is switched.
+SurvivorUI_ApplyBossHud = ApplyGameHud
+
 function SurvivorUI_BossBars(argument)
 	local settings = Settings()
 	if argument == "elites" then
@@ -436,7 +441,7 @@ function SurvivorUI_BossBars(argument)
 	else
 		settings.bossBars = not settings.bossBars
 		ApplyGameHud()
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.bossBars and "boss bars on; the game's own are put away." or "boss bars off; the game's own are back."))
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.bossBars and "boss bars on; the Default ones are put away." or "boss bars off; the Default ones are back."))
 	end
 	Update()
 end

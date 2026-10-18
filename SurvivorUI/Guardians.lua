@@ -11,9 +11,9 @@
 -- words' initials ("K. Taskmaster").
 --
 -- The client cannot tell which way the hero faces, so the arrows turn with the
--- way the hero walks: straight up is straight ahead, and they turn smoothly.
--- Standing still they keep the last way; /sui guardians north points them
--- north up instead, as the minimap does.
+-- way the hero faces (the game sends it from 0.97; before, the way walked):
+-- straight up is straight ahead, and they turn smoothly. /sui guardians north
+-- points them north up instead, as the minimap does.
 --
 -- Over the list, the achievement "Slay four guardians before 8:00": how many
 -- fell before 8:00 and the time left, green once four did.
@@ -330,12 +330,22 @@ local function Draw()
 	end
 	lastTime = time
 
-	local heroX, heroY
-	if SurvivorUI_HeroPlace then
-		heroX, heroY = SurvivorUI_HeroPlace()
+	-- The hero's place: in the world's yards and the way faced, when the game
+	-- sends them (0.97 on, every map); else on the map, the way walked.
+	local px, py, facing
+	if SurvivorUI_HeroWorld then
+		px, py, facing = SurvivorUI_HeroWorld()
 	end
-	local span = SurvivorUI_MapSpan and SurvivorUI_MapSpan()
-	if heroX and span then
+	local heroX, heroY, span
+	if not px then
+		if SurvivorUI_HeroPlace then
+			heroX, heroY = SurvivorUI_HeroPlace()
+		end
+		span = SurvivorUI_MapSpan and SurvivorUI_MapSpan()
+	end
+	if facing then
+		heading = facing
+	elseif heroX and span then
 		Walked(heroX, heroY, span)
 	end
 	local north = Settings().guardiansNorth
@@ -366,10 +376,18 @@ local function Draw()
 		elseif state == "awake" then
 			entry.share = healths[entry.id]
 		end
-		local mx = SurvivorUI_MapShare and SurvivorUI_MapShare(Field(lair, "mx", 9))
-		local my = SurvivorUI_MapShare and SurvivorUI_MapShare(Field(lair, "my", 10))
-		if heroX and span and mx and my then
-			local east, south = (mx - heroX) * span.across, (my - heroY) * span.down
+		local east, south
+		local lx, ly = tonumber(Field(lair, "x", 6)), tonumber(Field(lair, "y", 7))
+		if px and lx and ly then
+			east, south = SurvivorUI_WorldWay(px, py, lx, ly)
+		else
+			local mx = SurvivorUI_MapShare and SurvivorUI_MapShare(Field(lair, "mx", 9))
+			local my = SurvivorUI_MapShare and SurvivorUI_MapShare(Field(lair, "my", 10))
+			if heroX and span and mx and my then
+				east, south = (mx - heroX) * span.across, (my - heroY) * span.down
+			end
+		end
+		if east then
 			entry.yards = math.sqrt(east * east + south * south)
 			local bearing = math.atan2(east, -south)
 			wanted[place] = (north or not heading) and bearing or bearing - heading
@@ -634,7 +652,7 @@ function SurvivorUI_GuardianBar(head, y)
 		segment.fill:SetWidth(math.max(1, each * share))
 		segment.fill:SetVertexColor(color[1], color[2], color[3], 0.9)
 		segment.fill:Show()
-		local clickable = entry.alive and SurvivorUIDB and SurvivorUIDB.trackerHealth
+		local clickable = entry.alive
 		segment.button.target = clickable and entry.name or nil
 		segment.button:EnableMouse(clickable and true or false)
 		local fighting = entry.state == "awake"

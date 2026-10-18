@@ -196,16 +196,19 @@ end
 local lastAdded, lastAddedAt = nil, 0
 
 -- The line as the game writes it in each of its languages: English, Polish,
--- German, Portuguese, Spanish, French, Turkish, Russian, Chinese, Korean.
+-- German, Portuguese, Spanish, French, Turkish, Russian, Chinese, Korean, and
+-- from its 0.97 Romanian, Ukrainian and Japanese.
 local RECEIVE = {
 	"You receive loot:", "Otrzymujesz łup:", "Du erhältst Beute:", "Você recebe saque:",
 	"Recibes botín:", "Vous recevez du butin :", "Ganimet aldın:", "Вы получаете добычу:",
 	"你获得了战利品：", "전리품을 받았습니다:",
+	"Primești pradă:", "Ви отримуєте здобич:", "戦利品を入手：",
 }
 local NEW = {
 	"New in your collection", "Nowość w kolekcji", "Neu in deiner Sammlung", "Novo na sua coleção",
 	"Nuevo en tu colección", "Nouveau dans votre collection", "Koleksiyonunda yeni",
 	"Новое в вашей коллекции", "收藏新增", "수집품에 새로 추가",
+	"Nou în colecția ta", "Нове у вашій колекції", "コレクションに新しく追加",
 }
 
 -- What follows "You receive loot:" (or its own words), or nil.
@@ -350,8 +353,8 @@ function SurvivorUI_ToggleLoot()
 	settings.lootLog = not settings.lootLog
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.lootLog
-		and "loot list shown; the game's own loot notices are put away."
-		or "loot list hidden; the game's own loot notices are back."))
+		and "loot list shown; the Default loot notices are put away."
+		or "loot list hidden; the Default loot notices are back."))
 end
 
 if SurvivorUI_RegisterMover then

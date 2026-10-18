@@ -71,11 +71,21 @@ local CRIT_PALETTE = {
 
 local run = {}
 local critBest, critStats, critColor, critSeen = {}, {}, {}, 0
+local critBestAt = {}           -- [ability] = the run second its best was set
 local hitStats = {}             -- [ability] = { last, sum, count }, normal hits only
+
+-- The run's clock: a pause stops it.
+local function RunNow()
+	return AZS_GetRunTime and AZS_GetRunTime() or GetTime()
+end
 
 local function ResetCrits()
 	critBest, critStats, critColor, critSeen = {}, {}, {}, 0
+	critBestAt = {}
 	hitStats = {}
+	if SurvivorUI_ResetCritRecord then
+		SurvivorUI_ResetCritRecord()
+	end
 end
 
 local function ResetRun()
@@ -273,6 +283,24 @@ local function RestorePanel()
 	end
 end
 
+-- A tooltip beside its box, level with what it tells: right of the box on
+-- the screen's left half, left of it on the right half. Above a row it would
+-- be pushed down over the rows at the screen's top, where the panel starts.
+local function Beside(owner, box)
+	GameTooltip:SetOwner(owner, "ANCHOR_NONE")
+	GameTooltip:ClearAllPoints()
+	-- The gap from the row's edge out past the box's, in the tooltip's units.
+	local scale = owner:GetEffectiveScale() / GameTooltip:GetEffectiveScale()
+	local center = box:GetCenter()
+	if center and center * box:GetEffectiveScale() > UIParent:GetWidth() * UIParent:GetEffectiveScale() / 2 then
+		local gap = ((owner:GetLeft() or 0) - (box:GetLeft() or 0)) * scale + 6
+		GameTooltip:SetPoint("TOPRIGHT", owner, "TOPLEFT", -gap, 0)
+	else
+		local gap = ((box:GetRight() or 0) - (owner:GetRight() or 0)) * scale + 6
+		GameTooltip:SetPoint("TOPLEFT", owner, "TOPRIGHT", gap, 0)
+	end
+end
+
 -- A section title. It says how to move the panel, and is a handle for doing it.
 local function Title(text, tip)
 	local handle = CreateFrame("Frame", nil, panel)
@@ -283,7 +311,7 @@ local function Title(text, tip)
 	handle:SetScript("OnDragStart", function() if IsAltKeyDown() then panel:StartMoving() end end)
 	handle:SetScript("OnDragStop", function() panel:StopMovingOrSizing() SavePanel() end)
 	handle:SetScript("OnEnter", function()
-		GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
+		Beside(this, panel)
 		GameTooltip:SetText(text, 1, 0.82, 0)
 		GameTooltip:AddLine("Hold Alt and drag to move.", 1, 1, 1)
 		GameTooltip:AddLine(this.tip, 0.7, 0.7, 0.7, 1)
@@ -300,7 +328,7 @@ local function Title(text, tip)
 	return handle
 end
 
-local RUN_TIP_GAME = "The game's own numbers. Hover a row for more."
+local RUN_TIP_GAME = "The game's numbers. Hover a row for more."
 local RUN_TIP_OWN = "Counted by the addon from the combat log. A new run starts it over."
 local runTitle = Title("This Run", RUN_TIP_OWN)
 -- A row: a label and a value in one color, on a faint wash of that color, over
@@ -367,11 +395,11 @@ runRows.kpm.average:SetPoint("RIGHT", runRows.kpm.value, "LEFT", -6, -1)
 -- The clock is the addon's own count, not the game's: say where they can part.
 runRows.time:EnableMouse(true)
 runRows.time:SetScript("OnEnter", function()
-	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
+	Beside(this, panel)
 	GameTooltip:SetText("Survived", 1, 0.82, 0)
 	local game = Game()
 	if game then
-		GameTooltip:AddLine("The game's own clock. It stops while you pause or choose a card.", 1, 1, 1, 1)
+		GameTooltip:AddLine("The game's clock. It stops while you pause or choose a card.", 1, 1, 1, 1)
 		if Num(game.left) >= 0 and Num(game.endl) == 0 then
 			GameTooltip:AddDoubleLine("Final boss in", Clock(Num(game.left)), 0.7, 0.7, 0.7, 1, 1, 1)
 		elseif Num(game.endl) == 1 then
@@ -412,7 +440,7 @@ local function RowTip(key, fill)
 		if not game then
 			return
 		end
-		GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
+		Beside(this, panel)
 		fill(game)
 		GameTooltip:Show()
 	end)
@@ -675,6 +703,9 @@ local function CritTooltip(row)
 	Add("head", "Critical strikes", stats and stats.count or 0)
 	if stats then
 		Add("row", "Biggest", Short(critBest[ability]))
+		if critBestAt[ability] then
+			Add("row", "Beaten last", Clock(RunNow() - critBestAt[ability]).." ago")
+		end
 		Add("row", "Last", Short(stats.last))
 		Add("row", "Average", Short(stats.sum / stats.count))
 		Add("row", "Smallest", Short(stats.least))
@@ -862,7 +893,7 @@ critReset.text:SetText("Reset")
 critReset.text:SetTextColor(0.6, 0.6, 0.6)
 critReset:SetScript("OnEnter", function()
 	this.text:SetTextColor(1, 1, 1)
-	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
+	Beside(this, critBox)
 	GameTooltip:SetText("Clears the crits.", 1, 1, 1)
 	GameTooltip:Show()
 end)
@@ -1096,6 +1127,7 @@ local function RecordCrit(ability, amount)
 
 	if not critBest[ability] or amount > critBest[ability] then
 		critBest[ability] = amount
+		critBestAt[ability] = RunNow()
 	end
 	if critHovered and critHovered:IsVisible() then
 		CritTooltip(critHovered)
@@ -1139,6 +1171,11 @@ local function Hit(message)
 end
 
 local function Crit(message)
+	-- Each ability's best crit, as the combat numbers see it (SurvivorUI.lua).
+	local _, _, any = string.find(message, " crits? .- for (%d+)")
+	if any and SurvivorUI_NoteCrit then
+		SurvivorUI_NoteCrit(any, message)
+	end
 	-- "Your Lightning Bolt crits Kobold Vermin for 168."
 	local _, _, ability, _, amount = string.find(message, "^Your (.+) crits (.+) for (%d+)")
 	if not ability then

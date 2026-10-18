@@ -14,15 +14,17 @@
 --   Interface    the looks the addon gives the game's interface
 --   Character    where the stats show, and which of them this class keeps
 --   Size         each part's own size
---   Layout       move mode over a grid, the frames joined to the bar, resets
--- Most things act at once; a look that needs a reload lights the Reload
--- button at the bottom. Move mode sits beside it, on every page. Escape
--- closes the window.
+--   Layout       the frames joined to the bar, resets
+-- Most things act at once. Move UI, at the top beside each page's title,
+-- unlocks every piece over a grid; each tab's own pieces can be dragged while
+-- it is open, so one can play while setting them. Save & Close at the bottom
+-- (Reload & Close while a look waits for a reload), or Escape, closes the
+-- window; the - beside the x minimizes it to a bar of three buttons.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
-local WIDTH, HEIGHT = 640, 580
+local WIDTH, HEIGHT = 640, 700
 local SIDEBAR = 150
 local PAGE_X = SIDEBAR + 18               -- the pages' left edge
 local PAGE_WIDTH = WIDTH - PAGE_X - 18
@@ -54,6 +56,11 @@ end
 
 local function OnlyIfOn(key)
 	return function() return DB()[key] == true end
+end
+
+-- A setting on unless false, switched.
+local function Flip(key)
+	return function() DB()[key] = DB()[key] == false end
 end
 
 -- A look the addon gives the game's interface (SurvivorUI_Feature): most wait
@@ -148,15 +155,34 @@ version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 1, -3)
 local versionNumber = GetAddOnMetadata and GetAddOnMetadata("SurvivorUI", "Version")
 version:SetText(versionNumber and ("v"..versionNumber) or "")
 
-local close = CreateFrame("Button", nil, panel)
-close:SetWidth(20)
-close:SetHeight(20)
-close:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -6, -6)
-close.text = Text(close, 13, MUTED)
-close.text:SetPoint("CENTER", close, "CENTER", 0, 0)
-close.text:SetText("x")
-close:SetScript("OnEnter", function() this.text:SetTextColor(1, 0.35, 0.3) end)
-close:SetScript("OnLeave", function() this.text:SetTextColor(MUTED[1], MUTED[2], MUTED[3]) end)
+-- A square button at the window's top right: filled and edged in its color,
+-- brighter under the mouse, its sign in white.
+local function CornerButton(sign, color, lift)
+	local button = CreateFrame("Button", nil, panel)
+	button:SetWidth(22)
+	button:SetHeight(22)
+	button:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	button.text = Text(button, 12, { 1, 1, 1 })
+	button.text:SetPoint("CENTER", button, "CENTER", 0, lift or 0)
+	button.text:SetText(sign)
+	button.color = color
+	function button:Light(hot)
+		local fill = hot and 0.8 or 0.45
+		self:SetBackdropColor(self.color[1] * fill, self.color[2] * fill, self.color[3] * fill, 1)
+		if hot then
+			self:SetBackdropBorderColor(1, 1, 1, 1)
+		else
+			self:SetBackdropBorderColor(self.color[1], self.color[2], self.color[3], 0.9)
+		end
+	end
+	button:Light(false)
+	button:SetScript("OnEnter", function() this:Light(true) end)
+	button:SetScript("OnLeave", function() this:Light(false) end)
+	return button
+end
+
+local close = CornerButton("x", { 0.95, 0.32, 0.28 }, 1)
+close:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -10)
 close:SetScript("OnClick", function() panel:Hide() end)
 
 ------------------------------------------------------------------------------
@@ -186,8 +212,21 @@ local function RefreshAll()
 	end
 end
 
+-- Each tab's pieces, movable while it is open (Mover.lua), by their names in
+-- move mode; the tabs left out move none (Move UI moves every piece).
+local TAB_PIECES = {
+	panels = { "This Run", "Biggest Crits", "Loot", "Build", "Damage meter", "Boss bars", "Kills & gold", "Run tracker" },
+	tracker = { "Run tracker", "Guardians" },
+	combat = { "Damage numbers", "Crit numbers", "Damage taken", "Healing", "New best crit" },
+	units = { "Player frame", "Target frame", "Buffs" },
+	interface = { "Chat", "Minimap", "Minimap button" },
+}
+
 local function ShowPage(key)
 	current = key
+	if SurvivorUI_SetMoveFocus then
+		SurvivorUI_SetMoveFocus(TAB_PIECES[key])
+	end
 	for _, tab in pairs(TABS) do
 		local page, button = pages[tab.key], tabButtons[tab.key]
 		if tab.key == key then
@@ -436,6 +475,122 @@ local function Choice(page, options, get, set)
 	end
 end
 
+-- A choice in one row: an optional label on the left, then each option's ring
+-- and words side by side.
+local function Inline(page, label, options, get, set)
+	local color = page.color
+	local x = 0
+	if label then
+		local text = Text(page, 10, TEXT)
+		text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 3)
+		text:SetText(label)
+		x = 140
+	end
+	for index = 1, table.getn(options) do
+		local option = options[index]
+		local value = option[1]
+		local row = CreateFrame("Button", nil, page)
+		row:SetHeight(ROW)
+		row:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
+		row.ring = Fill(row, "BORDER", 0.3, 0.3, 0.35, 1)
+		row.ring:SetWidth(13)
+		row.ring:SetHeight(13)
+		row.ring:SetPoint("TOPLEFT", row, "TOPLEFT", 2, -4)
+		row.inner = Fill(row, "ARTWORK", 0.05, 0.05, 0.07, 1)
+		row.inner:SetPoint("TOPLEFT", row.ring, "TOPLEFT", 1, -1)
+		row.inner:SetPoint("BOTTOMRIGHT", row.ring, "BOTTOMRIGHT", -1, 1)
+		row.dot = Fill(row, "OVERLAY", 0, 0, 0, 1)
+		row.dot:SetPoint("TOPLEFT", row.ring, "TOPLEFT", 4, -4)
+		row.dot:SetPoint("BOTTOMRIGHT", row.ring, "BOTTOMRIGHT", -4, 4)
+		row.label = Text(row, 10, TEXT)
+		row.label:SetPoint("TOPLEFT", row.ring, "TOPRIGHT", 6, 0)
+		row.label:SetText(option[2])
+		local width = 2 + 13 + 6 + row.label:GetStringWidth() + 18
+		row:SetWidth(width)
+		x = x + width
+		row:SetScript("OnClick", function()
+			set(value)
+			RefreshAll()
+		end)
+		row:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+		row:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+		function row:Refresh()
+			local chosen = get() == value
+			self.ring:SetVertexColor(chosen and color[1] or 0.3, chosen and color[2] or 0.3, chosen and color[3] or 0.35, 1)
+			self.dot:SetVertexColor(color[1], color[2], color[3], chosen and 1 or 0)
+			if self.hot then
+				self.label:SetTextColor(1, 1, 1)
+			elseif chosen then
+				self.label:SetTextColor(color[1], color[2], color[3])
+			else
+				self.label:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+			end
+		end
+		table.insert(widgets, row)
+	end
+	page.y = page.y - ROW - 2
+end
+
+-- Checks in one row, side by side: { label, isOn, toggle } each.
+local function InlineChecks(page, items, label)
+	local color = page.color
+	local x, gap = 0, 22
+	if label then
+		local text = Text(page, 10, TEXT)
+		text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 3)
+		text:SetText(label)
+		x, gap = 140, 12
+	end
+	for index = 1, table.getn(items) do
+		local item = items[index]
+		local isOn, toggle = item[2], item[3]
+		local check = CreateFrame("Button", nil, page)
+		check:SetHeight(ROW)
+		check:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
+		check.edge = Fill(check, "BORDER", 0.3, 0.3, 0.35, 1)
+		check.edge:SetWidth(13)
+		check.edge:SetHeight(13)
+		check.edge:SetPoint("TOPLEFT", check, "TOPLEFT", 2, -3)
+		check.box = Fill(check, "ARTWORK", 0.06, 0.06, 0.08, 1)
+		check.box:SetPoint("TOPLEFT", check.edge, "TOPLEFT", 1, -1)
+		check.box:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -1, 1)
+		check.mark = Fill(check, "OVERLAY", 1, 1, 1, 0)
+		check.mark:SetPoint("TOPLEFT", check.edge, "TOPLEFT", 3, -3)
+		check.mark:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -3, 3)
+		check.label = Text(check, 11, TEXT)
+		check.label:SetPoint("LEFT", check.edge, "RIGHT", 9, 0)
+		check.label:SetText(item[1])
+		local width = 2 + 13 + 9 + check.label:GetStringWidth() + gap
+		check:SetWidth(width)
+		x = x + width
+		check:SetScript("OnClick", function()
+			toggle()
+			RefreshAll()
+		end)
+		check:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+		check:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+		function check:Refresh()
+			local on = isOn()
+			if on then
+				self.edge:SetVertexColor(color[1], color[2], color[3], 1)
+				self.mark:SetVertexColor(color[1], color[2], color[3], 1)
+			else
+				self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+				self.mark:SetVertexColor(1, 1, 1, 0)
+			end
+			if self.hot then
+				self.label:SetTextColor(1, 1, 1)
+			elseif on then
+				self.label:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+			else
+				self.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+			end
+		end
+		table.insert(widgets, check)
+	end
+	page.y = page.y - ROW
+end
+
 -- A slider: its label, a flat track filled in the page's color up to the
 -- thumb, and the value on the right. set() runs as it moves.
 local function Slider(page, label, low, high, step, get, set, format)
@@ -653,7 +808,7 @@ FontPicker(page, "Global font",
 	function() return SurvivorUI_GlobalFont and SurvivorUI_GlobalFont() end,
 	function(path) if SurvivorUI_SetGlobalFont then SurvivorUI_SetGlobalFont(path) end end)
 Note(page, "Changes every text of the addon at once. A piece given a font of its own, on its card in move mode, keeps that one.")
-Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"), "the game's own windows too, after a reload")
+Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"), "the Default windows too, after a reload")
 page.y = page.y - 6
 Button(page, "Every font back to default", 200, 0, function()
 	if SurvivorUI_ResetFonts then
@@ -680,18 +835,35 @@ Note(page, "Each part also has a size of its own, on top of this one: the Size t
 -- Panels.
 
 page = pages.panels
-Header(page, "Panels", "Each turns on or off at once. To move one, hold Alt and drag it, or use move mode (Layout).")
+Header(page, "Panels", "Each turns on or off at once. While this tab is open, drag a panel to move it, or click it for its card.")
 Subheader(page, "Lists")
-Check(page, "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "your spells, ranks and jewelry; off: the game's own")
-Check(page, "Damage meter", OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "off: the game's own")
+Check(page, "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "your spells, ranks and jewelry; off: Default")
+Check(page, "Damage meter", OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "off: Default")
 Check(page, "This Run", OnUnlessOff("runPanel"), Call("SurvivorUI_ToggleRun"), "the run's numbers")
 Check(page, "Biggest Crits", OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"), "each ability's biggest critical strike")
-Check(page, "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"), "what the run dropped; off: the game's own notices")
+Check(page, "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"), "what the run dropped; off: Default notices")
 Subheader(page, "Boss bars")
-Check(page, "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"), "with their debuffs; away while the run tracker shows the bosses' health")
+Check(page, "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"), "the bosses and awake guardians, with their debuffs; apart from the run tracker")
 Check(page, "Elites on the boss bars", OnlyIfOn("bossBarsElites"), Call("SurvivorUI_BossBars", "elites"))
+Subheader(page, "Kills and gold line")
+Inline(page, nil, {
+	{ "minimap", "Under the minimap" },
+	{ "bar", "Under the action bar" },
+	{ "off", "Off" },
+}, function() return SurvivorUI_TallyPlace and SurvivorUI_TallyPlace() or "minimap" end,
+	function(place) if SurvivorUI_SetTallyPlace then SurvivorUI_SetTallyPlace(place) end end)
+Inline(page, nil, {
+	{ "killsGold", "Kills, gold" },
+	{ "goldKills", "Gold, kills" },
+	{ "kills", "Kills only" },
+	{ "gold", "Gold only" },
+}, function() return DB().tallyLayout or "killsGold" end, function(layout) DB().tallyLayout = layout end)
+Check(page, "Gold and cache apart", OnlyIfOn("tallySplit"), function()
+	DB().tallySplit = not DB().tallySplit
+end, "the coin with your gold, the chest with the next cache's price")
+Check(page, "Coin shines when you can pay", OnUnlessOff("trackerCoinShine"), Flip("trackerCoinShine"), "the same switch as the tracker's coin")
+Note(page, "Off: the Default kills and gold box.")
 Subheader(page, "On the screen")
-Check(page, "Kills and gold line", OnUnlessOff("tally"), Call("SurvivorUI_Tally"), "under the action bar; off: the game's own box")
 Check(page, "Caches and lairs on the minimap", FeatureOn("mapPins"), FeatureToggle("mapPins", true))
 
 ------------------------------------------------------------------------------
@@ -699,27 +871,44 @@ Check(page, "Caches and lairs on the minimap", FeatureOn("mapPins"), FeatureTogg
 -- (Tracker.lua, Guardians.lua).
 
 page = pages.tracker
-Header(page, "Run tracker", "Under the minimap: the zone, the run's clock against its length with a tick for each boss, the bosses, the guardians, the elites alive and your level.")
-Check(page, "Run tracker", OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"), "off: the game's own clock")
+Header(page, "Run tracker", "Under the minimap: the zone, the run's clock against its length, the bosses, the guardians, the elites alive and your level. Each part on its own, apart from the boss bars (Panels).")
+Check(page, "Run tracker", OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"), "off: Default clock")
 
 Subheader(page, "Bosses")
-Check(page, "Boss health in the tracker", OnlyIfOn("trackerHealth"), function()
+Check(page, "Boss health", OnlyIfOn("trackerHealth"), function()
 	DB().trackerHealth = not DB().trackerHealth
-end, "in place of the boss bars; click a boss, a guardian or an elite to target it")
+	if SurvivorUI_ApplyBossHud then
+		SurvivorUI_ApplyBossHud()
+	end
+end, "each boss alive fills its line; click it to target")
+Inline(page, "Health shows as", {
+	{ "percent", "73%" },
+	{ "absolutePercent", "1.2M | 73%" },
+	{ "absolute", "1.2M" },
+}, function() return DB().trackerHealthLook or "percent" end, function(look) DB().trackerHealthLook = look end)
 
 Subheader(page, "Guardians")
-Check(page, "Guardians", OnUnlessOff("guardians"), Call("SurvivorUI_ToggleGuardians"), "each lair: which way, how far, alive or slain, and the goal of 4 by 8:00")
+Check(page, "Guardians", OnUnlessOff("guardians"), Call("SurvivorUI_ToggleGuardians"), "each lair: which way, how far, alive or slain; click one to target")
 Choice(page, {
-	{ "bar", "A bar in the tracker", "A stretch a lair, over the level: green with its arrow; red once slain, with the time until it is back." },
-	{ "list", "A list beside the tracker", "A line a lair: its name, SPAWNED or the time until it is back, its yards and an arrow." },
+	{ "bar", "A bar in the tracker", "A stretch a lair, over the level, red once slain with its time back." },
+	{ "list", "A list beside the tracker", "A line a lair: its name, its state, its yards and an arrow." },
 }, function() return DB().guardiansDocked and "bar" or "list" end,
 	function(choice) DB().guardiansDocked = choice == "bar" end)
-Check(page, "Arrows north up", OnlyIfOn("guardiansNorth"), Call("SurvivorUI_ToggleGuardians", "north"), "off: they turn as you walk, straight ahead up")
+Check(page, "Arrows north up", OnlyIfOn("guardiansNorth"), Call("SurvivorUI_ToggleGuardians", "north"), "off: they turn with you, straight ahead up")
 
 Subheader(page, "Elites")
-Check(page, "Elites in the tracker", OnUnlessOff("trackerElites"), function()
-	DB().trackerElites = DB().trackerElites == false
-end, "a small bar for each one alive, bright once it is hurt")
+Check(page, "Elites", OnUnlessOff("trackerElites"), Flip("trackerElites"), "a small bar for each one alive, bright once hurt; click one to target")
+Slider(page, "Bars shown", 4, 12, 1, function() return DB().trackerElitesMax or 8 end,
+	function(value) DB().trackerElitesMax = math.floor(value + 0.5) end, "%d")
+Check(page, "Only while one is alive", OnlyIfOn("trackerElitesHide"), function()
+	DB().trackerElitesHide = not DB().trackerElitesHide
+end, "off: the row keeps its room")
+
+Subheader(page, "Cache coin")
+Check(page, "Coin on the tracker", OnlyIfOn("trackerCoin"), function()
+	DB().trackerCoin = not DB().trackerCoin
+end, "left of the clock: gold when you can pay, red when not")
+Check(page, "Shine when you can pay", OnUnlessOff("trackerCoinShine"), Flip("trackerCoinShine"), "the tracker's coin and the kills and gold line's")
 
 ------------------------------------------------------------------------------
 -- Kill pace: the orb by the run tracker's clock (Pace.lua).
@@ -765,12 +954,13 @@ page.y = page.y - 28
 
 page = pages.combat
 Header(page, "Combat text")
-Choice(page, {
-	{ "survivor", "The addon's own  |cff8a8a90quick numbers, set up below|r" },
-	{ "game", "The game's own  |cff8a8a90the engine's floating numbers and combat text|r" },
-	{ "none", "None  |cff8a8a90no numbers at all|r" },
+Inline(page, nil, {
+	{ "survivor", "SurvivorUI" },
+	{ "game", "Default" },
+	{ "none", "None" },
 }, function() return SurvivorUI_DamageMode and SurvivorUI_DamageMode() or "survivor" end,
 	function(mode) if SurvivorUI_SetDamageMode then SurvivorUI_SetDamageMode(mode) end end)
+Note(page, "None turns every combat number off, Default's too.")
 
 -- Survivor's settings: each a setting of SurvivorUI.lua's (SurvivorUI_CT).
 local function CTGet(key)
@@ -792,26 +982,56 @@ local function CTSet(key)
 end
 
 Subheader(page, "Where")
-Choice(page, {
+Inline(page, nil, {
 	{ "sides", "Beside the hero" },
-	{ "enemies", "Over the enemies", "Needs nameplates on (Nameplates tab); without them, they ring the hero." },
+	{ "enemies", "Over the enemies" },
 }, CTGet("ctLayout"), CTSet("ctLayout"))
 Slider(page, "Distance from hero", 60, 320, 10, CTGet("ctDistance"), CTSet("ctDistance"), "%d")
 Slider(page, "How high they rise", 80, 320, 10, CTGet("ctRise"), CTSet("ctRise"), "%d")
-Check(page, "Crits in a column of their own", CTGet("ctCritColumn"), CTToggle("ctCritColumn"), "on the right")
+Check(page, "Crits in a separate column", CTGet("ctCritColumn"), CTToggle("ctCritColumn"), "on the right")
+Note(page, "Drag a column while this tab is open, or click it for its card; moved, it stays put whatever the distance. Over the enemies needs nameplates.")
 
 Subheader(page, "Look")
-Check(page, "Source icons", CTGet("ctIcons"), CTToggle("ctIcons"), "the spell's icon; melee and shots show the weapon")
-Check(page, "Damage meter colors", CTGet("ctMeterColors"), CTToggle("ctMeterColors"), "each source in its color from the meter")
-Check(page, "Short numbers", CTGet("ctShort"), CTToggle("ctShort"), "1475 as 1.5k, 2,200,000 as 2.2M")
+InlineChecks(page, {
+	{ "Source icons", CTGet("ctIcons"), CTToggle("ctIcons") },
+	{ "Meter colors", CTGet("ctMeterColors"), CTToggle("ctMeterColors") },
+	{ "Short numbers", CTGet("ctShort"), CTToggle("ctShort") },
+})
 Slider(page, "Text size", 0.5, 1.5, 0.05, CTGet("ctSize"), CTSet("ctSize"))
+Slider(page, "Crit size", 0.6, 1.6, 0.05, CTGet("ctCritSize"), CTSet("ctCritSize"))
 
 Subheader(page, "What shows")
-Check(page, "Damage over time", CTGet("ctPeriodic"), CTToggle("ctPeriodic"))
-Check(page, "Heals", CTGet("ctHeals"), CTToggle("ctHeals"))
-Check(page, "Damage taken", CTGet("ctTaken"), CTToggle("ctTaken"))
-page.y = page.y - 6
-Button(page, "Combat text back to default", 220, 0, function()
+InlineChecks(page, {
+	{ "Damage over time", CTGet("ctPeriodic"), CTToggle("ctPeriodic") },
+	{ "Heals", CTGet("ctHeals"), CTToggle("ctHeals") },
+	{ "Damage taken", CTGet("ctTaken"), CTToggle("ctTaken") },
+})
+Slider(page, "Smallest heal", 0, 10, 1, CTGet("ctHealMin"), CTSet("ctHealMin"), "%d%% HP")
+InlineChecks(page, {
+	{ "Damage", CTGet("ctAddDealt"), CTToggle("ctAddDealt") },
+	{ "Crits", CTGet("ctAddCrits"), CTToggle("ctAddCrits") },
+	{ "Heals", CTGet("ctAddHeals"), CTToggle("ctAddHeals") },
+	{ "Taken", CTGet("ctMergeTaken"), CTToggle("ctMergeTaken") },
+}, "Add up")
+Slider(page, "Add up within", 50, 500, 25, CTGet("ctAddWindow"), CTSet("ctAddWindow"), "%d ms")
+Note(page, "One source's hits that close: one number, their sum and count (1.2k x3).")
+
+Subheader(page, "New best crit")
+Check(page, "Held still when a best is beaten", CTGet("ctRecord"), CTToggle("ctRecord"), "bigger and gold, beside the Biggest Crits")
+Inline(page, "A best is", {
+	{ "ability", "per ability" },
+	{ "run", "the run's biggest" },
+}, CTGet("ctRecordKind"), CTSet("ctRecordKind"))
+Slider(page, "Stays", 1, 4, 0.1, CTGet("ctRecordHold"), CTSet("ctRecordHold"), "%.1f s")
+Slider(page, "Size", 0.6, 1.6, 0.05, CTGet("ctRecordSize"), CTSet("ctRecordSize"))
+Check(page, "A glow behind it", CTGet("ctRecordGlow"), CTToggle("ctRecordGlow"))
+page.y = page.y - 4
+Button(page, "Show a sample", 150, 0, function()
+	if SurvivorUI_CTSample then
+		SurvivorUI_CTSample()
+	end
+end)
+Button(page, "Combat text back to default", 220, 162, function()
 	if SurvivorUI_CTDefaults then
 		SurvivorUI_CTDefaults()
 	end
@@ -824,9 +1044,6 @@ page.y = page.y - 28
 
 page = pages.counters
 Header(page, "Counters", "A number over a spell's button: how many of it are out right now, in the spell's damage meter color.")
-local function Flip(key)
-	return function() DB()[key] = DB()[key] == false end
-end
 Subheader(page, "Damage over time")
 Check(page, "DoTs", OnUnlessOff("dotCounter"), Flip("dotCounter"), "how many of each are ticking on the enemies")
 Subheader(page, "Fear")
@@ -882,12 +1099,12 @@ end
 -- Interface.
 
 page = pages.interface
-Header(page, "Interface", "How the addon restyles the game's own interface. Most of these take hold after a reload.")
+Header(page, "Interface", "How SurvivorUI restyles the Default interface. Most of these take hold after a reload.")
 Subheader(page, "Action bar")
 Check(page, "Cooldown numbers on the buttons", FeatureOn("cooldownNumbers"), FeatureToggle("cooldownNumbers"), "OmniCC, when installed, does it instead")
 Check(page, "Hide key labels on the buttons", FeatureOn("hideKeys"), FeatureToggle("hideKeys"))
 Subheader(page, "Windows")
-Check(page, "Character pane, restyled", FeatureOn("characterPane"), FeatureToggle("characterPane"), "the stats in sections; off: the game's own pane")
+Check(page, "Character pane, restyled", FeatureOn("characterPane"), FeatureToggle("characterPane"), "the stats in sections; off: Default pane")
 Check(page, "Ability tooltips, laid out again", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"))
 Check(page, "Flat tooltips", FeatureOn("tooltip"), FeatureToggle("tooltip"))
 Check(page, "Flat chat", FeatureOn("chat"), FeatureToggle("chat"))
@@ -1087,7 +1304,7 @@ end)
 -- Layout.
 
 page = pages.layout
-Header(page, "Layout", "Move mode, the button at the bottom of this window, unlocks every piece over a grid: one let go snaps to the grid, or to a neighbour's edge. Click a piece for its card: its place, size and font, shown or hidden, reset and undo.")
+Header(page, "Layout", "Move UI, the button at the top of this window (or a right click on the minimap button), unlocks every piece over a grid: one let go snaps to the grid, or to a neighbour's edge. Click a piece for its card: its place, size and font, shown or hidden, reset and undo. Each tab's own pieces can be dragged while it is open, so you can play while setting them.")
 Subheader(page, "Action bar")
 Check(page, "Player and target frames move with the action bar",
 	function() return SurvivorUI_LinkFrames and SurvivorUI_LinkFrames() end,
@@ -1106,68 +1323,221 @@ page.y = page.y - 28
 ------------------------------------------------------------------------------
 -- The bottom: the reload, and who made it.
 
--- Move mode: on every page, at the bottom right, in the Layout tab's color;
--- lit and saying so while it is on.
+-- Move UI: on every page, at the top right beside the page's title (and on
+-- the minimized bar), in the Layout tab's color, filled and breathing a glow
+-- so it is seen at once; "Done moving" while it is on.
 local MOVE = { 0.25, 0.85, 0.8 }
-local editButton = CreateFrame("Button", nil, panel)
-editButton:SetWidth(170)
-editButton:SetHeight(28)
-editButton:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14, 12)
-editButton:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
-editButton.text = Text(editButton, 11, MOVE)
-editButton.text:SetPoint("CENTER", editButton, "CENTER", 0, 0)
-editButton:SetScript("OnClick", function()
-	local on = not (SurvivorUI_EditMode and SurvivorUI_EditMode())
-	if SurvivorUI_SetEditMode then
-		SurvivorUI_SetEditMode(on)
-	end
-	this:Refresh()
-end)
-editButton:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
-editButton:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
-function editButton:Refresh()
-	local on = SurvivorUI_EditMode and SurvivorUI_EditMode()
-	self.text:SetText(on and "Done moving" or "Move mode (grid)")
-	if on then
-		self:SetBackdropColor(MOVE[1] * 0.55, MOVE[2] * 0.55, MOVE[3] * 0.55, 1)
-		self:SetBackdropBorderColor(1, 1, 1, 1)
-		self.text:SetTextColor(1, 1, 1)
-	else
-		self:SetBackdropColor(MOVE[1] * 0.18, MOVE[2] * 0.18, MOVE[3] * 0.18, 1)
-		self:SetBackdropBorderColor(MOVE[1], MOVE[2], MOVE[3], self.hot and 1 or 0.7)
-		if self.hot then
-			self.text:SetTextColor(1, 1, 1)
-		else
-			self.text:SetTextColor(MOVE[1], MOVE[2], MOVE[3])
+local moveButtons = {}
+local Minimize                  -- the window down to its bar, set below
+
+local function MakeMoveButton(parent)
+	local button = CreateFrame("Button", nil, parent)
+	button:SetWidth(132)
+	button:SetHeight(22)
+	button:SetFrameLevel(parent:GetFrameLevel() + 5)
+	button:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	button.glow = button:CreateTexture(nil, "BACKGROUND")
+	button.glow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
+	button.glow:SetBlendMode("ADD")
+	button.glow:SetVertexColor(MOVE[1], MOVE[2], MOVE[3])
+	button.glow:SetWidth(190)
+	button.glow:SetHeight(54)
+	button.glow:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button.text = Text(button, 11, { 1, 1, 1 })
+	button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button:SetScript("OnClick", function()
+		local on = not (SurvivorUI_EditMode and SurvivorUI_EditMode())
+		if SurvivorUI_SetEditMode then
+			SurvivorUI_SetEditMode(on)
 		end
+		for _, each in pairs(moveButtons) do
+			each:Refresh()
+		end
+		-- Moving, the window steps aside: down to its bar.
+		if on and this:GetParent() == panel then
+			Minimize()
+		end
+	end)
+	button:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+	button:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+	button:SetScript("OnShow", function() this:Refresh() end)
+	button.age = 0
+	button:SetScript("OnUpdate", function()
+		this.age = this.age + arg1
+		local breath = 0.5 + 0.5 * math.sin(this.age * 3)
+		this.glow:SetAlpha((this.on and 0.75 or 0.35) + 0.3 * breath)
+	end)
+	function button:Refresh()
+		local on = SurvivorUI_EditMode and SurvivorUI_EditMode()
+		self.on = on
+		self.text:SetText(on and "DONE MOVING" or "MOVE UI")
+		local fill = on and 0.4 or (self.hot and 0.85 or 0.62)
+		self:SetBackdropColor(MOVE[1] * fill, MOVE[2] * fill, MOVE[3] * fill, 1)
+		self:SetBackdropBorderColor(1, 1, 1, (on or self.hot) and 1 or 0.75)
 	end
+	table.insert(moveButtons, button)
+	return button
 end
+
+local editButton = MakeMoveButton(panel)
+editButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -72, -10)
 table.insert(widgets, editButton)
 
-local reloadButton = CreateFrame("Button", nil, panel)
-reloadButton:SetWidth(150)
-reloadButton:SetHeight(28)
-reloadButton:SetPoint("RIGHT", editButton, "LEFT", -8, 0)
-reloadButton:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
-reloadButton.text = Text(reloadButton, 10, TEXT)
-reloadButton.text:SetPoint("CENTER", reloadButton, "CENTER", 0, 0)
-reloadButton:SetScript("OnClick", function() ReloadUI() end)
-reloadButton:SetScript("OnEnter", function() this.text:SetTextColor(1, 1, 1) end)
-reloadButton:SetScript("OnLeave", function() this:Refresh() end)
-function reloadButton:Refresh()
+-- Save & Close: at the bottom right; Reload & Close, lit, while a look waits
+-- for a reload.
+local doneButton = CreateFrame("Button", nil, panel)
+doneButton:SetWidth(170)
+doneButton:SetHeight(28)
+doneButton:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14, 12)
+doneButton:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+doneButton.text = Text(doneButton, 11, TEXT)
+doneButton.text:SetPoint("CENTER", doneButton, "CENTER", 0, 0)
+doneButton:SetScript("OnClick", function()
 	if needsReload then
-		self.text:SetText("Reload to apply")
-		self.text:SetTextColor(1, 0.85, 0.8)
+		ReloadUI()
+	else
+		panel:Hide()
+	end
+end)
+doneButton:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+doneButton:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+function doneButton:Refresh()
+	if needsReload then
+		self.text:SetText("Reload & Close")
+		self.text:SetTextColor(1, self.hot and 1 or 0.85, self.hot and 1 or 0.8)
 		self:SetBackdropColor(0.5, 0.14, 0.1, 1)
 		self:SetBackdropBorderColor(1, 0.38, 0.32, 1)
 	else
-		self.text:SetText("Reload interface")
-		self.text:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
-		self:SetBackdropColor(0.1, 0.1, 0.13, 1)
-		self:SetBackdropBorderColor(0.25, 0.25, 0.3, 1)
+		self.text:SetText("Save & Close")
+		if self.hot then
+			self.text:SetTextColor(1, 1, 1)
+		else
+			self.text:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+		end
+		self:SetBackdropColor(0.12, 0.12, 0.15, 1)
+		self:SetBackdropBorderColor(0.4, 0.4, 0.45, self.hot and 1 or 0.8)
 	end
 end
-table.insert(widgets, reloadButton)
+table.insert(widgets, doneButton)
+
+------------------------------------------------------------------------------
+-- Minimized: the window down to a small bar of three buttons, Maximize, Move
+-- UI and Save & Close, so the screen is free to set the pieces; the open
+-- tab's pieces stay movable. The bar moves by its edge, and Escape closes it
+-- as it does the window.
+
+local minimizing, restoring
+
+local mini = CreateFrame("Frame", "SurvivorUIOptionsMini", UIParent)
+mini:SetScale(0.8)
+mini:SetWidth(380)
+mini:SetHeight(40)
+mini:SetFrameStrata("FULLSCREEN_DIALOG")
+mini:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+mini:SetBackdropColor(0.05, 0.05, 0.07, 0.97)
+mini:SetBackdropBorderColor(0, 0, 0, 1)
+mini:EnableMouse(true)
+mini:SetMovable(true)
+if mini.SetClampedToScreen then
+	mini:SetClampedToScreen(true)
+end
+mini:RegisterForDrag("LeftButton")
+mini:SetScript("OnDragStart", function() this:StartMoving() end)
+mini:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+mini:Hide()
+if UISpecialFrames then
+	table.insert(UISpecialFrames, "SurvivorUIOptionsMini")
+end
+
+-- Closed for good (not put away to show the window again): move mode ends
+-- and the tab's pieces lock again, as when the window closes.
+mini:SetScript("OnHide", function()
+	if restoring then
+		return
+	end
+	if SurvivorUI_SetEditMode and SurvivorUI_EditMode and SurvivorUI_EditMode() then
+		SurvivorUI_SetEditMode(false)
+	end
+	if SurvivorUI_SetMoveFocus then
+		SurvivorUI_SetMoveFocus(nil)
+	end
+end)
+
+local function MiniButton(text, width, onClick)
+	local button = CreateFrame("Button", nil, mini)
+	button:SetWidth(width)
+	button:SetHeight(24)
+	button:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	button:SetBackdropColor(0.12, 0.12, 0.15, 1)
+	button:SetBackdropBorderColor(0.4, 0.4, 0.45, 0.8)
+	button.text = Text(button, 10, TEXT)
+	button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button.text:SetText(text)
+	button:SetScript("OnEnter", function()
+		this.text:SetTextColor(1, 1, 1)
+		this:SetBackdropBorderColor(0.4, 0.4, 0.45, 1)
+	end)
+	button:SetScript("OnLeave", function()
+		this.text:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+		this:SetBackdropBorderColor(0.4, 0.4, 0.45, 0.8)
+	end)
+	button:SetScript("OnClick", onClick)
+	return button
+end
+
+local function Maximize()
+	restoring = true
+	mini:Hide()
+	restoring = nil
+	panel:Show()
+end
+
+function Minimize()
+	local right, top = panel:GetRight(), panel:GetTop()
+	minimizing = true
+	panel:Hide()
+	minimizing = nil
+	mini:ClearAllPoints()
+	if right and top then
+		mini:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", right, top)
+	else
+		mini:SetPoint("TOP", UIParent, "TOP", 0, -40)
+	end
+	mini:Show()
+end
+
+local maximize = MiniButton("Maximize", 100, Maximize)
+maximize:SetPoint("LEFT", mini, "LEFT", 8, 0)
+local miniMove = MakeMoveButton(mini)
+miniMove:SetHeight(24)
+miniMove:SetPoint("LEFT", maximize, "RIGHT", 8, 0)
+local miniDone = MiniButton("Save & Close", 116, function()
+	if needsReload then
+		ReloadUI()
+	else
+		mini:Hide()
+	end
+end)
+miniDone:SetPoint("LEFT", miniMove, "RIGHT", 8, 0)
+miniDone:SetScript("OnShow", function()
+	this.text:SetText(needsReload and "Reload & Close" or "Save & Close")
+end)
+
+-- The - beside the x, in Move UI's teal.
+local minimize = CornerButton("-", MOVE, 2)
+minimize:SetPoint("RIGHT", close, "LEFT", -6, 0)
+minimize:SetScript("OnEnter", function()
+	this:Light(true)
+	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
+	GameTooltip:SetText("Minimize", 1, 1, 1)
+	GameTooltip:AddLine("Down to Maximize, Move UI and Save & Close, to set the pieces with the screen free.", 0.8, 0.8, 0.8, 1)
+	GameTooltip:Show()
+end)
+minimize:SetScript("OnLeave", function()
+	this:Light(false)
+	GameTooltip:Hide()
+end)
+minimize:SetScript("OnClick", Minimize)
 
 local credit = panel:CreateFontString(nil, "OVERLAY")
 credit:SetFont(SurvivorUI_FONT, 9, "")
@@ -1176,6 +1546,105 @@ credit:SetWidth(SIDEBAR - 18)
 credit:SetJustifyH("LEFT")
 credit:SetTextColor(0.42, 0.42, 0.47)
 credit:SetText("by morderous\ngithub.com/morderous/\nsurvivor-ui\nGPL-3.0")
+
+-- Over the credit: a coffee on Ko-fi, in a warm gold. The game opens no link:
+-- it shows in a box, selected, for Ctrl+C.
+local KOFI = "https://ko-fi.com/morderous"
+local WARM = { 1.00, 0.80, 0.42 }
+
+local linkBox
+local function ShowLink(title, url)
+	if not linkBox then
+		linkBox = CreateFrame("Frame", "SurvivorUILinkBox", panel)
+		linkBox:SetWidth(380)
+		linkBox:SetHeight(104)
+		linkBox:SetPoint("CENTER", panel, "CENTER", 0, 40)
+		linkBox:SetFrameLevel(panel:GetFrameLevel() + 30)
+		linkBox:EnableMouse(true)
+		linkBox:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+		linkBox:SetBackdropColor(0.08, 0.04, 0.03, 0.98)
+		linkBox:SetBackdropBorderColor(WARM[1] * 0.75, WARM[2] * 0.75, WARM[3] * 0.75, 1)
+		linkBox.title = Text(linkBox, 12, WARM)
+		linkBox.title:SetPoint("TOP", linkBox, "TOP", 0, -14)
+		linkBox.edit = CreateFrame("EditBox", nil, linkBox)
+		local edit = linkBox.edit
+		edit:SetWidth(340)
+		edit:SetHeight(24)
+		edit:SetPoint("TOP", linkBox, "TOP", 0, -40)
+		edit:SetAutoFocus(false)
+		edit:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
+		edit:SetTextColor(1, 1, 1)
+		edit:SetTextInsets(8, 8, 0, 0)
+		edit:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+		edit:SetBackdropColor(0, 0, 0, 0.85)
+		edit:SetBackdropBorderColor(0.35, 0.3, 0.28, 1)
+		-- The link stays as it is, whatever is typed; Enter or Escape closes.
+		edit:SetScript("OnTextChanged", function()
+			if this.url and this:GetText() ~= this.url then
+				this:SetText(this.url)
+				this:HighlightText()
+			end
+		end)
+		edit:SetScript("OnEnterPressed", function() linkBox:Hide() end)
+		edit:SetScript("OnEscapePressed", function() linkBox:Hide() end)
+		linkBox.hint = Text(linkBox, 9, MUTED)
+		linkBox.hint:SetPoint("TOP", edit, "BOTTOM", 0, -8)
+		linkBox.hint:SetText("Ctrl+C copies it; paste it in your browser.")
+		local shut = CreateFrame("Button", nil, linkBox)
+		shut:SetWidth(18)
+		shut:SetHeight(18)
+		shut:SetPoint("TOPRIGHT", linkBox, "TOPRIGHT", -4, -4)
+		shut.text = Text(shut, 11, MUTED)
+		shut.text:SetPoint("CENTER", shut, "CENTER", 0, 0)
+		shut.text:SetText("x")
+		shut:SetScript("OnClick", function() linkBox:Hide() end)
+		linkBox:SetScript("OnHide", function() this.edit:ClearFocus() end)
+	end
+	linkBox.title:SetText(title)
+	linkBox.edit.url = url
+	linkBox.edit:SetText(url)
+	linkBox:Show()
+	linkBox.edit:SetFocus()
+	linkBox.edit:HighlightText()
+end
+
+local function WarmButton(width, onClick, tip)
+	local button = CreateFrame("Button", nil, panel)
+	button:SetWidth(width)
+	button:SetHeight(22)
+	button:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	button:SetBackdropColor(0.20, 0.07, 0.04, 1)
+	button:SetBackdropBorderColor(WARM[1] * 0.7, WARM[2] * 0.7, WARM[3] * 0.7, 1)
+	button:SetScript("OnEnter", function()
+		this:SetBackdropBorderColor(WARM[1], WARM[2], WARM[3], 1)
+		if this.text then
+			this.text:SetTextColor(1, 1, 1)
+		end
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		GameTooltip:SetText(tip, WARM[1], WARM[2], WARM[3])
+		GameTooltip:Show()
+	end)
+	button:SetScript("OnLeave", function()
+		this:SetBackdropBorderColor(WARM[1] * 0.7, WARM[2] * 0.7, WARM[3] * 0.7, 1)
+		if this.text then
+			this.text:SetTextColor(WARM[1], WARM[2], WARM[3])
+		end
+		GameTooltip:Hide()
+	end)
+	button:SetScript("OnClick", onClick)
+	return button
+end
+
+-- A little smaller than the window's other buttons (a scale, so its words
+-- shrink with it); its place in the window's own units.
+local SUPPORT_SCALE = 0.7
+local coffee = WarmButton(108, function() ShowLink("Buy me a coffee :)", KOFI) end,
+	"If you want to support this love project, feel free.")
+coffee:SetScale(SUPPORT_SCALE)
+coffee:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12 / SUPPORT_SCALE, 66 / SUPPORT_SCALE)
+coffee.text = Text(coffee, 9, WARM)
+coffee.text:SetPoint("CENTER", coffee, "CENTER", 0, 0)
+coffee.text:SetText("Buy me a coffee :)")
 
 ------------------------------------------------------------------------------
 
@@ -1203,30 +1672,44 @@ panel:SetScript("OnShow", function()
 	end
 	ShowPage(current or "global")
 end)
--- Closing the panel ends move mode.
+-- Closing the panel ends move mode, and its tab's pieces lock again; not when
+-- it is only minimized.
 panel:SetScript("OnHide", function()
+	if minimizing then
+		return
+	end
 	if SurvivorUI_SetEditMode and SurvivorUI_EditMode and SurvivorUI_EditMode() then
 		SurvivorUI_SetEditMode(false)
+	end
+	if SurvivorUI_SetMoveFocus then
+		SurvivorUI_SetMoveFocus(nil)
 	end
 end)
 
 function SurvivorUI_ToggleOptions()
-	if panel:IsShown() then
+	if mini:IsShown() then
+		Maximize()
+	elseif panel:IsShown() then
 		panel:Hide()
 	else
 		panel:Show()
 	end
 end
 
--- Open on the Layout page with move mode on and the grid laid out (the
--- minimap button).
+-- Move mode on and the grid laid out, the window down to its bar (the minimap
+-- button's right click); Maximize opens it on the Layout page.
 function SurvivorUI_OpenOptionsMoving()
 	current = "layout"
-	panel:Show()
 	if SurvivorUI_SetEditMode then
 		SurvivorUI_SetEditMode(true)
 	end
-	ShowPage("layout")
+	if not mini:IsShown() then
+		panel:Show()
+		Minimize()
+	end
+	for _, each in pairs(moveButtons) do
+		each:Refresh()
+	end
 end
 
 -- A new class color: what took it once takes it again; the rest reads it as

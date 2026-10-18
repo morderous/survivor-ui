@@ -1,9 +1,9 @@
 -- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: a square button outside the minimap's bottom left corner, with
 -- the addon's own icon in the class's color (Art\SurvivorIconWhite.tga,
--- tinted), that opens the options with
--- configuration mode on (the grid laid out, every piece unlocked); right click
--- opens them without it. Other minimap buttons stack over it, upward, in the
+-- tinted), that opens the options (each tab's pieces movable while it is
+-- open); a right click moves the whole UI (the grid laid out, every piece
+-- unlocked). Other minimap buttons stack over it, upward, in the
 -- same square look: the game's battleground button (the crossed swords).
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
@@ -49,11 +49,45 @@ end
 local button = CreateFrame("Button", "SurvivorUIMinimapButton", Minimap or UIParent)
 button:SetFrameStrata("MEDIUM")
 button:SetFrameLevel((Minimap and Minimap:GetFrameLevel() or 1) + 5)
--- Outside the minimap, its bottom left corner; the stack grows upward.
-if Minimap then
-	button:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMLEFT", -5, 0)
-else
-	button:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -12, -12)
+-- Outside the minimap, its bottom left corner; the stack grows upward. Moved
+-- (the Interface tab, or Move UI), it keeps its place against the minimap's
+-- middle, so it follows the minimap.
+local function PlaceButton()
+	button:ClearAllPoints()
+	local db = SurvivorUIDB
+	if Minimap and db and db.mapButtonX and db.mapButtonY then
+		button:SetPoint("CENTER", Minimap, "CENTER", db.mapButtonX, db.mapButtonY)
+	elseif Minimap then
+		button:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMLEFT", -5, 0)
+	else
+		button:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -12, -12)
+	end
+end
+PlaceButton()
+button:SetMovable(true)
+
+local function SaveButton()
+	local x, y = button:GetCenter()
+	local mx, my
+	if Minimap then
+		mx, my = Minimap:GetCenter()
+	end
+	if not (x and mx) then
+		return
+	end
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.mapButtonX = math.floor(x - mx + 0.5)
+	SurvivorUIDB.mapButtonY = math.floor(y - my + 0.5)
+	PlaceButton()
+end
+
+if SurvivorUI_RegisterMover then
+	SurvivorUI_RegisterMover(button, "Minimap button", SaveButton, nil, function()
+		if SurvivorUIDB then
+			SurvivorUIDB.mapButtonX, SurvivorUIDB.mapButtonY = nil, nil
+		end
+		PlaceButton()
+	end)
 end
 button.icon = button:CreateTexture(nil, "ARTWORK")
 button.icon:SetTexture(ICON)
@@ -66,22 +100,25 @@ end
 button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 button:SetScript("OnClick", function()
 	local options = getglobal("SurvivorUIOptions")
-	if options and options:IsShown() then
+	local mini = getglobal("SurvivorUIOptionsMini")
+	if mini and mini:IsShown() and arg1 ~= "RightButton" then
+		SurvivorUI_ToggleOptions()
+	elseif options and options:IsShown() then
 		options:Hide()
 	elseif arg1 == "RightButton" then
-		if SurvivorUI_ToggleOptions then
-			SurvivorUI_ToggleOptions()
+		if SurvivorUI_OpenOptionsMoving then
+			SurvivorUI_OpenOptionsMoving()
 		end
-	elseif SurvivorUI_OpenOptionsMoving then
-		SurvivorUI_OpenOptionsMoving()
+	elseif SurvivorUI_ToggleOptions then
+		SurvivorUI_ToggleOptions()
 	end
 end)
 button:SetScript("OnEnter", function()
 	Lit(this, true)
 	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
 	GameTooltip:SetText("Survivor UI", ACCENT[1], ACCENT[2], ACCENT[3])
-	GameTooltip:AddLine("Click: options, with the grid to move things", 1, 1, 1)
-	GameTooltip:AddLine("Right click: options only", 0.7, 0.7, 0.7)
+	GameTooltip:AddLine("Click: options", 1, 1, 1)
+	GameTooltip:AddLine("Right click: move the whole UI", 0.7, 0.7, 0.7)
 	GameTooltip:Show()
 end)
 button:SetScript("OnLeave", function()
@@ -128,4 +165,7 @@ end
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
-loader:SetScript("OnEvent", RestyleBattlefield)
+loader:SetScript("OnEvent", function()
+	PlaceButton()
+	RestyleBattlefield()
+end)

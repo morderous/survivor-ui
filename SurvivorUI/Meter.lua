@@ -855,8 +855,8 @@ function SurvivorUI_ToggleMeter()
 	settings.meter = not settings.meter
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.meter
-		and "damage meter on; the game's own meter is put away."
-		or "damage meter off; the game's own is back, with its healing and boss damage."))
+		and "damage meter on; the Default meter is put away."
+		or "damage meter off; the Default one is back, with its healing and boss damage."))
 end
 
 -- The game's tooltip for units and the world: it opens at an anchor of its own

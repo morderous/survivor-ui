@@ -311,6 +311,8 @@ end
 
 -- Words in a tooltip line and their short names, the more specific first.
 local STAT_WORDS = {
+	{ "stun duration", "STUN" }, { "stun", "STUN" }, { "root", "ROOT" },
+	{ "shields you", "SHIELD" }, { "absorb", "ABSORB" }, { "weaken", "WEAK" },
 	{ "explode", "BOOM" }, { "leap", "LEAP" }, { "splash", "SPLASH" }, { "burn and bleed", "BLEED" },
 	{ "strike again", "AGAIN" }, { "duration", "DUR" },
 	{ "you kill restores", "HP/KILL" }, { "kill heals", "HP/KILL" }, { "each kill", "HP/KILL" },
@@ -352,12 +354,19 @@ local function Value(tag, text)
 end
 
 -- How a bonus reads in the list: the number first, then its word; a leap the
--- other way round, its two numbers together.
+-- other way round, its two numbers together; a stun or a root its word first
+-- and its seconds (STUN 1.5s), or the chance of it (STUN 20%).
+local CONTROL = { STUN = true, ROOT = true }
 local function Tagged(tag, value)
 	if not value then
 		return tag
 	elseif tag == "LEAP" then
 		return tag.." "..value
+	elseif CONTROL[tag] then
+		if string.find(value, "%", 1, true) then
+			return tag.." "..value
+		end
+		return tag.." "..value.."s"
 	end
 	return value.." "..tag
 end
@@ -613,8 +622,8 @@ function SurvivorUI_ToggleBuild()
 	settings.buildList = not settings.buildList
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.buildList
-		and "build list shown; the game's own row of spells is put away."
-		or "build list hidden; the game's own row of spells is back."))
+		and "build list shown; the Default row of spells is put away."
+		or "build list hidden; the Default row of spells is back."))
 end
 
 local loader = CreateFrame("Frame")

@@ -165,6 +165,63 @@ function SurvivorUI_SourceOf(name, line)
 	return name
 end
 
+-- Each ability's biggest crit this run, and the run's biggest, kept in one
+-- place for Biggest Crits (RunPanel.lua) and the combat numbers:
+-- SurvivorUI_NoteCrit(amount, line) says whether a crit beats its ability's
+-- own best, and whether it beats the run's biggest (a first only sets them),
+-- the same answers to each that asks about the same line at the same moment,
+-- whichever asks first.
+local critBestBy, critTop = {}, nil
+local noted, notedAt, notedRecord, notedTop
+
+-- The ability a crit's line names, as Biggest Crits names it.
+local function CritAbility(line)
+	local _, _, ability = string.find(line, "^Your (.+) crits ")
+	if ability then
+		return ability
+	end
+	if string.find(line, "^You crit ") then
+		return "Melee"
+	end
+	local _, _, _, own = string.find(line, "^(.+)'s (.+) crits ")
+	if own then
+		return own
+	end
+	local _, _, who = string.find(line, "^(.+) crits ")
+	return who
+end
+
+function SurvivorUI_NoteCrit(amount, line)
+	amount = tonumber(amount)
+	if not (amount and line) then
+		return false
+	end
+	local now = GetTime()
+	if line == noted and now == notedAt then
+		return notedRecord, notedTop
+	end
+	local record = false
+	local ability = CritAbility(line)
+	if ability then
+		ability = SurvivorUI_SourceOf(ability, line)
+		local best = critBestBy[ability]
+		record = best ~= nil and amount > best
+		if not best or amount > best then
+			critBestBy[ability] = amount
+		end
+	end
+	local top = critTop ~= nil and amount > critTop
+	if not critTop or amount > critTop then
+		critTop = amount
+	end
+	noted, notedAt, notedRecord, notedTop = line, now, record, top
+	return record, top
+end
+
+function SurvivorUI_ResetCritRecord()
+	critBestBy, critTop = {}, nil
+end
+
 -- The addon's own color, worn by its menus, its cards and its marks: the
 -- hero's class color (gold until the class is known). One table, changed in
 -- place, so whoever holds it reads the color of the moment;
@@ -1400,9 +1457,18 @@ end
 -- choices of the earlier versions carry over.
 
 local CT_DEFAULTS = {
-	ctLayout = "sides", ctDistance = 140, ctRise = 170, ctCritColumn = true,
-	ctIcons = true, ctMeterColors = true, ctSize = 0.85,
+	ctLayout = "sides", ctDistance = 170, ctRise = 170, ctCritColumn = true,
+	ctIcons = true, ctMeterColors = true, ctSize = 0.85, ctCritSize = 1,
 	ctPeriodic = true, ctHeals = true, ctTaken = true, ctShort = true,
+	-- Hits from one source close together in one number (x3), each kind as
+	-- chosen (the hits taken's switch kept its first name), within so many
+	-- milliseconds; a heal shown once it comes to this much of max health, in
+	-- percent.
+	ctAddDealt = true, ctAddCrits = true, ctAddHeals = true, ctMergeTaken = true, ctAddWindow = 200,
+	ctHealMin = 2,
+	-- The new best crit: held still, an ability's own best (or the run's
+	-- biggest), for so many seconds, at a size, over a glow.
+	ctRecord = true, ctRecordKind = "ability", ctRecordHold = 1.7, ctRecordSize = 1, ctRecordGlow = true,
 }
 
 local function CT()
@@ -1425,6 +1491,33 @@ local function CT()
 			db.ctShort = true
 		end
 	end
+	-- 3: the new best crit's settings.
+	if db.ctVersion < 3 then
+		db.ctVersion = 3
+		for _, key in pairs({ "ctRecord", "ctRecordKind", "ctRecordHold", "ctRecordSize", "ctRecordGlow" }) do
+			if db[key] == nil then
+				db[key] = CT_DEFAULTS[key]
+			end
+		end
+	end
+	-- 4: the crits' size, the hits taken adding up, the smallest heal.
+	if db.ctVersion < 4 then
+		db.ctVersion = 4
+		for _, key in pairs({ "ctCritSize", "ctMergeTaken", "ctHealMin" }) do
+			if db[key] == nil then
+				db[key] = CT_DEFAULTS[key]
+			end
+		end
+	end
+	-- 5: every kind adding up, and how close together.
+	if db.ctVersion < 5 then
+		db.ctVersion = 5
+		for _, key in pairs({ "ctAddDealt", "ctAddCrits", "ctAddHeals", "ctAddWindow" }) do
+			if db[key] == nil then
+				db[key] = CT_DEFAULTS[key]
+			end
+		end
+	end
 	return db
 end
 
@@ -1437,13 +1530,18 @@ local function Face(text, size, flags)
 	end
 end
 
+-- The crits' size against the other numbers' (Combat text, Crit size).
+local function CritScale()
+	return CT().ctCritSize or 1
+end
+
 ------------------------------------------------------------------------------
 -- Beside the hero (/sui damage side, or the option): the numbers scroll in
 -- columns by the hero instead of popping over the enemies. The damage dealt
 -- climbs on the left in white, its crits on the right in gold; under the hero
 -- the healing rises up to it, in green, and the damage
 -- taken falls from under the hero, in red. Hits that come together start a
--- line apart, so the column reads.
+-- line apart, so the column reads. Each column moves in move mode.
 
 local SIDE_LIFE = 1.3
 local SIDE_RISE = 190
@@ -1454,14 +1552,82 @@ local SIDE_COLUMNS = {
 	-- Five grid squares out (the move mode's lines are 32 apart).
 	dealt = { x = -160, y = 0, rise = 1 },
 	crit = { x = 160, y = 0, rise = 1 },
-	-- Under the hero, kept above the action bar (some 150 below it): the hits
-	-- taken fall a little, left of the middle; the heals rise up to the hero,
-	-- right of it, so the two never cross.
-	taken = { x = -30, y = -35, rise = -1, reach = 70, spread = -1 },
-	heal = { x = 30, y = -105, rise = 1, reach = 70, spread = 1 },
+	-- The hits taken fall from under the action bar; the heals rise over the
+	-- hero.
+	taken = { x = 0, y = -167, rise = -1, reach = 70 },
+	heal = { x = 0, y = 181, rise = 1, reach = 70 },
 }
 local sideStack = {}            -- [column] = { at = time, count = numbers started together }
-local SPREAD = { 0, 40, 80, 120, 160 }
+
+-- Each column moves in move mode, as a piece of its own: where its numbers
+-- start, saved; else by the hero as above (the damage and the crits the
+-- distance chosen out).
+local COLUMN_PIECES = {
+	dealt = { name = "Damage numbers", left = "dealtLeft", top = "dealtTop", width = 120, height = 28 },
+	crit = { name = "Crit numbers", left = "critLeft", top = "critTop", width = 120, height = 32 },
+	taken = { name = "Damage taken", left = "takenLeft", top = "takenTop", width = 90, height = 24 },
+	heal = { name = "Healing", left = "healLeft", top = "healTop", width = 90, height = 24 },
+}
+local COLUMN_ORDER = { "dealt", "crit", "taken", "heal" }
+local columnFrames, columnHandles = {}, {}
+
+local function ColumnDefault(kind)
+	local x, y = UIParent:GetWidth() / 2, UIParent:GetHeight() / 2
+	if kind == "taken" and CT().ctLayout ~= "sides" then
+		-- Over the enemies: from the hero's feet down, ending short of the
+		-- bar row (150 below).
+		return x, y - 15
+	elseif kind == "dealt" then
+		return x - (CT().ctDistance or 160), y
+	elseif kind == "crit" then
+		return x + (CT().ctDistance or 160), y
+	end
+	return x + SIDE_COLUMNS[kind].x, y + SIDE_COLUMNS[kind].y
+end
+
+local function ColumnMoved(kind)
+	local db = Settings()
+	local piece = COLUMN_PIECES[kind]
+	return db[piece.left] and db[piece.top]
+end
+
+-- Where a column's numbers start, now: the middle of its piece.
+local function ColumnAt(kind)
+	if ColumnMoved(kind) then
+		local db = Settings()
+		local piece = COLUMN_PIECES[kind]
+		return db[piece.left] + piece.width / 2, db[piece.top] - piece.height / 2
+	end
+	return ColumnDefault(kind)
+end
+
+local function ColumnFrame(kind)
+	local frame = columnFrames[kind]
+	if not frame then
+		local piece = COLUMN_PIECES[kind]
+		frame = CreateFrame("Frame", nil, damageLayer)
+		frame:SetWidth(piece.width)
+		frame:SetHeight(piece.height)
+		frame:SetMovable(true)
+		columnFrames[kind] = frame
+	end
+	return frame
+end
+
+local function PlaceColumn(kind)
+	local frame = ColumnFrame(kind)
+	local x, y = ColumnAt(kind)
+	frame:ClearAllPoints()
+	frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+end
+
+local function SaveColumn(kind)
+	local db = Settings()
+	local piece = COLUMN_PIECES[kind]
+	local frame = columnFrames[kind]
+	db[piece.left] = math.floor(frame:GetLeft() + 0.5)
+	db[piece.top] = math.floor(frame:GetTop() + 0.5)
+end
 
 local function SideOn()
 	return CT().ctLayout == "sides"
@@ -1496,15 +1662,22 @@ end
 
 -- A hit dealt in the meter's color and with its source's icon, as chosen;
 -- false when neither.
-local function Dress(text, dealt, crit, source)
+local function Dress(text, dealt, crit, source, healed)
 	local ct = CT()
 	local colored = dealt and source and ct.ctMeterColors
 	if colored then
 		local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(source) or { 1, 1, 1 }
 		text:SetTextColor(color[1], color[2], color[3])
 	end
-	if dealt and source and ct.ctIcons then
-		local icon, whole = SourceIcon(source)
+	local icon, whole
+	if (dealt or healed) and source and ct.ctIcons then
+		icon, whole = SourceIcon(source)
+		-- A heal whose source has no icon shows none.
+		if healed and icon == OWN_ICON then
+			icon = nil
+		end
+	end
+	if icon then
 		text.icon:SetTexture(icon)
 		if whole then
 			text.icon:SetTexCoord(0, 1, 0, 1)
@@ -1512,7 +1685,7 @@ local function Dress(text, dealt, crit, source)
 			text.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 		end
 		-- The icon sized with the type.
-		local edge = math.floor((crit and 22 or 16) * (ct.ctSize or 0.85) + 0.5)
+		local edge = math.floor((crit and 22 * CritScale() or 16) * (ct.ctSize or 0.85) + 0.5)
 		text.icon:SetWidth(edge)
 		text.icon:SetHeight(edge)
 		text.icon:SetAlpha(1)
@@ -1531,25 +1704,57 @@ local function Amount(amount)
 	return amount
 end
 
+-- Hits close together (a swarm's, an area spell's, a tenth or two apart) add
+-- up, as chosen for each kind, in the number just shown from the same source:
+-- their sum, and how many (x3), so a column reads instead of piling up.
+local ADD_UP = { dealt = "ctAddDealt", crit = "ctAddCrits", heal = "ctAddHeals", taken = "ctMergeTaken" }
+local lastOf = {}               -- [kind, crit, periodic and source] = the number shown last
+
+local function Label(kind, sum, count)
+	local label = Amount(sum)
+	if kind == "taken" then
+		label = "-"..label
+	elseif kind == "heal" then
+		label = "+"..label
+	end
+	if count > 1 then
+		label = label.." |cffc8c8c8x"..count.."|r"
+	end
+	return label
+end
+
+local function AddUp(key, kind, amount)
+	local ct = CT()
+	local text, value = lastOf[key], tonumber(amount)
+	if ct[ADD_UP[kind]] == false or not (value and text and text.live and text.addKey == key
+		and text.age < (ct.ctAddWindow or 200) / 1000) then
+		return false
+	end
+	text.sum = text.sum + value
+	text.count = text.count + 1
+	text:SetText(Label(kind, text.sum, text.count))
+	return true
+end
+
 local function SpawnSide(kind, amount, crit, periodic, source)
+	local ct = CT()
+	local dealt = kind == "dealt"
+	-- The crits in a column of their own, on the right, or with the rest.
+	if dealt and crit and ct.ctCritColumn then
+		kind = "crit"
+	end
+	local key = kind..(crit and "!" or "")..(periodic and "~" or "")..(source or "")
+	if AddUp(key, kind, amount) then
+		return
+	end
 	local text = DamageText()
 	if not text then
 		return
 	end
-	amount = Amount(amount)
-	local dealt = kind == "dealt"
-	local ct = CT()
-	-- The crits in a column of their own, on the right, or with the rest.
-	if kind == "dealt" and crit and ct.ctCritColumn then
-		kind = "crit"
-	end
+	text.sum, text.count, text.addKey = tonumber(amount) or 0, 1, key
+	lastOf[key] = text
 	local column = SIDE_COLUMNS[kind]
-	local columnX = column.x
-	if kind == "dealt" then
-		columnX = -(ct.ctDistance or 160)
-	elseif kind == "crit" then
-		columnX = ct.ctDistance or 160
-	end
+	local startX, startY = ColumnAt(kind)
 	local now = GetTime()
 	local stack = sideStack[kind] or { at = 0, count = 0 }
 	sideStack[kind] = stack
@@ -1560,14 +1765,12 @@ local function SpawnSide(kind, amount, crit, periodic, source)
 	end
 	stack.at = now
 
-	local size = crit and CRIT_POP_SIZE or ((periodic and 12 or 14) + FONT_BUMP)
+	local size = crit and CRIT_POP_SIZE * CritScale() or ((periodic and 12 or 14) + FONT_BUMP)
 	Face(text, size, crit and "THICKOUTLINE" or "OUTLINE")
 	if kind == "taken" then
 		text:SetTextColor(1, 0.22, 0.22)
-		amount = "-"..amount
 	elseif kind == "heal" then
 		text:SetTextColor(0.3, 1, 0.4)
-		amount = "+"..amount
 	elseif crit then
 		text:SetTextColor(1, 0.76, 0.08)
 	elseif periodic then
@@ -1575,8 +1778,8 @@ local function SpawnSide(kind, amount, crit, periodic, source)
 	else
 		text:SetTextColor(1, 1, 1)
 	end
-	text:SetText(amount)
-	Dress(text, dealt, crit, source)
+	text:SetText(Label(kind, text.sum, 1))
+	Dress(text, dealt, crit, source, kind == "heal")
 
 	text.live = true
 	text.crit = crit
@@ -1584,15 +1787,9 @@ local function SpawnSide(kind, amount, crit, periodic, source)
 	text.life = crit and SIDE_LIFE * 1.2 or SIDE_LIFE
 	text.age = 0
 	text.side = true
-	-- Numbers that start together line up, the later ones a line further on.
-	text.x = UIParent:GetWidth() / 2 + columnX
-	text.y = UIParent:GetHeight() / 2 + column.y - column.rise * stack.count * SIDE_GAP
-	if column.spread then
-		-- Under the hero, numbers that start together go side by side, outward,
-		-- not closer and closer to the bar.
-		text.x = text.x + column.spread * SPREAD[stack.count + 1]
-		text.y = UIParent:GetHeight() / 2 + column.y
-	end
+	-- Numbers that start together line up, the later ones a line behind.
+	text.x = startX
+	text.y = startY - column.rise * stack.count * SIDE_GAP
 	text.drift = 0
 	text.rise = (column.reach or ct.ctRise or SIDE_RISE) * column.rise
 	text:SetAlpha(0)
@@ -1614,6 +1811,7 @@ local function SpawnDamage(target, amount, crit, periodic, source)
 		return
 	end
 	text.side = nil
+	text.addKey = nil
 	amount = Amount(amount)
 
 	-- Over one of the enemies with that name, else in a ring around the hero.
@@ -1621,10 +1819,9 @@ local function SpawnDamage(target, amount, crit, periodic, source)
 	local plates = target and PlatesNamed(target) or {}
 	local count = table.getn(plates)
 	if not target then
-		-- The camera keeps the hero in the middle of the screen.
-		x = UIParent:GetWidth() / 2
-		-- From the hero's feet down, ending short of the bar row (150 below).
-		y = UIParent:GetHeight() / 2 - 15
+		-- Under the hero (the camera keeps it in the middle of the screen), or
+		-- where the damage taken was moved to.
+		x, y = ColumnAt("taken")
 	elseif count > 0 then
 		local plate = plates[math.random(1, count)]
 		local px, py = plate:GetCenter()
@@ -1644,12 +1841,12 @@ local function SpawnDamage(target, amount, crit, periodic, source)
 	end
 
 	if not target then
-		Face(text, crit and CRIT_POP_SIZE or 14, crit and "THICKOUTLINE" or "OUTLINE")
+		Face(text, crit and CRIT_POP_SIZE * CritScale() or 14, crit and "THICKOUTLINE" or "OUTLINE")
 		text:SetTextColor(1, 0.22, 0.22)
 		amount = "-"..amount
 	elseif crit then
 		-- Lands oversized, then settles: see the update below.
-		Face(text, CRIT_POP_SIZE, "THICKOUTLINE")
+		Face(text, CRIT_POP_SIZE * CritScale(), "THICKOUTLINE")
 		text:SetTextColor(1, 0.76, 0.08)
 	elseif periodic then
 		Face(text, 12 + FONT_BUMP, "OUTLINE")
@@ -1695,7 +1892,7 @@ damageLayer:SetScript("OnUpdate", function()
 			local t = text.age / text.life
 			if text.crit and not text.popped and text.age >= CRIT_POP_TIME then
 				text.popped = true
-				Face(text, CRIT_SIZE, "THICKOUTLINE")
+				Face(text, CRIT_SIZE * CritScale(), "THICKOUTLINE")
 			end
 			if t >= 1 then
 				text.live = nil
@@ -1769,6 +1966,258 @@ local TAKEN_TYPES = { DAMAGE = true, DAMAGE_CRIT = true, SPELL_DAMAGE = true }
 -- And the heals, beside the hero only.
 local HEAL_TYPES = { HEAL = true, HEAL_CRIT = true, PERIODIC_HEAL = true }
 
+------------------------------------------------------------------------------
+-- A crit that beats its ability's best this run, or the run's biggest, as
+-- chosen (SurvivorUI_NoteCrit; Combat text, New best crit): in place of its
+-- number climbing with the rest, it stands still a moment, larger and gold
+-- over a glow, "NEW BEST CRIT" over it, then fades. It stands beside the
+-- Biggest Crits, where the bests are listed, or where it was moved to (move
+-- mode). A newer record takes its place. /sui record shows one at once.
+
+local RECORD_SIZE, RECORD_POP_SIZE, RECORD_POP = 32, 44, 0.12
+local RECORD_FADE = 0.5                     -- seconds it takes to fade, after its hold
+local RECORD_GOLD = { 1.00, 0.84, 0.20 }
+
+local recordShown = CreateFrame("Frame", "SurvivorUIRecord", damageLayer)
+recordShown:SetWidth(200)
+recordShown:SetHeight(64)
+recordShown:SetMovable(true)
+recordShown:Hide()
+
+-- Where it stands: the place it was moved to, else by the numbers' layout.
+local function PlaceRecord()
+	local db = Settings()
+	recordShown:ClearAllPoints()
+	if db.recordLeft and db.recordTop then
+		recordShown:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", db.recordLeft, db.recordTop)
+		return
+	end
+	-- Beside the Biggest Crits, where the bests are listed: on its right, or
+	-- on its left when there is no room on the right.
+	local crits = getglobal("SurvivorUICrits")
+	local right = crits and crits:GetRight()
+	if right and right + recordShown:GetWidth() < UIParent:GetWidth() then
+		recordShown:SetPoint("TOPLEFT", crits, "TOPRIGHT", 1, -30)
+	elseif right then
+		recordShown:SetPoint("TOPRIGHT", crits, "TOPLEFT", -1, -30)
+	else
+		recordShown:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 223, -274)
+	end
+end
+
+local function SaveRecordPlace()
+	local db = Settings()
+	db.recordLeft = math.floor(recordShown:GetLeft() + 0.5)
+	db.recordTop = math.floor(recordShown:GetTop() + 0.5)
+end
+
+function SurvivorUI_ToggleRecord()
+	local ct = CT()
+	ct.ctRecord = ct.ctRecord == false
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: a new best crit "..(ct.ctRecord
+		and "stands still, bigger and gold." or "climbs with the rest."))
+end
+recordShown.glow = recordShown:CreateTexture(nil, "BACKGROUND")
+recordShown.glow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
+recordShown.glow:SetBlendMode("ADD")
+recordShown.glow:SetVertexColor(1, 0.75, 0.15)
+recordShown.glow:SetPoint("CENTER", recordShown, "CENTER", 0, 0)
+recordShown.number = recordShown:CreateFontString(nil, "OVERLAY")
+recordShown.number:SetPoint("CENTER", recordShown, "CENTER", 0, 0)
+recordShown.icon = recordShown:CreateTexture(nil, "OVERLAY")
+recordShown.icon:SetPoint("RIGHT", recordShown.number, "LEFT", -4, 0)
+recordShown.label = recordShown:CreateFontString(nil, "OVERLAY")
+recordShown.label:SetPoint("BOTTOM", recordShown.number, "TOP", 0, 2)
+
+local function ShowRecord(amount, source)
+	local ct = CT()
+	PlaceRecord()
+	local scale = ct.ctRecordSize or 1
+	recordShown.scale = scale
+	recordShown.life = (ct.ctRecordHold or 1.7) + RECORD_FADE
+	recordShown.glowing = ct.ctRecordGlow ~= false
+	if recordShown.glowing then
+		recordShown.glow:Show()
+	else
+		recordShown.glow:Hide()
+	end
+	Face(recordShown.number, RECORD_POP_SIZE * scale, "THICKOUTLINE")
+	recordShown.number:SetTextColor(RECORD_GOLD[1], RECORD_GOLD[2], RECORD_GOLD[3])
+	recordShown.number:SetText(Amount(amount))
+	Face(recordShown.label, 10 * math.max(0.8, scale), "OUTLINE")
+	recordShown.label:SetTextColor(1, 0.95, 0.75)
+	recordShown.label:SetText("NEW BEST CRIT")
+	local icon, whole = nil, false
+	if source and ct.ctIcons then
+		icon, whole = SourceIcon(source)
+	end
+	if icon then
+		recordShown.icon:SetTexture(icon)
+		if whole then
+			recordShown.icon:SetTexCoord(0, 1, 0, 1)
+		else
+			recordShown.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		end
+		recordShown.icon:SetWidth(26 * scale)
+		recordShown.icon:SetHeight(26 * scale)
+		recordShown.icon:Show()
+	else
+		recordShown.icon:Hide()
+	end
+	recordShown.age = 0
+	recordShown.popped = nil
+	recordShown:SetAlpha(1)
+	recordShown:Show()
+end
+
+recordShown:SetScript("OnUpdate", function()
+	this.age = this.age + arg1
+	local age = this.age
+	local life = this.life or 2.2
+	if age >= life then
+		this:Hide()
+		return
+	end
+	local scale = this.scale or 1
+	if not this.popped and age >= RECORD_POP then
+		this.popped = true
+		Face(this.number, RECORD_SIZE * scale, "THICKOUTLINE")
+	end
+	-- The glow bursts, then breathes; all of it fades at the end.
+	if this.glowing then
+		local burst = math.max(0, 1 - age / 0.5)
+		local size = (90 + 70 * burst + 10 * math.sin(age * 6)) * scale
+		this.glow:SetWidth(size)
+		this.glow:SetHeight(size * 0.7)
+		this.glow:SetAlpha(0.55 + 0.45 * burst)
+	end
+	local fade = life - RECORD_FADE
+	this:SetAlpha(age > fade and (1 - (age - fade) / RECORD_FADE) or math.min(1, age / 0.06))
+end)
+
+-- Placed once the saved settings are in, and a piece of move mode (Mover.lua
+-- runs after this file), as are the columns.
+local recordLoader = CreateFrame("Frame")
+recordLoader:RegisterEvent("PLAYER_ENTERING_WORLD")
+recordLoader:SetScript("OnEvent", function()
+	PlaceRecord()
+	for _, kind in pairs(COLUMN_ORDER) do
+		PlaceColumn(kind)
+	end
+	if not this.registered and SurvivorUI_RegisterMover then
+		this.registered = true
+		SurvivorUI_RegisterMover(recordShown, "New best crit", SaveRecordPlace, nil, function()
+			local db = Settings()
+			db.recordLeft, db.recordTop = nil, nil
+			PlaceRecord()
+		end)
+		for _, kind in pairs(COLUMN_ORDER) do
+			local column = kind
+			local piece = COLUMN_PIECES[column]
+			columnHandles[column] = SurvivorUI_RegisterMover(ColumnFrame(column), piece.name,
+				function() SaveColumn(column) end, nil, function()
+					local db = Settings()
+					db[piece.left], db[piece.top] = nil, nil
+					PlaceColumn(column)
+				end)
+		end
+	end
+end)
+
+-- A column in move mode only while it is used: beside the hero the four
+-- (the crits' while they have their own); over the enemies the damage taken
+-- alone. Out of move mode each keeps to its place, as the distance changes.
+local function ColumnUsed(kind)
+	local db = Settings()
+	if not db.damageText then
+		return false
+	end
+	if kind == "taken" then
+		return true
+	elseif not SideOn() then
+		return false
+	elseif kind == "crit" then
+		return CT().ctCritColumn and true or false
+	end
+	return true
+end
+
+local columnWatch = CreateFrame("Frame")
+columnWatch.elapsed = 0
+columnWatch:SetScript("OnUpdate", function()
+	this.elapsed = this.elapsed + arg1
+	if this.elapsed < 0.5 then
+		return
+	end
+	this.elapsed = 0
+	for _, kind in pairs(COLUMN_ORDER) do
+		local handle = columnHandles[kind]
+		if handle then
+			handle.disabled = not ColumnUsed(kind) or nil
+			if not handle:IsShown() then
+				PlaceColumn(kind)
+			end
+		end
+	end
+end)
+
+------------------------------------------------------------------------------
+-- The heals: the game's own never reach the combat text's feed, so they are
+-- read from its healing meter (AZS_HEALING, each source's health given this
+-- run, overhealing left out) as it changes: what a source gave since last
+-- shown, with its icon. A trickle (regeneration, a ring's health per second)
+-- gathers until it is worth a number: 2% of max health, 1 at least.
+
+local healSeen, healPending = {}, {}
+local healAt, healPrimed
+
+local function HealsOn()
+	local db = Settings()
+	return db.damageText and not db.damageNone and CT().ctHeals
+end
+
+local healWatch = CreateFrame("Frame")
+healWatch:SetScript("OnUpdate", function()
+	if not AZS_HEALING or AZS_HEALING_UPDATED == healAt then
+		return
+	end
+	healAt = AZS_HEALING_UPDATED
+	local on = healPrimed and HealsOn()
+	local worth = math.max(1, (CT().ctHealMin or 2) / 100 * (UnitHealthMax("player") or 0))
+	for index = 1, table.getn(AZS_HEALING) do
+		local line = AZS_HEALING[index]
+		local name, given = line.name, tonumber(line.dmg)
+		if name and given then
+			local seen = healSeen[name]
+			if not seen or given < seen then
+				-- A source new since the last read, or a new run's.
+				healPending[name] = (seen and given) or (healPrimed and given) or 0
+			else
+				healPending[name] = (healPending[name] or 0) + given - seen
+			end
+			healSeen[name] = given
+			if healPending[name] >= worth then
+				if on then
+					SpawnSide("heal", math.floor(healPending[name] + 0.5), false, false, name)
+				end
+				healPending[name] = 0
+			end
+		end
+	end
+	healPrimed = true
+end)
+
+-- The damage taken's and the heals' switches, for their cards in move mode.
+function SurvivorUI_ToggleTakenNumbers()
+	local ct = CT()
+	ct.ctTaken = not ct.ctTaken
+end
+
+function SurvivorUI_ToggleHealNumbers()
+	local ct = CT()
+	ct.ctHeals = not ct.ctHeals
+end
+
 local damageEvents = CreateFrame("Frame")
 damageEvents:SetScript("OnEvent", function()
 	if not Settings().damageText then
@@ -1777,7 +2226,7 @@ damageEvents:SetScript("OnEvent", function()
 	if event == "COMBAT_TEXT_UPDATE" then
 		if TAKEN_TYPES[arg1] and tonumber(arg2) then
 			SpawnDamage(nil, arg2, arg1 == "DAMAGE_CRIT")
-		elseif HEAL_TYPES[arg1] and CT().ctHeals then
+		elseif HEAL_TYPES[arg1] and CT().ctHeals and not AZS_GetHealing then
 			-- A heal: arg2 the healer, arg3 the health it gave.
 			local amount = tonumber(arg3) or tonumber(arg2)
 			if amount and amount > 0 then
@@ -1788,6 +2237,20 @@ damageEvents:SetScript("OnEvent", function()
 	end
 	local target, amount, crit, periodic, source = ParseDamage(arg1 or "")
 	if target then
+		-- A crit that beats its ability's best, or the run's biggest, as
+		-- chosen: its moment, held still.
+		if crit and not periodic then
+			local mine, top = SurvivorUI_NoteCrit(amount, arg1)
+			local ct = CT()
+			local record = mine
+			if ct.ctRecordKind == "run" then
+				record = top
+			end
+			if record and ct.ctRecord ~= false then
+				ShowRecord(amount, source)
+				return
+			end
+		end
 		SpawnDamage(target, amount, crit, periodic, source)
 	end
 end)
@@ -1885,7 +2348,7 @@ function SurvivorUI_ToggleDamage()
 	settings.damageText = not settings.damageText
 	settings.damageNone = nil
 	ApplyDamageText()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.damageText and "quick damage numbers." or "the game's own damage numbers."))
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.damageText and "SurvivorUI's damage numbers." or "Default damage numbers."))
 end
 
 -- How the combat numbers show, for the options: "quick" (over the enemies),
@@ -1923,7 +2386,54 @@ function SurvivorUI_CTDefaults()
 	for key, value in pairs(CT_DEFAULTS) do
 		ct[key] = value
 	end
+	-- Every column and the new best crit back in their first places.
+	for _, kind in pairs(COLUMN_ORDER) do
+		local piece = COLUMN_PIECES[kind]
+		ct[piece.left], ct[piece.top] = nil, nil
+		PlaceColumn(kind)
+	end
+	ct.recordLeft, ct.recordTop = nil, nil
+	PlaceRecord()
 	SurvivorUI_SetDamageMode("survivor")
+end
+
+-- A sample of every number as set (Combat text, Show a sample; /sui sample):
+-- hits dealt with the meter's top source, a crit, a swarm's hits taken, a
+-- heal and a new best crit, a moment apart.
+local sample = CreateFrame("Frame")
+sample:Hide()
+sample:SetScript("OnUpdate", function()
+	this.age = this.age + arg1
+	while this.steps[this.at] and this.steps[this.at][1] <= this.age do
+		this.steps[this.at][2]()
+		this.at = this.at + 1
+	end
+	if not this.steps[this.at] then
+		this:Hide()
+	end
+end)
+
+function SurvivorUI_CTSample()
+	local db = Settings()
+	if not db.damageText or db.damageNone then
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the sample shows SurvivorUI's numbers; choose SurvivorUI in Combat text first.")
+		return
+	end
+	local source = AZS_METER and AZS_METER[1] and AZS_METER[1].name or "Melee"
+	local healer = AZS_HEALING and AZS_HEALING[1] and AZS_HEALING[1].name
+	local ct = CT()
+	sample.steps = {
+		{ 0, function() SpawnDamage("Sample", 128, false, false, source) end },
+		{ 0.05, function() SpawnDamage("Sample", 131, false, false, source) end },
+		{ 0.35, function() SpawnDamage("Sample", 352, true, false, source) end },
+		{ 0.5, function() SpawnDamage(nil, 9) end },
+		{ 0.6, function() SpawnDamage(nil, 6) end },
+		{ 0.8, function() if ct.ctHeals then SpawnSide("heal", 27, false, false, healer) end end },
+		{ 1.0, function() SpawnDamage("Sample", 96, false, ct.ctPeriodic and true or false, source) end },
+		{ 1.3, function() if ct.ctRecord ~= false then ShowRecord(1234, source) end end },
+	}
+	sample.age, sample.at = 0, 1
+	sample:Show()
 end
 
 -- The numbers beside the hero, or over the enemies again.
@@ -2010,6 +2520,11 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ResetCollection then
 			SurvivorUI_ResetCollection()
 		end
+	elseif msg == "record" then
+		-- The look of a new best crit, at once.
+		ShowRecord(12345)
+	elseif msg == "sample" then
+		SurvivorUI_CTSample()
 	elseif msg == "dots" then
 		if SurvivorUI_ToggleDots then
 			SurvivorUI_ToggleDots()
@@ -2041,16 +2556,18 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(none and "no combat text at all." or "quick damage numbers."))
 	else
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui opt  opens the options: every piece on or off, panel size, and a move mode with a grid")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between the quick damage numbers and the game's own")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between SurvivorUI's damage numbers and Default")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage side  puts the damage numbers beside the hero, or back over the enemies")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui dots  shows or hides the counters over the action bar: DoTs, fears and totems")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui record  shows how a new best crit looks in the combat numbers")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui sample  shows a sample of every combat number as set")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui guardians  shows or hides the guardians' list; /sui guardians north  points its arrows north up; /sui guardians bar  makes it a bar in the run tracker")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui collection  the Jewelry Collection: every amulet, ring and trinket found, and what is left to find; /sui collection reset  forgets it all")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 10  sets the chat text size, 8 to 18 (default 10)")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui bosses  switches the boss bars on or off; /sui bosses elites  lists elites too")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the bar and the game's own box")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the minimap and the Default box")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pace  shows or hides the kill pace, the orb by the run tracker's clock; /sui pace class  against this class's runs only, or every class's; /sui pace reset  forgets the runs it holds against")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui run  shows or hides the run panel (the run's numbers and biggest crits); /sui run reset clears the crits")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tracker  shows or hides the run tracker under the minimap (the clock and the bosses)")
@@ -2058,7 +2575,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui crits  shows or hides the Biggest Crits box (off by default)")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui hover  switches the white outline around what the mouse is on")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui scale 0.85  sizes the panels, 0.6 to 1.4, for smaller screens")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui meter  switches between the addon's damage meter, with the crits, and the game's own")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui meter  switches between SurvivorUI's damage meter, with the crits, and Default")
 	end
 end
 

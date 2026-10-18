@@ -9,13 +9,13 @@
 -- collection learns those as they are found.
 
 SurvivorUI_JEWELRY = {
-	edition = "c.1016.m",
+	edition = "c.1017.m",
 	Ring = {
-		{ "Archimtiros' Ring of Reckoning", { "+5% damage reduction, +21% max health", "+7% damage reduction, +29% max health", "+9% damage reduction, +38% max health", "+10% damage reduction, +42% max health", "+10% damage reduction, +42% max health" } },
+		{ "Archimtiros' Ring of Reckoning", { "+4.4% damage reduction, +18% max health", "+5.8% damage reduction, +23% max health", "+7% damage reduction, +28% max health", "+8.5% damage reduction, +34% max health", "+10% damage reduction, +40% max health" } },
 		{ "Band of Accuria", { "+26% damage", "+36% damage", "+46% damage", "+61% damage", "+82% damage" } },
 		{ "Blooddrinker's Band", { "1.5% of damage dealt heals", "2.1% of damage dealt heals", "2.7% of damage dealt heals", "3.0% of damage dealt heals", "3.0% of damage dealt heals" } },
-		{ "Heavy Dark Iron Ring", { "+30% max health", "+42% max health", "+54% max health", "+60% max health", "+60% max health" } },
-		{ "Master Dragonslayer's Ring", { "+6% critical strike", "+8% critical strike", "+11% critical strike", "+14% critical strike", "+19% critical strike" } },
+		{ "Heavy Dark Iron Ring", { "+25% max health", "+33% max health", "+40% max health", "+48% max health", "+57% max health" } },
+		{ "Master Dragonslayer's Ring", { "+6% critical strike chance", "+8% critical strike chance", "+11% critical strike chance", "+14% critical strike chance", "+19% critical strike chance" } },
 		{ "Quick Strike Ring", { "-14% cooldowns", "-19% cooldowns", "-24% cooldowns", "-32% cooldowns", "-43% cooldowns" } },
 		{ "Ring of Spell Power", { "+21% area of effect", "+29% area of effect", "+38% area of effect", "+50% area of effect", "+67% area of effect" } },
 		{ "Ring of the Devoured", { "+2.2 health per second", "+3.1 health per second", "+4.0 health per second", "+4.5 health per second", "+4.5 health per second" } },
@@ -29,7 +29,7 @@ SurvivorUI_JEWELRY = {
 		{ "Hand of Justice", { "9% chance to cast twice", "13% chance to cast twice", nil, "22% chance to cast twice", "29% chance to cast twice" } },
 		{ "Horn of the Warchief", { "Buffs 22% stronger", "Buffs 32% stronger", "Buffs 41% stronger", "Buffs 54% stronger", "Buffs 72% stronger" } },
 		{ "Insignia of the Horde", { "+18% experience", "+25% experience", "+32% experience", "+43% experience", "+58% experience" } },
-		{ "Lifegiving Gem", { "+24% max health", "+34% max health", "+43% max health", "+48% max health", "+48% max health" } },
+		{ "Lifegiving Gem", { "+20% max health", "+26% max health", "+32% max health", "+39% max health", "+46% max health" } },
 		{ "Major Soulstone", { "+1 return to life", "+1 return to life", nil, "+2 returns to life", "+2 returns to life" } },
 		{ "Mark of the Chosen", { "+22% luck", "+32% luck", "+41% luck", "+54% luck", "+72% luck" } },
 		{ "Onyxia Blood Talisman", { "Each kill heals 3.0", "Each kill heals 4.2", "Each kill heals 5.4", "Each kill heals 6.0", "Each kill heals 6.0" } },

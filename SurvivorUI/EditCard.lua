@@ -42,6 +42,12 @@ local PIECES = {
 	["Biggest Crits"] = { part = "crits", places = { "critsLeft", "critsTop", "critsBottom" }, key = "critBox", offUnlessOn = true, toggle = "SurvivorUI_ToggleCrits" },
 	["Kills & gold"] = { part = "tally", places = { "tallyLeft", "tallyTop" }, key = "tally", toggle = "SurvivorUI_Tally" },
 	["Guardians"] = { part = "guardians", places = { "guardiansLeft", "guardiansTop" }, key = "guardians", toggle = "SurvivorUI_ToggleGuardians" },
+	["New best crit"] = { places = { "recordLeft", "recordTop" }, key = "ctRecord", toggle = "SurvivorUI_ToggleRecord", noFont = true },
+	["Damage numbers"] = { places = { "dealtLeft", "dealtTop" }, noFont = true },
+	["Crit numbers"] = { places = { "critLeft", "critTop" }, noFont = true },
+	["Damage taken"] = { places = { "takenLeft", "takenTop" }, key = "ctTaken", toggle = "SurvivorUI_ToggleTakenNumbers", noFont = true },
+	["Healing"] = { places = { "healLeft", "healTop" }, key = "ctHeals", toggle = "SurvivorUI_ToggleHealNumbers", noFont = true },
+	["Minimap button"] = { places = { "mapButtonX", "mapButtonY" }, noFont = true },
 }
 
 local selected          -- the handle (Mover.lua) whose card is open
@@ -58,24 +64,30 @@ local GAME_FONTS = {
 }
 
 -- The free faces that come with the addon, in its Fonts folder, under the SIL
--- Open Font License (each one's license beside it). None writes Chinese or
--- Korean, and those marked latin write no Cyrillic: each is offered only
--- where it can write the game's language.
+-- Open Font License (each one's license beside it). None writes Chinese,
+-- Korean or Japanese; Exo and Cinzel Decorative write no Cyrillic (Russian,
+-- Ukrainian), Russo One no Romanian ț: each is offered only where it can
+-- write the game's language.
 local OWN_FONTS = "Interface\\AddOns\\SurvivorUI\\Fonts\\"
+local CYRILLIC = { ru = true, uk = true }
 local ADDON_FONTS = {
 	{ name = "Fira Sans", path = OWN_FONTS.."FiraSans-Medium.ttf" },
 	{ name = "Noto Sans", path = OWN_FONTS.."NotoSans-Medium.ttf" },
-	{ name = "Exo", path = OWN_FONTS.."Exo-SemiBold.ttf", latin = true },
-	{ name = "Russo One", path = OWN_FONTS.."RussoOne-Regular.ttf" },
-	{ name = "Cinzel Decorative", path = OWN_FONTS.."CinzelDecorative-Bold.ttf", latin = true },
+	{ name = "Exo", path = OWN_FONTS.."Exo-SemiBold.ttf", cannot = CYRILLIC },
+	{ name = "Russo One", path = OWN_FONTS.."RussoOne-Regular.ttf", cannot = { ro = true } },
+	{ name = "Cinzel Decorative", path = OWN_FONTS.."CinzelDecorative-Bold.ttf", cannot = CYRILLIC },
 }
+local NO_FREE_FONT = { zh = true, ko = true, ja = true }
 
 local function Writes(face)
 	local language = SurvivorUI_Language and SurvivorUI_Language()
-	if language == "zh" or language == "ko" then
+	if not language then
+		return true
+	end
+	if NO_FREE_FONT[language] then
 		return false
 	end
-	return not (face.latin and language == "ru")
+	return not (face.cannot and face.cannot[language])
 end
 
 -- A face by its file: the addon's as Writes says, the game's always.
@@ -178,7 +190,7 @@ end
 local function ApplyFont(handle)
 	local piece = PIECES[handle.name]
 	local chosen = PieceFont(handle.name)
-	if not (handle.mover and piece and not piece.gameFont) then
+	if not (handle.mover and piece and not piece.gameFont and not piece.noFont) then
 		return
 	end
 	if chosen or handle.fontWorn then
@@ -361,7 +373,7 @@ local function Step(direction)
 	local handles = SurvivorUI_MoverHandles and SurvivorUI_MoverHandles() or {}
 	local list = {}
 	for _, handle in pairs(handles) do
-		if not handle.disabled then
+		if handle:IsShown() and not handle.disabled then
 			table.insert(list, handle)
 		end
 	end
@@ -593,7 +605,7 @@ end)
 stepUp:SetPoint("TOPRIGHT", card, "TOPRIGHT", -12, -148)
 local gameFont = Text(card, 9, MUTED)
 gameFont:SetPoint("TOPLEFT", card, "TOPLEFT", 50, -128)
-gameFont:SetText("the game's own")
+gameFont:SetText("Default")
 
 -- Shown or hidden, for the pieces that can be put away.
 local function Shown(piece)
@@ -615,7 +627,7 @@ end)
 visible:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -174)
 
 -- Back to its first place, and undo.
-local reset = Button("Reset", (WIDTH - 36) / 3, function()
+local reset = Button("Reset (Default)", 88, function()
 	if not (selected and selected.default) then
 		return
 	end
@@ -638,9 +650,9 @@ local function Undo()
 	MoveTo(last.handle, last.x, last.y)
 	Select(last.handle)
 end
-local undoButton = Button("Undo", (WIDTH - 36) / 3, Undo)
-undoButton:SetPoint("TOP", card, "TOP", 0, -198)
-local done = Button("Done", (WIDTH - 36) / 3, function() Select(nil) end)
+local undoButton = Button("Undo", 56, Undo)
+undoButton:SetPoint("TOPLEFT", reset, "TOPRIGHT", 6, 0)
+local done = Button("Done", 56, function() Select(nil) end)
 done:SetPoint("TOPRIGHT", card, "TOPRIGHT", -12, -198)
 
 local hint = Text(card, 8, MUTED)
@@ -678,7 +690,8 @@ function Fill()
 	end
 	local chosen = PieceFont(selected.name)
 	local fontRow = { picker, stepDown, stepUp }
-	if piece.gameFont then
+	if piece.gameFont or piece.noFont then
+		gameFont:SetText(piece.noFont and "set in Combat text" or "Default")
 		for _, button in pairs(fontRow) do
 			button:Hide()
 		end

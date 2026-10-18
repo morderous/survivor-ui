@@ -192,7 +192,9 @@ local SPARK_EVERY = 2.2             -- seconds between two twinkles
 local BURST = 0.7                   -- seconds the burst takes
 head.coin:SetScript("OnUpdate", function()
 	local coin = this
-	if not coin.pays then
+	if not coin.pays or (SurvivorUIDB and SurvivorUIDB.trackerCoinShine == false) then
+		coin.glow:Hide()
+		coin.spark:Hide()
 		return
 	end
 	local now = GetTime()
@@ -403,8 +405,13 @@ local function FillBossLine(line, entry, index, seconds, isNext)
 			line.fill:SetVertexColor(1.00, 0.55, 0.15, 0.85)
 			line.fill:Show()
 			line.name:SetTextColor(1, 1, 1)
-			-- Its share alone.
-			line.time:SetText(string.format("%d%%", (hpm > 0 and hp / hpm or 0) * 100 + 0.5))
+			-- Its health as chosen (/sui opt, Run tracker): its share, by default.
+			local look = SurvivorUIDB and SurvivorUIDB.trackerHealthLook or "percent"
+			if SurvivorUI_HealthText then
+				line.time:SetText(SurvivorUI_HealthText(hp, hpm, look))
+			else
+				line.time:SetText(string.format("%d%%", (hpm > 0 and hp / hpm or 0) * 100 + 0.5))
+			end
 			line.target = name
 			line:EnableMouse(true)
 		end
@@ -424,12 +431,17 @@ end
 ------------------------------------------------------------------------------
 -- The elites alive (AZS_UNITS), under the guardians: a small bar each, its
 -- health in the fight's orange. The game tells of no fight but the health, so
--- one that has taken a hit is bright, one still whole dim. Eight fit: the
--- hurt first, the lowest leftmost, then the ones seen longest; the rest only
--- in the count. With the health in the tracker a click targets one, as on a
--- boss's line.
+-- one that has taken a hit is bright, one still whole dim. Eight fit (4 to 12,
+-- as chosen): the hurt first, the lowest leftmost, then the ones seen longest;
+-- the rest only in the count. A click targets one.
 
-local ELITE_SLOTS, ELITE_GAP, ELITE_HEIGHT = 8, 2, 7
+local ELITE_GAP, ELITE_HEIGHT = 2, 7
+
+-- How many bars (/sui opt, Run tracker), 4 to 12: 8 by default.
+local function EliteSlots()
+	local count = SurvivorUIDB and tonumber(SurvivorUIDB.trackerElitesMax) or 8
+	return math.max(4, math.min(12, math.floor(count + 0.5)))
+end
 local ELITE_TOP, ELITE_LINE = 6, 12     -- room over the row, and its line of words
 local ELITE_COLOR = { 1.00, 0.55, 0.15 }
 
@@ -484,6 +496,14 @@ local function EliteSlot(index)
 	return slot
 end
 
+local function HideElites()
+	head.eliteTitle:Hide()
+	head.eliteCount:Hide()
+	for index = 1, table.getn(head.elites) do
+		head.elites[index]:Hide()
+	end
+end
+
 local function EliteRow(y)
 	if not TrackerElites() then
 		head.eliteTitle:Hide()
@@ -525,6 +545,11 @@ local function EliteRow(y)
 		return a.id < b.id
 	end)
 	local total, hurt = table.getn(alive), 0
+	-- With none alive, no row at all, when chosen; else it keeps its room.
+	if total == 0 and SurvivorUIDB and SurvivorUIDB.trackerElitesHide then
+		HideElites()
+		return y
+	end
 	for index = 1, total do
 		if alive[index].share < 1 then
 			hurt = hurt + 1
@@ -544,8 +569,12 @@ local function EliteRow(y)
 	head.eliteCount:SetPoint("TOPRIGHT", head, "TOPRIGHT", 0, y - ELITE_TOP)
 	head.eliteCount:Show()
 	y = y - ELITE_TOP - ELITE_LINE
-	local each = (WIDTH - (ELITE_SLOTS - 1) * ELITE_GAP) / ELITE_SLOTS
-	for index = 1, ELITE_SLOTS do
+	local slots = EliteSlots()
+	local each = (WIDTH - (slots - 1) * ELITE_GAP) / slots
+	for index = slots + 1, table.getn(head.elites) do
+		head.elites[index]:Hide()
+	end
+	for index = 1, slots do
 		local slot = EliteSlot(index)
 		slot:SetWidth(each)
 		slot:ClearAllPoints()
@@ -558,7 +587,7 @@ local function EliteRow(y)
 			slot.name = elite.name
 			slot.health = SurvivorUI_HealthText and SurvivorUI_HealthText(elite.hp, elite.hpm, "absolutePercent")
 				or string.format("%d%%", elite.share * 100 + 0.5)
-			slot.target = TrackerHealth() and elite.name or nil
+			slot.target = elite.name
 			slot:EnableMouse(true)
 		else
 			slot.fill:Hide()
@@ -648,15 +677,23 @@ local function Draw(game, phase)
 		head.clock:SetTextColor(1, 1, 1)
 	end
 	y = Put(head.clock, y - 1, 24)
-	-- The cache's coin, when the game tells its price: it shines (its own
+	-- The cache's coin, when the game tells its price and it is chosen (off
+	-- first: the kills and gold line shows the gold): it shines (its own
 	-- OnUpdate) while the gold pays for the cache, red and still while not.
 	local gold, cost = Num(game.gold), Num(game.chest)
 	local coin = head.coin
-	if cost > 0 then
+	if cost > 0 and SurvivorUIDB and SurvivorUIDB.trackerCoin == true then
 		local pays = gold >= cost
 		if pays and not coin.pays then
 			coin.paysSince = GetTime()
 			coin.icon:SetTexture(COIN_GOLD)
+		elseif pays then
+			-- Not shining (/sui opt, Run tracker): gold and still.
+			if SurvivorUIDB and SurvivorUIDB.trackerCoinShine == false then
+				coin.icon:SetWidth(COIN_SIZE)
+				coin.icon:SetHeight(COIN_SIZE)
+				coin.icon:SetVertexColor(1, 1, 1)
+			end
 		elseif not pays and coin.pays ~= false then
 			coin.glow:Hide()
 			coin.spark:Hide()
@@ -901,8 +938,8 @@ function SurvivorUI_ToggleTracker()
 	settings.tracker = not settings.tracker
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.tracker
-		and "run tracker on; the game's own clock is put away."
-		or "run tracker off; the game's own clock is back."))
+		and "run tracker on; the Default clock is put away."
+		or "run tracker off; the Default clock is back."))
 end
 
 local loader = CreateFrame("Frame")

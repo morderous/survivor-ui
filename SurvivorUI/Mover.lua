@@ -2,7 +2,7 @@
 -- Survivor UI: the middle of the screen moves as one.
 --
 -- The player frame, the action buttons, the target frame, the experience bar,
--- the kills and gold line, the hero's buffs and the target's debuffs all hang from one row
+-- the hero's buffs and the target's debuffs all hang from one row
 -- (SurvivorUIRow). Holding Alt lays a handle over the whole block, outlined so
 -- it shows: drag it and everything goes along. The place is kept between
 -- sessions; /sui center puts the block back under the hero.
@@ -70,6 +70,15 @@ end
 local handles = {}
 local dragging                  -- the handle being dragged, until it is let go
 local editing = false           -- configuration mode: everything unlocked, the grid on
+
+-- The pieces of the options' open tab, movable while it is open, without the
+-- grid ("all" for every one); a drag moves them, a click opens a card.
+local focus
+local focusVersion = 0
+
+local function InFocus(handle)
+	return focus == "all" or (focus ~= nil and handle.name ~= nil and focus[handle.name] == true)
+end
 
 ------------------------------------------------------------------------------
 -- The grid of configuration mode: a line every GRID units, the screen's middle
@@ -147,7 +156,7 @@ end
 -- left corner counted from the screen's corner, in the screen's own units; then
 -- a neighbour's edge (or middle) near one of its own pulls it into line.
 local function Snap(frame, own)
-	if not editing then
+	if not (editing or focus) then
 		return
 	end
 	local left, top = frame:GetLeft(), frame:GetTop()
@@ -226,9 +235,17 @@ local function MakeHandle(label)
 	handle.label:SetText(label)
 	handle.name = label
 
-	-- In move mode a click picks the piece for its card (EditCard.lua).
+	-- In move mode, or the piece's tab open, a click picks the piece for its
+	-- card (EditCard.lua); a drag only moves it.
+	handle:SetScript("OnMouseDown", function()
+		this.wasDragged = nil
+	end)
 	handle:SetScript("OnMouseUp", function()
-		if editing and SurvivorUI_EditSelect then
+		if this.wasDragged then
+			this.wasDragged = nil
+			return
+		end
+		if (editing or InFocus(this)) and SurvivorUI_EditSelect then
 			SurvivorUI_EditSelect(this)
 		end
 	end)
@@ -250,6 +267,7 @@ function SurvivorUI_RegisterMover(frame, label, save, mover, default)
 		if SurvivorUI_EditBefore then
 			SurvivorUI_EditBefore(this)
 		end
+		this.wasDragged = true
 		dragging = this
 		mover:StartMoving()
 	end)
@@ -274,8 +292,8 @@ function SurvivorUI_MoverHandles()
 end
 
 -- The action bar: the buttons and the experience bar under them. The player
--- and target frames, the buffs and the kills and gold line move on their own,
--- below; left where they are, they follow the bar.
+-- and target frames and the buffs move on their own, below; left where they
+-- are, they follow the bar.
 local middle = MakeHandle("Action bar  -  /sui center puts it back")
 middle.name = "Action bar"
 middle.mover, middle.save = row, Save
@@ -292,6 +310,7 @@ middle:SetScript("OnDragStart", function()
 	if SurvivorUI_EditBefore then
 		SurvivorUI_EditBefore(this)
 	end
+	this.wasDragged = true
 	dragging = this
 	row:StartMoving()
 end)
@@ -305,8 +324,8 @@ middle:SetScript("OnDragStop", function()
 	end
 end)
 
--- The buffs and the kills and gold line: their own handles. Left where they
--- are, they follow the middle block; once moved, they stay put.
+-- The frames and the buffs: their own handles. Left where they are, they
+-- follow the middle block; once moved, they stay put.
 local function KeepPiece(frame, label, xKey, yKey, point, default)
 	if not frame then
 		return
@@ -403,18 +422,20 @@ KeepPiece(getglobal("SurvivorUIBuffs"), "Buffs", "buffsLeft", "buffsBottom", "BO
 	SurvivorUIBuffs:SetPoint("BOTTOMLEFT", player, "TOPLEFT", 0, 5)
 end)
 
--- Shown with Alt held, in configuration mode, or while a drag is still going.
-local shown = false
+-- Every one shown with Alt held, in configuration mode, or while a drag (of
+-- one held with Alt) is still going; the open tab's pieces while it is open.
+local shown
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
-	local wanted = IsAltKeyDown() or editing or dragging ~= nil
-	if wanted == shown then
+	local all = IsAltKeyDown() or editing or (dragging ~= nil and not InFocus(dragging))
+	local state = (all and "all" or "some")..focusVersion
+	if state == shown then
 		return
 	end
-	shown = wanted
+	shown = state
 	for index = 1, table.getn(handles) do
 		local handle = handles[index]
-		if wanted and not handle.disabled then
+		if (all or InFocus(handle)) and not handle.disabled then
 			handle:Show()
 			handle:EnableMouse(true)
 		else
@@ -423,6 +444,23 @@ watcher:SetScript("OnUpdate", function()
 		end
 	end
 end)
+
+-- The options' open tab: its pieces by name, "all", or nil (closed). A card
+-- open on a piece put away closes.
+function SurvivorUI_SetMoveFocus(names)
+	if names == nil or names == "all" then
+		focus = names
+	else
+		focus = {}
+		for _, name in pairs(names) do
+			focus[name] = true
+		end
+	end
+	focusVersion = focusVersion + 1
+	if not editing and SurvivorUI_EditSelect then
+		SurvivorUI_EditSelect(nil)
+	end
+end
 
 ------------------------------------------------------------------------------
 -- The game's own pieces: the chat window and the minimap (with its zone name).
@@ -780,7 +818,9 @@ local PLACES = {
 	"meterRight", "meterBottom", "bossLeft", "bossTop", "lootLeft", "lootTop",
 	"chatLeft", "chatBottom", "mapRight", "mapTop", "tipRight", "tipBottom", "critsLeft", "critsBottom", "critsTop", "buildLeft", "buildTop",
 	"buffsLeft", "buffsBottom", "tallyLeft", "tallyTop", "playerLeft", "playerTop", "targetLeft", "targetTop",
-	"guardiansLeft", "guardiansTop",
+	"guardiansLeft", "guardiansTop", "recordLeft", "recordTop",
+	"dealtLeft", "dealtTop", "critLeft", "critTop", "takenLeft", "takenTop", "healLeft", "healTop",
+	"mapButtonX", "mapButtonY",
 }
 
 -- A new layout starts everyone from the first places once: the pieces moved
