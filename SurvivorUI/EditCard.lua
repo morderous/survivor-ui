@@ -32,15 +32,15 @@ local PIECES = {
 	["Chat"] = { places = { "chatLeft", "chatBottom" }, gameFont = true },
 	["Minimap"] = { part = "minimap", places = { "mapRight", "mapTop" }, gameFont = true },
 	["Tooltip"] = { places = { "tipRight", "tipBottom" }, gameFont = true },
-	["Stats"] = { part = "stats", places = { "statsLeft", "statsTop" } },
+	["Stats"] = { part = "stats", places = { "statsLeft", "statsTop" }, key = "statsPanel", offUnlessOn = true, toggle = "SurvivorUI_ToggleStatsPanel" },
 	["Run tracker"] = { part = "tracker", places = { "trackerRight", "trackerTop" }, key = "tracker", toggle = "SurvivorUI_ToggleTracker" },
-	["Build"] = { part = "build", places = { "buildLeft", "buildTop" }, key = "buildList", toggle = "SurvivorUI_ToggleBuild" },
+	["Build list"] = { part = "build", places = { "buildLeft", "buildTop" }, key = "buildList", toggle = "SurvivorUI_ToggleBuild" },
 	["Damage meter"] = { part = "meter", places = { "meterRight", "meterBottom" }, key = "meter", toggle = "SurvivorUI_ToggleMeter" },
 	["Boss bars"] = { part = "bosses", places = { "bossLeft", "bossTop" }, key = "bossBars", toggle = "SurvivorUI_BossBars" },
-	["Loot"] = { part = "loot", places = { "lootLeft", "lootTop" }, key = "lootLog", toggle = "SurvivorUI_ToggleLoot" },
+	["Loot list"] = { part = "loot", places = { "lootLeft", "lootTop" }, key = "lootLog", toggle = "SurvivorUI_ToggleLoot" },
 	["This Run"] = { part = "run", places = { "runLeft", "runTop", "runBottom" }, key = "runPanel", toggle = "SurvivorUI_ToggleRun" },
 	["Biggest Crits"] = { part = "crits", places = { "critsLeft", "critsTop", "critsBottom" }, key = "critBox", offUnlessOn = true, toggle = "SurvivorUI_ToggleCrits" },
-	["Kills & gold"] = { part = "tally", places = { "tallyLeft", "tallyX", "tallyTop" }, key = "tally", toggle = "SurvivorUI_Tally" },
+	["Kills and gold line"] = { part = "tally", places = { "tallyLeft", "tallyX", "tallyTop" }, key = "tally", toggle = "SurvivorUI_Tally" },
 	["Guardians"] = { part = "guardians", places = { "guardiansLeft", "guardiansTop" }, key = "guardians", toggle = "SurvivorUI_ToggleGuardians" },
 	["New best crit"] = { places = { "recordLeft", "recordTop" }, key = "ctRecord", toggle = "SurvivorUI_ToggleRecord", noFont = true },
 	["Damage numbers"] = { places = { "dealtLeft", "dealtTop" }, noFont = true },
@@ -138,11 +138,21 @@ function SurvivorUI_FontList(forGlobal)
 	return list
 end
 
--- The pieces' fonts, { path, step } by name in SurvivorUIDB.pieceFonts.
+-- The pieces' fonts, { path, step } by name in SurvivorUIDB.pieceFonts; a
+-- piece renamed (v3.0.5) keeps the font chosen under its old name.
+local RENAMED = { ["Build"] = "Build list", ["Loot"] = "Loot list", ["Kills & gold"] = "Kills and gold line" }
+
 local function PieceFonts()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.pieceFonts = SurvivorUIDB.pieceFonts or {}
-	return SurvivorUIDB.pieceFonts
+	local fonts = SurvivorUIDB.pieceFonts
+	for old, new in pairs(RENAMED) do
+		if fonts[old] then
+			fonts[new] = fonts[new] or fonts[old]
+			fonts[old] = nil
+		end
+	end
+	return fonts
 end
 
 -- A piece's font; one that cannot write the game's language is left aside.
@@ -769,6 +779,26 @@ function Select(handle)
 	card:Show()
 end
 SurvivorUI_EditSelect = Select
+
+-- A piece back in its first place by its name (the options' Back to its
+-- place), as its card's Reset does.
+function SurvivorUI_ResetPiece(name)
+	for _, handle in pairs(SurvivorUI_MoverHandles and SurvivorUI_MoverHandles() or {}) do
+		if handle.name == name and handle.default then
+			SurvivorUI_EditBefore(handle)
+			local piece = PIECES[name]
+			SurvivorUIDB = SurvivorUIDB or {}
+			for _, key in pairs(piece and piece.places or {}) do
+				SurvivorUIDB[key] = nil
+			end
+			handle.default()
+			if selected == handle then
+				Fill()
+			end
+			return
+		end
+	end
+end
 
 -- The keys while the card is open: arrows move, Ctrl+Z undoes, Escape closes.
 card:EnableKeyboard(true)

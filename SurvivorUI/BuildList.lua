@@ -3,8 +3,8 @@
 -- damage meter, the same spells side by side with what they deal.
 --
 -- Every spell slot, filled or not: each spell with its icon, its name in the
--- same color the damage meter gives it, its rank and its share of the damage,
--- then the racial apart (it takes no slot). Empty slots show, since how many
+-- same color the damage meter gives it, its rank and its share of the damage
+-- (or its range, as chosen: Build list tab), then the racial apart (it takes no slot). Empty slots show, since how many
 -- are left matters at every card choice. Hover a spell for its card: rank,
 -- cooldown, damage and crits. The spells run from the highest rank down, each
 -- in a border of its color.
@@ -228,6 +228,40 @@ local function Paint(row, color, alpha, filled)
 	row.rule:SetVertexColor(color[1], color[2], color[3], 0.28 * alpha)
 end
 
+-- A spell's range, read off its button's tooltip: the short lines over its
+-- cast line ("28 yd"; a spell with none, its radius: "11 yd radius"). Kept
+-- by its name and rank a few seconds, an upgrade can widen it.
+local scan = CreateFrame("GameTooltip", "SurvivorUIBuildScan", nil, "GameTooltipTemplate")
+local reaches = {}              -- [name:rank] = { text or false, when read }
+
+local function Reach(actionSlot, name, rank)
+	local key = tostring(name)..":"..tostring(rank)
+	local known = reaches[key]
+	if known and GetTime() - known[2] < 5 then
+		return known[1] or nil
+	end
+	scan:SetOwner(WorldFrame, "ANCHOR_NONE")
+	scan:ClearLines()
+	scan:SetAction(actionSlot)
+	local range, radius
+	for line = 2, scan:NumLines() do
+		local text = getglobal("SurvivorUIBuildScanTextLeft"..line)
+		text = text and text:GetText() or ""
+		local _, _, yards = string.find(text, "(%d+%.?%d*) yd")
+		if yards then
+			if string.find(text, "radius", 1, true) then
+				radius = radius or yards
+			else
+				range = range or yards
+			end
+		end
+	end
+	scan:Hide()
+	local reach = (range or radius) and ((range or radius).." yd") or false
+	reaches[key] = { reach, GetTime() }
+	return reach or nil
+end
+
 local function Fill(row, entry, actionSlot, isRacial)
 	local key = Field(entry, "key", 1)
 	local name = SpellName(key)
@@ -237,8 +271,12 @@ local function Fill(row, entry, actionSlot, isRacial)
 	row.icon:SetAlpha(1)
 	row.name:SetText(isRacial and name.."  |cff8a8a8a(racial)|r" or name)
 	row.rank:SetText(tonumber(Field(entry, "rank", 3)) or "")
-	local share = SurvivorUI_MeterShare and SurvivorUI_MeterShare(name)
-	row.share:SetText(share and share >= 0.005 and math.floor(share * 100 + 0.5).."%" or "")
+	if Settings().buildShows == "range" then
+		row.share:SetText(Reach(actionSlot, name, Field(entry, "rank", 3)) or "")
+	else
+		local share = SurvivorUI_MeterShare and SurvivorUI_MeterShare(name)
+		row.share:SetText(share and share >= 0.005 and math.floor(share * 100 + 0.5).."%" or "")
+	end
 	Paint(row, color, isRacial and 0.5 or 1, not isRacial)
 	row:Show()
 end
@@ -634,5 +672,5 @@ loader:SetScript("OnEvent", function()
 end)
 
 if SurvivorUI_RegisterMover then
-	SurvivorUI_RegisterMover(list, "Build", SavePlace, nil, RestorePlace)
+	SurvivorUI_RegisterMover(list, "Build list", SavePlace, nil, RestorePlace)
 end

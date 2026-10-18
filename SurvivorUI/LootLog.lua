@@ -358,7 +358,7 @@ function SurvivorUI_ToggleLoot()
 end
 
 if SurvivorUI_RegisterMover then
-	SurvivorUI_RegisterMover(log, "Loot", SavePlace, nil, function()
+	SurvivorUI_RegisterMover(log, "Loot list", SavePlace, nil, function()
 		DefaultPlace(true)
 	end)
 end

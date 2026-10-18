@@ -365,8 +365,10 @@ local function Wanted(unit, elites)
 	if kind == "final" or kind == "boss" then
 		return true
 	elseif kind == "guardian" then
-		-- A guardian asleep in its lair is not a fight yet.
-		return (tonumber(Field(unit, "state", 6)) or 0) == 1
+		-- A guardian asleep in its lair is not a fight yet; one already hurt
+		-- is, though the game still calls it asleep (feared from the first hit).
+		local hp, hpm = tonumber(Field(unit, "hp", 4)) or 0, tonumber(Field(unit, "hpm", 5)) or 0
+		return (tonumber(Field(unit, "state", 6)) or 0) == 1 or (hpm > 0 and hp > 0 and hp < hpm)
 	end
 	return elites and kind == "elite"
 end

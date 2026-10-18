@@ -50,7 +50,7 @@ local button = CreateFrame("Button", "SurvivorUIMinimapButton", Minimap or UIPar
 button:SetFrameStrata("MEDIUM")
 button:SetFrameLevel((Minimap and Minimap:GetFrameLevel() or 1) + 5)
 -- Outside the minimap, its bottom left corner; the stack grows upward. Moved
--- (the Interface tab, or Move UI), it keeps its place against the minimap's
+-- (the Frames & bar tab, or Move UI), it keeps its place against the minimap's
 -- middle, so it follows the minimap.
 local function PlaceButton()
 	button:ClearAllPoints()

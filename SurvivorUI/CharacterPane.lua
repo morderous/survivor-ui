@@ -3,7 +3,8 @@
 --
 -- One flat dark panel: the hero and the item slots on the left, and on the
 -- right the run's numbers in titled sections, in place of the stock stat rows
--- and the game's separate "Run Stats" box.
+-- and the game's separate "Run Stats" box. The same numbers as a panel of
+-- their own on the screen, the Stats panel, further down.
 --
 -- The numbers are the game's own: its interface keeps them in the global
 -- AZS_STATS table, fed by the server. This file only reads that table.
@@ -280,87 +281,47 @@ local function Stats()
 end
 
 ------------------------------------------------------------------------------
--- The numbers' own frame. With the character pane, its right side (the
--- default); or on its own, a window of its own anywhere on the screen, shown
--- with the character pane or all the time (the options, Interface).
+-- The numbers, in two places that stand on their own: the character pane's
+-- right side (on unless switched off: the options, Character pane), and the
+-- Stats panel, a panel of its own on the screen all the time (a module, off
+-- until chosen: the options, Stats panel), moved, sized and resized like the
+-- other panels. Both can be on at once. Which numbers show, and their order,
+-- are the same in both.
 
 local function DB()
 	SurvivorUIDB = SurvivorUIDB or {}
 	return SurvivorUIDB
 end
 
--- "attached", "detached" (with the character pane) or "always".
-local function StatsMode()
-	return DB().statsMode or "attached"
+-- Up to v3.0.4 the numbers had one place, statsMode: "attached" (in the pane),
+-- "detached" (a window of their own, with the pane) or "always" (a panel).
+-- The first two keep the pane's numbers; "always" becomes the Stats panel on
+-- and the pane's numbers off, as the screen was.
+local function Migrate()
+	local db = DB()
+	if db.statsMode then
+		if db.statsMode == "always" then
+			db.statsPanel = true
+			db.statsInPane = false
+		end
+		db.statsMode = nil
+		db.statsWindowSize = nil
+	end
 end
 
-local stats = CreateFrame("Frame", "SurvivorUICharacterStats", panel)
-stats:SetWidth(STATS_WIDTH)
-stats:SetHeight(ART_HEIGHT)
+local function StatsInPane()
+	return DB().statsInPane ~= false
+end
 
--- On its own it wears the panel's look: a dark fill and a black edge.
-local ownEdge = stats:CreateTexture(nil, "BACKGROUND")
-ownEdge:SetTexture(FLAT)
-ownEdge:SetVertexColor(0, 0, 0, 1)
-ownEdge:SetPoint("TOPLEFT", stats, "TOPLEFT", -1, 1)
-ownEdge:SetPoint("BOTTOMRIGHT", stats, "BOTTOMRIGHT", 1, -1)
-local ownFill = stats:CreateTexture(nil, "BORDER")
-ownFill:SetTexture(FLAT)
-ownFill:SetVertexColor(0.05, 0.05, 0.07, 0.92)
-ownFill:SetAllPoints(stats)
-
--- The headline: the damage bonus, with the hero's health under it.
-local headline = stats:CreateFontString(nil, "OVERLAY")
-headline:SetFont(SurvivorUI_FONT, 20 + FONT_BUMP, "OUTLINE")
-headline:SetPoint("TOP", stats, "TOP", 0, -14)
-headline:SetTextColor(0.72, 0.45, 1)
-
-local headlineCaption = stats:CreateFontString(nil, "OVERLAY")
-headlineCaption:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP)
-headlineCaption:SetPoint("TOP", headline, "BOTTOM", 0, -3)
-
--- Always shown, the numbers take the look of the panels that stay on the
--- screen (This Run, the build list): a light shade, a gold title, slim rows
--- washed in their group's color, as tall as what they hold.
-local PANEL_WIDTH = 220
-local PANEL_ROW = 16
-local PANEL_HEADER = 14
-local panelTitle = stats:CreateFontString(nil, "OVERLAY")
-panelTitle:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
-panelTitle:SetPoint("TOPLEFT", stats, "TOPLEFT", 8, -9)
-panelTitle:SetTextColor(1, 0.82, 0)
-panelTitle:SetText("Stats")
-panelTitle:Hide()
-
--- The top strip, where the window is taken to be moved (the rows under it
--- stay free for arranging).
-local grip = CreateFrame("Frame", nil, stats)
-grip:SetPoint("TOPLEFT", stats, "TOPLEFT", 0, 0)
-grip:SetPoint("TOPRIGHT", stats, "TOPRIGHT", 0, 0)
-grip:SetHeight(50)
-
-local scroll = CreateFrame("ScrollFrame", "SurvivorUICharacterScroll", stats)
-scroll:SetPoint("TOPLEFT", stats, "TOPLEFT", 12, -54)
-scroll:SetPoint("BOTTOMRIGHT", stats, "BOTTOMRIGHT", -12, 8)
-
-local content = CreateFrame("Frame", nil, scroll)
-content:SetWidth(STATS_WIDTH - 24)
-content:SetHeight(10)
-scroll:SetScrollChild(content)
-
-local scrollOffset, scrollRange = 0, 0
-scroll:EnableMouseWheel(true)
-scroll:SetScript("OnMouseWheel", function()
-	scrollOffset = math.max(0, math.min(scrollRange, scrollOffset - arg1 * ROW_MAX * 2))
-	this:SetVerticalScroll(scrollOffset)
-end)
+local function PanelOn()
+	return DB().statsPanel == true
+end
 
 ------------------------------------------------------------------------------
 -- The order: each group, and each number within its group, where the player
--- put it; a number can be switched off for good (the options, Character).
+-- put it; a number can be switched off for good (the options, Stats panel).
 -- Kept per class, as names, in SurvivorUIDB.statsByClass; anything the addon
--- adds later goes at the end
--- of its group.
+-- adds later goes at the end of its group.
 
 -- This class's choices: { order, hidden }. The ones kept before v2.9 (for
 -- every class at once) become the class of whoever logs in first.
@@ -425,19 +386,6 @@ local function Ordered()
 	return ordered
 end
 
--- The panels' look: on its own, always shown.
-local function PanelLook()
-	return StatsMode() == "always"
-end
-
--- On its own, the size the player dragged it to (its corner), by look:
--- { w, h }, or nil for the first size.
-local sizing = false
-local function SavedSize()
-	local key = PanelLook() and "statsPanelSize" or "statsWindowSize"
-	return DB()[key]
-end
-
 -- What a class hides unless the player chose otherwise: the damage over time
 -- and bonus damage numbers. Each class takes its own copy the first time.
 local DEFAULT_HIDDEN = {
@@ -500,373 +448,632 @@ function SurvivorUI_SetStatShown(label, shown)
 end
 
 ------------------------------------------------------------------------------
--- The rows and headers.
+-- A view of the numbers: its frame, its rows and headers, and the arranging
+-- by drag (in move mode or with Alt held). Made twice: in the character pane,
+-- and as the Stats panel (`alone`), which wears the panels' look (a light
+-- shade, a gold title, slim rows washed in their group's color, as tall as
+-- what they hold) and has a place and a size of its own.
 
-local headers, rows = {}, {}
-local layout = {}               -- what is drawn: { kind, section, label, top, height }
-local dragging                  -- { kind, section, label }
-local UpdateStats
+local PANEL_WIDTH = 220
+local PANEL_ROW = 16
+local PANEL_HEADER = 14
 
-local function RowEnter()
-	if dragging then
-		return
-	end
-	GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-	GameTooltip:SetText(this.title, 1, 1, 1)
-	GameTooltip:AddLine(this.text, 1, 0.82, 0, 1)
-	if Arranging() then
-		GameTooltip:AddLine("Drag to move it within its group. Which numbers show: /sui opt, Character.", 0.6, 0.6, 0.65, 1)
-	end
-	GameTooltip:Show()
-end
+local views = {}
+local UpdateAll                 -- every view shown drawn again; set below
 
--- Where the cursor stands, in the content's units, from its top.
-local function CursorDepth()
-	local _, y = GetCursorPosition()
-	return content:GetTop() - y / content:GetEffectiveScale()
-end
+local function MakeView(alone)
+	local view = { alone = alone }
+	local stats = CreateFrame("Frame", alone and "SurvivorUIStatsPanel" or "SurvivorUICharacterStats", alone and UIParent or panel)
+	view.frame = stats
+	stats:SetWidth(alone and PANEL_WIDTH or STATS_WIDTH)
+	stats:SetHeight(ART_HEIGHT)
 
--- The gold line where a dragged piece would land.
-local mark = content:CreateTexture(nil, "OVERLAY")
-mark:SetTexture(FLAT)
-mark:SetVertexColor(1, 0.82, 0, 1)
-mark:SetHeight(2)
-mark:Hide()
-
--- Where the dragged piece would go: the index among its kind (rows of its
--- group, or groups) it would come before, and the depth to draw the mark.
-local function Target()
-	local depth = CursorDepth()
-	local candidates = {}
-	for index = 1, table.getn(layout) do
-		local item = layout[index]
-		if dragging.kind == "row" and item.kind == "row" and item.section == dragging.section then
-			table.insert(candidates, { top = item.top, height = item.height, key = item.label })
-		elseif dragging.kind == "section" and item.kind == "header" then
-			table.insert(candidates, { top = item.top, height = item.block, key = item.section })
+	local headline, headlineCaption, grip
+	if alone then
+		local fill = stats:CreateTexture(nil, "BORDER")
+		fill:SetTexture(FLAT)
+		fill:SetVertexColor(0.04, 0.04, 0.07, 0.55)
+		fill:SetAllPoints(stats)
+		local title = stats:CreateFontString(nil, "OVERLAY")
+		title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
+		title:SetPoint("TOPLEFT", stats, "TOPLEFT", 8, -9)
+		title:SetTextColor(1, 0.82, 0)
+		title:SetText("Stats")
+		-- The top strip, where the panel is taken to be moved (the rows under
+		-- it stay free for arranging).
+		grip = CreateFrame("Frame", nil, stats)
+		grip:SetPoint("TOPLEFT", stats, "TOPLEFT", 0, 0)
+		grip:SetPoint("TOPRIGHT", stats, "TOPRIGHT", 0, 0)
+		grip:SetHeight(24)
+		stats:SetFrameStrata("MEDIUM")
+		stats:SetMovable(true)
+		if stats.SetClampedToScreen then
+			stats:SetClampedToScreen(true)
 		end
-	end
-	for index = 1, table.getn(candidates) do
-		local c = candidates[index]
-		if depth < c.top + c.height / 2 then
-			return index, c.top
-		end
-	end
-	local last = candidates[table.getn(candidates)]
-	return table.getn(candidates) + 1, last and (last.top + last.height) or 0
-end
-
-local function Drop()
-	local before = Target()
-	local ordered = Ordered()
-	if dragging.kind == "section" then
-		local moving, rest = nil, {}
-		for index = 1, table.getn(ordered) do
-			if ordered[index].title == dragging.section then
-				moving = ordered[index]
-			end
-		end
-		-- The shown groups' order, the dragged one taken out and put back.
-		local shownTitles = {}
-		for index = 1, table.getn(layout) do
-			if layout[index].kind == "header" then
-				table.insert(shownTitles, layout[index].section)
-			end
-		end
-		local target = shownTitles[before]
-		for index = 1, table.getn(ordered) do
-			if ordered[index].title ~= dragging.section then
-				if target and ordered[index].title == target then
-					table.insert(rest, moving)
-				end
-				table.insert(rest, ordered[index])
-			end
-		end
-		if not target then
-			table.insert(rest, moving)
-		end
-		ordered = rest
 	else
+		-- The headline: the damage bonus, with the hero's health under it.
+		headline = stats:CreateFontString(nil, "OVERLAY")
+		headline:SetFont(SurvivorUI_FONT, 20 + FONT_BUMP, "OUTLINE")
+		headline:SetPoint("TOP", stats, "TOP", 0, -14)
+		headline:SetTextColor(0.72, 0.45, 1)
+		headlineCaption = stats:CreateFontString(nil, "OVERLAY")
+		headlineCaption:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP)
+		headlineCaption:SetPoint("TOP", headline, "BOTTOM", 0, -3)
+	end
+
+	local scroll = CreateFrame("ScrollFrame", alone and "SurvivorUIStatsPanelScroll" or "SurvivorUICharacterScroll", stats)
+	if alone then
+		scroll:SetPoint("TOPLEFT", stats, "TOPLEFT", 4, -28)
+		scroll:SetPoint("BOTTOMRIGHT", stats, "BOTTOMRIGHT", -4, 6)
+	else
+		scroll:SetPoint("TOPLEFT", stats, "TOPLEFT", 12, -54)
+		scroll:SetPoint("BOTTOMRIGHT", stats, "BOTTOMRIGHT", -12, 8)
+	end
+	local content = CreateFrame("Frame", nil, scroll)
+	content:SetWidth(STATS_WIDTH - 24)
+	content:SetHeight(10)
+	scroll:SetScrollChild(content)
+
+	local scrollOffset, scrollRange = 0, 0
+	scroll:EnableMouseWheel(true)
+	scroll:SetScript("OnMouseWheel", function()
+		scrollOffset = math.max(0, math.min(scrollRange, scrollOffset - arg1 * ROW_MAX * 2))
+		this:SetVerticalScroll(scrollOffset)
+	end)
+
+	-- The panel's size, dragged by its corner: { w, h }, or nil for the first.
+	local sizing = false
+	local function SavedSize()
+		return alone and DB().statsPanelSize or nil
+	end
+
+	-- The rows and headers.
+	local headers, rows = {}, {}
+	local layout = {}               -- what is drawn: { kind, section, label, top, height }
+	local dragging                  -- { kind, section, label }
+	local UpdateStats
+
+	local function RowEnter()
+		if dragging then
+			return
+		end
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		GameTooltip:SetText(this.title, 1, 1, 1)
+		GameTooltip:AddLine(this.text, 1, 0.82, 0, 1)
+		if Arranging() then
+			GameTooltip:AddLine("Drag to move it within its group. Which numbers show: /sui opt, Stats panel.", 0.6, 0.6, 0.65, 1)
+		end
+		GameTooltip:Show()
+	end
+
+	-- Where the cursor stands, in the content's units, from its top.
+	local function CursorDepth()
+		local _, y = GetCursorPosition()
+		return content:GetTop() - y / content:GetEffectiveScale()
+	end
+
+	-- The gold line where a dragged piece would land.
+	local mark = content:CreateTexture(nil, "OVERLAY")
+	mark:SetTexture(FLAT)
+	mark:SetVertexColor(1, 0.82, 0, 1)
+	mark:SetHeight(2)
+	mark:Hide()
+
+	-- Where the dragged piece would go: the index among its kind (rows of its
+	-- group, or groups) it would come before, and the depth to draw the mark.
+	local function Target()
+		local depth = CursorDepth()
+		local candidates = {}
+		for index = 1, table.getn(layout) do
+			local item = layout[index]
+			if dragging.kind == "row" and item.kind == "row" and item.section == dragging.section then
+				table.insert(candidates, { top = item.top, height = item.height, key = item.label })
+			elseif dragging.kind == "section" and item.kind == "header" then
+				table.insert(candidates, { top = item.top, height = item.block, key = item.section })
+			end
+		end
+		for index = 1, table.getn(candidates) do
+			local c = candidates[index]
+			if depth < c.top + c.height / 2 then
+				return index, c.top
+			end
+		end
+		local last = candidates[table.getn(candidates)]
+		return table.getn(candidates) + 1, last and (last.top + last.height) or 0
+	end
+
+	local function Drop()
+		local before = Target()
+		local ordered = Ordered()
+		if dragging.kind == "section" then
+			local moving, rest = nil, {}
+			for index = 1, table.getn(ordered) do
+				if ordered[index].title == dragging.section then
+					moving = ordered[index]
+				end
+			end
+			-- The shown groups' order, the dragged one taken out and put back.
+			local shownTitles = {}
+			for index = 1, table.getn(layout) do
+				if layout[index].kind == "header" then
+					table.insert(shownTitles, layout[index].section)
+				end
+			end
+			local target = shownTitles[before]
+			for index = 1, table.getn(ordered) do
+				if ordered[index].title ~= dragging.section then
+					if target and ordered[index].title == target then
+						table.insert(rest, moving)
+					end
+					table.insert(rest, ordered[index])
+				end
+			end
+			if not target then
+				table.insert(rest, moving)
+			end
+			ordered = rest
+		else
+			for index = 1, table.getn(ordered) do
+				local section = ordered[index]
+				if section.title == dragging.section then
+					local shownLabels = {}
+					for each = 1, table.getn(layout) do
+						local item = layout[each]
+						if item.kind == "row" and item.section == section.title then
+							table.insert(shownLabels, item.label)
+						end
+					end
+					local target = shownLabels[before]
+					local moving, rest = nil, {}
+					for each = 1, table.getn(section.rows) do
+						if section.rows[each][1] == dragging.label then
+							moving = section.rows[each]
+						end
+					end
+					for each = 1, table.getn(section.rows) do
+						local entry = section.rows[each]
+						if entry[1] ~= dragging.label then
+							if target and entry[1] == target then
+								table.insert(rest, moving)
+							end
+							table.insert(rest, entry)
+						end
+					end
+					if not target then
+						table.insert(rest, moving)
+					end
+					section.rows = rest
+				end
+			end
+		end
+		SaveOrder(ordered)
+	end
+
+	local function StartDrag(kind, frame)
+		if not Arranging() then
+			return
+		end
+		dragging = { kind = kind, section = frame.section, label = frame.key }
+		frame:SetAlpha(0.4)
+		GameTooltip:Hide()
+	end
+
+	-- Dropped, the order is the same in both views: both drawn again.
+	local function StopDrag(frame)
+		if not dragging then
+			return
+		end
+		Drop()
+		dragging = nil
+		mark:Hide()
+		frame:SetAlpha(1)
+		UpdateAll()
+	end
+
+	local function Header(index)
+		local header = headers[index]
+		if not header then
+			header = CreateFrame("Frame", nil, content)
+			header:SetWidth(STATS_WIDTH - 24)
+			header:SetHeight(HEADER_HEIGHT)
+			header.text = header:CreateFontString(nil, "OVERLAY")
+			header.text:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
+			header.text:SetPoint("CENTER", header, "CENTER", 0, -2)
+			header.left = Line(header, 1, 1, 1)
+			header.left:SetHeight(1)
+			header.left:SetPoint("LEFT", header, "LEFT", 0, -2)
+			header.left:SetPoint("RIGHT", header.text, "LEFT", -6, 0)
+			header.right = Line(header, 1, 1, 1)
+			header.right:SetHeight(1)
+			header.right:SetPoint("RIGHT", header, "RIGHT", 0, -2)
+			header.right:SetPoint("LEFT", header.text, "RIGHT", 6, 0)
+			header:EnableMouse(true)
+			header:RegisterForDrag("LeftButton")
+			header:SetScript("OnDragStart", function() StartDrag("section", this) end)
+			header:SetScript("OnDragStop", function() StopDrag(this) end)
+			header:SetScript("OnEnter", function()
+				if Arranging() and not dragging then
+					GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+					GameTooltip:SetText(this.section, 1, 1, 1)
+					GameTooltip:AddLine("Drag to move the whole group.", 0.6, 0.6, 0.65, 1)
+					GameTooltip:Show()
+				end
+			end)
+			header:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			headers[index] = header
+		end
+		return header
+	end
+
+	local function Row(index)
+		local row = rows[index]
+		if not row then
+			row = CreateFrame("Button", nil, content)
+			row:SetWidth(STATS_WIDTH - 24)
+			row:SetHeight(ROW_MAX)
+			row:EnableMouse(true)
+			row:RegisterForDrag("LeftButton")
+			row:SetScript("OnEnter", RowEnter)
+			row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			row:SetScript("OnDragStart", function() StartDrag("row", this) end)
+			row:SetScript("OnDragStop", function() StopDrag(this) end)
+			row.wash = row:CreateTexture(nil, "BACKGROUND")
+			row.wash:SetTexture(FLAT)
+			row.wash:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+			row.wash:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
+			row.rule = row:CreateTexture(nil, "BORDER")
+			row.rule:SetTexture(FLAT)
+			row.rule:SetHeight(1)
+			row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+			row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+			row.grip = row:CreateFontString(nil, "OVERLAY")
+			row.grip:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP)
+			row.grip:SetPoint("LEFT", row, "LEFT", 0, 0)
+			row.grip:SetTextColor(1, 0.82, 0)
+			row.grip:SetText("::")
+			row.label = row:CreateFontString(nil, "OVERLAY")
+			row.label:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP)
+			row.label:SetPoint("LEFT", row, "LEFT", 2, 0)
+			row.label:SetTextColor(0.82, 0.82, 0.82)
+			row.value = row:CreateFontString(nil, "OVERLAY")
+			row.value:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP)
+			row.value:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+			rows[index] = row
+		end
+		return row
+	end
+
+	UpdateStats = function()
+		local s = Stats()
+		local arranging = Arranging()
+
+		if headline then
+			if s then
+				headline:SetText(Pct(s.dmg - 1))
+				headlineCaption:SetText("|cffa0a0a0Damage  \194\183  Health:|r |cff4da6ff"..string.format("%.0f", s.hp).."|r")
+			else
+				headline:SetText("-")
+				headlineCaption:SetText("|cffa0a0a0Start a run to see its numbers|r")
+			end
+		end
+
+		-- What shows: a group appears once one of its rows does. While arranging,
+		-- the hidden rows show too, faint, to bring them back.
+		local ordered = Ordered()
+		local shown = {}
+		local totalRows, totalHeaders = 0, 0
+		for index = 1, table.getn(ordered) do
+			local visible = {}
+			local section = ordered[index]
+			for each = 1, table.getn(section.rows) do
+				local entry = section.rows[each]
+				local relevant = not entry[4] or (s and s[entry[4]] ~= 0)
+				if (relevant or arranging) and not Hidden(entry[1]) then
+					table.insert(visible, entry)
+				end
+			end
+			shown[index] = visible
+			if table.getn(visible) > 0 then
+				totalRows = totalRows + table.getn(visible)
+				totalHeaders = totalHeaders + 1
+			end
+		end
+
+		-- Rows as tall as the room allows, and the type to match; in the panel,
+		-- slim rows and the panel as tall as they make it, unless sized by the
+		-- player: then the rows fill the room it was given, the type with them.
+		local headerHeight = alone and PANEL_HEADER or HEADER_HEIGHT
+		local frameWidth = alone and stats:GetWidth() or STATS_WIDTH
+		local width = frameWidth - (alone and 8 or 24)
+		content:SetWidth(width)
+		local rowHeight, fontSize
+		local sized = alone and (SavedSize() or sizing)
+		if alone and not sized then
+			rowHeight, fontSize = PANEL_ROW, 10
+		else
+			local room = scroll:GetHeight() - totalHeaders * headerHeight
+			local most = sized and 26 or ROW_MAX
+			rowHeight = most
+			if totalRows > 0 and room > 0 then
+				rowHeight = math.max(ROW_MIN, math.min(most, math.floor(room / totalRows)))
+			end
+			fontSize = math.max(8, math.min(sized and 15 or 11, rowHeight - 3))
+		end
+
+		local y = 0
+		local headerCount, rowCount = 0, 0
+		layout = {}
 		for index = 1, table.getn(ordered) do
 			local section = ordered[index]
-			if section.title == dragging.section then
-				local shownLabels = {}
-				for each = 1, table.getn(layout) do
-					local item = layout[each]
-					if item.kind == "row" and item.section == section.title then
-						table.insert(shownLabels, item.label)
+			local visible = shown[index]
+
+			if table.getn(visible) > 0 then
+				local color = section.color
+				headerCount = headerCount + 1
+				local header = Header(headerCount)
+				header:SetWidth(width)
+				header:SetHeight(headerHeight)
+				header:ClearAllPoints()
+				header:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
+				header.text:SetText(section.title)
+				header.text:SetTextColor(color[1], color[2], color[3])
+				header.left:SetVertexColor(color[1], color[2], color[3], 0.6)
+				header.right:SetVertexColor(color[1], color[2], color[3], 0.6)
+				header.section = section.title
+				header:Show()
+				local headerItem = { kind = "header", section = section.title, top = y, height = headerHeight }
+				table.insert(layout, headerItem)
+				y = y + headerHeight
+
+				for each = 1, table.getn(visible) do
+					local entry = visible[each]
+					rowCount = rowCount + 1
+					local row = Row(rowCount)
+					row:SetWidth(width)
+					row:SetHeight(rowHeight)
+					local face = fontSize..(alone and "o" or "")
+					if row.face ~= face then
+						row.face = face
+						row.label:SetFont(SurvivorUI_FONT, fontSize + FONT_BUMP, alone and "OUTLINE" or "")
+						row.value:SetFont(SurvivorUI_FONT, fontSize + FONT_BUMP, alone and "OUTLINE" or "")
 					end
-				end
-				local target = shownLabels[before]
-				local moving, rest = nil, {}
-				for each = 1, table.getn(section.rows) do
-					if section.rows[each][1] == dragging.label then
-						moving = section.rows[each]
+					-- The panel: the row washed in its group's color, label too.
+					if alone then
+						row.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
+						row.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
+						row.wash:Show()
+						row.rule:Show()
+						row.label:SetTextColor(color[1], color[2], color[3])
+					else
+						row.wash:Hide()
+						row.rule:Hide()
+						row.label:SetTextColor(0.82, 0.82, 0.82)
 					end
-				end
-				for each = 1, table.getn(section.rows) do
-					local entry = section.rows[each]
-					if entry[1] ~= dragging.label then
-						if target and entry[1] == target then
-							table.insert(rest, moving)
-						end
-						table.insert(rest, entry)
+					local value = s and entry[2](s) or "-"
+					row:ClearAllPoints()
+					row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
+					row.label:SetText(entry[1])
+					row.value:SetText(value)
+					row.value:SetTextColor(color[1], color[2], color[3])
+					row.title = entry[1].." "..value
+					row.text = entry[3]
+					row.section, row.key = section.title, entry[1]
+					-- Arranging: a grip, the label moved off it, hidden rows faint.
+					row.label:ClearAllPoints()
+					if arranging then
+						row.grip:Show()
+						row.label:SetPoint("LEFT", row, "LEFT", 12, 0)
+					else
+						row.grip:Hide()
+						row.label:SetPoint("LEFT", row, "LEFT", 2, 0)
 					end
+					if not (dragging and dragging.label == entry[1]) then
+						row:SetAlpha(Hidden(entry[1]) and 0.3 or 1)
+					end
+					row:Show()
+					table.insert(layout, { kind = "row", section = section.title, label = entry[1], top = y, height = rowHeight })
+					y = y + rowHeight
 				end
-				if not target then
-					table.insert(rest, moving)
-				end
-				section.rows = rest
+				headerItem.block = y - headerItem.top
 			end
 		end
-	end
-	SaveOrder(ordered)
-end
 
-local function StartDrag(kind, frame)
-	if not Arranging() then
-		return
-	end
-	dragging = { kind = kind, section = frame.section, label = frame.key }
-	frame:SetAlpha(0.4)
-	GameTooltip:Hide()
-end
+		for index = headerCount + 1, table.getn(headers) do
+			headers[index]:Hide()
+		end
+		for index = rowCount + 1, table.getn(rows) do
+			rows[index]:Hide()
+		end
 
-local function StopDrag(frame)
-	if not dragging then
-		return
+		content:SetHeight(math.max(10, y))
+		if alone and not SavedSize() and not sizing then
+			stats:SetHeight(28 + math.max(10, y) + 6)
+		end
+		scrollRange = math.max(0, y - scroll:GetHeight())
+		if scrollOffset > scrollRange then
+			scrollOffset = scrollRange
+			scroll:SetVerticalScroll(scrollOffset)
+		end
 	end
-	Drop()
-	dragging = nil
-	mark:Hide()
-	frame:SetAlpha(1)
-	UpdateStats()
-end
+	view.Update = UpdateStats
 
-local function Header(index)
-	local header = headers[index]
-	if not header then
-		header = CreateFrame("Frame", nil, content)
-		header:SetWidth(STATS_WIDTH - 24)
-		header:SetHeight(HEADER_HEIGHT)
-		header.text = header:CreateFontString(nil, "OVERLAY")
-		header.text:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
-		header.text:SetPoint("CENTER", header, "CENTER", 0, -2)
-		header.left = Line(header, 1, 1, 1)
-		header.left:SetHeight(1)
-		header.left:SetPoint("LEFT", header, "LEFT", 0, -2)
-		header.left:SetPoint("RIGHT", header.text, "LEFT", -6, 0)
-		header.right = Line(header, 1, 1, 1)
-		header.right:SetHeight(1)
-		header.right:SetPoint("RIGHT", header, "RIGHT", 0, -2)
-		header.right:SetPoint("LEFT", header.text, "RIGHT", 6, 0)
-		header:EnableMouse(true)
-		header:RegisterForDrag("LeftButton")
-		header:SetScript("OnDragStart", function() StartDrag("section", this) end)
-		header:SetScript("OnDragStop", function() StopDrag(this) end)
-		header:SetScript("OnEnter", function()
-			if Arranging() and not dragging then
-				GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-				GameTooltip:SetText(this.section, 1, 1, 1)
-				GameTooltip:AddLine("Drag to move the whole group.", 0.6, 0.6, 0.65, 1)
-				GameTooltip:Show()
+	-- The numbers keep themselves current while shown; the mark follows a
+	-- drag at once.
+	local statsElapsed, wasArranging = 0, nil
+	stats:SetScript("OnUpdate", function()
+		if dragging then
+			local _, top = Target()
+			mark:ClearAllPoints()
+			mark:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -top + 1)
+			mark:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -top + 1)
+			mark:Show()
+		end
+		statsElapsed = statsElapsed + arg1
+		local arranging = Arranging() and true or false
+		if statsElapsed < 0.3 and arranging == wasArranging then
+			return
+		end
+		statsElapsed = 0
+		wasArranging = arranging
+		if not dragging then
+			UpdateStats()
+		end
+	end)
+
+	if alone then
+		-- The panel's place: where it was left, or first right of the character
+		-- window; moved by its top strip (Mover.lua), Stats on its card.
+		local function SavePlace()
+			DB().statsLeft = math.floor(stats:GetLeft() + 0.5)
+			DB().statsTop = math.floor(stats:GetTop() + 0.5)
+		end
+
+		local function Place()
+			stats:ClearAllPoints()
+			if DB().statsLeft and DB().statsTop then
+				stats:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", DB().statsLeft, DB().statsTop)
+			else
+				stats:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", ART_LEFT + ART_WIDTH + 8, ART_TOP)
+			end
+		end
+
+		-- Its size: the one dragged to, or its first width with the height its
+		-- rows make.
+		local function Size()
+			local size = SavedSize()
+			stats:SetWidth(size and size[1] or PANEL_WIDTH)
+			if size then
+				stats:SetHeight(size[2])
+			end
+			scrollOffset = 0
+			scroll:SetVerticalScroll(0)
+		end
+
+		-- Its scale (the options, Stats panel: Size), place and size, shown
+		-- while the module is on.
+		function view.Apply()
+			stats:SetScale(SurvivorUI_PartScale and SurvivorUI_PartScale("stats") or 1)
+			Place()
+			Size()
+			if PanelOn() then
+				stats:Show()
+				UpdateStats()
+			else
+				stats:Hide()
+			end
+		end
+
+		-- The panel takes the size it is dragged to by its bottom right corner:
+		-- a grip shows there under the mouse. The rows and their type follow
+		-- the room. Right click the grip for the first size again.
+		stats:SetResizable(true)
+		if stats.SetMinResize then
+			stats:SetMinResize(150, 120)
+			stats:SetMaxResize(520, 900)
+		end
+		local corner = CreateFrame("Button", nil, stats)
+		corner:SetWidth(16)
+		corner:SetHeight(16)
+		corner:SetPoint("BOTTOMRIGHT", stats, "BOTTOMRIGHT", -1, 1)
+		corner:SetFrameLevel(stats:GetFrameLevel() + 20)
+		corner.noHoverOutline = true
+		corner:RegisterForClicks("RightButtonUp")
+		-- Three gold strokes, a corner's grip, faint until the mouse is on it.
+		corner.lines = {}
+		for index = 1, 3 do
+			local line = corner:CreateTexture(nil, "OVERLAY")
+			line:SetTexture(FLAT)
+			line:SetVertexColor(1, 0.82, 0, 1)
+			line:SetHeight(2)
+			line:SetWidth(4 * index + 2)
+			line:SetPoint("BOTTOMRIGHT", corner, "BOTTOMRIGHT", 0, (index - 1) * 4)
+			table.insert(corner.lines, line)
+		end
+		corner:SetAlpha(0)
+		corner:SetScript("OnEnter", function()
+			this:SetAlpha(1)
+			GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+			GameTooltip:SetText("Drag to resize", 1, 1, 1)
+			GameTooltip:AddLine("Right click: the first size again.", 0.7, 0.7, 0.7)
+			GameTooltip:Show()
+		end)
+		corner:SetScript("OnLeave", function()
+			if not sizing then
+				this:SetAlpha(0)
+			end
+			GameTooltip:Hide()
+		end)
+		corner:SetScript("OnMouseDown", function()
+			if arg1 == "LeftButton" then
+				sizing = true
+				GameTooltip:Hide()
+				stats:StartSizing("BOTTOMRIGHT")
 			end
 		end)
-		header:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		headers[index] = header
-	end
-	return header
-end
+		corner:SetScript("OnMouseUp", function()
+			if not sizing then
+				return
+			end
+			stats:StopMovingOrSizing()
+			sizing = false
+			DB().statsPanelSize = { math.floor(stats:GetWidth() + 0.5), math.floor(stats:GetHeight() + 0.5) }
+			-- Its place kept as it now stands.
+			SavePlace()
+			this:SetAlpha(MouseIsOver(this) and 1 or 0)
+			UpdateStats()
+		end)
+		corner:SetScript("OnClick", function()
+			DB().statsPanelSize = nil
+			Size()
+			UpdateStats()
+		end)
+		stats:SetScript("OnSizeChanged", function()
+			if sizing then
+				UpdateStats()
+			end
+		end)
 
-local function Row(index)
-	local row = rows[index]
-	if not row then
-		row = CreateFrame("Button", nil, content)
-		row:SetWidth(STATS_WIDTH - 24)
-		row:SetHeight(ROW_MAX)
-		row:EnableMouse(true)
-		row:RegisterForDrag("LeftButton")
-		row:SetScript("OnEnter", RowEnter)
-		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-		row:SetScript("OnDragStart", function() StartDrag("row", this) end)
-		row:SetScript("OnDragStop", function() StopDrag(this) end)
-		row.wash = row:CreateTexture(nil, "BACKGROUND")
-		row.wash:SetTexture(FLAT)
-		row.wash:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
-		row.wash:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
-		row.rule = row:CreateTexture(nil, "BORDER")
-		row.rule:SetTexture(FLAT)
-		row.rule:SetHeight(1)
-		row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-		row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
-		row.grip = row:CreateFontString(nil, "OVERLAY")
-		row.grip:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP)
-		row.grip:SetPoint("LEFT", row, "LEFT", 0, 0)
-		row.grip:SetTextColor(1, 0.82, 0)
-		row.grip:SetText("::")
-		row.label = row:CreateFontString(nil, "OVERLAY")
-		row.label:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP)
-		row.label:SetPoint("LEFT", row, "LEFT", 2, 0)
-		row.label:SetTextColor(0.82, 0.82, 0.82)
-		row.value = row:CreateFontString(nil, "OVERLAY")
-		row.value:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP)
-		row.value:SetPoint("RIGHT", row, "RIGHT", -2, 0)
-		rows[index] = row
-	end
-	return row
-end
-
-UpdateStats = function()
-	local s = Stats()
-	local arranging = Arranging()
-
-	if s then
-		headline:SetText(Pct(s.dmg - 1))
-		headlineCaption:SetText("|cffa0a0a0Damage  \194\183  Health:|r |cff4da6ff"..string.format("%.0f", s.hp).."|r")
+		if SurvivorUI_RegisterMover then
+			view.handle = SurvivorUI_RegisterMover(grip, "Stats", SavePlace, stats, function()
+				DB().statsLeft, DB().statsTop = nil, nil
+				Place()
+			end)
+		end
 	else
-		headline:SetText("-")
-		headlineCaption:SetText("|cffa0a0a0Start a run to see its numbers|r")
-	end
-
-	-- What shows: a group appears once one of its rows does. While arranging,
-	-- the hidden rows show too, faint, to bring them back.
-	local ordered = Ordered()
-	local shown = {}
-	local totalRows, totalHeaders = 0, 0
-	for index = 1, table.getn(ordered) do
-		local visible = {}
-		local section = ordered[index]
-		for each = 1, table.getn(section.rows) do
-			local entry = section.rows[each]
-			local relevant = not entry[4] or (s and s[entry[4]] ~= 0)
-			if (relevant or arranging) and not Hidden(entry[1]) then
-				table.insert(visible, entry)
+		-- In the pane: its right side, the pane as wide as both; or off, the
+		-- hero and the slots alone.
+		function view.Apply()
+			if StatsInPane() then
+				stats:ClearAllPoints()
+				stats:SetPoint("TOPLEFT", panel, "TOPLEFT", ART_WIDTH + 1, 0)
+				stats:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
+				stats:SetFrameLevel(panel:GetFrameLevel() + 1)
+				panel:SetWidth(ART_WIDTH + STATS_WIDTH)
+				divider:Show()
+				stats:Show()
+				scrollOffset = 0
+				scroll:SetVerticalScroll(0)
+				UpdateStats()
+			else
+				panel:SetWidth(ART_WIDTH)
+				divider:Hide()
+				stats:Hide()
 			end
 		end
-		shown[index] = visible
-		if table.getn(visible) > 0 then
-			totalRows = totalRows + table.getn(visible)
-			totalHeaders = totalHeaders + 1
+	end
+
+	table.insert(views, view)
+	return view
+end
+
+local paneView = MakeView(false)
+local panelView = MakeView(true)
+
+UpdateAll = function()
+	for index = 1, table.getn(views) do
+		if views[index].frame:IsVisible() then
+			views[index].Update()
 		end
-	end
-
-	-- Rows as tall as the room allows, and the type to match; in the panels'
-	-- look, slim rows and the panel as tall as they make it.
-	local panelLook = PanelLook()
-	local alone = StatsMode() ~= "attached"
-	local headerHeight = panelLook and PANEL_HEADER or HEADER_HEIGHT
-	local frameWidth = alone and stats:GetWidth() or STATS_WIDTH
-	local width = frameWidth - (panelLook and 8 or 24)
-	content:SetWidth(width)
-	-- On its own and sized by the player, the rows fill the room it was given,
-	-- the type with them; else as before.
-	local rowHeight, fontSize
-	local sized = alone and (SavedSize() or sizing)
-	if panelLook and not sized then
-		rowHeight, fontSize = PANEL_ROW, 10
-	else
-		local room = scroll:GetHeight() - totalHeaders * headerHeight
-		local most = sized and 26 or ROW_MAX
-		rowHeight = most
-		if totalRows > 0 and room > 0 then
-			rowHeight = math.max(ROW_MIN, math.min(most, math.floor(room / totalRows)))
-		end
-		fontSize = math.max(8, math.min(sized and 15 or 11, rowHeight - 3))
-	end
-
-	local y = 0
-	local headerCount, rowCount = 0, 0
-	layout = {}
-	for index = 1, table.getn(ordered) do
-		local section = ordered[index]
-		local visible = shown[index]
-
-		if table.getn(visible) > 0 then
-			local color = section.color
-			headerCount = headerCount + 1
-			local header = Header(headerCount)
-			header:SetWidth(width)
-			header:SetHeight(headerHeight)
-			header:ClearAllPoints()
-			header:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
-			header.text:SetText(section.title)
-			header.text:SetTextColor(color[1], color[2], color[3])
-			header.left:SetVertexColor(color[1], color[2], color[3], 0.6)
-			header.right:SetVertexColor(color[1], color[2], color[3], 0.6)
-			header.section = section.title
-			header:Show()
-			local headerItem = { kind = "header", section = section.title, top = y, height = headerHeight }
-			table.insert(layout, headerItem)
-			y = y + headerHeight
-
-			for each = 1, table.getn(visible) do
-				local entry = visible[each]
-				rowCount = rowCount + 1
-				local row = Row(rowCount)
-				row:SetWidth(width)
-				row:SetHeight(rowHeight)
-				local face = fontSize..(panelLook and "o" or "")
-				if row.face ~= face then
-					row.face = face
-					row.label:SetFont(SurvivorUI_FONT, fontSize + FONT_BUMP, panelLook and "OUTLINE" or "")
-					row.value:SetFont(SurvivorUI_FONT, fontSize + FONT_BUMP, panelLook and "OUTLINE" or "")
-				end
-				-- The panels' look: the row washed in its group's color, label too.
-				if panelLook then
-					row.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
-					row.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
-					row.wash:Show()
-					row.rule:Show()
-					row.label:SetTextColor(color[1], color[2], color[3])
-				else
-					row.wash:Hide()
-					row.rule:Hide()
-					row.label:SetTextColor(0.82, 0.82, 0.82)
-				end
-				local value = s and entry[2](s) or "-"
-				row:ClearAllPoints()
-				row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
-				row.label:SetText(entry[1])
-				row.value:SetText(value)
-				row.value:SetTextColor(color[1], color[2], color[3])
-				row.title = entry[1].." "..value
-				row.text = entry[3]
-				row.section, row.key = section.title, entry[1]
-				-- Arranging: a grip, the label moved off it, hidden rows faint.
-				row.label:ClearAllPoints()
-				if arranging then
-					row.grip:Show()
-					row.label:SetPoint("LEFT", row, "LEFT", 12, 0)
-				else
-					row.grip:Hide()
-					row.label:SetPoint("LEFT", row, "LEFT", 2, 0)
-				end
-				if not (dragging and dragging.label == entry[1]) then
-					row:SetAlpha(Hidden(entry[1]) and 0.3 or 1)
-				end
-				row:Show()
-				table.insert(layout, { kind = "row", section = section.title, label = entry[1], top = y, height = rowHeight })
-				y = y + rowHeight
-			end
-			headerItem.block = y - headerItem.top
-		end
-	end
-
-	for index = headerCount + 1, table.getn(headers) do
-		headers[index]:Hide()
-	end
-	for index = rowCount + 1, table.getn(rows) do
-		rows[index]:Hide()
-	end
-
-	content:SetHeight(math.max(10, y))
-	if panelLook and not SavedSize() and not sizing then
-		stats:SetHeight(28 + math.max(10, y) + 6)
-	end
-	scrollRange = math.max(0, y - scroll:GetHeight())
-	if scrollOffset > scrollRange then
-		scrollOffset = scrollRange
-		scroll:SetVerticalScroll(scrollOffset)
 	end
 end
 
@@ -899,220 +1106,35 @@ local function HideStock()
 end
 
 ------------------------------------------------------------------------------
--- Where the numbers sit, by the mode.
+-- For the options: the pane's numbers on or off, the Stats panel on or off,
+-- and the panel at its size (Mover.lua).
 
-local statsHandle
-
-local function SaveStats()
-	DB().statsLeft = math.floor(stats:GetLeft() + 0.5)
-	DB().statsTop = math.floor(stats:GetTop() + 0.5)
+function SurvivorUI_StatsInPane()
+	return StatsInPane()
 end
 
-local function PlaceAlone()
-	stats:ClearAllPoints()
-	if DB().statsLeft and DB().statsTop then
-		stats:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", DB().statsLeft, DB().statsTop)
-	else
-		-- First time on its own: right of the character window.
-		stats:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", ART_LEFT + ART_WIDTH + 8, ART_TOP)
+function SurvivorUI_SetStatsInPane(on)
+	DB().statsInPane = on and true or false
+	if panel:IsVisible() then
+		paneView.Apply()
 	end
 end
 
--- On their own, the numbers have a size of their own (the options, Size);
--- in the character pane, the pane's.
-local function SizeStats()
-	if StatsMode() == "attached" then
-		stats:SetScale(1)
-	else
-		stats:SetScale(SurvivorUI_PartScale and SurvivorUI_PartScale("stats") or 1)
+function SurvivorUI_StatsPanel()
+	return PanelOn()
+end
+
+-- Switched, or set to `on`.
+function SurvivorUI_ToggleStatsPanel(on)
+	if on == nil then
+		on = not PanelOn()
 	end
+	DB().statsPanel = on and true or false
+	panelView.Apply()
 end
 
 function SurvivorUI_StatsScale()
-	SizeStats()
-	if StatsMode() ~= "attached" then
-		PlaceAlone()
-	end
-end
-
--- The resize grip, made further down.
-local corner
-
--- The look by the mode: the character pane's window, or the panels' look.
-local function ApplyLook()
-	local panelLook = PanelLook()
-	scroll:ClearAllPoints()
-	local size = StatsMode() ~= "attached" and SavedSize()
-	if panelLook then
-		stats:SetWidth(size and size[1] or PANEL_WIDTH)
-		if size then
-			stats:SetHeight(size[2])
-		end
-		ownEdge:Hide()
-		ownFill:SetVertexColor(0.04, 0.04, 0.07, 0.55)
-		headline:Hide()
-		headlineCaption:Hide()
-		panelTitle:Show()
-		grip:SetHeight(24)
-		scroll:SetPoint("TOPLEFT", stats, "TOPLEFT", 4, -28)
-		scroll:SetPoint("BOTTOMRIGHT", stats, "BOTTOMRIGHT", -4, 6)
-	else
-		stats:SetWidth(size and size[1] or STATS_WIDTH)
-		stats:SetHeight(size and size[2] or ART_HEIGHT)
-		ownFill:SetVertexColor(0.05, 0.05, 0.07, 0.92)
-		headline:Show()
-		headlineCaption:Show()
-		panelTitle:Hide()
-		grip:SetHeight(50)
-		scroll:SetPoint("TOPLEFT", stats, "TOPLEFT", 12, -54)
-		scroll:SetPoint("BOTTOMRIGHT", stats, "BOTTOMRIGHT", -12, 8)
-	end
-	scrollOffset = 0
-	scroll:SetVerticalScroll(0)
-end
-
-local function ApplyStatsMode()
-	local mode = StatsMode()
-	SizeStats()
-	if mode == "attached" then
-		stats:SetParent(panel)
-		stats:ClearAllPoints()
-		stats:SetPoint("TOPLEFT", panel, "TOPLEFT", ART_WIDTH + 1, 0)
-		stats:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
-		panel:SetWidth(ART_WIDTH + STATS_WIDTH)
-		divider:Show()
-		ApplyLook()
-		ownEdge:Hide()
-		ownFill:Hide()
-		stats:SetFrameLevel(panel:GetFrameLevel() + 1)
-		stats:Show()
-	else
-		stats:SetParent(UIParent)
-		stats:SetFrameStrata("MEDIUM")
-		stats:SetMovable(true)
-		if stats.SetClampedToScreen then
-			stats:SetClampedToScreen(true)
-		end
-		PlaceAlone()
-		panel:SetWidth(ART_WIDTH)
-		divider:Hide()
-		ownEdge:Show()
-		ownFill:Show()
-		ApplyLook()
-		if mode == "always" or (panel:IsVisible() and Enabled()) then
-			stats:Show()
-		else
-			stats:Hide()
-		end
-	end
-	if statsHandle then
-		statsHandle.disabled = mode == "attached"
-	end
-	if corner and mode == "attached" then
-		corner:Hide()
-	elseif corner then
-		corner:Show()
-	end
-	-- With the character pane, over the panels; always shown, among them.
-	if mode == "detached" then
-		stats:SetFrameStrata("HIGH")
-	elseif mode == "always" then
-		stats:SetFrameStrata("MEDIUM")
-	end
-end
-
-------------------------------------------------------------------------------
--- On its own, the numbers' window takes the size it is dragged to by its
--- bottom right corner: a grip shows there under the mouse. The rows and their
--- type follow the room. Right click the grip for the first size again.
-
-stats:SetResizable(true)
-if stats.SetMinResize then
-	stats:SetMinResize(150, 120)
-	stats:SetMaxResize(520, 900)
-end
-
-corner = CreateFrame("Button", nil, stats)
-corner:SetWidth(16)
-corner:SetHeight(16)
-corner:SetPoint("BOTTOMRIGHT", stats, "BOTTOMRIGHT", -1, 1)
-corner:SetFrameLevel(stats:GetFrameLevel() + 20)
-corner.noHoverOutline = true
-corner:RegisterForClicks("RightButtonUp")
--- Three gold strokes, a corner's grip, faint until the mouse is on it.
-corner.lines = {}
-for index = 1, 3 do
-	local line = corner:CreateTexture(nil, "OVERLAY")
-	line:SetTexture(FLAT)
-	line:SetVertexColor(1, 0.82, 0, 1)
-	line:SetHeight(2)
-	line:SetWidth(4 * index + 2)
-	line:SetPoint("BOTTOMRIGHT", corner, "BOTTOMRIGHT", 0, (index - 1) * 4)
-	table.insert(corner.lines, line)
-end
-corner:SetAlpha(0)
-corner:SetScript("OnEnter", function()
-	this:SetAlpha(1)
-	GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-	GameTooltip:SetText("Drag to resize", 1, 1, 1)
-	GameTooltip:AddLine("Right click: the first size again.", 0.7, 0.7, 0.7)
-	GameTooltip:Show()
-end)
-corner:SetScript("OnLeave", function()
-	if not sizing then
-		this:SetAlpha(0)
-	end
-	GameTooltip:Hide()
-end)
-corner:SetScript("OnMouseDown", function()
-	if arg1 == "LeftButton" then
-		sizing = true
-		GameTooltip:Hide()
-		stats:StartSizing("BOTTOMRIGHT")
-	end
-end)
-corner:SetScript("OnMouseUp", function()
-	if not sizing then
-		return
-	end
-	stats:StopMovingOrSizing()
-	sizing = false
-	local key = PanelLook() and "statsPanelSize" or "statsWindowSize"
-	DB()[key] = { math.floor(stats:GetWidth() + 0.5), math.floor(stats:GetHeight() + 0.5) }
-	-- Its place kept as it now stands.
-	SaveStats()
-	this:SetAlpha(MouseIsOver(this) and 1 or 0)
-	UpdateStats()
-end)
-corner:SetScript("OnClick", function()
-	local key = PanelLook() and "statsPanelSize" or "statsWindowSize"
-	DB()[key] = nil
-	ApplyLook()
-	UpdateStats()
-end)
-stats:SetScript("OnSizeChanged", function()
-	if sizing then
-		UpdateStats()
-	end
-end)
-
--- For the options: where the numbers go.
-function SurvivorUI_StatsMode()
-	return StatsMode()
-end
-
-function SurvivorUI_SetStatsMode(mode)
-	DB().statsMode = mode
-	ApplyStatsMode()
-end
-
-if SurvivorUI_RegisterMover then
-	statsHandle = SurvivorUI_RegisterMover(grip, "Stats", SaveStats, stats, function()
-		DB().statsLeft, DB().statsTop = nil, nil
-		if StatsMode() ~= "attached" then
-			PlaceAlone()
-		end
-	end)
+	panelView.Apply()
 end
 
 local closeButton = getglobal("CharacterFrameCloseButton")
@@ -1131,7 +1153,6 @@ local function PaintClass()
 		end
 	end
 	panelEdge:SetVertexColor(r, g, b, 1)
-	ownEdge:SetVertexColor(r, g, b, 1)
 end
 
 panel:SetScript("OnShow", function()
@@ -1143,8 +1164,7 @@ panel:SetScript("OnShow", function()
 	HideStock()
 	UpdateSlotBorders()
 	UpdateTabs()
-	ApplyStatsMode()
-	UpdateStats()
+	paneView.Apply()
 	if closeButton then
 		closeButton:ClearAllPoints()
 		closeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 4, 4)
@@ -1161,10 +1181,6 @@ panel:SetScript("OnHide", function()
 		closeButton:ClearAllPoints()
 		closeButton:SetPoint("CENTER", CharacterFrame, "TOPRIGHT", -44, -25)
 	end
-	-- On its own with the character pane: it goes with it.
-	if StatsMode() == "detached" then
-		stats:Hide()
-	end
 end)
 
 local elapsed = 0
@@ -1178,40 +1194,29 @@ panel:SetScript("OnUpdate", function()
 	UpdateSlotBorders()
 end)
 
--- The numbers keep themselves current wherever they are; the mark follows a
--- drag at once.
-local statsElapsed, wasArranging = 0, nil
-stats:SetScript("OnUpdate", function()
-	if dragging then
-		local _, top = Target()
-		mark:ClearAllPoints()
-		mark:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -top + 1)
-		mark:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -top + 1)
-		mark:Show()
-	end
-	statsElapsed = statsElapsed + arg1
-	local arranging = Arranging() and true or false
-	if statsElapsed < 0.3 and arranging == wasArranging then
-		return
-	end
-	statsElapsed = 0
-	wasArranging = arranging
-	if not dragging then
-		UpdateStats()
-	end
-end)
-
 -- The character window in front of the panels that stay on the screen (the
--- numbers always shown, the meter, the collection on its own).
+-- Stats panel, the meter, the collection on its own).
 CharacterFrame:SetFrameStrata("HIGH")
 
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", function()
-	if Enabled() then
-		ApplyStatsMode()
-	else
-		stats:Hide()
+	Migrate()
+	panelView.Apply()
+end)
+
+-- The Stats panel comes back by itself: the game puts frames away as a match
+-- closes and another starts, and nothing else would show it again.
+local keeper = CreateFrame("Frame")
+local keepElapsed = 0
+keeper:SetScript("OnUpdate", function()
+	keepElapsed = keepElapsed + arg1
+	if keepElapsed < 0.5 then
+		return
+	end
+	keepElapsed = 0
+	if SurvivorUIDB and PanelOn() and not panelView.frame:IsShown() then
+		panelView.Apply()
 	end
 end)
 

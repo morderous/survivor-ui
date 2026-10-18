@@ -338,7 +338,7 @@ local resetAsked = 0
 function SurvivorUI_ResetCollection()
 	if GetTime() - resetAsked > 10 then
 		resetAsked = GetTime()
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: this forgets every piece in the Jewelry Collection, for every class and account on this game. Type /sui collection reset again within 10 seconds to do it.")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: this forgets every piece in the Jewelry Collection, for every class and account on this game. Do it again within 10 seconds (/sui collection reset, or the button in the options' Jewelry tab) to forget them.")
 		return
 	end
 	resetAsked = 0
@@ -1116,9 +1116,8 @@ function panel.Draw()
 end
 
 ------------------------------------------------------------------------------
--- With the character pane (its own button, or the options, Character): the
--- collection opens and closes with it, set right beside it (beside the
--- numbers, when they stand on their own against it). From the minimap
+-- With the character pane (its own button, or the options, Jewelry): the
+-- collection opens and closes with it, set right beside it. From the minimap
 -- button, on its own, where it was left.
 
 local function WithPane()
@@ -1130,16 +1129,8 @@ local function Dock()
 	if not pane then
 		return
 	end
-	local beside = pane
-	local stats = getglobal("SurvivorUICharacterStats")
-	if stats and stats:IsVisible() and stats:GetParent() ~= pane and stats:GetLeft() and pane:GetRight() then
-		local gap = stats:GetLeft() * stats:GetEffectiveScale() - pane:GetRight() * pane:GetEffectiveScale()
-		if gap > -40 and gap < 40 then
-			beside = stats
-		end
-	end
 	panel:ClearAllPoints()
-	panel:SetPoint("TOPLEFT", beside, "TOPRIGHT", 8, 0)
+	panel:SetPoint("TOPLEFT", pane, "TOPRIGHT", 8, 0)
 	-- In front with the character window.
 	panel:SetFrameStrata("HIGH")
 end

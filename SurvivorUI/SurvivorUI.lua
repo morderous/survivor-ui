@@ -1335,8 +1335,9 @@ local function StyleTooltips()
 		if tooltip and not tooltip.survivorStyled then
 			tooltip.survivorStyled = true
 			tooltip:SetBackdrop(TOOLTIP_BACKDROP)
-			-- A fifth smaller than the stock size: it covers less of the fight.
-			tooltip:SetScale(0.8)
+			-- A fifth smaller than the stock size: it covers less of the fight;
+			-- the size chosen (Size, Tooltip) on top.
+			tooltip:SetScale(0.8 * (Settings().tooltipSize or 1))
 			PaintTooltip(tooltip)
 
 			local stockShow = tooltip:GetScript("OnShow")
@@ -2447,6 +2448,42 @@ function SurvivorUI_ToggleDamageSide()
 	ApplyDamageText()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: damage numbers "..(settings.damageSide and "beside the hero." or "over the enemies."))
 end
+
+-- For the options (Size): the chat's text size, 8 to 18, and the tooltips'
+-- size, on top of the flat tooltips' fifth smaller.
+function SurvivorUI_ChatSize()
+	return Settings().chatSize
+end
+
+function SurvivorUI_SetChatSize(size)
+	Settings().chatSize = math.max(8, math.min(18, math.floor(size + 0.5)))
+	StyleChat()
+end
+
+function SurvivorUI_TooltipSize()
+	return Settings().tooltipSize or 1
+end
+
+function SurvivorUI_SetTooltipSize(size)
+	Settings().tooltipSize = size
+	for _, name in pairs(TOOLTIPS) do
+		local tooltip = getglobal(name)
+		if tooltip then
+			tooltip:SetScale((tooltip.survivorStyled and 0.8 or 1) * size)
+		end
+	end
+end
+
+-- The tooltips' size put on once the saved settings are in (the flat ones
+-- take it as they are styled).
+local tooltipSizer = CreateFrame("Frame")
+tooltipSizer:RegisterEvent("PLAYER_ENTERING_WORLD")
+tooltipSizer:SetScript("OnEvent", function()
+	local size = SurvivorUIDB and SurvivorUIDB.tooltipSize
+	if size and size ~= 1 then
+		SurvivorUI_SetTooltipSize(size)
+	end
+end)
 
 SLASH_SURVIVORUI1 = "/sui"
 SlashCmdList["SURVIVORUI"] = function(msg)

@@ -51,7 +51,7 @@ DefaultPlace()
 
 -- A red skull and the kills, then the run tracker's coin (gold only) and the
 -- gold against the next cache's price: (skull) 220   (coin) 114/20. Or as
--- chosen (Panels): the gold first, the kills or the gold alone, and the gold
+-- chosen (Kills & gold tab): the gold first, the kills or the gold alone, and the gold
 -- and the cache apart, the cache's price by the minimap's chest. The line
 -- keeps itself centred as the numbers grow.
 local ICON_SIZE = 14
@@ -315,7 +315,7 @@ local function SavePlace()
 	RestorePlace()
 end
 
--- Its place for the options (Panels): "minimap", "bar" or "off". A place
+-- Its place for the options (Kills & gold tab): "minimap", "bar" or "off". A place
 -- chosen there wins over one it was dragged to.
 function SurvivorUI_TallyPlace()
 	local settings = Settings()
@@ -338,7 +338,7 @@ function SurvivorUI_SetTallyPlace(place)
 end
 
 if SurvivorUI_RegisterMover then
-	SurvivorUI_RegisterMover(holder, "Kills & gold", SavePlace, nil, RestorePlace)
+	SurvivorUI_RegisterMover(holder, "Kills and gold line", SavePlace, nil, RestorePlace)
 end
 
 local loader = CreateFrame("Frame")

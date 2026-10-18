@@ -535,48 +535,53 @@ end)
 -- and the saved places that belong to them.
 
 local SCALE_MIN, SCALE_MAX = 0.5, 2
+-- Each in a section, as the options' tabs are grouped.
 local PARTS = {
-	{ key = "tracker", label = "Run tracker", frames = { "SurvivorUITracker" },
+	{ key = "tracker", label = "Run tracker", section = "Run", frames = { "SurvivorUITracker" },
 		places = { { "trackerRight", "trackerTop", "TOPRIGHT" } } },
-	{ key = "build", label = "Build list", frames = { "SurvivorUIBuild" },
+	{ key = "build", section = "Character", label = "Build list", frames = { "SurvivorUIBuild" },
 		places = { { "buildLeft", "buildTop", "TOPLEFT" } } },
-	{ key = "meter", label = "Damage meter", frames = { "SurvivorUIMeter", "SurvivorUICritTip" },
+	{ key = "meter", section = "Combat", label = "Damage meter", frames = { "SurvivorUIMeter", "SurvivorUICritTip" },
 		places = { { "meterRight", "meterBottom", "BOTTOMRIGHT" } } },
-	{ key = "run", label = "This Run", frames = { "SurvivorUIRun" },
+	{ key = "run", section = "Combat", label = "This Run", frames = { "SurvivorUIRun" },
 		places = { { "runLeft", "runTop", "TOPLEFT" } }, extra = { "runBottom" } },
-	{ key = "crits", label = "Biggest Crits", frames = { "SurvivorUICrits" },
+	{ key = "crits", section = "Combat", label = "Biggest Crits", frames = { "SurvivorUICrits" },
 		places = { { "critsLeft", "critsTop", "TOPLEFT" } }, extra = { "critsBottom" } },
-	{ key = "bosses", label = "Boss bars", frames = { "SurvivorUIBosses" },
+	{ key = "bosses", section = "Run", label = "Boss bars", frames = { "SurvivorUIBosses" },
 		places = { { "bossLeft", "bossTop", "TOPLEFT" } } },
-	{ key = "loot", label = "Loot list", frames = { "SurvivorUILoot" },
+	{ key = "loot", section = "Run", label = "Loot list", frames = { "SurvivorUILoot" },
 		places = { { "lootLeft", "lootTop", "TOPLEFT" } } },
-	{ key = "guardians", label = "Guardians", frames = { "SurvivorUIGuardians" },
+	{ key = "guardians", section = "Run", label = "Guardians", frames = { "SurvivorUIGuardians" },
 		places = { { "guardiansLeft", "guardiansTop", "TOPLEFT" } } },
-	-- The whole center at once: the bar, the frames, the buffs and the kills
-	-- line, each still with its own size on top.
-	{ key = "middle", label = "Whole center bar", frames = {}, places = {}, members = "middle", default = 0.9 },
+	-- The whole center at once: the bar, the frames and the buffs, each still
+	-- with its own size on top.
+	{ key = "middle", section = "Center bar", label = "Whole center bar", frames = {}, places = {}, members = "middle", default = 0.9 },
 	-- The buttons belong to the game's bar, hung on the row: sized with it.
-	{ key = "bar", label = "Action bar", group = "middle", frames = { "SurvivorUIRow", "MainMenuExpBar",
+	{ key = "bar", section = "Center bar", label = "Action bar", group = "middle", frames = { "SurvivorUIRow", "MainMenuExpBar",
 		"ActionButton1", "ActionButton2", "ActionButton3", "ActionButton4", "ActionButton5", "ActionButton6",
 		"ActionButton7", "ActionButton8", "ActionButton9", "ActionButton10", "ActionButton11", "ActionButton12",
 		"BonusActionButton1", "BonusActionButton2", "BonusActionButton3", "BonusActionButton4", "BonusActionButton5", "BonusActionButton6",
 		"BonusActionButton7", "BonusActionButton8", "BonusActionButton9", "BonusActionButton10", "BonusActionButton11", "BonusActionButton12" },
 		places = {}, extra = { "rowX", "rowY" }, restore = function() Restore() end, default = 0.85 },
-	{ key = "frames", label = "Player and target", group = "middle", frames = { "SurvivorUIPlayer", "SurvivorUITarget" },
+	{ key = "frames", section = "Center bar", label = "Player and target", group = "middle", frames = { "SurvivorUIPlayer", "SurvivorUITarget" },
 		places = { { "playerLeft", "playerTop", "TOPLEFT", "SurvivorUIPlayer" }, { "targetLeft", "targetTop", "TOPLEFT", "SurvivorUITarget" } } },
-	{ key = "buffs", label = "Buffs", group = "middle", frames = { "SurvivorUIBuffs" },
+	{ key = "buffs", section = "Center bar", label = "Buffs", group = "middle", frames = { "SurvivorUIBuffs" },
 		places = { { "buffsLeft", "buffsBottom", "BOTTOMLEFT" } } },
-	{ key = "tally", label = "Kills and gold", group = "middle", frames = { "SurvivorUITallyFrame" },
+	-- Under the minimap now: a size of its own, out of the center bar's.
+	{ key = "tally", section = "Run", label = "Kills and gold line", frames = { "SurvivorUITallyFrame" },
 		places = { { "tallyX", "tallyTop", "TOP" } } },
+	{ key = "xpbar", section = "Run", label = "XP bar", frames = { "SurvivorUIXpBar" },
+		places = { { "xpBarX", "xpBarTop", "TOP" } } },
 	-- The minimap with all it holds: the zone's name, the pins and the buttons.
-	{ key = "minimap", label = "Minimap", frames = { "MinimapCluster" },
+	{ key = "minimap", section = "Screen", label = "Minimap", frames = { "MinimapCluster" },
 		places = { { "mapRight", "mapTop", "TOPRIGHT" } } },
 	-- A little smaller than the game made it, to leave room beside it.
-	{ key = "character", label = "Character pane", frames = { "CharacterFrame" }, places = {}, default = 0.85 },
+	{ key = "character", section = "Character", label = "Character pane", frames = { "CharacterFrame" }, places = {}, default = 0.85 },
 	-- The numbers on their own (CharacterPane.lua): sized and placed there, as
 	-- inside the character pane they take its size.
-	{ key = "stats", label = "Stats on their own", frames = {}, places = {}, extra = { "statsLeft", "statsTop" },
+	{ key = "stats", section = "Character", label = "Stats", frames = {}, places = {}, extra = { "statsLeft", "statsTop" },
 		apply = function(scale) if SurvivorUI_StatsScale then SurvivorUI_StatsScale(scale) end end },
+	{ key = "jewelry", section = "Character", label = "Jewelry Collection", frames = { "SurvivorUIJewelryPanel" }, places = {} },
 }
 
 local function Clamp(value)
@@ -691,7 +696,7 @@ end
 function SurvivorUI_ScaleParts()
 	local list = {}
 	for index = 1, table.getn(PARTS) do
-		table.insert(list, { key = PARTS[index].key, label = PARTS[index].label })
+		table.insert(list, { key = PARTS[index].key, label = PARTS[index].label, section = PARTS[index].section })
 	end
 	return list
 end
@@ -772,15 +777,24 @@ end
 -- at the size they had, through their own sizes.
 local function MigrateScale()
 	SurvivorUIDB = SurvivorUIDB or {}
-	if SurvivorUIDB.scaleVersion == 2 then
-		return
+	local fresh = SurvivorUIDB.scaleVersion == nil and SurvivorUIDB.partScale == nil
+	if (SurvivorUIDB.scaleVersion or 0) < 2 then
+		SurvivorUIDB.scaleVersion = 2
+		local global = SurvivorUIDB.panelScale or 1
+		if global ~= 1 then
+			local parts = PartScales()
+			for _, key in pairs({ "bar", "frames", "buffs", "tally" }) do
+				parts[key] = parts[key] or Clamp(math.floor(100 / global + 0.5) / 100)
+			end
+		end
 	end
-	SurvivorUIDB.scaleVersion = 2
-	local global = SurvivorUIDB.panelScale or 1
-	if global ~= 1 then
-		local parts = PartScales()
-		for _, key in pairs({ "bar", "frames", "buffs", "tally" }) do
-			parts[key] = parts[key] or Clamp(math.floor(100 / global + 0.5) / 100)
+	-- 3 (v3.0.5): the kills and gold line out of the center bar's size; its own
+	-- takes the center bar's in once, so it stays as large as it was.
+	if SurvivorUIDB.scaleVersion < 3 then
+		SurvivorUIDB.scaleVersion = 3
+		if not fresh then
+			local parts = PartScales()
+			parts.tally = Clamp(math.floor((parts.tally or 1) * Own("middle") * 100 + 0.5) / 100)
 		end
 	end
 end

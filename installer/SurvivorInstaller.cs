@@ -14,7 +14,12 @@
 //     stands where the install button was;
 //   - "Start with Windows, in the tray" (a tick in the window and in the
 //     tray's menu): a line in the user's own Run key starts it with --tray,
-//     in the tray without a window, to look for updates.
+//     in the tray without a window, to look for updates;
+//   - "Beta builds" (a tick in the window and in the tray's menu): the test
+//     builds that come before a release, GitHub's pre-releases, taken when
+//     newer than the release; a warning first, since they may have more bugs
+//     than usual and update more often. Unticked, the release is offered
+//     again ("Back to"). A version with "-beta" stands below its release.
 //
 // Built with the C# compiler that comes with Windows (.NET Framework 4.8):
 // see build.bat. C# 5, no external packages. Its icons (the addons' S, the S
@@ -37,7 +42,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Survivor UI Installer")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.1.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.2.0.0")]
 
 namespace SurvivorInstaller
 {
@@ -116,6 +121,7 @@ namespace SurvivorInstaller
         public string Notes;
         public string ZipUrl;
         public string ZipName;
+        public bool Beta;           // a pre-release on GitHub
     }
 
     class MainForm : Form
@@ -131,6 +137,7 @@ namespace SurvivorInstaller
         static readonly Color Gold = Color.FromArgb(255, 209, 0);
         static readonly Color TextColor = Color.FromArgb(230, 230, 230);
         static readonly Color Muted = Color.FromArgb(150, 150, 160);
+        static readonly Color BetaColor = Color.FromArgb(255, 170, 70);
 
         readonly Label installedLabel = new Label();
         readonly Label latestLabel = new Label();
@@ -142,6 +149,7 @@ namespace SurvivorInstaller
         readonly Label upToDate = new Label();
         readonly CheckBox startBox = new CheckBox();
         readonly LinkLabel openLink = new LinkLabel();
+        readonly CheckBox betaBox = new CheckBox();
 
         Release latest;
 
@@ -159,6 +167,9 @@ namespace SurvivorInstaller
         bool installing;
         bool startHidden;           // started with Windows: the window stays away until asked for
         readonly ToolStripMenuItem startItem = new ToolStripMenuItem("Start with Windows");
+        readonly ToolStripMenuItem betaItem = new ToolStripMenuItem("Beta builds");
+        bool beta;                  // the beta channel: GitHub's pre-releases taken too
+        bool settingBeta;           // the tick set by the code, not by the user
 
         // Starting with Windows: a line of the user's own Run key, the exe's
         // path with --tray. Nothing else is written.
@@ -198,11 +209,33 @@ namespace SurvivorInstaller
             }
         }
 
+        // The beta channel is on while this file is there.
+        static string BetaPath
+        {
+            get { return Path.Combine(Path.GetDirectoryName(ConfigPath), "beta-channel.txt"); }
+        }
+
+        static bool BetaOn()
+        {
+            try { return File.Exists(BetaPath); }
+            catch { return false; }
+        }
+
+        static void SetBeta(bool on)
+        {
+            try
+            {
+                if (on) File.WriteAllText(BetaPath, "The installer offers beta builds while this file is here.");
+                else if (File.Exists(BetaPath)) File.Delete(BetaPath);
+            }
+            catch { }
+        }
+
         public MainForm(bool inTray)
         {
             startHidden = inTray;
             this.Text = "Survivor UI Installer";
-            ClientSize = new Size(560, 460);
+            ClientSize = new Size(560, 486);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -354,7 +387,20 @@ namespace SurvivorInstaller
             // Moved since it was set: the line follows the exe.
             if (startBox.Checked) SetStartWithWindows(true);
 
-            statusLabel.Location = new Point(20, 438);
+            // Beta builds: the test builds before a release, a warning first;
+            // the same tick as the tray's menu.
+            beta = BetaOn();
+            betaBox.Text = "Beta builds: before a release, more bugs than usual, updated more often";
+            betaBox.AutoSize = true;
+            betaBox.Location = new Point(20, 440);
+            betaBox.ForeColor = TextColor;
+            betaBox.FlatStyle = FlatStyle.Flat;
+            betaBox.Cursor = Cursors.Hand;
+            betaBox.Checked = beta;
+            betaBox.CheckedChanged += delegate { BetaChanged(); };
+            Controls.Add(betaBox);
+
+            statusLabel.Location = new Point(20, 464);
             statusLabel.Size = new Size(520, 20);
             statusLabel.ForeColor = Muted;
             Controls.Add(statusLabel);
@@ -413,6 +459,10 @@ namespace SurvivorInstaller
             startItem.Checked = StartsWithWindows();
             startItem.Click += delegate { startBox.Checked = !startBox.Checked; };
             menu.Items.Add(startItem);
+            betaItem.CheckOnClick = false;
+            betaItem.Checked = BetaOn();
+            betaItem.Click += delegate { FromTray(); betaBox.Checked = !betaBox.Checked; };
+            menu.Items.Add(betaItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, delegate { Close(); });
             tray.ContextMenuStrip = menu;
@@ -450,6 +500,34 @@ namespace SurvivorInstaller
             ShowOverlay();
         }
 
+        // The beta tick: a warning when ticked, then the latest beta asked for
+        // and installed at once; unticked, the release asked for again.
+        void BetaChanged()
+        {
+            if (settingBeta) return;
+            if (betaBox.Checked)
+            {
+                DialogResult go = MessageBox.Show(this,
+                    "Beta builds come before a release, to be tested: they may have more bugs than usual, and they update more often.\n\n" +
+                    "Install the latest beta now? Untick \"Beta builds\" any time to go back to the release.",
+                    "Survivor UI beta", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (go != DialogResult.Yes)
+                {
+                    settingBeta = true;
+                    betaBox.Checked = false;
+                    settingBeta = false;
+                    return;
+                }
+            }
+            beta = betaBox.Checked;
+            SetBeta(beta);
+            betaItem.Checked = beta;
+            toldOf = null;
+            installWhenNewer = beta;
+            Status(beta ? "Asking GitHub for the latest beta..." : "Asking GitHub for the latest release...");
+            CheckNow();
+        }
+
         // --- The notes, larger ------------------------------------------------
 
         NotesForm notesWindow;
@@ -463,7 +541,7 @@ namespace SurvivorInstaller
             }
             if (notesWindow == null || notesWindow.IsDisposed)
                 notesWindow = new NotesForm(appIcon);
-            notesWindow.ShowNotes("What's new in Survivor UI " + latest.Tag, latest.Notes);
+            notesWindow.ShowNotes("What's new in Survivor UI " + latest.Tag + (latest.Beta ? " (beta)" : ""), latest.Notes);
             if (!notesWindow.Visible) notesWindow.Show(this);
             notesWindow.Activate();
         }
@@ -528,15 +606,18 @@ namespace SurvivorInstaller
         {
             string installed = InstalledVersion(folderBox.Text);
             bool known = latest != null && latest.ZipUrl != null;
-            updateWaiting = known && installed != null && Newer(latest.Tag, installed);
+            bool newer = known && installed != null && Newer(latest.Tag, installed);
+            // Off the beta channel with a beta installed: the release again.
+            bool back = known && installed != null && !newer && !beta && IsBeta(installed) && !latest.Beta;
+            updateWaiting = newer || back;
             bool current = known && installed != null && !updateWaiting;
             tray.Icon = updateWaiting ? (trayUpdateIcon ?? tray.Icon) : (trayIcon ?? tray.Icon);
             tray.Text = updateWaiting ? Trim("Survivor UI " + latest.Tag + " is out: click to update", 63)
                 : current ? "Survivor UI Installer: up to date" : "Survivor UI Installer";
             installItem.Enabled = updateWaiting && !installing;
-            installItem.Text = updateWaiting ? "Install " + latest.Tag : current ? "Up to date (" + latest.Tag + ")" : "Install the update";
-            latestLabel.ForeColor = updateWaiting ? Color.FromArgb(90, 220, 110) : Gold;
-            installButton.Text = installed == null ? "Install" : updateWaiting ? "Update to " + latest.Tag : "Install / Update";
+            installItem.Text = updateWaiting ? (back ? "Back to " : "Install ") + latest.Tag : current ? "Up to date (" + latest.Tag + ")" : "Install the update";
+            latestLabel.ForeColor = updateWaiting ? Color.FromArgb(90, 220, 110) : known && latest.Beta ? BetaColor : Gold;
+            installButton.Text = installed == null ? "Install" : back ? "Back to " + latest.Tag : updateWaiting ? "Update to " + latest.Tag : "Install / Update";
             installButton.Visible = !current;
             upToDate.Text = current ? "\u2713  Up to date" : "";
             upToDate.Visible = current;
@@ -556,7 +637,7 @@ namespace SurvivorInstaller
             {
                 toldOf = latest.Tag;
                 tray.ShowBalloonTip(6000, "Survivor UI " + latest.Tag + " is out",
-                    "Click to see what's new and update.", ToolTipIcon.Info);
+                    (latest.Beta ? "A beta build: more bugs than usual. " : "") + "Click to see what's new and update.", ToolTipIcon.Info);
             }
         }
 
@@ -565,18 +646,41 @@ namespace SurvivorInstaller
             return text.Length <= most ? text : text.Substring(0, most);
         }
 
-        // "v3.0.2" against "3.0.1": number by number, a missing one as 0.
+        // "v3.0.5-beta.2" against "3.0.5": the numbers before any "-beta", one
+        // by one, a missing one as 0; the same numbers, the release stands
+        // above any beta, and a later beta above an earlier one.
         static bool Newer(string tag, string installed)
         {
-            MatchCollection a = Regex.Matches(tag ?? "", @"\d+");
-            MatchCollection b = Regex.Matches(installed ?? "", @"\d+");
+            MatchCollection a = Regex.Matches(Numbers(tag), @"\d+");
+            MatchCollection b = Regex.Matches(Numbers(installed), @"\d+");
             for (int i = 0; i < Math.Max(a.Count, b.Count); i++)
             {
                 int x = i < a.Count ? int.Parse(a[i].Value) : 0;
                 int y = i < b.Count ? int.Parse(b[i].Value) : 0;
                 if (x != y) return x > y;
             }
-            return false;
+            return BetaNumber(tag) > BetaNumber(installed);
+        }
+
+        // The version's numbers: what comes before any "-".
+        static string Numbers(string version)
+        {
+            version = version ?? "";
+            int dash = version.IndexOf('-');
+            return dash < 0 ? version : version.Substring(0, dash);
+        }
+
+        static bool IsBeta(string version)
+        {
+            return Regex.IsMatch(version ?? "", @"-beta", RegexOptions.IgnoreCase);
+        }
+
+        // A beta's number ("-beta.2": 2, "-beta": 0); a release stands above them all.
+        static int BetaNumber(string version)
+        {
+            Match match = Regex.Match(version ?? "", @"-beta\.?(\d*)", RegexOptions.IgnoreCase);
+            if (!match.Success) return int.MaxValue;
+            return match.Groups[1].Value == "" ? 0 : int.Parse(match.Groups[1].Value);
         }
 
         static void Style(Button button, string text)
@@ -680,24 +784,28 @@ namespace SurvivorInstaller
         {
             try
             {
-                string json = Download("https://api.github.com/repos/" + Repo + "/releases/latest");
-                Dictionary<string, object> data = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json);
-                Release release = new Release();
-                release.Tag = (string)data["tag_name"];
-                release.Notes = data.ContainsKey("body") ? (string)data["body"] : "";
-                foreach (object asset in (System.Collections.ArrayList)data["assets"])
+                // GitHub's releases, newest first: the newest release and the
+                // newest beta (a pre-release). The beta channel takes the newer
+                // of the two; off it, the release alone.
+                string json = Download("https://api.github.com/repos/" + Repo + "/releases?per_page=20");
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                serializer.MaxJsonLength = int.MaxValue;
+                System.Collections.IEnumerable list = (System.Collections.IEnumerable)serializer.DeserializeObject(json);
+                Release stable = null, pre = null;
+                foreach (object item in list)
                 {
-                    Dictionary<string, object> a = (Dictionary<string, object>)asset;
-                    string name = (string)a["name"];
-                    // The addons' zip, "SurvivorUI-v2.4.zip", not the installer's own.
-                    if (Regex.IsMatch(name, @"^SurvivorUI-v[\d.]+\.zip$", RegexOptions.IgnoreCase))
-                    {
-                        release.ZipName = name;
-                        release.ZipUrl = (string)a["browser_download_url"];
-                        break;
-                    }
+                    Dictionary<string, object> data = (Dictionary<string, object>)item;
+                    if (data.ContainsKey("draft") && (bool)data["draft"]) continue;
+                    bool isPre = data.ContainsKey("prerelease") && (bool)data["prerelease"];
+                    if (isPre ? pre != null : stable != null) continue;
+                    Release release = Read(data, isPre);
+                    if (isPre) pre = release; else stable = release;
+                    if (stable != null && pre != null) break;
                 }
-                BeginInvoke(new Action<Release>(ShowLatest), release);
+                Release chosen = stable;
+                if (beta && pre != null && (stable == null || Newer(pre.Tag, stable.Tag))) chosen = pre;
+                if (chosen == null) throw new Exception("GitHub lists no release");
+                BeginInvoke(new Action<Release>(ShowLatest), chosen);
             }
             catch (Exception error)
             {
@@ -716,11 +824,36 @@ namespace SurvivorInstaller
             }
         }
 
+        // One release as GitHub gives it: its tag, its notes and its addons' zip.
+        static Release Read(Dictionary<string, object> data, bool isPre)
+        {
+            Release release = new Release();
+            release.Tag = (string)data["tag_name"];
+            release.Beta = isPre;
+            release.Notes = data.ContainsKey("body") ? (string)data["body"] : "";
+            foreach (object asset in (System.Collections.IEnumerable)data["assets"])
+            {
+                Dictionary<string, object> a = (Dictionary<string, object>)asset;
+                string name = (string)a["name"];
+                // The addons' zip, "SurvivorUI-v2.4.zip" or "SurvivorUI-v3.0.5-beta.1.zip",
+                // not the installer's own.
+                if (Regex.IsMatch(name, @"^SurvivorUI-v[\d.]+(-beta[\d.]*)?\.zip$", RegexOptions.IgnoreCase))
+                {
+                    release.ZipName = name;
+                    release.ZipUrl = (string)a["browser_download_url"];
+                    break;
+                }
+            }
+            return release;
+        }
+
         void ShowLatest(Release release)
         {
             latest = release;
-            latestLabel.Text = "Latest:  " + release.Tag;
-            notesBox.Text = Plain(release.Notes);
+            latestLabel.Text = (release.Beta ? "Latest beta:  " : "Latest:  ") + release.Tag;
+            notesBox.Text = (release.Beta
+                ? "BETA BUILD, before a release: more bugs than usual may be in it, and it updates more often. Untick \"Beta builds\" to go back to the release.\r\n\r\n"
+                : "") + Plain(release.Notes);
             installButton.Enabled = release.ZipUrl != null;
             if (release.ZipUrl == null) Status("The latest release has no zip to install.");
             ShowUpdateState();
@@ -813,6 +946,7 @@ namespace SurvivorInstaller
                     Status("Installed " + release.Tag + ".");
                     MessageBox.Show(this,
                         "Survivor UI " + release.Tag + " is installed.\n\n" +
+                        (release.Beta ? "A beta build: more bugs than usual may be in it, and it updates more often. Tell what you find on Discord.\n\n" : "") +
                         (running ? "The game is open: restart it to load the new version." : "Start the game and enjoy!") +
                         "\n\nType /sui in the game for every command.",
                         "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);

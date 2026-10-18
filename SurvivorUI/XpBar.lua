@@ -10,7 +10,7 @@
 --
 -- Shown two ways, each on its own: at the run tracker's foot (Tracker.lua,
 -- the time beside the level; Run tracker tab), and as an XP bar of its own,
--- movable (Panels): the level, the bar with the experience and its share,
+-- movable (XP bar tab): the level, the bar with the experience and its share,
 -- marked at every 20%, and under it the time to the next level and the
 -- experience a minute. No backing: it sits on the world.
 
@@ -123,7 +123,7 @@ local function Running()
 end
 
 ------------------------------------------------------------------------------
--- The XP bar of its own (Panels): off until chosen.
+-- The XP bar of its own (XP bar tab): off until chosen.
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}

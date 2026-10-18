@@ -375,6 +375,11 @@ local function Draw()
 			entry.left = (tonumber(Field(lair, "left", 5)) or -1) - since
 		elseif state == "awake" then
 			entry.share = healths[entry.id]
+		elseif healths[entry.id] and healths[entry.id] < 1 then
+			-- Hurt while the game still calls it asleep (feared or held from
+			-- the first hit, it never turned on the hero): a fight all the same.
+			entry.state = "awake"
+			entry.share = healths[entry.id]
 		end
 		local east, south
 		local lx, ly = tonumber(Field(lair, "x", 6)), tonumber(Field(lair, "y", 7))
