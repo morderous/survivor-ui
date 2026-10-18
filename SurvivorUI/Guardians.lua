@@ -28,6 +28,9 @@
 -- there), red once slain with the time until its lair is claimed again;
 -- over the bar, a thin line with the 8:00 achievement.
 --
+-- Or only a count (the options, Run tracker): one line in the tracker, how
+-- many lairs hold their guardian, "3 / 5 alive", orange while one is awake.
+--
 -- Hold Alt to move it; /sui guardians hides it.
 
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
@@ -528,6 +531,7 @@ local function Outline(frame)
 end
 
 local bar
+local counter                   -- the count, a line in the tracker
 local segments = {}
 
 local function Segment(index)
@@ -594,7 +598,49 @@ function SurvivorUI_GuardianBar(head, y)
 		if bar then
 			bar:Hide()
 		end
+		if counter then
+			counter:Hide()
+		end
 		return y
+	end
+	-- Only a count: "Guardians   3 / 5 alive".
+	if Settings().guardiansCount then
+		if bar then
+			bar:Hide()
+		end
+		if not counter then
+			counter = CreateFrame("Frame", nil, head)
+			counter:SetHeight(LINE)
+			counter.title = counter:CreateFontString(nil, "OVERLAY")
+			counter.title:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
+			counter.title:SetPoint("LEFT", counter, "LEFT", 0, 0)
+			counter.title:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+			counter.title:SetText("Guardians")
+			counter.value = counter:CreateFontString(nil, "OVERLAY")
+			counter.value:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
+			counter.value:SetPoint("RIGHT", counter, "RIGHT", 0, 0)
+		end
+		local alive, total, awake = 0, 0, 0
+		for _, entry in pairs(byPlace) do
+			total = total + 1
+			if entry.alive then
+				alive = alive + 1
+			end
+			if entry.state == "awake" then
+				awake = awake + 1
+			end
+		end
+		local color = awake > 0 and AWAKE or (alive > 0 and SPAWNED or MUTED)
+		counter.value:SetText(alive.." / "..total.." alive")
+		counter.value:SetTextColor(color[1], color[2], color[3])
+		counter:SetWidth(head:GetWidth())
+		counter:ClearAllPoints()
+		counter:SetPoint("TOP", head, "TOP", 0, y - BAR_TOP)
+		counter:Show()
+		return y - BAR_TOP - LINE
+	end
+	if counter then
+		counter:Hide()
 	end
 	if not bar then
 		bar = CreateFrame("Frame", nil, head)
@@ -797,6 +843,7 @@ end)
 function SurvivorUI_ToggleGuardians(argument)
 	local settings = Settings()
 	if argument == "bar" then
+		settings.guardiansCount = nil
 		settings.guardiansDocked = not settings.guardiansDocked
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the guardians "..(settings.guardiansDocked
 			and "are a bar in the run tracker." or "are a list beside the run tracker again."))

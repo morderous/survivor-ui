@@ -1139,6 +1139,49 @@ end
 
 local closeButton = getglobal("CharacterFrameCloseButton")
 
+------------------------------------------------------------------------------
+-- The pane's place: where it was dragged to, its tab open or in move mode
+-- (Mover.lua; its card has the numbers), kept as its top left corner; else
+-- where the game seats it. The game seats it again each time it opens, so a
+-- saved place is put back as it shows, and once more on the next tick.
+
+local stockPlace                -- where the game seated it, for Reset
+local placePending
+
+local function SavePanePlace()
+	DB().characterLeft = math.floor(CharacterFrame:GetLeft() + 0.5)
+	DB().characterTop = math.floor(CharacterFrame:GetTop() + 0.5)
+end
+
+local function PlacePane()
+	local db = DB()
+	if db.characterLeft and db.characterTop then
+		CharacterFrame:ClearAllPoints()
+		CharacterFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", db.characterLeft, db.characterTop)
+	elseif not stockPlace and CharacterFrame:GetLeft() then
+		stockPlace = { CharacterFrame:GetLeft(), CharacterFrame:GetTop() }
+	end
+end
+
+local function DefaultPanePlace()
+	DB().characterLeft, DB().characterTop = nil, nil
+	if stockPlace then
+		CharacterFrame:ClearAllPoints()
+		CharacterFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", stockPlace[1], stockPlace[2])
+	end
+end
+
+CharacterFrame:SetMovable(true)
+if CharacterFrame.SetClampedToScreen then
+	CharacterFrame:SetClampedToScreen(true)
+end
+if SurvivorUI_RegisterMover then
+	local paneHandle = SurvivorUI_RegisterMover(panel, "Character pane", SavePanePlace, CharacterFrame, DefaultPanePlace)
+	-- With the pane: shown and hidden with it, over it.
+	paneHandle:SetParent(panel)
+	paneHandle:SetFrameStrata("DIALOG")
+end
+
 -- The hero's class color: on the name and level line, and the pane's edge.
 local function PaintClass()
 	local _, class = UnitClass("player")
@@ -1165,6 +1208,8 @@ panel:SetScript("OnShow", function()
 	UpdateSlotBorders()
 	UpdateTabs()
 	paneView.Apply()
+	PlacePane()
+	placePending = true
 	if closeButton then
 		closeButton:ClearAllPoints()
 		closeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 4, 4)
@@ -1185,6 +1230,10 @@ end)
 
 local elapsed = 0
 panel:SetScript("OnUpdate", function()
+	if placePending then
+		placePending = nil
+		PlacePane()
+	end
 	elapsed = elapsed + arg1
 	if elapsed < 0.3 then
 		return

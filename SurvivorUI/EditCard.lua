@@ -33,6 +33,7 @@ local PIECES = {
 	["Minimap"] = { part = "minimap", places = { "mapRight", "mapTop" }, gameFont = true },
 	["Tooltip"] = { places = { "tipRight", "tipBottom" }, gameFont = true },
 	["Stats"] = { part = "stats", places = { "statsLeft", "statsTop" }, key = "statsPanel", offUnlessOn = true, toggle = "SurvivorUI_ToggleStatsPanel" },
+	["Character pane"] = { part = "character", places = { "characterLeft", "characterTop" }, noFont = true },
 	["Run tracker"] = { part = "tracker", places = { "trackerRight", "trackerTop" }, key = "tracker", toggle = "SurvivorUI_ToggleTracker" },
 	["Build list"] = { part = "build", places = { "buildLeft", "buildTop" }, key = "buildList", toggle = "SurvivorUI_ToggleBuild" },
 	["Damage meter"] = { part = "meter", places = { "meterRight", "meterBottom" }, key = "meter", toggle = "SurvivorUI_ToggleMeter" },
@@ -49,6 +50,7 @@ local PIECES = {
 	["Healing"] = { places = { "healLeft", "healTop" }, key = "ctHeals", toggle = "SurvivorUI_ToggleHealNumbers", noFont = true },
 	["Minimap button"] = { places = { "mapButtonX", "mapButtonY" }, noFont = true },
 	["XP bar"] = { places = { "xpBarX", "xpBarTop" }, key = "xpBar", offUnlessOn = true, toggle = "SurvivorUI_ToggleXpBar" },
+	["Level Up!"] = { part = "levelup", places = { "levelUpX", "levelUpTop" }, key = "levelUp", toggle = "SurvivorUI_ToggleLevelUp" },
 }
 
 local selected          -- the handle (Mover.lua) whose card is open

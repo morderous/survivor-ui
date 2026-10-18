@@ -206,6 +206,7 @@ local TABS = {
 	{ key = "bosses", label = "Boss bars", color = { 0.95, 0.45, 0.35 } },
 	{ key = "tally", label = "Kills & gold", color = { 1.00, 0.82, 0.30 } },
 	{ key = "xpbar", label = "XP bar", color = { 0.72, 0.45, 1.00 } },
+	{ key = "levelup", label = "Level Up!", color = { 1.00, 0.86, 0.30 } },
 	{ key = "loot", label = "Loot list", color = { 0.55, 0.75, 1.00 } },
 	{ group = "Combat" },
 	{ key = "combat", label = "Combat text", color = { 1.00, 0.38, 0.32 } },
@@ -240,12 +241,14 @@ local TAB_PIECES = {
 	bosses = { "Boss bars" },
 	tally = { "Kills and gold line" },
 	xpbar = { "XP bar" },
+	levelup = { "Level Up!" },
 	loot = { "Loot list" },
 	combat = { "Damage numbers", "Crit numbers", "Damage taken", "Healing", "New best crit" },
 	meter = { "Damage meter" },
 	run = { "This Run" },
 	crits = { "Biggest Crits" },
 	build = { "Build list" },
+	character = { "Character pane" },
 	stats = { "Stats" },
 	units = { "Player frame", "Target frame", "Buffs", "Minimap", "Minimap button" },
 	chat = { "Chat" },
@@ -901,19 +904,6 @@ Note(page, "Each part also has a size of its own, on top of this one, in its own
 -- run, and the Default comes back where there is one; the other tabs keep only
 -- how each part shows. Two columns; hover one for what it does.
 
--- A section's title, saying so while its part is off in Modules: for a part
--- that is not the tab's own (the guardians in Run tracker).
-local function Section(page, text, isOn)
-	local header = Subheader(page, text)
-	local widget = {}
-	function widget:Refresh()
-		local off = isOn and not isOn()
-		header:SetText(string.upper(text)..(off and "  |cff8a8a95(off in Modules)|r" or ""))
-	end
-	table.insert(widgets, widget)
-	return header
-end
-
 local function DamageOn()
 	return SurvivorUI_DamageMode and SurvivorUI_DamageMode() == "survivor"
 end
@@ -995,7 +985,7 @@ local MODULES = {
 		{ "Kill pace", OnUnlessOff("pace"), Call("SurvivorUI_TogglePace"),
 			"The orb by the tracker's clock: how fast the enemies die, against your own runs. It sits on the run tracker." },
 		{ "Guardians", OnUnlessOff("guardians"), Call("SurvivorUI_ToggleGuardians"),
-			"Each lair: which way, how far, alive or slain, as a bar in the tracker or a list beside it." },
+			"Each lair: which way, how far, alive or slain, as a bar in the tracker, a list beside it or a count." },
 		{ "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"),
 			"The bosses and the awake guardians with their debuffs, apart from the tracker." },
 		{ "Caches on the minimap", FeatureOn("mapPins"), FeatureToggle("mapPins", true),
@@ -1004,6 +994,8 @@ local MODULES = {
 			"Your kills, your gold and the next cache's price. Off: the Default box." },
 		{ "XP bar", OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"),
 			"Your level and experience as a bar of its own, with the time to the next level." },
+		{ "Level Up! button", OnUnlessOff("levelUp"), Call("SurvivorUI_ToggleLevelUp"),
+			"With Store Level-Ups on, a button over the action bar for the levels waiting. Off: the game's button." },
 		{ "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"),
 			"What the run dropped. Off: the Default loot notices." },
 	} },
@@ -1281,7 +1273,7 @@ end
 -- (Tracker.lua, Guardians.lua).
 
 page = pages.tracker
-Header(page, "Run tracker", "Under the minimap: the zone, the run's clock against its length, the bosses, the guardians, the elites alive and your level, each part on its own. The guardians are on or off in the Modules tab.")
+Header(page, "Run tracker", "Under the minimap: the zone, the run's clock against its length, the bosses, the guardians, the elites alive and your level, each part on its own.")
 PanelHead(page, OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"), "tracker", "Run tracker")
 
 Subheader(page, "Bosses")
@@ -1297,12 +1289,28 @@ Inline(page, "Health shows as", {
 	{ "absolute", "1.2M" },
 }, function() return DB().trackerHealthLook or "percent" end, function(look) DB().trackerHealthLook = look end)
 
-Section(page, "Guardians", OnUnlessOff("guardians"))
-Choice(page, {
-	{ "bar", "A bar in the tracker", "A stretch a lair, over the level, red once slain with its time back." },
-	{ "list", "A list beside the tracker", "A line a lair: its name, its state, its yards and an arrow." },
-}, function() return DB().guardiansDocked and "bar" or "list" end,
-	function(choice) DB().guardiansDocked = choice == "bar" end)
+Subheader(page, "Guardians")
+Inline(page, "Show as", {
+	{ "bar", "A bar" },
+	{ "list", "A list" },
+	{ "count", "A count" },
+	{ "off", "Off" },
+}, function()
+	if DB().guardians == false then
+		return "off"
+	end
+	if DB().guardiansCount then
+		return "count"
+	end
+	return DB().guardiansDocked and "bar" or "list"
+end, function(choice)
+	DB().guardians = choice ~= "off"
+	if choice ~= "off" then
+		DB().guardiansDocked = choice ~= "list"
+		DB().guardiansCount = choice == "count" or nil
+	end
+end)
+Note(page, "A bar: a stretch a lair in the tracker, red once slain with its time back. A list: a line a lair beside it, its name, state, yards and an arrow. A count: 3 / 5 alive, a line in the tracker. Off: no guardians at all, as their tick in Modules.")
 Check(page, "Arrows north up", OnlyIfOn("guardiansNorth"), Call("SurvivorUI_ToggleGuardians", "north"), "off: they turn with you, straight ahead up")
 Slider(page, "The list's size", 0.5, 2, 0.05,
 	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("guardians") or 1 end,
@@ -1408,6 +1416,25 @@ Subheader(page, "What shows")
 Check(page, "Time to the next level", OnUnlessOff("xpBarEta"), Flip("xpBarEta"), "and the experience a minute, from the recent pace")
 
 ------------------------------------------------------------------------------
+-- Level Up! (LevelUp.lua): the button for the levels waiting, and the game's
+-- Store Level-Ups.
+
+page = pages.levelup
+Header(page, "Level Up!", "With Store Level-Ups on, a level-up no longer stops the fight: the levels wait, and this button over the action bar opens them, one card choice after another. It stands in for the game's own, which sits where the game's action bars were. Off: the game's button.")
+PanelHead(page, OnUnlessOff("levelUp"), Call("SurvivorUI_ToggleLevelUp"), "levelup", "Level Up!")
+Subheader(page, "Store Level-Ups")
+Check(page, "Level-ups wait until you are ready", function() return AZS_IsStoringLevels and AZS_IsStoringLevels() end,
+	function()
+		if AZS_SetStoringLevels and AZS_IsStoringLevels then
+			AZS_SetStoringLevels(not AZS_IsStoringLevels())
+		end
+	end, "the game's own setting (its Options, Controls); turned off, the levels waiting are offered at once")
+if not AZS_SetStoringLevels then
+	Note(page, "Needs the game's 0.98 or later.")
+end
+Note(page, "The levels waiting also show by your level, in the run tracker and on the XP bar: Lv. 12 +3. While this tab is open the button shows, to be placed.")
+
+------------------------------------------------------------------------------
 -- Loot list (LootLog.lua).
 
 page = pages.loot
@@ -1509,6 +1536,8 @@ page.y = page.y - 28
 page = pages.meter
 Header(page, "Damage meter", "Each source's damage and its share, its crits on hover; its title's menu for the healing or the last boss fight. Off: the Default meter.")
 PanelHead(page, OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "meter", "Damage meter")
+Subheader(page, "What shows")
+Check(page, "Damage a second right now", OnUnlessOff("meterNow"), Flip("meterNow"), "under the run's, over the last 5 seconds, as the game's meter has it")
 
 ------------------------------------------------------------------------------
 -- This Run (RunPanel.lua).
@@ -1542,17 +1571,23 @@ page = pages.build
 Header(page, "Build list", "Your spells with their icons and ranks, the free slots and the jewelry you wear. Off: the Default row of spells.")
 PanelHead(page, OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "build", "Build list")
 Subheader(page, "Beside each spell")
-Inline(page, nil, {
-	{ "share", "Share of damage" },
-	{ "range", "Range" },
-}, function() return DB().buildShows == "range" and "range" or "share" end, function(choice) DB().buildShows = choice end)
-Note(page, "The range read off the spell's own tooltip; its radius for one with no range.")
+InlineChecks(page, {
+	{ "Range", function() return DB().buildRange ~= false and DB().buildShows ~= "cooldown" end, function()
+		DB().buildShows = nil
+		DB().buildRange = DB().buildRange == false
+	end },
+	{ "Cooldown", function() return DB().buildCooldown == true or DB().buildShows == "cooldown" end, function()
+		DB().buildShows = nil
+		DB().buildCooldown = not DB().buildCooldown
+	end },
+})
+Note(page, "Either or both. The range read off the spell's own tooltip, its radius for one with no range; the cooldown as the game has it now, haste in.")
 
 -- Character pane (CharacterPane.lua): it opens with this tab.
 
 page = pages.character
-Header(page, "Character pane", "The character pane laid out again: the hero and the slots, and the run's numbers beside them. It opens with this tab, to see what it sets.")
-PanelHead(page, FeatureOn("characterPane"), FeatureToggle("characterPane"), "character", nil, true)
+Header(page, "Character pane", "The character pane laid out again: the hero and the slots, and the run's numbers beside them. It opens with this tab: drag it while the tab is open, or click it for its card.")
+PanelHead(page, FeatureOn("characterPane"), FeatureToggle("characterPane"), "character", "Character pane", true)
 Subheader(page, "In the pane")
 Check(page, "The stats beside the hero", function() return not SurvivorUI_StatsInPane or SurvivorUI_StatsInPane() end,
 	function()

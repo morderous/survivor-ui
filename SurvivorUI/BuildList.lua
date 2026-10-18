@@ -3,8 +3,9 @@
 -- damage meter, the same spells side by side with what they deal.
 --
 -- Every spell slot, filled or not: each spell with its icon, its name in the
--- same color the damage meter gives it, its rank and its share of the damage
--- (or its range, as chosen: Build list tab), then the racial apart (it takes no slot). Empty slots show, since how many
+-- same color the damage meter gives it, its rank, and its range, its cooldown
+-- or both (as chosen: Build list tab), then the racial apart (it takes no
+-- slot). Empty slots show, since how many
 -- are left matters at every card choice. Hover a spell for its card: rank,
 -- cooldown, damage and crits. The spells run from the highest rank down, each
 -- in a border of its color.
@@ -22,13 +23,14 @@ local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local WIDTH = 224
 local ROW_HEIGHT = 18
 local TITLE_HEIGHT = 20
+local HEAD_HEIGHT = 13          -- the columns' names, under the title
 local SLOTS = 6                 -- spell slots a run has
 local RACIAL_SLOT = 12          -- the action bar's last button carries the racial
 local MUTED = { 0.45, 0.45, 0.45 }
 local GEAR_SLOTS = {               -- inventory slot, label
 	{ 2, "Neck" }, { 11, "Ring" }, { 12, "Ring" }, { 13, "Trinket" }, { 14, "Trinket" },
 }
-local GEAR_TOP = TITLE_HEIGHT + (SLOTS + 1) * ROW_HEIGHT + 6
+local GEAR_TOP = TITLE_HEIGHT + HEAD_HEIGHT + (SLOTS + 1) * ROW_HEIGHT + 6
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
@@ -108,6 +110,107 @@ list.count = list:CreateFontString(nil, "OVERLAY")
 list.count:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 list.count:SetPoint("TOPRIGHT", list, "TOPRIGHT", -7, -7)
 
+------------------------------------------------------------------------------
+-- The columns at the right of each spell: its range and its cooldown (each
+-- as chosen: Build list tab) and its rank, each under its name in the header
+-- and between dividers. Laid out from the right edge; the name takes the
+-- rest.
+
+local COLUMN_WIDTH = { rank = 20, cd = 30, range = 34 }
+local columns                   -- [key] = { right, width, divider }, the ones shown
+local columnsKey
+local nameRoom = WIDTH - ROW_HEIGHT - 70
+
+local function Columns(showRange, showCooldown)
+	local key = (showRange and "r" or "")..(showCooldown and "c" or "")
+	if key == columnsKey then
+		return false
+	end
+	columnsKey = key
+	columns = {}
+	local order = { "rank" }
+	if showCooldown then
+		table.insert(order, "cd")
+	end
+	if showRange then
+		table.insert(order, "range")
+	end
+	local right = 2
+	for index = 1, table.getn(order) do
+		local width = COLUMN_WIDTH[order[index]]
+		columns[order[index]] = { right = right, width = width, divider = right + width + 1 }
+		right = right + width + 3
+	end
+	nameRoom = WIDTH - right - ROW_HEIGHT - 1
+	return true
+end
+
+-- A column's text, centered in its column; away with its column.
+local function PlaceText(text, column)
+	text:ClearAllPoints()
+	if column then
+		text:SetPoint("RIGHT", text:GetParent(), "RIGHT", -column.right, 0)
+		text:SetWidth(column.width)
+		text:Show()
+	else
+		text:Hide()
+	end
+end
+
+local head = CreateFrame("Frame", nil, list)
+head:SetPoint("TOPLEFT", list, "TOPLEFT", 6, -TITLE_HEIGHT)
+head:SetWidth(WIDTH)
+head:SetHeight(HEAD_HEIGHT)
+local function HeadLabel(text)
+	local label = head:CreateFontString(nil, "OVERLAY")
+	label:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
+	label:SetJustifyH("CENTER")
+	label:SetTextColor(0.62, 0.62, 0.66)
+	label:SetText(text)
+	return label
+end
+head.range = HeadLabel("Range")
+head.cd = HeadLabel("CD")
+head.rank = HeadLabel("Rank")
+
+-- The dividers, over the rows: from the header's top to the racial's bottom,
+-- each at its column's left.
+local rules = CreateFrame("Frame", nil, list)
+rules:SetAllPoints(list)
+rules:SetFrameLevel(list:GetFrameLevel() + 6)
+rules.lines = {}
+for _, key in pairs({ "rank", "cd", "range" }) do
+	local line = rules:CreateTexture(nil, "OVERLAY")
+	line:SetTexture(FLAT)
+	line:SetVertexColor(1, 1, 1, 0.14)
+	line:SetWidth(1)
+	rules.lines[key] = line
+end
+
+local function PlaceHead()
+	for key, line in pairs(rules.lines) do
+		local column = columns[key]
+		line:ClearAllPoints()
+		if column then
+			line:SetPoint("TOPLEFT", list, "TOPLEFT", 6 + WIDTH - column.divider, -TITLE_HEIGHT - 1)
+			line:SetHeight(HEAD_HEIGHT + (SLOTS + 1) * ROW_HEIGHT - 1)
+			line:Show()
+		else
+			line:Hide()
+		end
+	end
+	PlaceText(head.range, columns.range)
+	PlaceText(head.cd, columns.cd)
+	PlaceText(head.rank, columns.rank)
+end
+
+local function PlaceRow(row)
+	PlaceText(row.range, columns.range)
+	PlaceText(row.cd, columns.cd)
+	PlaceText(row.rank, columns.rank)
+	row.name:SetWidth(nameRoom)
+end
+
 local rows = {}
 
 local function Row(index)
@@ -118,7 +221,7 @@ local function Row(index)
 	row = CreateFrame("Frame", nil, list)
 	row:SetWidth(WIDTH)
 	row:SetHeight(ROW_HEIGHT)
-	row:SetPoint("TOPLEFT", list, "TOPLEFT", 6, -TITLE_HEIGHT - (index - 1) * ROW_HEIGHT)
+	row:SetPoint("TOPLEFT", list, "TOPLEFT", 6, -TITLE_HEIGHT - HEAD_HEIGHT - (index - 1) * ROW_HEIGHT)
 
 	row.wash = row:CreateTexture(nil, "BACKGROUND")
 	row.wash:SetTexture(FLAT)
@@ -162,14 +265,22 @@ local function Row(index)
 	row.name:SetHeight(12)
 	row.name:SetJustifyH("LEFT")
 
-	row.share = row:CreateFontString(nil, "OVERLAY")
-	row.share:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
-	row.share:SetPoint("RIGHT", row, "RIGHT", -44, 0)
-	row.share:SetTextColor(0.6, 0.6, 0.6)
+	row.range = row:CreateFontString(nil, "OVERLAY")
+	row.range:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
+	row.range:SetJustifyH("CENTER")
+	row.range:SetTextColor(0.6, 0.6, 0.6)
+
+	row.cd = row:CreateFontString(nil, "OVERLAY")
+	row.cd:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
+	row.cd:SetJustifyH("CENTER")
+	row.cd:SetTextColor(0.6, 0.6, 0.6)
 
 	row.rank = row:CreateFontString(nil, "OVERLAY")
 	row.rank:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
-	row.rank:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+	row.rank:SetJustifyH("CENTER")
+	if columns then
+		PlaceRow(row)
+	end
 
 	-- The spell's card, as on the damage meter: beside the list, on its left.
 	row.cardFrame = list
@@ -217,12 +328,14 @@ local function Paint(row, color, alpha, filled)
 	if filled then
 		row.name:SetTextColor(1, 1, 1)
 		row.rank:SetTextColor(1, 1, 1)
-		row.share:SetTextColor(0.9, 0.9, 0.9)
+		row.range:SetTextColor(0.9, 0.9, 0.9)
+		row.cd:SetTextColor(0.9, 0.9, 0.9)
 		row.wash:SetVertexColor(color[1], color[2], color[3], 0.45)
 	else
 		row.name:SetTextColor(color[1], color[2], color[3])
 		row.rank:SetTextColor(color[1], color[2], color[3])
-		row.share:SetTextColor(0.6, 0.6, 0.6)
+		row.range:SetTextColor(0.6, 0.6, 0.6)
+		row.cd:SetTextColor(0.6, 0.6, 0.6)
 		row.wash:SetVertexColor(color[1], color[2], color[3], 0.07 * alpha)
 	end
 	row.rule:SetVertexColor(color[1], color[2], color[3], 0.28 * alpha)
@@ -262,6 +375,31 @@ local function Reach(actionSlot, name, rank)
 	return reach or nil
 end
 
+-- Beside each spell (the options, Build list): its range, its cooldown, or
+-- both. The first builds of v3.0.5-beta.2 kept one choice, buildShows.
+local function Shows()
+	local db = Settings()
+	if db.buildShows then
+		if db.buildShows == "cooldown" then
+			db.buildRange, db.buildCooldown = false, true
+		end
+		db.buildShows = nil
+	end
+	return db.buildRange ~= false, db.buildCooldown == true
+end
+
+-- A spell's cooldown as the game has it now, haste in: "3.1s", "12s".
+local function CooldownText(entry)
+	local cd = tonumber(Field(entry, "cdmax", 5)) or 0
+	if cd <= 0 then
+		return ""
+	end
+	if cd >= 10 then
+		return string.format("%ds", math.floor(cd + 0.5))
+	end
+	return string.format("%.1fs", cd)
+end
+
 local function Fill(row, entry, actionSlot, isRacial)
 	local key = Field(entry, "key", 1)
 	local name = SpellName(key)
@@ -271,12 +409,9 @@ local function Fill(row, entry, actionSlot, isRacial)
 	row.icon:SetAlpha(1)
 	row.name:SetText(isRacial and name.."  |cff8a8a8a(racial)|r" or name)
 	row.rank:SetText(tonumber(Field(entry, "rank", 3)) or "")
-	if Settings().buildShows == "range" then
-		row.share:SetText(Reach(actionSlot, name, Field(entry, "rank", 3)) or "")
-	else
-		local share = SurvivorUI_MeterShare and SurvivorUI_MeterShare(name)
-		row.share:SetText(share and share >= 0.005 and math.floor(share * 100 + 0.5).."%" or "")
-	end
+	local showRange, showCooldown = Shows()
+	row.range:SetText(showRange and Reach(actionSlot, name, Field(entry, "rank", 3)) or "")
+	row.cd:SetText(showCooldown and CooldownText(entry) or "")
 	Paint(row, color, isRacial and 0.5 or 1, not isRacial)
 	row:Show()
 end
@@ -288,12 +423,20 @@ local function Empty(row)
 	row.icon:SetAlpha(0.8)
 	row.name:SetText("empty slot")
 	row.rank:SetText("")
-	row.share:SetText("")
+	row.range:SetText("")
+	row.cd:SetText("")
 	Paint(row, MUTED, 0.6)
 	row:Show()
 end
 
 local function Draw()
+	-- The columns as chosen; changed, every row laid out again.
+	if Columns(Shows()) then
+		PlaceHead()
+		for index = 1, table.getn(rows) do
+			PlaceRow(rows[index])
+		end
+	end
 	local spells = AZS_SPELLS or {}
 	local count = table.getn(spells)
 	-- The racial comes last in the game's list and takes no slot.

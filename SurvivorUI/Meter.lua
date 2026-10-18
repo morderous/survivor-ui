@@ -352,6 +352,59 @@ meter.total:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 meter.total:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -42, -6)
 meter.total:SetTextColor(0.7, 0.7, 0.7)
 
+-- Under it, the damage a second right now (the options, Damage meter): the
+-- total line moves up to make room, and the bars start lower. With it on,
+-- each number is named: "total 238.8k" over "719 dps  now 2.5k", the two
+-- rates together as the game's meter has them.
+meter.now = meter:CreateFontString(nil, "OVERLAY")
+meter.now:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
+meter.now:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -42, -14)
+meter.now:SetTextColor(0.7, 0.7, 0.7)
+meter.now:Hide()
+
+local function NowOn()
+	return Settings().meterNow ~= false
+end
+
+-- The seconds of the run's clock "now" is measured over.
+local NOW_WINDOW = 5
+
+-- What each number is, under the mouse; dragged, the meter moves.
+local totals = CreateFrame("Frame", nil, meter)
+totals:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -40, -1)
+totals:SetWidth(112)
+totals:SetHeight(22)
+totals:EnableMouse(true)
+totals:RegisterForDrag("LeftButton")
+totals:SetScript("OnDragStart", StartMove)
+totals:SetScript("OnDragStop", StopMove)
+totals:SetScript("OnEnter", function()
+	local healing = this.view == "healing"
+	local what = healing and "healing" or "damage"
+	local unit = healing and "hps" or "dps"
+	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
+	GameTooltip:SetText(healing and "Healing Done" or (this.view == "boss" and "Boss Damage" or "Damage Done"), 1, 0.82, 0)
+	GameTooltip:AddDoubleLine("total", "the "..(this.view == "boss" and "last boss fight's" or "run's").." "..what..(this.view == "damage" and ", since Reset" or ""), 1, 1, 1, 0.8, 0.8, 0.8)
+	GameTooltip:AddDoubleLine(unit, "that a second, on average", 1, 1, 1, 0.8, 0.8, 0.8)
+	if NowOn() then
+		GameTooltip:AddDoubleLine("now", "a second over the last "..NOW_WINDOW.." seconds", 1, 1, 1, 0.8, 0.8, 0.8)
+	end
+	GameTooltip:Show()
+end)
+totals:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+local nowLaidOut
+local function LayOutNow(on)
+	if nowLaidOut == on then
+		return
+	end
+	nowLaidOut = on
+	meter.total:ClearAllPoints()
+	meter.total:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -42, on and -3 or -6)
+	meter.empty:ClearAllPoints()
+	meter.empty:SetPoint("TOPLEFT", meter, "TOPLEFT", 8, on and -28 or -24)
+end
+
 -- A view with nothing in it yet says so.
 meter.empty = meter:CreateFontString(nil, "OVERLAY")
 meter.empty:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
@@ -388,6 +441,36 @@ local lastSeconds
 
 local function RunSeconds()
 	return (AZS_GetRunTime and AZS_GetRunTime()) or 0
+end
+
+-- The damage (or healing) a second right now: the view's total as it climbs
+-- over the last NOW_WINDOW seconds of the run's clock, as the game's own
+-- meter has it beside the run's rate. Paused or choosing a card, the clock
+-- stands still and so does it; the clock going back, or the total (Reset),
+-- starts it over.
+local recent = {}               -- [view key] = { { at = run second, total }, ... }
+
+local function NowRate(key, total)
+	local list = recent[key] or {}
+	recent[key] = list
+	local at = RunSeconds()
+	local last = list[table.getn(list)]
+	if last and (at < last.at or total < last.total) then
+		list = {}
+		recent[key] = list
+		last = nil
+	end
+	if not last or at > last.at then
+		table.insert(list, { at = at, total = total })
+	end
+	while table.getn(list) > 1 and list[1].at < at - NOW_WINDOW do
+		table.remove(list, 1)
+	end
+	local span = at - list[1].at
+	if span < 1 then
+		return nil
+	end
+	return (total - list[1].total) / span
 end
 
 local function TakeBase()
@@ -441,6 +524,13 @@ local SPELL_KEYS = {
 local OWN_ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIcon"
 local icons = {}                -- [name] = texture
 local missedAt = {}             -- [name] = GetTime() of the last miss
+
+-- A burst that goes off under a name of its own (the game's 0.98): the icon
+-- of the spell it comes from, whichever of them the hero has.
+local BORROWED = {
+	["Corpse Explosion"] = { "Seed of Corruption", "Shadowform" },
+	["Noxious Cloud"] = { "Toxic Bloom" },
+}
 
 local function SpellIndex(name)
 	if not AZS_SPELLS then
@@ -536,6 +626,11 @@ local function IconOf(name)
 			return nil
 		end
 		texture = FromSpellbook(name) or FromTalents(name) or FromItems(name)
+	end
+	if not texture and BORROWED[name] then
+		for _, source in pairs(BORROWED[name]) do
+			texture = texture or IconOf(source)
+		end
 	end
 	if texture then
 		icons[name] = texture
@@ -742,7 +837,19 @@ local function Draw()
 	else
 		lines, total, dps = OtherLines(VIEWS[view].get)
 	end
-	meter.total:SetText(Short(total).."  |cffffffff"..Short(dps).."|r "..(key == "healing" and "hps" or "dps"))
+	local unit = key == "healing" and "hps" or "dps"
+	local nowOn = NowOn()
+	LayOutNow(nowOn)
+	totals.view = key
+	if nowOn then
+		local now = NowRate(key, total)
+		meter.total:SetText("|cff8a8a95total|r  |cffffffff"..Short(total).."|r")
+		meter.now:SetText("|cffffffff"..Short(dps).."|r "..unit.."   |cff8a8a95now|r |cffffffff"..Short(now or 0).."|r")
+		meter.now:Show()
+	else
+		meter.total:SetText(Short(total).."  |cffffffff"..Short(dps).."|r "..unit)
+		meter.now:Hide()
+	end
 	reset:SetAlpha(key == "damage" and 1 or 0)
 	reset:EnableMouse(key == "damage")
 	if table.getn(lines) == 0 then
@@ -754,6 +861,7 @@ local function Draw()
 
 	local count = math.min(shownLines, table.getn(lines))
 	local top = count > 0 and lines[1].dmg or 0
+	local firstBar = nowOn and 24 or 20
 	for index = 1, count do
 		local line = lines[index]
 		local name = line.name
@@ -762,7 +870,7 @@ local function Draw()
 		local bar = Bar(index)
 
 		bar:ClearAllPoints()
-		bar:SetPoint("TOPLEFT", meter, "TOPLEFT", 4, -20 - (index - 1) * (BAR_HEIGHT + BAR_GAP))
+		bar:SetPoint("TOPLEFT", meter, "TOPLEFT", 4, -firstBar - (index - 1) * (BAR_HEIGHT + BAR_GAP))
 		bar:SetValue(top > 0 and line.dmg / top or 0)
 		bar:SetStatusBarColor(color[1], color[2], color[3], 0.85)
 		bar.ability = key == "damage" and name or nil

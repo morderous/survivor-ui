@@ -462,6 +462,12 @@ function SurvivorUI_SetMoveFocus(names)
 	end
 end
 
+-- Whether a piece is being placed (move mode, Alt held, or its tab open): one
+-- that only shows now and then (the Level Up! button) shows a sample then.
+function SurvivorUI_Placing(name)
+	return editing or IsAltKeyDown() or focus == "all" or (focus ~= nil and focus[name] == true)
+end
+
 ------------------------------------------------------------------------------
 -- The game's own pieces: the chat window and the minimap (with its zone name).
 -- The run tracker hangs from the minimap, so the right column follows it.
@@ -572,11 +578,14 @@ local PARTS = {
 		places = { { "tallyX", "tallyTop", "TOP" } } },
 	{ key = "xpbar", section = "Run", label = "XP bar", frames = { "SurvivorUIXpBar" },
 		places = { { "xpBarX", "xpBarTop", "TOP" } } },
+	{ key = "levelup", section = "Run", label = "Level Up!", frames = { "SurvivorUILevelUp" },
+		places = { { "levelUpX", "levelUpTop", "TOP" } } },
 	-- The minimap with all it holds: the zone's name, the pins and the buttons.
 	{ key = "minimap", section = "Screen", label = "Minimap", frames = { "MinimapCluster" },
 		places = { { "mapRight", "mapTop", "TOPRIGHT" } } },
 	-- A little smaller than the game made it, to leave room beside it.
-	{ key = "character", section = "Character", label = "Character pane", frames = { "CharacterFrame" }, places = {}, default = 0.85 },
+	{ key = "character", section = "Character", label = "Character pane", frames = { "CharacterFrame" },
+		places = { { "characterLeft", "characterTop", "TOPLEFT" } }, default = 0.85 },
 	-- The numbers on their own (CharacterPane.lua): sized and placed there, as
 	-- inside the character pane they take its size.
 	{ key = "stats", section = "Character", label = "Stats", frames = {}, places = {}, extra = { "statsLeft", "statsTop" },

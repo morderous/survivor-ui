@@ -6,7 +6,10 @@
 //   - finds the game's AddOns folder (or lets the player pick the game);
 //   - on Install, downloads the release's zip, removes the old SurvivorUI and
 //     SurvivorPlates folders and unzips the new ones in their place;
-//   - minimized, waits in the tray, asking GitHub again every half hour: when
+//   - Play starts the game (the one by the AddOns folder), and the installer
+//     steps into the tray;
+//   - minimized or closed, waits in the tray, asking GitHub again every half
+//     hour (only the tray's Exit quits it): when
 //     a release newer than the one installed is out, a green arrow shows on
 //     its tray icon and on its taskbar button, and a note says so once; the
 //     tray's "Check for updates now" brings it forward and installs a newer
@@ -19,7 +22,12 @@
 //     builds that come before a release, GitHub's pre-releases, taken when
 //     newer than the release; a warning first, since they may have more bugs
 //     than usual and update more often. Unticked, the release is offered
-//     again ("Back to"). A version with "-beta" stands below its release.
+//     again ("Back to"). A version with "-beta" stands below its release;
+//   - updates itself: a release's SurvivorUI-Installer.zip carries its
+//     version in the asset's label ("Installer 1.3.0"). A newer one is
+//     offered at the top of the window and in the tray; with "Update the
+//     installer by itself" (on by default) it is taken at once: the running
+//     exe renamed aside, the new one put in its place and started.
 //
 // Built with the C# compiler that comes with Windows (.NET Framework 4.8):
 // see build.bat. C# 5, no external packages. Its icons (the addons' S, the S
@@ -42,7 +50,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Survivor UI Installer")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.2.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.3.0.0")]
 
 namespace SurvivorInstaller
 {
@@ -53,19 +61,31 @@ namespace SurvivorInstaller
         {
             // Started with Windows: in the tray, no window.
             bool inTray = Array.Exists(args, delegate (string arg) { return arg == "--tray"; });
+            // Started by the installer it replaces: that one is closing.
+            bool updated = Array.Exists(args, delegate (string arg) { return arg == "--updated"; });
             // One at a time: opened again while it waits in the tray, the one
-            // running comes forward instead.
-            bool first;
-            using (Mutex single = new Mutex(true, "SurvivorUIInstaller.Single", out first))
+            // running comes forward instead; just updated, it waits for the old
+            // one to let go.
+            using (Mutex single = new Mutex(false, "SurvivorUIInstaller.Single"))
             {
-                if (!first)
+                bool owned;
+                try { owned = single.WaitOne(updated ? 20000 : 0, false); }
+                catch (AbandonedMutexException) { owned = true; }
+                if (!owned)
                 {
                     if (!inTray) Native.PostMessage(Native.HWND_BROADCAST, Native.ShowMe, IntPtr.Zero, IntPtr.Zero);
                     return;
                 }
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainForm(inTray));
+                try
+                {
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+                    Application.Run(new MainForm(inTray, updated));
+                }
+                finally
+                {
+                    single.ReleaseMutex();
+                }
             }
         }
     }
@@ -122,6 +142,8 @@ namespace SurvivorInstaller
         public string ZipUrl;
         public string ZipName;
         public bool Beta;           // a pre-release on GitHub
+        public string InstallerUrl; // its SurvivorUI-Installer.zip, with a version
+        public Version InstallerVersion;
     }
 
     class MainForm : Form
@@ -138,6 +160,8 @@ namespace SurvivorInstaller
         static readonly Color TextColor = Color.FromArgb(230, 230, 230);
         static readonly Color Muted = Color.FromArgb(150, 150, 160);
         static readonly Color BetaColor = Color.FromArgb(255, 170, 70);
+        static readonly Color LauncherDim = Color.FromArgb(28, 120, 52);
+        static readonly Color LauncherLit = Color.FromArgb(58, 190, 88);
 
         readonly Label installedLabel = new Label();
         readonly Label latestLabel = new Label();
@@ -145,11 +169,17 @@ namespace SurvivorInstaller
         readonly TextBox notesBox = new TextBox();
         readonly Button installButton = new Button();
         readonly Button browseButton = new Button();
+        readonly Button playButton = new Button();
         readonly Label statusLabel = new Label();
         readonly Label upToDate = new Label();
         readonly CheckBox startBox = new CheckBox();
         readonly LinkLabel openLink = new LinkLabel();
         readonly CheckBox betaBox = new CheckBox();
+        readonly CheckBox selfBox = new CheckBox();
+        readonly Label versionLabel = new Label();
+        readonly Button launcherButton = new Button();
+        readonly ToolTip tips = new ToolTip();
+        Release updatingTo;         // the installer being downloaded, while it is
 
         Release latest;
 
@@ -168,6 +198,13 @@ namespace SurvivorInstaller
         bool startHidden;           // started with Windows: the window stays away until asked for
         readonly ToolStripMenuItem startItem = new ToolStripMenuItem("Start with Windows");
         readonly ToolStripMenuItem betaItem = new ToolStripMenuItem("Beta builds");
+        readonly ToolStripMenuItem playItem = new ToolStripMenuItem("Play");
+        bool exiting;               // the tray's Exit: the window closes for good
+        readonly ToolStripMenuItem selfItem = new ToolStripMenuItem("Update the installer");
+        static readonly Version OwnVersion = Assembly.GetExecutingAssembly().GetName().Version;
+        Release selfRelease;        // the release with a newer installer, while one is out
+        bool selfUpdating;
+        string toldOfSelf;          // the installer version the tray's note last told of
         bool beta;                  // the beta channel: GitHub's pre-releases taken too
         bool settingBeta;           // the tick set by the code, not by the user
 
@@ -215,6 +252,28 @@ namespace SurvivorInstaller
             get { return Path.Combine(Path.GetDirectoryName(ConfigPath), "beta-channel.txt"); }
         }
 
+        // The installer updates itself unless this file is there.
+        static string SelfOffPath
+        {
+            get { return Path.Combine(Path.GetDirectoryName(ConfigPath), "self-update-off.txt"); }
+        }
+
+        static bool SelfAuto()
+        {
+            try { return !File.Exists(SelfOffPath); }
+            catch { return true; }
+        }
+
+        static void SetSelfAuto(bool on)
+        {
+            try
+            {
+                if (on) { if (File.Exists(SelfOffPath)) File.Delete(SelfOffPath); }
+                else File.WriteAllText(SelfOffPath, "The installer does not update itself while this file is here.");
+            }
+            catch { }
+        }
+
         static bool BetaOn()
         {
             try { return File.Exists(BetaPath); }
@@ -231,11 +290,11 @@ namespace SurvivorInstaller
             catch { }
         }
 
-        public MainForm(bool inTray)
+        public MainForm(bool inTray, bool updated)
         {
             startHidden = inTray;
             this.Text = "Survivor UI Installer";
-            ClientSize = new Size(560, 486);
+            ClientSize = new Size(560, 512);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -259,6 +318,44 @@ namespace SurvivorInstaller
             subtitle.AutoSize = true;
             subtitle.Location = new Point(20, 48);
             Controls.Add(subtitle);
+
+            // Its own update: a green button at the top right while a newer
+            // installer is out, breathing so it is seen; its version under it.
+            launcherButton.Text = "Launcher update";
+            launcherButton.FlatStyle = FlatStyle.Flat;
+            launcherButton.FlatAppearance.BorderColor = Color.FromArgb(150, 240, 160);
+            launcherButton.FlatAppearance.BorderSize = 1;
+            launcherButton.ForeColor = Color.White;
+            launcherButton.BackColor = LauncherDim;
+            launcherButton.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+            launcherButton.Cursor = Cursors.Hand;
+            launcherButton.Location = new Point(380, 12);
+            launcherButton.Size = new Size(160, 30);
+            launcherButton.Visible = false;
+            launcherButton.Click += delegate { UpdateSelf(); };
+            Controls.Add(launcherButton);
+            System.Windows.Forms.Timer breathe = new System.Windows.Forms.Timer();
+            breathe.Interval = 50;
+            double breath = 0;
+            breathe.Tick += delegate
+            {
+                if (!launcherButton.Visible || !launcherButton.Enabled) return;
+                breath += 0.12;
+                double t = (Math.Sin(breath) + 1) / 2;
+                launcherButton.BackColor = Color.FromArgb(
+                    (int)(LauncherDim.R + (LauncherLit.R - LauncherDim.R) * t),
+                    (int)(LauncherDim.G + (LauncherLit.G - LauncherDim.G) * t),
+                    (int)(LauncherDim.B + (LauncherLit.B - LauncherDim.B) * t));
+            };
+            breathe.Start();
+
+            versionLabel.AutoSize = false;
+            versionLabel.Location = new Point(250, 46);
+            versionLabel.Size = new Size(290, 16);
+            versionLabel.TextAlign = ContentAlignment.MiddleRight;
+            versionLabel.Font = new Font("Segoe UI", 8.5f);
+            Controls.Add(versionLabel);
+            ShowOwnVersion();
 
             installedLabel.AutoSize = true;
             installedLabel.Location = new Point(20, 80);
@@ -366,11 +463,25 @@ namespace SurvivorInstaller
             upToDate.Visible = false;
             Controls.Add(upToDate);
 
-            // Start with Windows: beside the install button, the same tick as
+            // Play: the game by the AddOns folder, started; the installer steps
+            // into the tray.
+            playButton.Text = "\u25B6  Play";
+            playButton.FlatStyle = FlatStyle.Flat;
+            playButton.FlatAppearance.BorderColor = Color.FromArgb(70, 150, 85);
+            playButton.BackColor = Color.FromArgb(24, 52, 30);
+            playButton.ForeColor = Color.FromArgb(125, 232, 140);
+            playButton.Cursor = Cursors.Hand;
+            playButton.Location = new Point(380, 396);
+            playButton.Size = new Size(160, 36);
+            playButton.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+            playButton.Click += delegate { Play(); };
+            Controls.Add(playButton);
+
+            // Start with Windows: under the install button, the same tick as
             // the tray's menu.
             startBox.Text = "Start with Windows, in the tray";
             startBox.AutoSize = true;
-            startBox.Location = new Point(300, 405);
+            startBox.Location = new Point(20, 442);
             startBox.ForeColor = TextColor;
             startBox.FlatStyle = FlatStyle.Flat;
             startBox.Cursor = Cursors.Hand;
@@ -387,12 +498,30 @@ namespace SurvivorInstaller
             // Moved since it was set: the line follows the exe.
             if (startBox.Checked) SetStartWithWindows(true);
 
+            // Its own updates: taken by itself unless unticked.
+            selfBox.Text = "Update the installer by itself";
+            selfBox.AutoSize = true;
+            selfBox.Location = new Point(300, 442);
+            selfBox.ForeColor = TextColor;
+            selfBox.FlatStyle = FlatStyle.Flat;
+            selfBox.Cursor = Cursors.Hand;
+            selfBox.Checked = SelfAuto();
+            selfBox.CheckedChanged += delegate
+            {
+                SetSelfAuto(selfBox.Checked);
+                Status(selfBox.Checked
+                    ? "The installer will update itself when a new one is out."
+                    : "The installer will only tell you when a new one is out.");
+                if (selfBox.Checked && selfRelease != null) UpdateSelf();
+            };
+            Controls.Add(selfBox);
+
             // Beta builds: the test builds before a release, a warning first;
             // the same tick as the tray's menu.
             beta = BetaOn();
             betaBox.Text = "Beta builds: before a release, more bugs than usual, updated more often";
             betaBox.AutoSize = true;
-            betaBox.Location = new Point(20, 440);
+            betaBox.Location = new Point(20, 466);
             betaBox.ForeColor = TextColor;
             betaBox.FlatStyle = FlatStyle.Flat;
             betaBox.Cursor = Cursors.Hand;
@@ -400,7 +529,7 @@ namespace SurvivorInstaller
             betaBox.CheckedChanged += delegate { BetaChanged(); };
             Controls.Add(betaBox);
 
-            statusLabel.Location = new Point(20, 464);
+            statusLabel.Location = new Point(20, 490);
             statusLabel.Size = new Size(520, 20);
             statusLabel.ForeColor = Muted;
             Controls.Add(statusLabel);
@@ -410,6 +539,10 @@ namespace SurvivorInstaller
             folderBox.Text = FindAddonsFolder() ?? "";
             if (folderBox.Text == "") Status("Click \"Find game...\" and pick " + GameExe + ".");
             ShowInstalled();
+
+            // Just updated: the old exe, set aside, goes once it has closed.
+            if (updated) Status("The installer is now " + Short(OwnVersion) + ".");
+            CleanUpOld(updated);
 
             Shown += delegate { CheckNow(); };
             checkTimer.Interval = CheckEvery;
@@ -445,6 +578,8 @@ namespace SurvivorInstaller
             tray.Text = "Survivor UI Installer";
             ContextMenuStrip menu = new ContextMenuStrip();
             menu.Items.Add("Open", null, delegate { FromTray(); });
+            playItem.Click += delegate { Play(); };
+            menu.Items.Add(playItem);
             menu.Items.Add("Check for updates now", null, delegate
             {
                 FromTray();
@@ -455,6 +590,9 @@ namespace SurvivorInstaller
             installItem.Enabled = false;
             installItem.Click += delegate { FromTray(); Install(); };
             menu.Items.Add(installItem);
+            selfItem.Visible = false;
+            selfItem.Click += delegate { UpdateSelf(); };
+            menu.Items.Add(selfItem);
             startItem.CheckOnClick = false;
             startItem.Checked = StartsWithWindows();
             startItem.Click += delegate { startBox.Checked = !startBox.Checked; };
@@ -464,7 +602,7 @@ namespace SurvivorInstaller
             betaItem.Click += delegate { FromTray(); betaBox.Checked = !betaBox.Checked; };
             menu.Items.Add(betaItem);
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Exit", null, delegate { Close(); });
+            menu.Items.Add("Exit", null, delegate { exiting = true; Close(); });
             tray.ContextMenuStrip = menu;
             tray.MouseClick += delegate (object sender, MouseEventArgs e)
             {
@@ -477,19 +615,93 @@ namespace SurvivorInstaller
             Resize += delegate
             {
                 if (WindowState != FormWindowState.Minimized) return;
-                Hide();
-                if (!toldOfTray && !updateWaiting)
-                {
-                    toldOfTray = true;
-                    tray.ShowBalloonTip(4000, "Survivor UI Installer",
-                        "Still here, in the tray. A green arrow shows when an update is out.", ToolTipIcon.Info);
-                }
+                ToTray();
             };
             FormClosed += delegate
             {
                 tray.Visible = false;
                 tray.Dispose();
             };
+        }
+
+        // Into the tray, saying so the first time.
+        void ToTray()
+        {
+            Hide();
+            if (!toldOfTray && !updateWaiting)
+            {
+                toldOfTray = true;
+                tray.ShowBalloonTip(5000, "Survivor UI Installer",
+                    "Still here, in the tray: a green arrow shows when an update is out. To quit it, right click this icon and choose Exit.", ToolTipIcon.Info);
+            }
+        }
+
+        // The window's close button: into the tray. Only the tray's Exit (or
+        // Windows shutting down) closes it for good.
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (!exiting && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                ToTray();
+                return;
+            }
+            base.OnFormClosing(e);
+        }
+
+        // --- Play -------------------------------------------------------------
+
+        // The game for an AddOns folder: its exe in benilla-config (the folder
+        // holding AddOns), or one folder up.
+        static string GameFor(string addons)
+        {
+            try
+            {
+                string config = Path.GetDirectoryName((addons ?? "").Trim().TrimEnd('\\'));
+                foreach (string dir in new[] { config, config == null ? null : Path.GetDirectoryName(config) })
+                {
+                    if (string.IsNullOrEmpty(dir)) continue;
+                    string exe = Path.Combine(dir, GameExe);
+                    if (File.Exists(exe)) return exe;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        static bool GameRunning()
+        {
+            return Process.GetProcessesByName(Path.GetFileNameWithoutExtension(GameExe)).Length > 0;
+        }
+
+        void Play()
+        {
+            string exe = GameFor(folderBox.Text);
+            if (exe == null)
+            {
+                FromTray();
+                Status("The game is not found by that AddOns folder: click \"Find game...\".");
+                return;
+            }
+            if (GameRunning())
+            {
+                Status("The game is already open.");
+                return;
+            }
+            try
+            {
+                ProcessStartInfo info = new ProcessStartInfo(exe);
+                info.WorkingDirectory = Path.GetDirectoryName(exe);
+                info.UseShellExecute = true;
+                Process.Start(info);
+                Status("Starting the game...");
+                if (Visible) ToTray();
+            }
+            catch (Exception error)
+            {
+                FromTray();
+                Status("Could not start the game: " + error.Message);
+            }
         }
 
         void FromTray()
@@ -615,6 +827,9 @@ namespace SurvivorInstaller
             tray.Text = updateWaiting ? Trim("Survivor UI " + latest.Tag + " is out: click to update", 63)
                 : current ? "Survivor UI Installer: up to date" : "Survivor UI Installer";
             installItem.Enabled = updateWaiting && !installing;
+            bool playable = !installing && GameFor(folderBox.Text) != null;
+            playButton.Enabled = playable;
+            playItem.Enabled = playable;
             installItem.Text = updateWaiting ? (back ? "Back to " : "Install ") + latest.Tag : current ? "Up to date (" + latest.Tag + ")" : "Install the update";
             latestLabel.ForeColor = updateWaiting ? Color.FromArgb(90, 220, 110) : known && latest.Beta ? BetaColor : Gold;
             installButton.Text = installed == null ? "Install" : back ? "Back to " + latest.Tag : updateWaiting ? "Update to " + latest.Tag : "Install / Update";
@@ -805,7 +1020,16 @@ namespace SurvivorInstaller
                 Release chosen = stable;
                 if (beta && pre != null && (stable == null || Newer(pre.Tag, stable.Tag))) chosen = pre;
                 if (chosen == null) throw new Exception("GitHub lists no release");
+                // The newest installer among the releases this channel follows.
+                Release newestInstaller = null;
+                foreach (Release candidate in new Release[] { stable, beta ? pre : null })
+                {
+                    if (candidate == null || candidate.InstallerVersion == null) continue;
+                    if (newestInstaller == null || candidate.InstallerVersion > newestInstaller.InstallerVersion)
+                        newestInstaller = candidate;
+                }
                 BeginInvoke(new Action<Release>(ShowLatest), chosen);
+                BeginInvoke(new Action<Release>(ShowSelfUpdate), newestInstaller);
             }
             catch (Exception error)
             {
@@ -835,13 +1059,21 @@ namespace SurvivorInstaller
             {
                 Dictionary<string, object> a = (Dictionary<string, object>)asset;
                 string name = (string)a["name"];
-                // The addons' zip, "SurvivorUI-v2.4.zip" or "SurvivorUI-v3.0.5-beta.1.zip",
-                // not the installer's own.
-                if (Regex.IsMatch(name, @"^SurvivorUI-v[\d.]+(-beta[\d.]*)?\.zip$", RegexOptions.IgnoreCase))
+                // The addons' zip, "SurvivorUI-v2.4.zip" or "SurvivorUI-v3.0.5-beta.1.zip".
+                if (release.ZipUrl == null && Regex.IsMatch(name, @"^SurvivorUI-v[\d.]+(-beta[\d.]*)?\.zip$", RegexOptions.IgnoreCase))
                 {
                     release.ZipName = name;
                     release.ZipUrl = (string)a["browser_download_url"];
-                    break;
+                }
+                // The installer's own, its version in the asset's label.
+                else if (string.Equals(name, "SurvivorUI-Installer.zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    Version version = ParseVersion(a.ContainsKey("label") ? a["label"] as string : null);
+                    if (version != null)
+                    {
+                        release.InstallerUrl = (string)a["browser_download_url"];
+                        release.InstallerVersion = version;
+                    }
                 }
             }
             return release;
@@ -884,6 +1116,165 @@ namespace SurvivorInstaller
             return client;
         }
 
+        // --- Its own update -----------------------------------------------------
+
+        // "Installer 1.3.0" -> 1.3.0.0; missing parts as 0.
+        static Version ParseVersion(string text)
+        {
+            Match match = Regex.Match(text ?? "", @"(\d+)\.(\d+)(?:\.(\d+))?(?:\.(\d+))?");
+            if (!match.Success) return null;
+            int[] parts = new int[4];
+            for (int i = 0; i < 4; i++)
+                parts[i] = match.Groups[i + 1].Success ? int.Parse(match.Groups[i + 1].Value) : 0;
+            return new Version(parts[0], parts[1], parts[2], parts[3]);
+        }
+
+        // 1.3.0.0 as "1.3", 1.3.1.0 as "1.3.1".
+        static string Short(Version version)
+        {
+            return version.Build > 0 ? version.Major + "." + version.Minor + "." + version.Build : version.Major + "." + version.Minor;
+        }
+
+        // The top right: the installer's version, and the Launcher update
+        // button while a newer one is out (or being taken).
+        void ShowOwnVersion()
+        {
+            Release pending = selfUpdating ? updatingTo : selfRelease;
+            launcherButton.Visible = pending != null;
+            launcherButton.Enabled = pending != null && !selfUpdating;
+            launcherButton.Text = selfUpdating ? "Updating..." : "Launcher update";
+            if (!launcherButton.Enabled) launcherButton.BackColor = LauncherDim;
+            versionLabel.Text = "Installer " + Short(OwnVersion) + (pending != null ? "  \u2192  " + Short(pending.InstallerVersion) : "");
+            versionLabel.ForeColor = pending != null ? Color.FromArgb(110, 225, 125) : Muted;
+            if (pending != null)
+                tips.SetToolTip(launcherButton, "Installer " + Short(pending.InstallerVersion) + " is out: click to update it. It starts again by itself.");
+        }
+
+        // A newer installer out: offered, or taken at once when it updates itself.
+        void ShowSelfUpdate(Release release)
+        {
+            selfRelease = release != null && release.InstallerVersion > OwnVersion ? release : null;
+            bool available = selfRelease != null;
+            selfItem.Visible = available;
+            selfItem.Enabled = available && !selfUpdating;
+            if (available) selfItem.Text = "Update the installer to " + Short(selfRelease.InstallerVersion);
+            ShowOwnVersion();
+            if (!available) return;
+            if (selfBox.Checked)
+            {
+                UpdateSelf();
+                return;
+            }
+            string version = selfRelease.InstallerVersion.ToString();
+            if (toldOfSelf != version)
+            {
+                toldOfSelf = version;
+                tray.ShowBalloonTip(6000, "Survivor UI Installer " + Short(selfRelease.InstallerVersion) + " is out",
+                    "Click \"Launcher update\" at the top of the window, or in the tray's menu.", ToolTipIcon.Info);
+            }
+        }
+
+        void UpdateSelf()
+        {
+            if (selfRelease == null || selfUpdating) return;
+            // Not in the middle of installing the addons: after it.
+            if (installing)
+            {
+                Status("The installer updates itself once the addons are installed.");
+                return;
+            }
+            selfUpdating = true;
+            selfItem.Enabled = false;
+            Release release = selfRelease;
+            updatingTo = release;
+            selfRelease = null;
+            ShowOwnVersion();
+            Status("Downloading the installer " + Short(release.InstallerVersion) + "...");
+            new Thread(delegate () { DoUpdateSelf(release); }) { IsBackground = true }.Start();
+        }
+
+        static string OldPath
+        {
+            get
+            {
+                string exe = Application.ExecutablePath;
+                return Path.Combine(Path.GetDirectoryName(exe), Path.GetFileNameWithoutExtension(exe) + ".old.exe");
+            }
+        }
+
+        void DoUpdateSelf(Release release)
+        {
+            string exe = Application.ExecutablePath;
+            string fresh = exe + ".new";
+            string zip = Path.Combine(Path.GetTempPath(), "SurvivorUI-Installer-" + Short(release.InstallerVersion) + ".zip");
+            try
+            {
+                using (WebClient client = Client())
+                    client.DownloadFile(release.InstallerUrl, zip);
+                using (ZipArchive archive = ZipFile.OpenRead(zip))
+                {
+                    ZipArchiveEntry entry = archive.GetEntry("SurvivorInstaller.exe");
+                    if (entry == null) throw new Exception("the zip holds no SurvivorInstaller.exe");
+                    entry.ExtractToFile(fresh, true);
+                }
+                // The one downloaded is the one announced, and newer than this.
+                Version got = AssemblyName.GetAssemblyName(fresh).Version;
+                if (got <= OwnVersion) throw new Exception("the download is not newer (" + got + ")");
+                // A running exe can be renamed, not overwritten: this one aside,
+                // the new one in its place.
+                if (File.Exists(OldPath)) File.Delete(OldPath);
+                File.Move(exe, OldPath);
+                try { File.Move(fresh, exe); }
+                catch { File.Move(OldPath, exe); throw; }
+                BeginInvoke(new Action(delegate
+                {
+                    ProcessStartInfo info = new ProcessStartInfo(exe, "--updated" + (Visible ? "" : " --tray"));
+                    info.WorkingDirectory = Path.GetDirectoryName(exe);
+                    info.UseShellExecute = false;
+                    Process.Start(info);
+                    exiting = true;
+                    Close();
+                }));
+            }
+            catch (Exception error)
+            {
+                try { if (File.Exists(fresh)) File.Delete(fresh); } catch { }
+                BeginInvoke(new Action(delegate
+                {
+                    selfUpdating = false;
+                    updatingTo = null;
+                    selfRelease = release;
+                    selfItem.Enabled = true;
+                    ShowOwnVersion();
+                    Status("The installer could not update itself: " + error.Message + ". Download it again from GitHub.");
+                }));
+            }
+            finally
+            {
+                try { File.Delete(zip); } catch { }
+            }
+        }
+
+        // The old exe set aside by an update: deleted once its process is gone,
+        // tried every second for a while; and said so, once, from the tray.
+        void CleanUpOld(bool updated)
+        {
+            System.Windows.Forms.Timer cleanup = new System.Windows.Forms.Timer();
+            cleanup.Interval = 1000;
+            int tries = 0;
+            cleanup.Tick += delegate
+            {
+                tries++;
+                if (updated && tries == 1 && !Visible)
+                    tray.ShowBalloonTip(5000, "Survivor UI Installer", "Updated to " + Short(OwnVersion) + ".", ToolTipIcon.Info);
+                bool gone = true;
+                try { if (File.Exists(OldPath)) File.Delete(OldPath); }
+                catch { gone = false; }
+                if (gone || tries > 30) cleanup.Stop();
+            };
+            cleanup.Start();
+        }
+
         // --- Install ----------------------------------------------------------
 
         void Install()
@@ -900,6 +1291,8 @@ namespace SurvivorInstaller
             installButton.Enabled = false;
             browseButton.Enabled = false;
             installItem.Enabled = false;
+            playButton.Enabled = false;
+            playItem.Enabled = false;
             Status("Downloading " + latest.ZipName + "...");
             Release release = latest;
             new Thread(delegate () { DoInstall(addons, release); }) { IsBackground = true }.Start();
@@ -970,6 +1363,7 @@ namespace SurvivorInstaller
                     installButton.Enabled = true;
                     browseButton.Enabled = true;
                     ShowUpdateState();
+                    if (selfRelease != null && selfBox.Checked) UpdateSelf();
                 }));
             }
         }

@@ -825,6 +825,11 @@ local function Draw(game, phase)
 	if not (SurvivorUIDB and SurvivorUIDB.trackerXp == false) then
 		local xp, xpNeeded = Num(game.xp), Num(game.xpn)
 		local level = "|cffbf8cffLv. "..Num(game.lvl).."|r"
+		-- The levels waiting (Store Level-Ups, LevelUp.lua): "Lv. 12 +3".
+		local stored = SurvivorUI_StoredLevels and SurvivorUI_StoredLevels() or 0
+		if stored > 0 then
+			level = level.." |cffffd100+"..stored.."|r"
+		end
 		if not (SurvivorUIDB and SurvivorUIDB.trackerXpEta == false) and SurvivorUI_XpNextText then
 			local nextIn = SurvivorUI_XpNextText()
 			if nextIn then

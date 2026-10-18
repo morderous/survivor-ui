@@ -188,7 +188,9 @@ local function Fill()
 		panel:Hide()
 		return
 	end
-	panel.level:SetText("|cffbf8cffLv. "..estimate.lvl.."|r")
+	-- The levels waiting (Store Level-Ups, LevelUp.lua): "Lv. 12 +3".
+	local stored = SurvivorUI_StoredLevels and SurvivorUI_StoredLevels() or 0
+	panel.level:SetText("|cffbf8cffLv. "..estimate.lvl.."|r"..(stored > 0 and " |cffffd100+"..stored.."|r" or ""))
 	local amount = Short(estimate.xp)
 	if estimate.xpn and estimate.xpn > 0 then
 		amount = amount.." / "..Short(estimate.xpn).."  "..MUTED..math.floor(estimate.share * 100 + 0.5).."%|r"
