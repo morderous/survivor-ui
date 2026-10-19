@@ -799,6 +799,10 @@ local function MakeView(alone)
 			end
 			fontSize = math.max(8, math.min(sized and 15 or 11, rowHeight - 3))
 		end
+		-- In the pane, the text size set in the options' Character pane tab, on top.
+		if not alone then
+			fontSize = math.max(6, fontSize + (SurvivorUIDB and tonumber(SurvivorUIDB.paneStatsStep) or 0))
+		end
 
 		local y = 0
 		local headerCount, rowCount = 0, 0
@@ -1069,6 +1073,19 @@ end
 
 local paneView = MakeView(false)
 local panelView = MakeView(true)
+
+-- The pane's stats' text size, -4 to +8 over what their rows give (the
+-- options' Character pane tab; the Stats panel's is its own tab's).
+function SurvivorUI_PaneStatsStep()
+	return SurvivorUIDB and tonumber(SurvivorUIDB.paneStatsStep) or 0
+end
+
+function SurvivorUI_SetPaneStatsStep(step)
+	SurvivorUIDB = SurvivorUIDB or {}
+	step = math.max(-4, math.min(8, math.floor((tonumber(step) or 0) + 0.5)))
+	SurvivorUIDB.paneStatsStep = step ~= 0 and step or nil
+	paneView.Apply()
+end
 
 UpdateAll = function()
 	for index = 1, table.getn(views) do

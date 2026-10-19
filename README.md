@@ -209,6 +209,29 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.11, 2026-10-19
+
+**Survivor UI**
+- **The core as modules: Unit frames, Action bar and Buffs**, each on or off as a whole (Modules, Interface; and at the top of the Frames & bar tab), after a reload. Off, the game's own comes back and SurvivorUI's neither shows nor runs: the game's player and target frames, its whole action bar with the bags and the experience bar, its buffs at the top right. Keeping the bags shut (B opening none) now goes with the action bar; with it off, the row's seven dark slots go too, and its Size no longer touches the game's own buttons and experience bar. With every module off, what is left is the [S] button with the options, Run History, and the switches of other tabs (the chat filter, the cooldown numbers, one font everywhere).
+- **Checked against the game's 0.103.0**: its addon API is the same as 0.102's.
+- **The run's modifiers, all four, in the kill pace orb's tooltip**: Enemy density, health, damage and speed, a line each with its share, harder than normal in orange, easier in green, the normal ones grey, under "Modifiers (held against runs with the same)". It listed only the ones off 100%, on one line.
+- **Run History: an endless run's two badges are its switch**: the purple one says **ENDLESS** (it said FALLEN, as the red one), and each badge holds its time ("VICTORY 20:04", "ENDLESS 44:56"). A click on a badge shows that moment: its badge lit with a line of its color under it, the other dimmed until the mouse is over it. The two tabs under them are gone.
+- **Run History: the modifiers as chips**, under the badges in the middle: Density, Health, Damage and Speed, each with its share, harder than normal in orange, easier in green, normal in grey (a run with all four normal shows "Modifiers normal"). They were a grey line of text under the date.
+- **Run History: Delete reworked** (new art, a trash can and our own dropdown arrow: restart the game once): a red button of the addon's own kind, with a list over it. **Delete this run** asks once, in a box over the window that names the run; **Clear all runs** asks for the word `clear` to be typed first (Enter works too), and takes every run kept, the pinned ones too. It was a red word asking again at a second click.
+- **Run History: our own arrow on the run list**, in gold, in place of the chat's scroll arrow.
+- **Run History: the footer reworded**: "RUN HISTORY · 43 of 100 runs kept · 2 pinned", the name in soft gold, the numbers white.
+- **The options, spring cleaned** (a new file: restart the game once):
+  - **Text size in every tab** with a piece: the same step as its card's A- and A+ in move mode (the two always agree), under its Size. The Jewelry Collection, Run History and Career, which have no card, get theirs too: Jewelry in its tab, the Run History window and Career together in the Run History tab, with a **Size** (they had none) and a **Back to its place**.
+  - **One box asks before anything goes**, in the middle of the screen: everything of a kind asks for a word typed first (**Clear all runs**: `clear`, in the window and the Run History tab alike; **Forget the collection**: `forget`, and `/sui collection reset` too), the rest once (Forget this zone's runs in Kill pace, which asked nothing; Every piece back in place, Every size and Every font back to default, Combat text back to default, Stats back to default). Each says how much goes: the runs and the pinned, the pieces, the zone's runs. Before: a second click within 3 seconds, or 10 with a line in the chat, or nothing.
+  - **Back to its place always at the right of a tab's first row**: Level Up! now has the head every part has (On, The game's, Back to its place, Size, Text size) in place of its own button choice; the minimap and the guardians list have theirs there too. Frames & bar gains **Frames back in place** (your frame, the target's, the buffs).
+  - **The same words everywhere**: the game's own parts are **The game's** (they were "Default" in most tabs), a thing shown or not is **Off** (Combat numbers and the red flag said "None"); Modules names its parts as the tabs do (Kills & gold, Level Up!, Jewelry), in the tabs' order.
+  - **Sizes**: the Tooltip's and the nameplates' now 0.5 to 2 as every part's; "Plate size" and "The list's size" are "Size" and "List size"; Combat text's "Text size" is its "Size"; the chat's text size reads in points.
+  - **Counters get a Size** for their numbers; the Jewelry tab's note sits beside its button, as the others do; the guardians' note is shorter.
+- **The character pane's stats get a text size** (Character pane tab, "Stats text size", -4 to +8 over what their rows give); the Stats panel keeps its own, in its tab.
+
+**Survivor Plates**
+- **Plate size from 0.5** (it started at 0.6), as every size in Survivor UI's options; `/splates scale 0.5-2`.
+
 ### v3.0.10, 2026-10-19
 
 **Survivor UI**

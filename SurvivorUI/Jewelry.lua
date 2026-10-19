@@ -332,21 +332,39 @@ local function Book()
 	return books.shared
 end
 
--- /sui collection reset: everything found is forgotten, for every class and
--- account on this game. Asked twice, within ten seconds.
-local resetAsked = 0
-function SurvivorUI_ResetCollection()
-	if GetTime() - resetAsked > 10 then
-		resetAsked = GetTime()
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: this forgets every piece in the Jewelry Collection, for every class and account on this game. Do it again within 10 seconds (/sui collection reset, or the button in the options' Jewelry tab) to forget them.")
-		return
-	end
-	resetAsked = 0
+-- /sui collection reset, or the options' Jewelry tab: everything found is
+-- forgotten, for every class and account on this game; asked first in the
+-- addon's one box (Confirm.lua), the word forget typed, the pieces counted.
+local function Forget()
 	Books().shared = { items = {} }
 	if SurvivorUIJewelryPanel and SurvivorUIJewelryPanel:IsShown() then
 		SurvivorUIJewelryPanel.Draw()
 	end
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the Jewelry Collection is empty again. Pieces you wear now come back on their own.")
+end
+
+function SurvivorUI_ResetCollection()
+	local count = 0
+	for _ in pairs(Book().items or {}) do
+		count = count + 1
+	end
+	if count == 0 then
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the Jewelry Collection holds no piece yet.")
+		return
+	end
+	if not SurvivorUI_Confirm then
+		Forget()
+		return
+	end
+	SurvivorUI_Confirm({
+		title = "Forget the collection?",
+		text = "Every piece found goes: "..count..(count == 1 and " piece" or " pieces")
+			..", for every class and account on this game. Pieces you wear come back on their own."
+			.."\n|cff9a9aa0Type|r forget |cff9a9aa0to forget them.|r",
+		word = "forget",
+		yes = "Forget all",
+		onYes = Forget,
+	})
 end
 
 -- A piece this class can find: every one but another class's legendary
@@ -1153,6 +1171,17 @@ panel:SetScript("OnShow", function()
 	Look()
 	panel.Draw()
 end)
+
+-- The options' Back to its place (Jewelry tab): where it first opens, away from
+-- the character pane; beside the pane it still docks there.
+function SurvivorUI_ResetJewelryPlace()
+	local books = Books()
+	books.left, books.top = nil, nil
+	if not docked then
+		panel:ClearAllPoints()
+		panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 280, -120)
+	end
+end
 
 function SurvivorUI_ToggleJewelry()
 	if not Enabled() then

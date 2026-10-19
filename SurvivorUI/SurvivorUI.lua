@@ -535,8 +535,10 @@ row:SetFrameStrata("LOW")
 -- A dark, bordered slot behind every button, so an empty one still reads as a
 -- slot. These are frames of the row, not textures of the buttons: a texture
 -- added to a button's own background layer draws over its icon.
+row.slots = {}
 for position = 1, table.getn(BAR_BUTTONS) do
 	local slot = CreateFrame("Frame", nil, row)
+	row.slots[position] = slot
 	slot:SetWidth(BUTTON_SIZE)
 	slot:SetHeight(BUTTON_SIZE)
 	slot:SetPoint("LEFT", row, "LEFT", (position - 1) * (BUTTON_SIZE + BUTTON_GAP), 0)
@@ -814,14 +816,15 @@ local function PlaceButton(prefix, id, position)
 	end
 end
 
--- The bags: a run has nothing to keep in them, so B and Shift+B open none.
-for _, name in pairs({ "ToggleBackpack", "OpenBackpack", "ToggleBag", "OpenBag", "OpenAllBags", "ToggleKeyRing" }) do
-	if getglobal(name) then
-		setglobal(name, function() end)
-	end
-end
-
 local function LayoutBar()
+	-- The bags: a run has nothing to keep in them, so B and Shift+B open none;
+	-- with the action bar (Modules), as its bag buttons go.
+	for _, name in pairs({ "ToggleBackpack", "OpenBackpack", "ToggleBag", "OpenBag", "OpenAllBags", "ToggleKeyRing" }) do
+		if getglobal(name) then
+			setglobal(name, function() end)
+		end
+	end
+
 	local positions = {}
 	for position = 1, table.getn(BAR_BUTTONS) do
 		positions[BAR_BUTTONS[position]] = position
@@ -2831,9 +2834,29 @@ loader:RegisterEvent("PLAYER_TARGET_CHANGED")
 loader:RegisterEvent("UNIT_PORTRAIT_UPDATE")
 loader:SetScript("OnEvent", function()
 	if event == "PLAYER_ENTERING_WORLD" then
-		HideStockUnitFrames()
-		HideStockBuffs()
-		LayoutBar()
+		-- The core's three parts, each a module (after a reload): off, the game's
+		-- own stays and SurvivorUI's neither shows nor runs.
+		if Feature("unitFrames") then
+			HideStockUnitFrames()
+		else
+			unitUpdater:SetScript("OnUpdate", nil)
+			player:Hide()
+			target:Hide()
+		end
+		if Feature("buffs") then
+			HideStockBuffs()
+		else
+			auraUpdater:SetScript("OnUpdate", nil)
+			buffHolder:Hide()
+		end
+		if Feature("actionBar") then
+			LayoutBar()
+		else
+			-- The row stays, as what the frames hang from; its slots go.
+			for _, slot in pairs(row.slots) do
+				slot:Hide()
+			end
+		end
 		if Feature("minimap") then
 			SquareMinimap()
 		end

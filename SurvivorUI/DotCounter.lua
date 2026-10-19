@@ -155,6 +155,13 @@ local function Light(lit, spell, count, seconds)
 		return
 	end
 	local badge = Badge(button)
+	-- At the size set in the options' Counters tab.
+	local size = SurvivorUIDB and tonumber(SurvivorUIDB.counterSize) or 1
+	if badge.size ~= size then
+		badge.size = size
+		badge:SetFont(SurvivorUI_FONT, math.floor(13 * size + 0.5) + FONT_BUMP, "THICKOUTLINE")
+		badge.timer:SetFont(SurvivorUI_FONT, math.floor(9 * size + 0.5) + FONT_BUMP, "OUTLINE")
+	end
 	badge:SetText(math.max(1, math.floor(count + 0.5)))
 	local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(spell)
 	if color then

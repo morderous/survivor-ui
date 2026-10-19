@@ -571,7 +571,7 @@ local PARTS = {
 	-- with its own size on top.
 	{ key = "middle", section = "Center bar", label = "Whole center bar", frames = {}, places = {}, members = "middle", default = 0.9 },
 	-- The buttons belong to the game's bar, hung on the row: sized with it.
-	{ key = "bar", section = "Center bar", label = "Action bar", group = "middle", frames = { "SurvivorUIRow", "MainMenuExpBar",
+	{ key = "bar", section = "Center bar", label = "Action bar", group = "middle", feature = "actionBar", frames = { "SurvivorUIRow", "MainMenuExpBar",
 		"ActionButton1", "ActionButton2", "ActionButton3", "ActionButton4", "ActionButton5", "ActionButton6",
 		"ActionButton7", "ActionButton8", "ActionButton9", "ActionButton10", "ActionButton11", "ActionButton12",
 		"BonusActionButton1", "BonusActionButton2", "BonusActionButton3", "BonusActionButton4", "BonusActionButton5", "BonusActionButton6",
@@ -599,6 +599,8 @@ local PARTS = {
 	{ key = "stats", section = "Character", label = "Stats", frames = {}, places = {}, extra = { "statsLeft", "statsTop" },
 		apply = function(scale) if SurvivorUI_StatsScale then SurvivorUI_StatsScale(scale) end end },
 	{ key = "jewelry", section = "Character", label = "Jewelry Collection", frames = { "SurvivorUIJewelryPanel" }, places = {} },
+	-- Run History and Career, one size for both (the options' Run History tab).
+	{ key = "history", section = "Run", label = "Run History", frames = { "SurvivorUILastRuns", "SurvivorUICareer" }, places = {} },
 }
 
 local function Clamp(value)
@@ -641,6 +643,10 @@ end
 local function ApplyPart(part, from)
 	-- A group's size is only its members'.
 	if part.members then
+		return
+	end
+	-- A module off (the action bar): the game's own frames left as they are.
+	if part.feature and SurvivorUI_Feature and not SurvivorUI_Feature(part.feature) then
 		return
 	end
 	local scale = Effective(part)

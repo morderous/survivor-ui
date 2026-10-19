@@ -236,6 +236,22 @@ local function RefreshAll()
 	end
 end
 
+-- What goes, or goes back to default, asked first in the addon's one box
+-- (Confirm.lua): once, or with a word typed (word).
+local function Asked(title, text, yes, action, word)
+	return function()
+		local function Done()
+			action()
+			RefreshAll()
+		end
+		if SurvivorUI_Confirm then
+			SurvivorUI_Confirm({ title = title, text = text, yes = yes, word = word, onYes = Done })
+		else
+			Done()
+		end
+	end
+end
+
 -- Each tab's pieces, movable while it is open (Mover.lua), by their names in
 -- move mode; the tabs left out move none (Move UI moves every piece).
 local TAB_PIECES = {
@@ -879,14 +895,11 @@ FontPicker(page, "Global font",
 	function() return SurvivorUI_GlobalFont and SurvivorUI_GlobalFont() end,
 	function(path) if SurvivorUI_SetGlobalFont then SurvivorUI_SetGlobalFont(path) end end)
 Note(page, "Changes every text of the addon at once. A piece given a font of its own, on its card in move mode, keeps that one.")
-Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"), "the Default windows too, after a reload")
+Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"), "the game's windows too, after a reload")
 page.y = page.y - 6
-Button(page, "Every font back to default", 200, 0, function()
-	if SurvivorUI_ResetFonts then
-		SurvivorUI_ResetFonts()
-	end
-	RefreshAll()
-end)
+Button(page, "Every font back to default", 200, 0, Asked("Every font back to default?",
+	"The global font the game's again, and every piece's own font and text size gone.", "Back to default",
+	function() if SurvivorUI_ResetFonts then SurvivorUI_ResetFonts() end end))
 page.y = page.y - 28
 
 Subheader(page, "Color")
@@ -980,7 +993,7 @@ local function GameTick(page, x, y, width, label, game, oursOn, oursToggle)
 		this.hot = true
 		this:Refresh()
 		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-		GameTooltip:SetText("Default "..game.name, color[1], color[2], color[3])
+		GameTooltip:SetText("The game's "..game.name, color[1], color[2], color[3])
 		GameTooltip:AddLine("The game's own "..game.name..", shown while SurvivorUI's is off. Ticked, SurvivorUI's goes"
 			..(game.also and " (and the run tracker's boss health)" or "").."; untick both for neither.", 1, 1, 1, 1)
 		GameTooltip:Show()
@@ -1069,33 +1082,33 @@ local function ModuleCheck(page, x, y, item)
 	end
 	table.insert(widgets, check)
 	if game then
-		GameTick(page, x + PAGE_WIDTH / 2 - 80, y, 74, "Default", game, isOn, toggle)
+		GameTick(page, x + PAGE_WIDTH / 2 - 92, y, 86, "The game's", game, isOn, toggle)
 	end
 end
 
 page = pages.modules
-Header(page, "Modules", "Each part of SurvivorUI on or off as a whole: off, it does not run at all. Where the game has its own, Default beside it is the game's: SurvivorUI's puts it away, and with both unticked neither shows. Hover one for what it does; * after a reload.")
+Header(page, "Modules", "Each part of SurvivorUI on or off as a whole: off, it does not run at all. Where the game has its own, The game's beside it is that one: SurvivorUI's puts it away, and with both unticked neither shows. Hover one for what it does; * after a reload.")
 
 local MODULES = {
 	{ "Run", {
 		{ "Run tracker", OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"),
-			"Under the minimap: the zone, the run's clock, the bosses, the guardians, the elites and your level. It puts the Default clock away.", nil, nil, GAME.clock },
+			"Under the minimap: the zone, the run's clock, the bosses, the guardians, the elites and your level. It puts the game's clock away.", nil, nil, GAME.clock },
 		{ "Kill pace", OnUnlessOff("pace"), Call("SurvivorUI_TogglePace"),
 			"The orb by the tracker's clock: how fast the enemies die, against your own runs. It sits on the run tracker." },
 		{ "Guardians", OnUnlessOff("guardians"), Call("SurvivorUI_ToggleGuardians"),
 			"Each lair: which way, how far, alive or slain, as a bar in the tracker, a list beside it or a count." },
 		{ "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"),
-			"The bosses and the awake guardians with their debuffs, apart from the tracker. They put the Default bars away.", nil, nil, GAME.bosses },
+			"The bosses and the awake guardians with their debuffs, apart from the tracker. They put the game's bars away.", nil, nil, GAME.bosses },
 		{ "Minimap pins", FeatureOn("mapPins"), FeatureToggle("mapPins", true),
 			"On the minimap, a mark for each guardian's lair and a chest for each cache, set in the Minimap tab." },
-		{ "Kills and gold line", OnUnlessOff("tally"), Call("SurvivorUI_Tally"),
-			"Your kills, your gold and the next cache's price. It puts the Default box away.", nil, nil, GAME.tally },
+		{ "Kills & gold", OnUnlessOff("tally"), Call("SurvivorUI_Tally"),
+			"Your kills, your gold and the next cache's price. It puts the game's box away.", nil, nil, GAME.tally },
 		{ "XP bar", OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"),
 			"Your level and experience as a bar of its own, with the time to the next level." },
-		{ "Level Up! button", OnlyIfOn("levelUp"), Call("SurvivorUI_ToggleLevelUp"),
+		{ "Level Up!", OnlyIfOn("levelUp"), Call("SurvivorUI_ToggleLevelUp"),
 			"With Store Level-Ups on, a button over the action bar for the levels waiting. Off by default, the game's own showing: on a touch screen only it takes a tap.", nil, nil, GAME.levels },
 		{ "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"),
-			"What the run dropped. It puts the Default loot notices away.", nil, nil, GAME.loot },
+			"What the run dropped. It puts the game's loot notices away.", nil, nil, GAME.loot },
 	} },
 	{ "Combat", {
 		{ "Combat text", DamageOn, function()
@@ -1103,9 +1116,9 @@ local MODULES = {
 					SurvivorUI_SetDamageMode(DamageOn() and "game" or "survivor")
 				end
 			end,
-			"SurvivorUI's combat numbers, set in the Combat text tab. Off: Default's." },
+			"SurvivorUI's combat numbers, set in the Combat text tab. Off: the game's." },
 		{ "Damage meter", OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"),
-			"Each source's damage, its crits on hover, the healing and the boss damage. It puts the Default meter away.", nil, nil, GAME.meter },
+			"Each source's damage, its crits on hover, the healing and the boss damage. It puts the game's meter away.", nil, nil, GAME.meter },
 		{ "This Run", OnUnlessOff("runPanel"), Call("SurvivorUI_ToggleRun"),
 			"The run's numbers, as the game's victory screen gives them." },
 		{ "Biggest Crits", OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"),
@@ -1114,18 +1127,24 @@ local MODULES = {
 			"Over the spells' buttons: the DoTs ticking, the enemies feared, the totems down." },
 	} },
 	{ "Character", {
+		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
+			"Your spells, their ranks and your jewelry. It puts the game's row of spells away.", nil, nil, GAME.build },
 		{ "Character pane", FeatureOn("characterPane"), FeatureToggle("characterPane"),
-			"The character pane laid out again, the stats in sections. Off: the Default pane.", true },
+			"The character pane laid out again, the stats in sections. Off: the game's pane.", true },
 		{ "Stats panel", OnlyIfOn("statsPanel"), Call("SurvivorUI_ToggleStatsPanel"),
 			"The run's numbers as a panel on the screen all the time, apart from the character pane." },
-		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
-			"Your spells, their ranks and your jewelry. It puts the Default row of spells away.", nil, nil, GAME.build },
-		{ "Jewelry Collection", OnUnlessOff("jewelry"), Flip("jewelry"),
+		{ "Jewelry", OnUnlessOff("jewelry"), Flip("jewelry"),
 			"Every amulet, ring and trinket found, and what is left to find." },
 		{ "Ability tooltips", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"),
 			"A spell's tooltip laid out again: its school, cooldown, upgrades.", true },
 	} },
 	{ "Interface", {
+		{ "Unit frames", FeatureOn("unitFrames"), FeatureToggle("unitFrames"),
+			"Your frame and your target's: flat, the portrait, the health in numbers, the target's debuffs over it. Off: the game's frames.", true },
+		{ "Action bar", FeatureOn("actionBar"), FeatureToggle("actionBar"),
+			"Buttons 1 to 6 and = in one flat row, the rest of the bar and the bags put away, the experience a strip under it. Off: the game's bar.", true },
+		{ "Buffs", FeatureOn("buffs"), FeatureToggle("buffs"),
+			"Your buffs and debuffs over your frame, with time left and stacks. Off: the game's, at the top right.", true },
 		{ "Flat tooltips", FeatureOn("tooltip"), FeatureToggle("tooltip"),
 			"Dark, flat tooltips, with a health bar.", true },
 		{ "Flat chat", FeatureOn("chat"), FeatureToggle("chat"),
@@ -1298,11 +1317,26 @@ local function PartSize(key, label)
 		function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale(key, value) end end }
 end
 
+-- A piece's text size: its card's step (A- and A+), -4 to +8, by its name
+-- (EditCard.lua); a window with no card by the name its tab gives it.
+local function TextSize(page, name, get, set, label)
+	Slider(page, label or "Text size", -4, 8, 1,
+		get or function() return SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep(name) or 0 end,
+		set or function(value) if SurvivorUI_SetPieceTextStep then SurvivorUI_SetPieceTextStep(name, value) end end,
+		function(value)
+			value = math.floor(value + 0.5)
+			return value == 0 and "normal" or ((value > 0 and "+" or "")..value)
+		end)
+end
+
 ------------------------------------------------------------------------------
 -- A panel's tab opens with the same head: whether it is on (Modules), Back to
--- its place, and its size; each where the panel has one.
+-- its place at the right, its size and its text's size; each where the panel
+-- has one. extra: { back = Back to its place for a window with no card,
+-- font = the name its Text size goes by, false for none }.
 
-local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads, game)
+local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads, game, extra)
+	extra = extra or {}
 	-- The switch: the part on or off, the same as its tick in Modules.
 	local color = page.color
 	local switch = CreateFrame("Button", nil, page)
@@ -1351,22 +1385,29 @@ local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads, game)
 		end
 	end
 	table.insert(widgets, switch)
-	if pieceName then
-		Button(page, "Back to its place", 150, PAGE_WIDTH - 150, function()
+	if pieceName or extra.back then
+		Button(page, "Back to its place", 150, PAGE_WIDTH - 150, extra.back or function()
 			if SurvivorUI_ResetPiece then
 				SurvivorUI_ResetPiece(pieceName)
 			end
 		end)
 	end
-	-- A part the game has its own of: its Default's tick, beside the switch.
+	-- A part the game has its own of: The game's tick, beside the switch.
 	if game then
-		GameTick(page, 92, page.y - 2, 210, "Default  |cff8a8a95(the game's own)|r", game, isOn or function() return true end, toggle)
+		GameTick(page, 92, page.y - 2, 210, "The game's", game, isOn or function() return true end, toggle)
 	end
 	page.y = page.y - 30
 	if partKey then
 		Slider(page, "Size", 0.5, 2, 0.05,
 			function() return SurvivorUI_GetScale and SurvivorUI_GetScale(partKey) or 1 end,
 			function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale(partKey, value) end end)
+	end
+	local font = extra.font
+	if font == nil then
+		font = pieceName
+	end
+	if font then
+		TextSize(page, font)
 	end
 end
 
@@ -1392,6 +1433,12 @@ Inline(page, "Health shows as", {
 }, function() return DB().trackerHealthLook or "percent" end, function(look) DB().trackerHealthLook = look end)
 
 Subheader(page, "Guardians")
+-- The list's Back to its place, at the right of its first row, as a head's.
+Button(page, "Back to its place", 150, PAGE_WIDTH - 150, function()
+	if SurvivorUI_ResetPiece then
+		SurvivorUI_ResetPiece("Guardians")
+	end
+end)
 Inline(page, "Show as", {
 	{ "bar", "A bar" },
 	{ "list", "A list" },
@@ -1412,12 +1459,13 @@ end, function(choice)
 		DB().guardiansCount = choice == "count" or nil
 	end
 end)
-Note(page, "A bar: a stretch a lair in the tracker, red once slain with its time back. A list: a line a lair beside it, its name, state, yards and an arrow. A count: 3 / 5 alive, a line in the tracker. Off: no guardians at all, as their tick in Modules.")
+Note(page, "Bar: a stretch a lair in the tracker, red once slain. List: a line a lair beside it, yards and an arrow. Count: 3 / 5 alive. Off: none, as in Modules.")
 Check(page, "Arrows north up", OnlyIfOn("guardiansNorth"), Call("SurvivorUI_ToggleGuardians", "north"), "off: they turn with you, straight ahead up")
 Check(page, "Lair marks", OnUnlessOff("guardianMarks"), Flip("guardianMarks"), "each lair its own heraldic mark: the same in the tracker, on the minimap and on its boss bar")
-Slider(page, "The list's size", 0.5, 2, 0.05,
+Slider(page, "List size", 0.5, 2, 0.05,
 	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("guardians") or 1 end,
 	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("guardians", value) end end)
+TextSize(page, "Guardians")
 
 Subheader(page, "Elites")
 Check(page, "Elites", OnUnlessOff("trackerElites"), Flip("trackerElites"), "a small bar for each one alive, bright once hurt; click one to target")
@@ -1470,7 +1518,7 @@ Slider(page, "Banner stays", 3, 15, 1, function() return DB().paceBannerHold or 
 page.y = page.y - 6
 Button(page, "Forget this zone's runs", 200, 0, function()
 	if SurvivorUI_TogglePace then
-		SurvivorUI_TogglePace("reset")
+		SurvivorUI_TogglePace("ask")
 	end
 end)
 page.y = page.y - 28
@@ -1483,14 +1531,14 @@ Header(page, "Boss bars", "At the top of the screen: the bosses and the awake gu
 PanelHead(page, OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"), "bosses", "Boss bars", nil, GAME.bosses)
 Subheader(page, "What shows")
 Check(page, "Elites on the boss bars", OnlyIfOn("bossBarsElites"), Call("SurvivorUI_BossBars", "elites"))
-Note(page, "Only the run tracker's own bosses? Untick these and their Default, and keep the tracker's Boss health on (Run tracker tab): with it on, the Default bars stay away anyway.")
+Note(page, "Only the run tracker's own bosses? Untick these and The game's, and keep the tracker's Boss health on (Run tracker tab): with it on, the game's bars stay away anyway.")
 HealthRow("Health", "bossHealth", "absolutePercent")
 
 ------------------------------------------------------------------------------
 -- Kills & gold: the line of the kills, the gold and the cache (Tally.lua).
 
 page = pages.tally
-Header(page, "Kills & gold", "Your kills, your gold and the next cache's price, in one line. Off: the Default box.")
+Header(page, "Kills & gold", "Your kills, your gold and the next cache's price, in one line. Off: the game's box.")
 PanelHead(page, OnUnlessOff("tally"), Call("SurvivorUI_Tally"), "tally", "Kills and gold line", nil, GAME.tally)
 Subheader(page, "Where")
 Inline(page, nil, {
@@ -1525,23 +1573,8 @@ Check(page, "Time to the next level", OnUnlessOff("xpBarEta"), Flip("xpBarEta"),
 
 page = pages.levelup
 Header(page, "Level Up!", "With Store Level-Ups on, a level-up no longer stops the fight: the levels wait, and a button opens them, one card choice after another: SurvivorUI's over the action bar, or the game's own where its action bars were.")
-Inline(page, "Button", {
-	{ "ours", "SurvivorUI's" },
-	{ "game", "The game's" },
-	{ "off", "Off" },
-}, function() return SurvivorUI_LevelUpButton and SurvivorUI_LevelUpButton() or "game" end,
-	function(choice) if SurvivorUI_SetLevelUpButton then SurvivorUI_SetLevelUpButton(choice) end end)
-Note(page, "The game's by default. On a touch screen only the game's takes a tap. Off: no button at all, so keep Store Level-Ups off then, or the levels wait with nothing to open them.")
-page.y = page.y - 4
-Button(page, "Back to its place", 150, 0, function()
-	if SurvivorUI_ResetPiece then
-		SurvivorUI_ResetPiece("Level Up!")
-	end
-end)
-page.y = page.y - 30
-Slider(page, "Size", 0.5, 2, 0.05,
-	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("levelup") or 1 end,
-	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("levelup", value) end end)
+PanelHead(page, OnlyIfOn("levelUp"), Call("SurvivorUI_ToggleLevelUp"), "levelup", "Level Up!", nil, GAME.levels)
+Note(page, "On: SurvivorUI's button. Off with The game's ticked: the game's own, as by default; on a touch screen only it takes a tap. Both off: no button at all, so keep Store Level-Ups off then, or the levels wait with nothing to open them.")
 Subheader(page, "Store Level-Ups")
 Check(page, "Level-ups wait until you are ready", function() return AZS_IsStoringLevels and AZS_IsStoringLevels() end,
 	function()
@@ -1574,11 +1607,11 @@ Slider(page, "Lines shown", 3, 15, 1, function() return DB().lootLines or 8 end,
 -- Combat text.
 
 page = pages.combat
-Header(page, "Combat text", "The combat numbers: SurvivorUI's, set below; Default's; or none at all.")
+Header(page, "Combat text", "The combat numbers: SurvivorUI's, set below; the game's; or off.")
 Inline(page, "Combat numbers", {
 	{ "survivor", "SurvivorUI's" },
-	{ "game", "Default's" },
-	{ "none", "None" },
+	{ "game", "The game's" },
+	{ "none", "Off" },
 }, function() return SurvivorUI_DamageMode and SurvivorUI_DamageMode() or "survivor" end,
 	function(mode) if SurvivorUI_SetDamageMode then SurvivorUI_SetDamageMode(mode) end end)
 
@@ -1617,7 +1650,7 @@ InlineChecks(page, {
 	{ "Meter colors", CTGet("ctMeterColors"), CTToggle("ctMeterColors") },
 	{ "Short numbers", CTGet("ctShort"), CTToggle("ctShort") },
 })
-Slider(page, "Text size", 0.5, 1.5, 0.05, CTGet("ctSize"), CTSet("ctSize"))
+Slider(page, "Size", 0.5, 1.5, 0.05, CTGet("ctSize"), CTSet("ctSize"))
 Slider(page, "Crit size", 0.6, 1.6, 0.05, CTGet("ctCritSize"), CTSet("ctCritSize"))
 
 Subheader(page, "What shows")
@@ -1651,19 +1684,16 @@ Button(page, "Show a sample", 150, 0, function()
 		SurvivorUI_CTSample()
 	end
 end)
-Button(page, "Combat text back to default", 220, 162, function()
-	if SurvivorUI_CTDefaults then
-		SurvivorUI_CTDefaults()
-	end
-	RefreshAll()
-end)
+Button(page, "Combat text back to default", 220, 162, Asked("Combat text back to default?",
+	"Every setting of this tab as it first was; the columns you moved stay where they are.", "Back to default",
+	function() if SurvivorUI_CTDefaults then SurvivorUI_CTDefaults() end end))
 page.y = page.y - 28
 
 ------------------------------------------------------------------------------
 -- Damage meter (Meter.lua).
 
 page = pages.meter
-Header(page, "Damage meter", "Each source's damage and its share, its crits on hover; its title's menu for the healing or the last boss fight. Off: the Default meter.")
+Header(page, "Damage meter", "Each source's damage and its share, its crits on hover; its title's menu for the healing or the last boss fight. Off: the game's meter.")
 PanelHead(page, OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "meter", "Damage meter", nil, GAME.meter)
 Subheader(page, "What shows")
 Check(page, "Damage a second right now", OnUnlessOff("meterNow"), Flip("meterNow"), "under the run's, over the last 5 seconds, as the game's meter has it")
@@ -1686,7 +1716,18 @@ Button(page, "Open Run History", 170, 0, function()
 		SurvivorUI_ShowRunHistory()
 	end
 end)
+-- The window and Career's: back under the screen's top, one size, one text size.
+Button(page, "Back to its place", 150, PAGE_WIDTH - 150, function()
+	if SurvivorUI_ResetHistoryPlace then
+		SurvivorUI_ResetHistoryPlace()
+	end
+end)
 page.y = page.y - 32
+Slider(page, "Size", 0.5, 2, 0.05,
+	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("history") or 1 end,
+	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("history", value) end end)
+TextSize(page, "Run History")
+Note(page, "The size and text size of the Run History window and of Career, alike.")
 
 local function Sets(key)
 	return function(value) DB()[key] = value end
@@ -1763,29 +1804,14 @@ function statsHolder:Refresh()
 end
 table.insert(widgets, statsHolder)
 page.y = page.y - 24
-local clearAll = Button(page, "Delete all runs", 170, 0, nil, { 0.95, 0.40, 0.35 })
+local clearAll = Button(page, "Clear all runs", 170, 0, function()
+	if SurvivorUI_AskClearHistory then
+		SurvivorUI_AskClearHistory(RefreshAll)
+	end
+end, { 0.95, 0.40, 0.35 })
 local clearNote = Text(page, 9, MUTED)
 clearNote:SetPoint("LEFT", clearAll, "RIGHT", 12, 0)
-clearNote:SetText("Every run, the pinned ones too. Click twice.")
-clearAll:SetScript("OnClick", function()
-	if this.armed and GetTime() - this.armed < 3 then
-		this.armed = nil
-		this.text:SetText("Delete all runs")
-		if SurvivorUI_ClearHistory then
-			SurvivorUI_ClearHistory()
-		end
-		RefreshAll()
-		return
-	end
-	this.armed = GetTime()
-	this.text:SetText("Click again: all of them")
-end)
-clearAll:SetScript("OnUpdate", function()
-	if this.armed and GetTime() - this.armed >= 3 then
-		this.armed = nil
-		this.text:SetText("Delete all runs")
-	end
-end)
+clearNote:SetText("Every run, the pinned ones too: the word clear typed first.")
 page.y = page.y - 30
 
 ------------------------------------------------------------------------------
@@ -1806,11 +1832,15 @@ Check(page, "DoTs", OnUnlessOff("dotCounter"), Flip("dotCounter"), "how many of 
 Check(page, "Fears", OnUnlessOff("fearCounter"), Flip("fearCounter"), "how many enemies each one holds; the game writes a fear's hit but not its end, so each enemy hit counts for the fear's full time")
 Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, and the seconds until the next one ends: each cast counts one totem for its tooltip's time; two set down at once by a talent count as one, and one that drops on its own is not seen")
 
+Subheader(page, "Look")
+Slider(page, "Size", 0.5, 2, 0.05, function() return tonumber(DB().counterSize) or 1 end,
+	function(value) DB().counterSize = math.floor(value * 100 + 0.5) / 100 end)
+
 ------------------------------------------------------------------------------
 -- Build list (BuildList.lua).
 
 page = pages.build
-Header(page, "Build list", "Your spells with their icons and ranks, the free slots and the jewelry you wear. Off: the Default row of spells.")
+Header(page, "Build list", "Your spells with their icons and ranks, the free slots and the jewelry you wear. Off: the game's row of spells.")
 PanelHead(page, OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "build", "Build list", nil, GAME.build)
 Subheader(page, "Beside each spell")
 InlineChecks(page, {
@@ -1829,7 +1859,7 @@ Note(page, "Either or both. The range read off the spell's own tooltip, its radi
 
 page = pages.character
 Header(page, "Character pane", "The character pane laid out again: the hero and the slots, and the run's numbers beside them. It opens with this tab: drag it while the tab is open, or click it for its card.")
-PanelHead(page, FeatureOn("characterPane"), FeatureToggle("characterPane"), "character", "Character pane", true)
+PanelHead(page, FeatureOn("characterPane"), FeatureToggle("characterPane"), "character", "Character pane", true, nil, { font = false })
 Subheader(page, "In the pane")
 Check(page, "The stats beside the hero", function() return not SurvivorUI_StatsInPane or SurvivorUI_StatsInPane() end,
 	function()
@@ -1837,6 +1867,8 @@ Check(page, "The stats beside the hero", function() return not SurvivorUI_StatsI
 			SurvivorUI_SetStatsInPane(not SurvivorUI_StatsInPane())
 		end
 	end, "off: the hero and the slots alone")
+TextSize(page, nil, function() return SurvivorUI_PaneStatsStep and SurvivorUI_PaneStatsStep() or 0 end,
+	function(value) if SurvivorUI_SetPaneStatsStep then SurvivorUI_SetPaneStatsStep(value) end end, "Stats text size")
 Note(page, "The same numbers on the screen all the time are a panel of their own: the Stats panel tab. The Jewelry Collection can open beside the pane: the Jewelry tab.")
 
 ------------------------------------------------------------------------------
@@ -1921,19 +1953,17 @@ for index = 1, table.getn(groups) do
 	columnY[column] = y - 6
 end
 page.y = math.min(columnY[1], math.min(columnY[2], columnY[3])) - 4
-Button(page, "Default for this class", 200, 0, function()
-	if SurvivorUI_ResetStatOrder then
-		SurvivorUI_ResetStatOrder()
-	end
-	RefreshAll()
-end)
+Button(page, "Stats back to default", 200, 0, Asked("Stats back to default?",
+	"This class's numbers all shown again, in their first order.", "Back to default",
+	function() if SurvivorUI_ResetStatOrder then SurvivorUI_ResetStatOrder() end end))
 
 ------------------------------------------------------------------------------
 -- Jewelry: the Jewelry Collection (Jewelry.lua).
 
 page = pages.jewelry
 Header(page, "Jewelry", "The Jewelry Collection: every amulet, ring and trinket of the game's codex, found or still to find, and what each gives by rarity; your class's own amulets by spell.")
-PanelHead(page, OnUnlessOff("jewelry"), Flip("jewelry"), "jewelry")
+PanelHead(page, OnUnlessOff("jewelry"), Flip("jewelry"), "jewelry", nil, nil, nil, { font = "Jewelry",
+	back = function() if SurvivorUI_ResetJewelryPlace then SurvivorUI_ResetJewelryPlace() end end })
 Check(page, "Beside the character pane", function() return SurvivorUI_JewelryWithPane and SurvivorUI_JewelryWithPane() end,
 	function()
 		if SurvivorUI_SetJewelryWithPane and SurvivorUI_JewelryWithPane then
@@ -1941,19 +1971,27 @@ Check(page, "Beside the character pane", function() return SurvivorUI_JewelryWit
 		end
 	end, "each time the pane opens; off: /sui collection opens it")
 page.y = page.y - 4
-Button(page, "Forget the collection", 170, 0, function()
+local forget = Button(page, "Forget the collection", 170, 0, function()
 	if SurvivorUI_ResetCollection then
 		SurvivorUI_ResetCollection()
 	end
-end)
-page.y = page.y - 28
-Note(page, "Click twice within 10 seconds: it forgets every piece, for every class and account on this game.")
+end, { 0.95, 0.40, 0.35 })
+local forgetNote = Text(page, 9, MUTED)
+forgetNote:SetPoint("LEFT", forget, "RIGHT", 12, 0)
+forgetNote:SetText("Every piece, for every class and account on this game: the word forget typed first.")
+page.y = page.y - 30
 
 ------------------------------------------------------------------------------
 -- Frames & bar: the player's and the target's frames, and the action bar.
 
 page = pages.units
 Header(page, "Frames & bar", "Your frame and your target's, the action bar and the tooltip (the minimap has a tab of its own). While this tab is open, drag the frames or the buffs to move them.")
+InlineChecks(page, {
+	{ "Unit frames", FeatureOn("unitFrames"), FeatureToggle("unitFrames") },
+	{ "Action bar", FeatureOn("actionBar"), FeatureToggle("actionBar") },
+	{ "Buffs", FeatureOn("buffs"), FeatureToggle("buffs") },
+}, "On")
+Note(page, "Each a module, as in Modules: off, the game's own comes back. After a reload.")
 Subheader(page, "Health numbers")
 Note(page, "The percent, the health left, the health left of the whole, or the health left and the percent. Always short: 1.2M for 1,200,000.")
 HealthRow("Player", "playerHealth", "absolutePercent")
@@ -1971,12 +2009,19 @@ Check(page, "Player and target frames move with the action bar",
 	end)
 page.y = page.y - 4
 Button(page, "Center the action bar", 200, 0, Call("SurvivorUI_CenterRow"))
+Button(page, "Frames back in place", 200, 212, function()
+	if SurvivorUI_ResetPiece then
+		for _, name in pairs({ "Player frame", "Target frame", "Buffs" }) do
+			SurvivorUI_ResetPiece(name)
+		end
+	end
+end)
 page.y = page.y - 28
 Subheader(page, "Size")
 SizeGrid(page, {
 	PartSize("middle", "Whole center bar"), PartSize("bar", "Action bar"),
 	PartSize("frames", "Player and target"), PartSize("buffs", "Buffs"),
-	{ "Tooltip", 0.6, 1.6, 0.05,
+	{ "Tooltip", 0.5, 2, 0.05,
 		function() return SurvivorUI_TooltipSize and SurvivorUI_TooltipSize() or 1 end,
 		function(value) if SurvivorUI_SetTooltipSize then SurvivorUI_SetTooltipSize(value) end end },
 })
@@ -1986,6 +2031,11 @@ SizeGrid(page, {
 
 page = pages.minimap
 Header(page, "Minimap", "Its look and its size, and the pins a run puts on it: each guardian's lair its own mark, a chest for each cache. While this tab is open, drag the minimap or its button to move them.")
+Button(page, "Back to its place", 150, PAGE_WIDTH - 150, function()
+	if SurvivorUI_ResetPiece then
+		SurvivorUI_ResetPiece("Minimap")
+	end
+end)
 Check(page, "Square minimap", FeatureOn("minimap"), FeatureToggle("minimap"), "its buttons tidied; after a reload")
 Check(page, "Run History button", OnUnlessOff("historyMapButton"), function()
 	DB().historyMapButton = DB().historyMapButton == false
@@ -1996,13 +2046,6 @@ end, "the hourglass over the [S], opening Run History")
 Slider(page, "Size", 0.5, 2, 0.05,
 	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("minimap") or 1 end,
 	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("minimap", value) end end)
-page.y = page.y - 4
-Button(page, "Back to its place", 150, 0, function()
-	if SurvivorUI_ResetPiece then
-		SurvivorUI_ResetPiece("Minimap")
-	end
-end)
-page.y = page.y - 28
 
 -- The pins as they are set, drawn under the settings; each size slider redraws it.
 local pinPreview
@@ -2036,10 +2079,10 @@ Inline(page, "Out of reach", { { "edge", "On the edge" }, { "hide", "Hidden" } }
 Note(page, "On the edge: a pin past the minimap's reach sits on its edge, smaller and fainter, pointing the way. Hidden: only what the minimap reaches.")
 
 Subheader(page, "The game's flag")
-Inline(page, "Red flag", { { "ours", "Our glow" }, { "game", "The game's" }, { "none", "None" } },
+Inline(page, "Red flag", { { "ours", "Our glow" }, { "game", "The game's" }, { "none", "Off" } },
 	function() return SurvivorUI_GameFlag and SurvivorUI_GameFlag() or "game" end,
 	function(value) if SurvivorUI_SetGameFlag then SurvivorUI_SetGameFlag(value) end end)
-Note(page, "The game flags the lair to head for: the nearest with its guardian, else the one back soonest. Our glow: the flag put away, that lair's mark glowing gold on the minimap and in the run tracker. The game's: its red flag. None: neither. From the game's 0.102.")
+Note(page, "The game flags the lair to head for: the nearest with its guardian, else the one back soonest. Our glow: the flag put away, that lair's mark glowing gold on the minimap and in the run tracker. The game's: its red flag. Off: neither. From the game's 0.102.")
 
 -- The preview: the eight marks (or the skull) at the lairs' size and the chest
 -- at the caches', on a minimap's grass, as the settings stand.
@@ -2122,10 +2165,10 @@ page.y = page.y - 46
 
 page = pages.chat
 Header(page, "Chat", "The chat window: flat, its buttons on hover (Flat chat, in the Modules tab), its text's size, and what reaches it.")
-PanelHead(page, FeatureOn("chat"), FeatureToggle("chat"), nil, "Chat", true)
+PanelHead(page, FeatureOn("chat"), FeatureToggle("chat"), nil, "Chat", true, nil, { font = false })
 Slider(page, "Text size", 8, 18, 1,
 	function() return SurvivorUI_ChatSize and SurvivorUI_ChatSize() or 8 end,
-	function(value) if SurvivorUI_SetChatSize then SurvivorUI_SetChatSize(value) end end, "%d")
+	function(value) if SurvivorUI_SetChatSize then SurvivorUI_SetChatSize(value) end end, "%d pt")
 Slider(page, "Background", 0, 100, 5,
 	function() return math.floor((SurvivorUI_ChatBackground and SurvivorUI_ChatBackground() or 0) * 100 + 0.5) end,
 	function(value) if SurvivorUI_SetChatBackground then SurvivorUI_SetChatBackground(value / 100) end end, "%d%%")
@@ -2163,7 +2206,7 @@ if PlatesThere() then
 	Subheader(page, "Look")
 	Check(page, "Names on every plate", function() return SurvivorPlatesDB and SurvivorPlatesDB.names == true end,
 		function() Plates("names") end, "off: only on elites, guardians and bosses")
-	Slider(page, "Plate size", 0.6, 2, 0.05,
+	Slider(page, "Size", 0.5, 2, 0.05,
 		function() return SurvivorPlates_GetScale and SurvivorPlates_GetScale() or 1 end,
 		function(value) if SurvivorPlates_SetScale then SurvivorPlates_SetScale(value) end end)
 else
@@ -2176,14 +2219,13 @@ end
 page = pages.layout
 Header(page, "Layout", "Move UI, the button at the top of this window (or a right click on the minimap button), unlocks every piece over a grid: one let go snaps to the grid, or to a neighbour's edge. Click a piece for its card: its place, size and font, shown or hidden, reset and undo. Each tab's own pieces can be dragged while it is open, so you can play while setting them.")
 Subheader(page, "Reset")
-Button(page, "Every piece back in place", 220, 0, Call("SurvivorUI_ResetLayout"))
+Button(page, "Every piece back in place", 220, 0, Asked("Every piece back in place?",
+	"Every piece you moved goes back where it first stood.", "Back in place",
+	function() if SurvivorUI_ResetLayout then SurvivorUI_ResetLayout() end end))
 page.y = page.y - 32
-Button(page, "Every size back to default", 220, 0, function()
-	if SurvivorUI_ResetPartScales then
-		SurvivorUI_ResetPartScales()
-	end
-	RefreshAll()
-end)
+Button(page, "Every size back to default", 220, 0, Asked("Every size back to default?",
+	"Every part's own size back to its first; the whole interface's stays.", "Back to default",
+	function() if SurvivorUI_ResetPartScales then SurvivorUI_ResetPartScales() end end))
 page.y = page.y - 28
 
 ------------------------------------------------------------------------------

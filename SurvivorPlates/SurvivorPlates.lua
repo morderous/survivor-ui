@@ -25,7 +25,7 @@
 --   /splates all        plates on every enemy, or only on elites, guardians and bosses
 --   /splates names      names only on elites, guardians and bosses (default), or on every plate
 --   /splates none       no nameplates at all (the default), or back
---   /splates scale N    plate size, 0.6 to 2 (default 1)
+--   /splates scale N    plate size, 0.5 to 2 (default 1)
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 -- Survivor UI's face when it is installed: a player's own Expressway, else its
@@ -491,10 +491,10 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		ApplyShown()
 		Say(settings.hidden and "no nameplates." or "nameplates back.")
 	elseif command == "scale" and number then
-		settings.scale = math.max(0.6, math.min(2, number))
+		settings.scale = math.max(0.5, math.min(2, number))
 		Say("scale "..settings.scale..".")
 	else
-		Say("/splates all | names | none | scale 0.6-2")
+		Say("/splates all | names | none | scale 0.5-2")
 		return
 	end
 	Restyle()
@@ -508,7 +508,7 @@ end
 function SurvivorPlates_SetScale(value)
 	value = tonumber(value)
 	if value then
-		Settings().scale = math.max(0.6, math.min(2, math.floor(value * 100 + 0.5) / 100))
+		Settings().scale = math.max(0.5, math.min(2, math.floor(value * 100 + 0.5) / 100))
 		Restyle()
 	end
 end

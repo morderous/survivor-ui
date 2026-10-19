@@ -212,6 +212,27 @@ local function ApplyFont(handle)
 	end
 end
 
+-- The windows with no card, by their frames' names: the name their text size
+-- goes by (the options' Run History and Jewelry tabs).
+local FONT_WINDOWS = {
+	{ "SurvivorUILastRuns", "Run History" }, { "SurvivorUICareer", "Run History" },
+	{ "SurvivorUIJewelryPanel", "Jewelry" },
+}
+
+-- A window's text at its step (only while it is seen; worn, put back at 0).
+local function WearWindows(name, always)
+	for _, each in pairs(FONT_WINDOWS) do
+		local frame = getglobal(each[1])
+		if frame and (not name or name == each[2]) and (always or frame:IsVisible()) then
+			local chosen = PieceFonts()[each[2]]
+			if chosen or frame.suiFontWorn then
+				Walk(frame, chosen and chosen.path, chosen and chosen.step or 0)
+				frame.suiFontWorn = chosen and true or nil
+			end
+		end
+	end
+end
+
 -- Pieces draw new words as they go: their fonts are put on again now and then.
 local fonts = CreateFrame("Frame")
 local fontWait = 0
@@ -230,6 +251,7 @@ fonts:SetScript("OnUpdate", function()
 			ApplyFont(handle)
 		end
 	end
+	WearWindows()
 end)
 
 ------------------------------------------------------------------------------
@@ -860,7 +882,48 @@ function SurvivorUI_ResetFonts()
 	for _, handle in pairs(handles) do
 		ApplyFont(handle)
 	end
+	WearWindows(nil, true)
 	if selected then
+		Fill()
+	end
+end
+
+-- The options' Text size, in each tab: the card's step (A- and A+, -4 to +8)
+-- by the piece's name, its face kept; for the windows with no card, theirs.
+function SurvivorUI_PieceHasFont(name)
+	local piece = PIECES[name]
+	if piece then
+		return not piece.gameFont and not piece.noFont
+	end
+	for _, each in pairs(FONT_WINDOWS) do
+		if each[2] == name then
+			return true
+		end
+	end
+	return false
+end
+
+function SurvivorUI_PieceTextStep(name)
+	local chosen = PieceFonts()[name]
+	return chosen and chosen.step or 0
+end
+
+function SurvivorUI_SetPieceTextStep(name, step)
+	local set = PieceFonts()
+	local face = set[name] and set[name].path
+	step = math.max(-4, math.min(8, math.floor((tonumber(step) or 0) + 0.5)))
+	if not face and step == 0 then
+		set[name] = nil
+	else
+		set[name] = { path = face, step = step }
+	end
+	for _, handle in pairs(SurvivorUI_MoverHandles and SurvivorUI_MoverHandles() or {}) do
+		if handle.name == name then
+			ApplyFont(handle)
+		end
+	end
+	WearWindows(name, true)
+	if selected and selected.name == name then
 		Fill()
 	end
 end

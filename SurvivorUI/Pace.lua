@@ -753,9 +753,27 @@ frame:SetScript("OnEnter", function()
 	end
 	local slowest, count, fastest, average, slowClass, fastClass = Reference()
 	local zoneName = AZS_ZONE and AZS_ZONE.zname or "this zone"
-	local modsText = AZS_ZONE and ModsLabel(AZS_ZONE.mods)
-	if modsText then
-		GameTooltip:AddDoubleLine("Modifiers (held against the same)", modsText, 0.8, 0.8, 0.8, 1, 1, 1)
+	-- The run's four modifiers, each on its line: as the menu has them, harder
+	-- in orange, easier in green, the others grey; the pace is held against
+	-- runs with the same.
+	local values, index = {}, 0
+	for value in string.gfind(tostring(AZS_ZONE and AZS_ZONE.mods or ""), "%d+") do
+		index = index + 1
+		values[index] = tonumber(value)
+	end
+	if index > 0 then
+		GameTooltip:AddLine(" ")
+		GameTooltip:AddLine("Modifiers  |cff8a8a92(held against runs with the same)|r", 1, 0.82, 0)
+		for place = 1, table.getn(MOD_NAMES) do
+			local value = values[place] or 100
+			local r, g, b = 0.62, 0.62, 0.66
+			if value > 100 then
+				r, g, b = 1.00, 0.58, 0.25
+			elseif value < 100 then
+				r, g, b = 0.40, 0.95, 0.45
+			end
+			GameTooltip:AddDoubleLine("  Enemy "..MOD_NAMES[place], value.."%", 0.8, 0.8, 0.8, r, g, b)
+		end
 	end
 	local classOnly = Settings().paceClassOnly
 	local what = classOnly and ((AZS_ZONE and AZS_ZONE.cname or "this class").." runs on "..zoneName)
@@ -806,6 +824,30 @@ function SurvivorUI_TogglePace(argument)
 		settings.paceClassOnly = not settings.paceClassOnly or nil
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the kill pace holds a run against "..(settings.paceClassOnly
 			and "your runs of the same class on its zone." or "all your runs on its zone, every class's."))
+		return
+	end
+	-- The options' Forget this zone's runs: the runs counted, asked once first.
+	if argument == "ask" then
+		local key = RunKey()
+		local list = key and settings.paceRuns[key]
+		local count = 0
+		for _, each in pairs(list or {}) do
+			if not settings.paceClassOnly or each.class == AZS_ZONE.class then
+				count = count + 1
+			end
+		end
+		if count == 0 or not SurvivorUI_Confirm then
+			SurvivorUI_TogglePace("reset")
+			return
+		end
+		local whose = settings.paceClassOnly and ((AZS_ZONE.cname or "this class").."'s") or "every class's"
+		SurvivorUI_Confirm({
+			title = "Forget this zone's runs?",
+			text = "The kill pace forgets "..count..(count == 1 and " run" or " runs").." of "..(AZS_ZONE.zname or "this zone")
+				.." ("..whose..", these modifiers). The runs from now on teach it again.",
+			yes = "Forget",
+			onYes = function() SurvivorUI_TogglePace("reset") end,
+		})
 		return
 	end
 	if argument == "reset" then

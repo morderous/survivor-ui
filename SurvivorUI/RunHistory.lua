@@ -671,9 +671,10 @@ local function TextButton(label, width, onClick)
 end
 
 ------------------------------------------------------------------------------
--- The header: how the run ended at the top in the middle, as its title, an
--- endless run's tabs under it; the hero at the top left in the class's
--- color, the map under it; the date and the modifiers on the right.
+-- The header: how the run ended at the top in the middle, as its title (an
+-- endless run's two, each showing its moment on a click), the modifiers under
+-- it; the hero at the top left in the class's color, the map under it; the
+-- date on the right.
 
 local shown = 1
 local view = "end"                -- an endless run's moment shown: "victory" or "end"
@@ -954,8 +955,14 @@ pick.arrow = CreateFrame("Button", nil, window)
 pick.arrow:SetWidth(16)
 pick.arrow:SetHeight(16)
 pick.arrow:SetPoint("RIGHT", after, "LEFT", -4, 0)
-pick.arrow:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
-pick.arrow:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down")
+-- Our own arrow (Art\\DropArrow, light, tinted gold): pushed a shade darker,
+-- lit under the mouse.
+pick.arrow:SetNormalTexture("Interface\\AddOns\\SurvivorUI\\Art\\DropArrow")
+pick.arrow:GetNormalTexture():SetVertexColor(1, 0.82, 0)
+pick.arrow:SetPushedTexture("Interface\\AddOns\\SurvivorUI\\Art\\DropArrow")
+pick.arrow:GetPushedTexture():SetVertexColor(0.72, 0.58, 0)
+pick.arrow:SetHighlightTexture("Interface\\AddOns\\SurvivorUI\\Art\\DropArrow")
+pick.arrow:GetHighlightTexture():SetVertexColor(0.5, 0.42, 0.1)
 -- The run's number box moves over for it.
 pageButton:ClearAllPoints()
 pageButton:SetPoint("RIGHT", pick.arrow, "LEFT", -3, 0)
@@ -1059,9 +1066,14 @@ local FOOTER = 28
 
 -- Survivor UI's small gold button: an icon and a word on a dark gold body in
 -- a gold edge, lit under the mouse with a soft glow; kept lit while .lit is
--- set (a pinned run's Pin). Run History's Pin and Career, Career's Runs.
--- .tipTitle and .tipText: its tooltip.
-function SurvivorUI_GoldButton(parent, width, texture, coords, label)
+-- set (a pinned run's Pin). Run History's Pin and Career, Career's Runs; in
+-- red (tone), Delete. .tipTitle and .tipText: its tooltip.
+local TONES = {
+	gold = { edge = GOLD, body = { 0.32, 0.25, 0.04 }, text = { 1, 0.88, 0.5 } },
+	red = { edge = { 1, 0.40, 0.34 }, body = { 0.34, 0.08, 0.07 }, text = { 1, 0.74, 0.70 } },
+}
+function SurvivorUI_GoldButton(parent, width, texture, coords, label, tone)
+	tone = tone or TONES.gold
 	local button = CreateFrame("Button", nil, parent)
 	button:SetWidth(width)
 	button:SetHeight(17)
@@ -1069,7 +1081,7 @@ function SurvivorUI_GoldButton(parent, width, texture, coords, label)
 	button.glow = button:CreateTexture(nil, "BACKGROUND")
 	button.glow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
 	button.glow:SetBlendMode("ADD")
-	button.glow:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
+	button.glow:SetVertexColor(tone.edge[1], tone.edge[2], tone.edge[3])
 	button.glow:SetWidth(width + 40)
 	button.glow:SetHeight(40)
 	button.glow:SetPoint("CENTER", button, "CENTER", 0, 0)
@@ -1086,9 +1098,14 @@ function SurvivorUI_GoldButton(parent, width, texture, coords, label)
 	button.text:SetText(label)
 	function button:Light(hot)
 		local on = hot or self.lit
-		self:SetBackdropColor(0.32 * (on and 1.4 or 1), 0.25 * (on and 1.4 or 1), 0.04, 0.95)
-		self:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], on and 1 or 0.6)
-		self.text:SetTextColor(1, on and 1 or 0.88, on and 1 or 0.5)
+		local lift = on and 1.4 or 1
+		self:SetBackdropColor(tone.body[1] * lift, tone.body[2] * lift, tone.body[3], 0.95)
+		self:SetBackdropBorderColor(tone.edge[1], tone.edge[2], tone.edge[3], on and 1 or 0.6)
+		if on then
+			self.text:SetTextColor(1, 1, 1)
+		else
+			self.text:SetTextColor(tone.text[1], tone.text[2], tone.text[3])
+		end
 		self.glow:SetAlpha(hot and 0.45 or (self.lit and 0.2 or 0))
 	end
 	button:Light(false)
@@ -1139,110 +1156,106 @@ end)
 local footer = Font(window, 9, MUTED, "", "CENTER")
 footer:SetPoint("BOTTOM", window, "BOTTOM", 0, 12)
 
--- Delete: the run shown, for good, at a second click; the first asks, for
--- three seconds.
-local DELETE = { 0.85, 0.42, 0.40 }
-local deleteButton = CreateFrame("Button", nil, window)
-deleteButton:SetWidth(76)
-deleteButton:SetHeight(18)
-deleteButton:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -PAD, 8)
-deleteButton.text = Font(deleteButton, 11, DELETE, nil, "CENTER")
-deleteButton.text:SetPoint("CENTER", deleteButton, "CENTER", 0, 0)
-deleteButton.text:SetText("Delete")
+-- Delete, red (a trash can, our arrow): a list over it, "Delete this run"
+-- (asked once) and "Clear all runs" (the word clear typed first), both in
+-- the addon's one box (Confirm.lua). One table for it all: the file is near
+-- Lua 5.0's 200 locals.
+local del = {}
+local deleteButton = SurvivorUI_GoldButton(window, 84, "Interface\\AddOns\\SurvivorUI\\Art\\Trash", nil, "Delete", TONES.red)
+deleteButton:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -PAD, 9)
+deleteButton.icon:SetVertexColor(1, 0.66, 0.62)
+deleteButton.drop = deleteButton:CreateTexture(nil, "ARTWORK")
+deleteButton.drop:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\DropArrow")
+deleteButton.drop:SetVertexColor(1, 0.6, 0.55)
+deleteButton.drop:SetWidth(12)
+deleteButton.drop:SetHeight(12)
+deleteButton.drop:SetPoint("RIGHT", deleteButton, "RIGHT", -4, 0)
+deleteButton.tipTitle = "Delete"
+deleteButton.tipText = "This run, or every run kept."
+deleteButton:SetScript("OnClick", function() del.Toggle() end)
 
-Disarm = function()
-	deleteButton.armed = nil
-	deleteButton.text:SetText("Delete")
-	deleteButton.text:SetTextColor(DELETE[1], DELETE[2], DELETE[3])
+-- The list, over the button.
+del.menu = CreateFrame("Frame", nil, window)
+del.menu:SetFrameStrata("FULLSCREEN_DIALOG")
+del.menu:SetWidth(200)
+del.menu:SetHeight(48)
+del.menu:SetPoint("BOTTOMRIGHT", deleteButton, "TOPRIGHT", 0, 4)
+del.menu:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+del.menu:SetBackdropColor(0.05, 0.03, 0.04, 0.98)
+del.menu:SetBackdropBorderColor(1, 0.40, 0.34, 0.6)
+del.menu:EnableMouse(true)
+del.menu:Hide()
+
+function del.Item(index, label, kind)
+	local row = CreateFrame("Button", nil, del.menu)
+	row:SetWidth(192)
+	row:SetHeight(20)
+	row:SetPoint("TOPLEFT", del.menu, "TOPLEFT", 4, -4 - (index - 1) * 20)
+	row.wash = Flat(row, "BACKGROUND", WHITE, 0)
+	row.wash:SetAllPoints(row)
+	row.icon = row:CreateTexture(nil, "ARTWORK")
+	row.icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\Trash")
+	row.icon:SetVertexColor(1, 0.6, 0.55)
+	row.icon:SetWidth(12)
+	row.icon:SetHeight(12)
+	row.icon:SetPoint("LEFT", row, "LEFT", 4, 0)
+	row.text = Font(row, 10, WHITE)
+	row.text:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+	row.text:SetText(label)
+	row.note = Font(row, 8, MUTED, nil, "RIGHT")
+	row.note:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+	row.kind = kind
+	row:SetScript("OnEnter", function() this.wash:SetVertexColor(1, 0.40, 0.34, 0.18) end)
+	row:SetScript("OnLeave", function() this.wash:SetVertexColor(1, 1, 1, 0) end)
+	row:SetScript("OnClick", function()
+		del.menu:Hide()
+		del.Ask(this.kind)
+	end)
+	return row
 end
+del.one = del.Item(1, "Delete this run", "one")
+del.all = del.Item(2, "Clear all runs", "all")
 
-deleteButton:SetScript("OnClick", function()
-	local history = History()
-	if not this.armed then
-		this.armed = GetTime()
-		this.text:SetText("Delete it?")
-		this.text:SetTextColor(1, 0.25, 0.2)
+function del.Toggle()
+	local total = table.getn(History())
+	if del.menu:IsShown() or total == 0 then
+		del.menu:Hide()
 		return
 	end
-	Disarm()
-	if history[shown] then
-		table.remove(history, shown)
-	end
-	Go(math.min(shown, table.getn(history)))
-end)
-deleteButton:SetScript("OnUpdate", function()
-	if this.armed and GetTime() - this.armed > 3 then
-		Disarm()
-	end
-end)
-deleteButton:SetScript("OnEnter", function()
-	if not this.armed then
-		this.text:SetTextColor(1, 0.55, 0.5)
-	end
-	GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
-	GameTooltip:SetText("Delete this run", 1, 0.4, 0.35)
-	GameTooltip:AddLine("For good, at a second click.", 0.8, 0.8, 0.8, 1)
-	GameTooltip:Show()
-end)
-deleteButton:SetScript("OnLeave", function()
-	if not this.armed then
-		this.text:SetTextColor(DELETE[1], DELETE[2], DELETE[3])
-	end
-	GameTooltip:Hide()
-end)
-
--- An endless run's two moments, a tab each under the result, in the middle:
--- the one shown in the class's color over a line of it.
-local function Tab(key)
-	local tab = CreateFrame("Button", nil, window)
-	tab:SetHeight(18)
-	tab.key = key
-	tab.wash = Flat(tab, "BACKGROUND", GOLD, 0)
-	tab.wash:SetAllPoints(tab)
-	tab.line = Flat(tab, "ARTWORK", GOLD, 1)
-	tab.line:SetHeight(2)
-	tab.line:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, 0)
-	tab.line:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, 0)
-	tab.text = Font(tab, 11, MUTED, nil, "CENTER")
-	tab.text:SetPoint("CENTER", tab, "CENTER", 0, 1)
-	tab:SetScript("OnClick", function()
-		view = this.key
-		Draw()
-		window.again = true
-	end)
-	tab:SetScript("OnEnter", function()
-		if view ~= this.key then
-			this.text:SetTextColor(1, 1, 1)
-		end
-	end)
-	tab:SetScript("OnLeave", function()
-		if view ~= this.key then
-			this.text:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
-		end
-	end)
-	tab:Hide()
-	return tab
+	del.one.note:SetText("run "..shown)
+	del.all.note:SetText(total..(total == 1 and " run" or " runs"))
+	pick.list:Hide()
+	del.menu:Show()
 end
 
-local victoryTab = Tab("victory")
-victoryTab:SetPoint("TOPLEFT", window, "TOP", 0, -38)
-local endTab = Tab("end")
-endTab:SetPoint("LEFT", victoryTab, "RIGHT", 6, 0)
-
-local function SetTab(tab, label)
-	tab.text:SetText(label)
-	tab:SetWidth(tab.text:GetStringWidth() + 18)
-	local on = view == tab.key
-	local color = on and Light(theme) or MUTED
-	tab.text:SetTextColor(color[1], color[2], color[3])
-	tab.wash:SetVertexColor(theme[1], theme[2], theme[3], on and 0.14 or 0)
-	tab.line:SetVertexColor(theme[1], theme[2], theme[3], 1)
-	if on then
-		tab.line:Show()
-	else
-		tab.line:Hide()
+function del.Ask(kind)
+	local history = History()
+	if table.getn(history) == 0 then
+		return
 	end
-	tab:Show()
+	if kind == "all" then
+		SurvivorUI_AskClearHistory()
+		return
+	end
+	local run, index = history[shown], shown
+	SurvivorUI_Confirm({
+		title = "Delete this run?",
+		text = pick.Line(run).."  |cff9a9aa0(run "..index..", "..(run.at and Ago(run.at) or (run.when or ""))..")|r"
+			.."\n|cff9a9aa0It goes for good.|r",
+		yes = "Delete",
+		onYes = function()
+			local list = History()
+			if list[index] == run then
+				table.remove(list, index)
+			end
+			Go(math.min(shown, table.getn(list)))
+		end,
+	})
+end
+
+-- Another run shown, or the window closed: the list and the box put away.
+Disarm = function()
+	del.menu:Hide()
 end
 
 -- The class's icon in an edge of its color, the map beside it, the hero
@@ -1334,8 +1347,6 @@ local zoneText = Font(window, 10, { 0.40, 1.00, 0.42 })
 zoneText:SetPoint("LEFT", zoneIcon, "RIGHT", 3, 0)
 local whenText = Font(window, 9, MUTED, "")
 whenText:SetPoint("TOPRIGHT", window, "TOPRIGHT", -PAD - 2, -34)
-local modsText = Font(window, 9, MUTED, "")
-modsText:SetPoint("TOPRIGHT", window, "TOPRIGHT", -PAD - 2, -48)
 
 -- The date's zone, under the mouse: where to set it.
 local whenTip = CreateFrame("Frame", nil, window)
@@ -1360,9 +1371,11 @@ whenTip:SetScript("OnLeave", function() GameTooltip:Hide() end)
 -- breathing behind it, and a motion of its own. Victory green, its sparks
 -- rising in green and gold, stars twinkling, a shine crossing it now and
 -- then; Fallen red, embers falling slowly, a heavy breath; an endless run's
--- end purple (Fallen, Left, or Endless while it lasts), sparks circling it.
--- A burst as a run is shown; under the mouse a brighter glow and the run's
--- time.
+-- end purple (Endless, fallen or still going; Left in blue), sparks circling
+-- it. A burst as a run is shown; under the mouse a brighter glow and how it
+-- ended. Each holds its time. An endless run's two are its switch: the moment
+-- shown, its badge lit with a line under it; the other dimmed, lit under the
+-- mouse, a click showing its moment.
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local SPARKS, STARS = 14, 5
 local RESULTS = {
@@ -1370,7 +1383,7 @@ local RESULTS = {
 		sparks = { { 0.45, 1.00, 0.50 }, { 1.00, 0.85, 0.30 } }, breath = 1.6, motion = "rise", every = 0.16, stars = 0.45, shine = 2.6 },
 	dead    = { word = "FALLEN", fill = { 0.70, 0.10, 0.10 }, edge = { 1.00, 0.55, 0.48 }, glow = { 1.00, 0.22, 0.16 },
 		sparks = { { 1.00, 0.42, 0.12 }, { 1.00, 0.20, 0.10 } }, breath = 3.2, motion = "fall", every = 0.42 },
-	endless = { word = "FALLEN", fill = { 0.48, 0.18, 0.80 }, edge = { 0.86, 0.66, 1.00 }, glow = { 0.68, 0.38, 1.00 },
+	endless = { word = "ENDLESS", fill = { 0.48, 0.18, 0.80 }, edge = { 0.86, 0.66, 1.00 }, glow = { 0.68, 0.38, 1.00 },
 		sparks = { { 0.80, 0.58, 1.00 }, { 0.55, 0.75, 1.00 } }, breath = 2.2, motion = "circle", every = 0.2, stars = 0.7 },
 	-- Left from the menu: neither won nor lost, in steel blue, its sparks
 	-- drifting out to the right, as one walking out.
@@ -1443,6 +1456,7 @@ local function Animate()
 		return
 	end
 	badge.clock = badge.clock + elapsed
+	badge:SetAlpha(badge.dim and (badge.hot and 0.85 or 0.45) or 1)
 	local wave = (math.sin(badge.clock * 6.283 / look.breath) + 1) / 2
 	-- The burst as the run is shown: the glow swells, then settles.
 	local burst = 0
@@ -1571,8 +1585,17 @@ local function Badge()
 	badge.shineRight:SetHeight(20)
 	badge.shineRight:SetGradientAlpha("HORIZONTAL", 1, 1, 1, 0.55, 1, 1, 1, 0)
 	badge.shineRight:Hide()
-	badge.text = Font(badge, 13, WHITE, nil, "CENTER")
-	badge.text:SetPoint("CENTER", badge, "CENTER", 0, 0)
+	-- The word and the time beside it, smaller and lighter, as one in the middle.
+	badge.text = Font(badge, 13, WHITE)
+	badge.text:SetPoint("LEFT", badge, "LEFT", 15, 0)
+	badge.time = Font(badge, 10, { 0.92, 0.92, 0.92 })
+	badge.time:SetPoint("LEFT", badge.text, "RIGHT", 7, 0)
+	-- Under the moment shown: a line of its color.
+	badge.mark = Flat(badge, "OVERLAY", WHITE, 1)
+	badge.mark:SetHeight(2)
+	badge.mark:SetPoint("TOPLEFT", badge, "BOTTOMLEFT", 8, -3)
+	badge.mark:SetPoint("TOPRIGHT", badge, "BOTTOMRIGHT", -8, -3)
+	badge.mark:Hide()
 	badge.sparks, badge.stars = {}, {}
 	for index = 1, SPARKS do
 		badge.sparks[index] = Glowing(badge, "PaceDot", "OVERLAY")
@@ -1599,6 +1622,14 @@ local function Badge()
 		this.hot = nil
 		GameTooltip:Hide()
 	end)
+	-- An endless run's: its moment, on a click.
+	badge:SetScript("OnMouseUp", function()
+		if this.view and view ~= this.view then
+			view = this.view
+			Draw()
+			window.again = true
+		end
+	end)
 	badge:Hide()
 	return badge
 end
@@ -1620,17 +1651,27 @@ end
 
 -- A box set to a result; a new one (another run, or the window opened) with
 -- its burst and a handful of sparks at once.
-local function SetBadge(badge, key, tipTitle, tipLine)
+-- Of an endless run's two, moment is the one it shows ("victory" or "end").
+local function SetBadge(badge, key, tipTitle, tipLine, time, moment)
 	local look = RESULTS[key]
 	if not look then
 		badge:Hide()
-		badge.look, badge.shown = nil, nil
+		badge.look, badge.shown, badge.view, badge.dim = nil, nil, nil, nil
 		return
 	end
 	badge.tipTitle, badge.tipLine = tipTitle, tipLine
 	badge.text:SetText(look.word)
-	badge:SetWidth(badge.text:GetStringWidth() + 30)
+	badge.time:SetText(time or "")
+	badge:SetWidth(badge.text:GetStringWidth() + (time and badge.time:GetStringWidth() + 7 or 0) + 30)
 	badge:SetBackdropBorderColor(look.edge[1], look.edge[2], look.edge[3], 1)
+	badge.view = moment
+	badge.dim = moment and view ~= moment or nil
+	badge.mark:SetVertexColor(look.edge[1], look.edge[2], look.edge[3], 1)
+	if moment and not badge.dim then
+		badge.mark:Show()
+	else
+		badge.mark:Hide()
+	end
 	local stamp = key..":"..tostring(tipLine)
 	if badge.shown ~= stamp or not badge:IsVisible() then
 		badge.shown = stamp
@@ -1649,6 +1690,77 @@ local rule = Themed("rule", Flat(window, "ARTWORK", GOLD, 0.3))
 rule:SetHeight(1)
 rule:SetPoint("TOPLEFT", window, "TOPLEFT", PAD, -62)
 rule:SetPoint("TOPRIGHT", window, "TOPRIGHT", -PAD, -62)
+
+-- The modifiers under the badges: a chip each, its name and its share,
+-- harder than normal in orange, easier in green, normal in grey (as the kill
+-- pace orb's tooltip has them). Kept as words ("density 175%, health 1%", or
+-- "normal"), read back here.
+local MODS = { { "density", "Density" }, { "health", "Health" }, { "damage", "Damage" }, { "speed", "Speed" } }
+local modChips = {}
+for index = 1, 4 do
+	local chip = CreateFrame("Frame", nil, window)
+	chip:SetHeight(16)
+	chip:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	chip.name = Font(chip, 8, MUTED)
+	chip.name:SetPoint("LEFT", chip, "LEFT", 6, 0)
+	chip.value = Font(chip, 9, WHITE)
+	chip.value:SetPoint("LEFT", chip.name, "RIGHT", 4, 0)
+	chip:EnableMouse(true)
+	chip:SetScript("OnEnter", function()
+		GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
+		GameTooltip:SetText("Modifiers", 1, 0.82, 0)
+		GameTooltip:AddLine("The run's Run Options: enemy density, health, damage and speed.", 1, 1, 1, 1)
+		GameTooltip:AddLine("Orange: harder than normal. Green: easier. Grey: normal.", 0.7, 0.7, 0.7, 1)
+		GameTooltip:Show()
+	end)
+	chip:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	chip:Hide()
+	modChips[index] = chip
+end
+
+local function DrawMods(label)
+	for _, chip in pairs(modChips) do
+		chip:Hide()
+	end
+	if not label then
+		return
+	end
+	local values = {}
+	for name, value in string.gfind(label, "(%a+) (%d+)%%") do
+		values[name] = tonumber(value)
+	end
+	local width, count = 0, label == "normal" and 1 or 4
+	for index = 1, count do
+		local chip, value = modChips[index], values[MODS[index][1]] or 100
+		local color = { 0.62, 0.62, 0.66 }
+		if value > 100 then
+			color = { 1.00, 0.58, 0.25 }
+		elseif value < 100 then
+			color = { 0.40, 0.95, 0.45 }
+		end
+		if count == 1 then
+			chip.name:SetText("Modifiers")
+			chip.value:SetText("normal")
+		else
+			chip.name:SetText(MODS[index][2])
+			chip.value:SetText(value.."%")
+		end
+		chip.value:SetTextColor(color[1], color[2], color[3])
+		chip:SetBackdropColor(color[1] * 0.14, color[2] * 0.14, color[3] * 0.14, 0.85)
+		chip:SetBackdropBorderColor(color[1] * 0.6, color[2] * 0.6, color[3] * 0.6, 1)
+		chip:SetWidth(chip.name:GetStringWidth() + chip.value:GetStringWidth() + 16)
+		width = width + chip:GetWidth() + (index > 1 and 4 or 0)
+	end
+	-- In the middle, under the badges (and the line under the one shown).
+	local x = -math.floor(width / 2 + 0.5)
+	for index = 1, count do
+		local chip = modChips[index]
+		chip:ClearAllPoints()
+		chip:SetPoint("TOPLEFT", window, "TOP", x, -40)
+		chip:Show()
+		x = x + chip:GetWidth() + 4
+	end
+end
 
 local empty = Font(window, 11, MUTED, "", "CENTER")
 empty:SetPoint("TOP", window, "TOP", 0, -100)
@@ -2988,15 +3100,14 @@ local function DrawEmpty()
 	before:Disable()
 	after:Disable()
 	zoneIcon:Hide()
-	for _, text in pairs({ nameText, zoneText, whenText, heroText, modsText }) do
+	for _, text in pairs({ nameText, zoneText, whenText, heroText }) do
 		text:SetText("")
 	end
+	DrawMods(nil)
 	SetBadge(firstBadge, nil)
 	SetBadge(secondBadge, nil)
 	classIcon:Hide()
 	Theme(GOLD)
-	victoryTab:Hide()
-	endTab:Hide()
 	for _, box in pairs(BOXES) do
 		box:Hide()
 	end
@@ -3023,7 +3134,11 @@ local function DrawNavigation(history, total)
 	end
 	-- How many are kept, out of how many the options keep (the Run History tab).
 	local most = tonumber(Settings().historyKeep) or 100
-	footer:SetText("RUN HISTORY  \194\183  "..total..(total == 1 and " run" or " runs").." kept (up to "..most..")"..(pinned > 0 and ", "..pinned.." pinned" or ""))
+	-- "RUN HISTORY  ·  43 of 100 runs kept  ·  2 pinned": the name in soft gold,
+	-- the numbers white.
+	local dot = "   \194\183   "
+	footer:SetText("|cffd9b44aRUN HISTORY|r"..dot.."|cffffffff"..total.."|r of "..most.." runs kept"
+		..(pinned > 0 and (dot.."|cffffffff"..pinned.."|r pinned") or ""))
 	local pinnedRun = history[shown].pinned and true or false
 	pinButton.text:SetText(pinnedRun and "Pinned" or "Pin")
 	pinButton.lit = pinnedRun
@@ -3043,21 +3158,25 @@ end
 local function DrawHeader(run, final, moment)
 	zoneText:SetText(run.zone or "?")
 	zoneIcon:Show()
+	-- An endless run's two badges show its moments on a click; the line under
+	-- the one shown.
+	local first, second = final and "victory" or nil, final and "end" or nil
+	local pick = final and "\n|cff9a9aa0Click to show this moment.|r" or ""
 	if run.result == "victory" then
-		SetBadge(firstBadge, "victory", "Victory", "The final boss slain at "..Clock(run.time)..".")
+		SetBadge(firstBadge, "victory", "Victory", "The final boss slain at "..Clock(run.time).."."..pick, Clock(run.time), first)
 	elseif run.result == "left" then
-		SetBadge(firstBadge, "left", "Left", "Left from the menu at "..Clock(run.time)..", level "..Num(run.level)..".")
+		SetBadge(firstBadge, "left", "Left", "Left from the menu at "..Clock(run.time)..", level "..Num(run.level)..".", Clock(run.time), first)
 	else
-		SetBadge(firstBadge, "dead", "Fallen", "Fell at "..Clock(run.time)..", level "..Num(run.level)..".")
+		SetBadge(firstBadge, "dead", "Fallen", "Fell at "..Clock(run.time)..", level "..Num(run.level)..".", Clock(run.time), first)
 	end
 	if final then
 		local after = Clock(Num(final.time) - Num(run.time))
 		if final.result == "dead" then
-			SetBadge(secondBadge, "endless", "Fallen in endless mode", "Fell at "..Clock(final.time)..", "..after.." after the victory.")
+			SetBadge(secondBadge, "endless", "Fallen in endless mode", "Fell at "..Clock(final.time)..", "..after.." after the victory."..pick, Clock(final.time), second)
 		elseif final.result == "left" then
-			SetBadge(secondBadge, "left", "Left in endless mode", "Left at "..Clock(final.time)..", "..after.." after the victory.")
+			SetBadge(secondBadge, "left", "Left in endless mode", "Left at "..Clock(final.time)..", "..after.." after the victory."..pick, Clock(final.time), second)
 		else
-			SetBadge(secondBadge, "going", "Endless mode, still going", Clock(final.time).." so far, "..after.." after the victory.")
+			SetBadge(secondBadge, "going", "Endless mode, still going", Clock(final.time).." so far, "..after.." after the victory."..pick, Clock(final.time), second)
 		end
 	else
 		SetBadge(secondBadge, nil)
@@ -3093,18 +3212,7 @@ local function DrawHeader(run, final, moment)
 	-- line's own color (the class's, lighter).
 	heroText:SetText("Lv. "..Num(moment.level).."  "..(run.race or "").." "..(run.class or ""))
 	heroText:SetTextColor(light[1], light[2], light[3])
-	modsText:SetText(run.mods and ("Modifiers: "..run.mods) or "")
-	if final then
-		SetTab(victoryTab, "Victory  "..Clock(run.time))
-		SetTab(endTab, "Endless  "..Clock(final.time))
-		-- The two together, in the middle.
-		local width = victoryTab:GetWidth() + 6 + endTab:GetWidth()
-		victoryTab:ClearAllPoints()
-		victoryTab:SetPoint("TOPLEFT", window, "TOP", -math.floor(width / 2 + 0.5), -38)
-	else
-		victoryTab:Hide()
-		endTab:Hide()
-	end
+	DrawMods(run.mods)
 end
 
 -- The panels in their three columns, the window's height to hold them.
@@ -3208,6 +3316,45 @@ function SurvivorUI_ClearHistory()
 	Settings().runHistory = {}
 	if window:IsShown() then
 		Go(1)
+	end
+end
+
+-- Every run, asked first: the word clear typed (the window's Delete list and
+-- the options' Run History tab); then is called after, if given.
+function SurvivorUI_AskClearHistory(then_)
+	local history = History()
+	local total = table.getn(history)
+	if total == 0 then
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: Run History keeps no run.")
+		return
+	end
+	local pinned = 0
+	for _, each in pairs(history) do
+		if each.pinned then
+			pinned = pinned + 1
+		end
+	end
+	SurvivorUI_Confirm({
+		title = "Clear all runs?",
+		text = "Every run kept goes for good: "..total..(total == 1 and " run" or " runs")
+			..(pinned > 0 and (", the "..pinned.." pinned too") or "")..".\n|cff9a9aa0Type|r clear |cff9a9aa0to clear them.|r",
+		word = "clear",
+		yes = "Clear all",
+		onYes = function()
+			SurvivorUI_ClearHistory()
+			if then_ then
+				then_()
+			end
+		end,
+	})
+end
+
+-- The options' Back to its place (Run History tab): this window and Career's
+-- under the screen's top, in the middle, as at first.
+function SurvivorUI_ResetHistoryPlace()
+	for _, frame in pairs({ window, getglobal("SurvivorUICareer") }) do
+		frame:ClearAllPoints()
+		frame:SetPoint("TOP", UIParent, "TOP", 0, -60)
 	end
 end
 
