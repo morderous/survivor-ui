@@ -124,6 +124,84 @@ local function Settings()
 	return SurvivorUIDB
 end
 
+-- A time zone in hours as its name: "UTC", "UTC-3", "UTC+5:30".
+function SurvivorUI_ZoneLabel(hours)
+	hours = tonumber(hours) or 0
+	if hours == 0 then
+		return "UTC"
+	end
+	local sign = hours < 0 and "-" or "+"
+	local whole = math.floor(math.abs(hours))
+	local minutes = math.floor((math.abs(hours) - whole) * 60 + 0.5)
+	return "UTC"..sign..whole..(minutes > 0 and string.format(":%02d", minutes) or "")
+end
+
+-- A tooltip's lines with their colors, to keep (the last runs, RunHistory.lua):
+-- { l = left text, lc = its color, r = right text, rc = its color } each.
+local function Color3(r, g, b)
+	return { math.floor((r or 1) * 100 + 0.5) / 100, math.floor((g or 1) * 100 + 0.5) / 100, math.floor((b or 1) * 100 + 0.5) / 100 }
+end
+
+function SurvivorUI_ReadTooltip(tooltip)
+	local name = tooltip:GetName()
+	local lines = {}
+	for index = 1, tooltip:NumLines() do
+		local left = getglobal(name.."TextLeft"..index)
+		local right = getglobal(name.."TextRight"..index)
+		local line = {}
+		if left and left:GetText() then
+			line.l = left:GetText()
+			line.lc = Color3(left:GetTextColor())
+		end
+		if right and right:IsShown() and right:GetText() and right:GetText() ~= "" then
+			line.r = right:GetText()
+			line.rc = Color3(right:GetTextColor())
+		end
+		table.insert(lines, line)
+	end
+	return lines
+end
+
+-- Kept lines shown again in GameTooltip, already owned and placed.
+function SurvivorUI_ShowTooltipLines(lines)
+	for index = 1, table.getn(lines or {}) do
+		local line = lines[index]
+		local lc = line.lc or { 1, 1, 1 }
+		if line.r then
+			local rc = line.rc or { 1, 1, 1 }
+			GameTooltip:AddDoubleLine(line.l or " ", line.r, lc[1], lc[2], lc[3], rc[1], rc[2], rc[3])
+		elseif index == 1 then
+			GameTooltip:SetText(line.l or " ", lc[1], lc[2], lc[3], 1, 1)
+		else
+			GameTooltip:AddLine(line.l or " ", lc[1], lc[2], lc[3], 1)
+		end
+	end
+	GameTooltip:Show()
+end
+
+-- A frame's tooltip as it would show now, read off GameTooltip without being
+-- seen: its OnEnter run, the lines read, its OnLeave run, in one go.
+function SurvivorUI_Photograph(frame)
+	local enter = frame and frame:GetScript("OnEnter")
+	if not enter then
+		return nil
+	end
+	local before = this
+	GameTooltip:Hide()
+	this = frame
+	local lines
+	if pcall(enter) and GameTooltip:IsShown() and GameTooltip:NumLines() > 0 then
+		lines = SurvivorUI_ReadTooltip(GameTooltip)
+	end
+	local leave = frame:GetScript("OnLeave")
+	if leave then
+		pcall(leave)
+	end
+	this = before
+	GameTooltip:Hide()
+	return lines
+end
+
 -- 1.12 paints shamans in the paladin's pink; they wear their modern blue here.
 local CLASS_OVERRIDES = {
 	SHAMAN = { r = 0.00, g = 0.44, b = 0.87 },
@@ -138,24 +216,30 @@ function SurvivorUI_ClassColor(class)
 	return 1, 0.82, 0
 end
 
--- The Searing Totem's shots come in the combat log as an "Attack" for Fire
--- damage ("Your Attack hits Scarlet Monk for 168 Fire damage."), while the
--- game's meter names them right: with the totem among the hero's spells, a
--- Fire "Attack" is the totem's. SurvivorUI_SourceOf(name, line) gives the
--- name a hit's source goes by.
-local searingSeen, searingHas
-local function HasSearing()
-	if AZS_SPELLS_UPDATED and AZS_SPELLS_UPDATED ~= searingSeen then
-		searingSeen = AZS_SPELLS_UPDATED
-		searingHas = false
+-- Two of the game's spells come in the combat log under another name than the
+-- one its meter gives them, and SurvivorUI_SourceOf(name, line) gives the name
+-- a hit's source goes by:
+-- the Searing Totem's shots, as an "Attack" for Fire damage ("Your Attack
+-- hits Scarlet Monk for 168 Fire damage."): with the totem among the hero's
+-- spells, a Fire "Attack" is the totem's;
+-- Call of Flame's blast, the totems exploding as they expire, as a "Fire
+-- Nova" ("Your Fire Nova hits Core Hound for 3650 Fire damage."): with Call
+-- of Flame among the hero's spells and no Fire Nova of its own, a Fire Nova
+-- is Call of Flame's.
+local keysSeen, keysHeld = nil, {}
+
+-- Whether the hero has a spell, by its key in the game's list; the list read
+-- again as it changes.
+local function Holds(key)
+	if AZS_SPELLS_UPDATED and AZS_SPELLS_UPDATED ~= keysSeen then
+		keysSeen = AZS_SPELLS_UPDATED
+		keysHeld = {}
 		for index = 1, table.getn(AZS_SPELLS or {}) do
 			local entry = AZS_SPELLS[index]
-			if (entry.key or entry[1]) == "searing_totem" then
-				searingHas = true
-			end
+			keysHeld[entry.key or entry[1] or ""] = true
 		end
 	end
-	return searingHas
+	return keysHeld[key]
 end
 
 -- The combat log can also name a spell at more length than the game's own
@@ -220,8 +304,11 @@ local function ShortName(name)
 end
 
 function SurvivorUI_SourceOf(name, line)
-	if name == "Attack" and line and string.find(line, " Fire damage", 1, true) and HasSearing() then
+	if name == "Attack" and line and string.find(line, " Fire damage", 1, true) and Holds("searing_totem") then
 		return "Searing Totem"
+	end
+	if name == "Fire Nova" and Holds("call_of_flame") and not Holds("fire_nova") then
+		return "Call of Flame"
 	end
 	if name then
 		return ShortName(name)
@@ -385,24 +472,40 @@ local function Hide(name)
 	end
 end
 
--- 950, 1k, 1.1k, 15.3k, 2M, 2.2M, 1.5B: one decimal at most, none when round.
-local SIZES = { { 1000000000, "B" }, { 1000000, "M" }, { 1000, "k" } }
+-- One way to write a big number, everywhere in the addon: thousands k,
+-- millions M, billions B, trillions T, three figures where they fit, the
+-- trailing zeros dropped: 950, 4.9k, 12k, 282.7k, 1.11M, 9.27B, 10.3B, 1.5T.
+local SIZES = { { 1000000000000, "T" }, { 1000000000, "B" }, { 1000000, "M" }, { 1000, "k" } }
+
+local function Figures(scaled, decimals)
+	local text = string.format("%."..decimals.."f", scaled)
+	text = string.gsub(text, "(%.%d-)0+$", "%1")
+	return (string.gsub(text, "%.$", ""))
+end
+
 function SurvivorUI_Abbrev(value)
 	value = tonumber(value) or 0
+	local sign = ""
+	if value < 0 then
+		sign, value = "-", -value
+	end
 	for index = 1, table.getn(SIZES) do
-		if value >= SIZES[index][1] then
-			local size = SIZES[index]
-			local scaled = math.floor(value / size[1] * 10 + 0.5) / 10
+		local size = SIZES[index]
+		if value >= size[1] then
+			local scaled = value / size[1]
+			local decimals = scaled < 10 and 2 or 1
+			local step = decimals == 2 and 100 or 10
+			scaled = math.floor(scaled * step + 0.5) / step
 			-- 999,960 rounds to 1000k: the next size up says it.
 			if scaled >= 1000 and index > 1 then
 				size = SIZES[index - 1]
-				scaled = math.floor(value / size[1] * 10 + 0.5) / 10
+				scaled = math.floor(value / size[1] * 100 + 0.5) / 100
+				decimals = 2
 			end
-			local text = string.gsub(string.format("%.1f", scaled), "%.0$", "")
-			return text..size[2]
+			return sign..Figures(scaled, decimals)..size[2]
 		end
 	end
-	return tostring(math.floor(value + 0.5))
+	return sign..tostring(math.floor(value + 0.5))
 end
 
 -- A health as an option reads it: "percent" 73%, "absolute" 1.2M, "both"
@@ -2652,6 +2755,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleJewelry then
 			SurvivorUI_ToggleJewelry()
 		end
+	elseif msg == "history" or msg == "last" or msg == "runs" then
+		if SurvivorUI_ShowLastRuns then
+			SurvivorUI_ShowLastRuns()
+		end
 	elseif msg == "collection reset" then
 		if SurvivorUI_ResetCollection then
 			SurvivorUI_ResetCollection()
@@ -2695,6 +2802,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between SurvivorUI's damage numbers and Default")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage side  puts the damage numbers beside the hero, or back over the enemies")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui dots  shows or hides the counters over the action bar: DoTs, fears and totems")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui history  your run history, each run as it ended: the run tracker, the numbers, the build, the damage, the crits and the loot")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui record  shows how a new best crit looks in the combat numbers")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui sample  shows a sample of every combat number as set")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui guardians  shows or hides the guardians' list; /sui guardians north  points its arrows north up; /sui guardians bar  makes it a bar in the run tracker")

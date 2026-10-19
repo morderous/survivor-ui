@@ -148,6 +148,8 @@ local function ModsLabel(mods)
 	end
 	return table.getn(parts) > 0 and table.concat(parts, ", ") or "normal"
 end
+-- For the last runs (RunHistory.lua).
+SurvivorUI_ModsLabel = ModsLabel
 
 -- "shaman" as "Shaman".
 local function ClassLabel(class)

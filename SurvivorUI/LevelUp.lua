@@ -7,7 +7,9 @@
 -- sits over the game's action bars, where Survivor UI's compact bar is not, so
 -- the addon draws its own in its place (AZS_SetHudShown("levels", false)):
 -- over the action bar, how many levels wait, breathing a gold glow; a click
--- opens them (AZS_OpenStoredLevels). Off in Modules, the game's comes back.
+-- opens them (AZS_OpenStoredLevels). Off until chosen (Modules): on a touch
+-- screen the game's button takes a tap and the addon's does not, and the
+-- addon cannot tell a touch screen; off, the game's shows.
 -- The levels waiting also show by the level, in the run tracker and on the XP
 -- bar (Tracker.lua, XpBar.lua).
 
@@ -22,7 +24,7 @@ local function Settings()
 end
 
 local function On()
-	return Settings().levelUp ~= false
+	return Settings().levelUp == true
 end
 
 -- The levels waiting: 0 with Store Level-Ups off, or on a game without it.
@@ -123,7 +125,7 @@ local function ApplyGameHud()
 		return
 	end
 	local settings = Settings()
-	if On() then
+	if On() or settings.noGameLevels then
 		if AZS_IsHudShown("levels") then
 			AZS_SetHudShown("levels", false)
 			settings.hidGameLevels = true
@@ -134,11 +136,32 @@ local function ApplyGameHud()
 	end
 end
 
+-- For the options: the Default tick in Modules, as the other parts the game
+-- has its own of.
+SurvivorUI_GameHud = SurvivorUI_GameHud or {}
+SurvivorUI_GameHud.levels = ApplyGameHud
+
 function SurvivorUI_ToggleLevelUp()
 	local settings = Settings()
 	settings.levelUp = not On()
 	ApplyGameHud()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the Level Up! button "..(On() and "is Survivor UI's." or "is the game's again."))
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the Level Up! button "..(On() and "is Survivor UI's."
+		or (settings.noGameLevels and "is off, the game's too." or "is the game's again.")))
+end
+
+-- Which button: "ours", "game" or "off" (none at all).
+function SurvivorUI_LevelUpButton()
+	if On() then
+		return "ours"
+	end
+	return Settings().noGameLevels and "off" or "game"
+end
+
+function SurvivorUI_SetLevelUpButton(choice)
+	local settings = Settings()
+	settings.levelUp = choice == "ours"
+	settings.noGameLevels = choice == "off" or nil
+	ApplyGameHud()
 end
 
 ------------------------------------------------------------------------------

@@ -591,6 +591,60 @@ local function Docked()
 	return Settings().guardiansDocked
 end
 
+-- For the last runs (RunHistory.lua): the guardians as the run tracker shows
+-- them, nil when they are not in it: the count, or each lair's stretch of the
+-- bar (its color, how full, its words: "alive" in green, the health awake in
+-- orange, the time to its return slain in red) and the 8:00 achievement's
+-- line. From the last look, which holds as the run ends.
+function SurvivorUI_GuardianSnapshot()
+	if not (Settings().guardians and Docked() and next(byPlace)) then
+		return nil
+	end
+	local places = {}
+	for place in pairs(byPlace) do
+		table.insert(places, place)
+	end
+	table.sort(places)
+	local living = {}
+	for _, place in pairs(places) do
+		if byPlace[place].alive and byPlace[place].yards then
+			table.insert(living, place)
+		end
+	end
+	table.sort(living, function(a, b) return byPlace[a].yards < byPlace[b].yards end)
+	local rank = {}
+	for index = 1, table.getn(living) do
+		rank[living[index]] = index
+	end
+	local shot = {
+		count = Settings().guardiansCount and true or nil, alive = 0, awake = 0,
+		goal = goalText, goalColor = { goalColor[1], goalColor[2], goalColor[3] }, lairs = {},
+	}
+	for _, place in pairs(places) do
+		local entry = byPlace[place]
+		local share, color, text = 1, nil, nil
+		if not entry.alive then
+			color = RESPAWN
+			if entry.left and entry.left > 0 then
+				text = Clock(entry.left)
+			end
+		elseif entry.state == "awake" then
+			color, share = AWAKE, entry.share or 1
+			text = entry.share and string.format("%d%%", entry.share * 100 + 0.5) or "FIGHT"
+			shot.awake = shot.awake + 1
+		else
+			-- In the bar its arrow; in the copy, which has no arrow, a word.
+			color = NEARNESS[math.min(rank[place] or 1, table.getn(NEARNESS))]
+			text = "alive"
+		end
+		if entry.alive then
+			shot.alive = shot.alive + 1
+		end
+		table.insert(shot.lairs, { color = { color[1], color[2], color[3] }, share = share, text = text })
+	end
+	return shot
+end
+
 -- Laid out by the run tracker (Tracker.lua) under its experience, at y; the
 -- y under it comes back, so the tracker makes room.
 function SurvivorUI_GuardianBar(head, y)

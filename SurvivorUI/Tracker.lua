@@ -55,13 +55,12 @@ local function Clock(seconds)
 end
 
 -- 950, 1.2k, 3.4m
+-- A big number as the whole addon writes it (SurvivorUI_Abbrev): 4.9k, 1.11M, 9.27B.
 local function Short(value)
-	if value >= 1000000 then
-		return string.format("%.1fm", value / 1000000)
-	elseif value >= 1000 then
-		return string.format("%.1fk", value / 1000)
+	if SurvivorUI_Abbrev then
+		return SurvivorUI_Abbrev(value)
 	end
-	return math.floor(value + 0.5)
+	return tostring(math.floor((tonumber(value) or 0) + 0.5))
 end
 
 local function Pair(label, value)
@@ -388,9 +387,6 @@ local function FillBossLine(line, entry, index, seconds, isNext)
 			local hpm = Num(Field(unit, "hpm", 5))
 			if hpm > 0 then
 				share = math.floor(Num(Field(unit, "hp", 4)) / hpm * 100 + 0.5).."%   "
-			end
-			if Num(Field(unit, "state", 6)) == 1 then
-				share = "|cffff4040enraged|r  "..share
 			end
 		end
 		line.time:SetText("|cffff8c40"..share.."|r"..Clock(at))
@@ -848,6 +844,92 @@ local function Draw(game, phase)
 
 	head:SetHeight(-y)
 end
+-- For the last runs (RunHistory.lua): the tracker as it stands, to be drawn
+-- again as it was when the run ended. The zone and how the run stands, the
+-- clock against the zone's length, each boss with its second, where it stands
+-- and when it fell, the guardians (Guardians.lua) and the elites alive, the
+-- level and its experience.
+function SurvivorUI_TrackerSnapshot()
+	local game, phase = Game()
+	if not game then
+		return nil
+	end
+	local zone = AZS_ZONE or {}
+	local seconds = (AZS_GetRunTime and AZS_GetRunTime()) or Num(game.t)
+	local length = Num(zone.len)
+	if length <= 0 and AZS_GetRunLength then
+		length = Num(AZS_GetRunLength())
+	end
+	if length <= 0 then
+		length = Num(game.fin)
+	end
+	local zoneName = zone.zname
+	if not zoneName or zoneName == "" then
+		zoneName = (GetRealZoneText and GetRealZoneText()) or GetZoneText() or ""
+	end
+	local schedule = AZS_SCHEDULE or {}
+	local shot = {
+		zone = zoneName, phase = phase, lives = Num(game.lives), seconds = seconds, length = length,
+		endless = Num(game.endl) == 1 or nil,
+		slots = math.max(BOSS_SLOTS, Num(zone.bt), table.getn(schedule)),
+		bosses = {},
+	}
+	for index = 1, table.getn(schedule) do
+		local entry = schedule[index]
+		local name = Field(entry, "name", 3) or "?"
+		local boss = {
+			name = name, at = Num(Field(entry, "at", 2)), state = Field(entry, "state", 5) or "due",
+			final = Num(Field(entry, "final", 4)) == 1 or nil, fell = bossKilled[index..name],
+		}
+		if boss.state == "up" then
+			local unit = LiveBoss(name)
+			if unit and Num(Field(unit, "hpm", 5)) > 0 then
+				boss.hp = Num(Field(unit, "hp", 4)) / Num(Field(unit, "hpm", 5))
+			end
+		end
+		table.insert(shot.bosses, boss)
+	end
+	if shot.endless and (tonumber(game.nb) or -1) >= 0 then
+		local name = game.nbn
+		shot.nextBoss = { name = (name and name ~= "") and name or "Next boss", left = tonumber(game.nb) }
+	end
+	shot.guardians = SurvivorUI_GuardianSnapshot and SurvivorUI_GuardianSnapshot() or nil
+	-- The elites alive, the hurt first, the lowest leftmost.
+	if TrackerElites() then
+		local shares, hurt = {}, 0
+		local units = AZS_UNITS or {}
+		for index = 1, table.getn(units) do
+			local unit = units[index]
+			if Field(unit, "kind", 1) == "elite" then
+				local hp, hpm = Num(Field(unit, "hp", 4)), Num(Field(unit, "hpm", 5))
+				if hp > 0 then
+					local share = hpm > 0 and math.min(1, hp / hpm) or 1
+					table.insert(shares, share)
+					if share < 1 then
+						hurt = hurt + 1
+					end
+				end
+			end
+		end
+		table.sort(shares)
+		local total = table.getn(shares)
+		if not (total == 0 and SurvivorUIDB and SurvivorUIDB.trackerElitesHide) then
+			local slots = EliteSlots()
+			while table.getn(shares) > slots do
+				table.remove(shares)
+			end
+			shot.elites = { total = total, hurt = hurt, slots = slots, shares = shares }
+		end
+	end
+	if not (SurvivorUIDB and SurvivorUIDB.trackerXp == false) then
+		local xp, xpNeeded = Num(game.xp), Num(game.xpn)
+		shot.level = Num(game.lvl)
+		shot.xp = xpNeeded > 0 and math.min(1, xp / xpNeeded) or 0
+		shot.stored = SurvivorUI_StoredLevels and SurvivorUI_StoredLevels() or 0
+	end
+	return shot
+end
+
 local elapsed = 0
 head:SetScript("OnUpdate", function()
 	elapsed = elapsed + arg1

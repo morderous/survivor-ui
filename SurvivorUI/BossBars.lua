@@ -45,13 +45,12 @@ local function Field(entry, name, index)
 end
 
 -- 950, 1.2k, 3.4m
+-- A big number as the whole addon writes it (SurvivorUI_Abbrev): 4.9k, 1.11M, 9.27B.
 local function Short(value)
-	if value >= 1000000 then
-		return string.format("%.1fm", value / 1000000)
-	elseif value >= 1000 then
-		return string.format("%.1fk", value / 1000)
+	if SurvivorUI_Abbrev then
+		return SurvivorUI_Abbrev(value)
 	end
-	return math.floor(value + 0.5)
+	return tostring(math.floor((tonumber(value) or 0) + 0.5))
 end
 
 local function Playing()

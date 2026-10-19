@@ -216,18 +216,12 @@ local function MeterLine(ability)
 end
 
 -- 950, 1k, 1.2k, 3.4m
+-- A big number as the whole addon writes it (SurvivorUI_Abbrev): 4.9k, 1.11M, 9.27B.
 local function Short(value)
-	local short, suffix
-	if value >= 1000000 then
-		short, suffix = value / 1000000, "m"
-	elseif value >= 1000 then
-		short, suffix = value / 1000, "k"
-	else
-		return math.floor(value + 0.5)
+	if SurvivorUI_Abbrev then
+		return SurvivorUI_Abbrev(value)
 	end
-	local text = string.format("%.1f", short)
-	text = string.gsub(text, "%.0$", "")
-	return text..suffix
+	return tostring(math.floor((tonumber(value) or 0) + 0.5))
 end
 
 ------------------------------------------------------------------------------
@@ -331,6 +325,55 @@ end
 local RUN_TIP_GAME = "The game's numbers. Hover a row for more."
 local RUN_TIP_OWN = "Counted by the addon from the combat log. A new run starts it over."
 local runTitle = Title("This Run", RUN_TIP_OWN)
+
+-- At the title's right: History, the run history (RunHistory.lua), a small
+-- gold button with a book's icon, lit under the mouse with a soft glow.
+local GOLD_EDGE = { 1, 0.82, 0 }
+local history = CreateFrame("Button", nil, runTitle)
+history:SetWidth(68)
+history:SetHeight(17)
+history:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -5)
+history:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+history.glow = history:CreateTexture(nil, "BACKGROUND")
+history.glow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
+history.glow:SetBlendMode("ADD")
+history.glow:SetVertexColor(GOLD_EDGE[1], GOLD_EDGE[2], GOLD_EDGE[3])
+history.glow:SetWidth(110)
+history.glow:SetHeight(40)
+history.glow:SetPoint("CENTER", history, "CENTER", 0, 0)
+history.icon = history:CreateTexture(nil, "ARTWORK")
+history.icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
+history.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+history.icon:SetWidth(13)
+history.icon:SetHeight(13)
+history.icon:SetPoint("LEFT", history, "LEFT", 2, 0)
+history.text = history:CreateFontString(nil, "OVERLAY")
+history.text:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
+history.text:SetPoint("LEFT", history.icon, "RIGHT", 4, 0)
+history.text:SetText("History")
+local function LightHistory(hot)
+	history:SetBackdropColor(0.32 * (hot and 1.4 or 1), 0.25 * (hot and 1.4 or 1), 0.04, 0.95)
+	history:SetBackdropBorderColor(GOLD_EDGE[1], GOLD_EDGE[2], GOLD_EDGE[3], hot and 1 or 0.6)
+	history.text:SetTextColor(1, hot and 1 or 0.88, hot and 1 or 0.5)
+	history.glow:SetAlpha(hot and 0.45 or 0)
+end
+LightHistory(false)
+history:SetScript("OnEnter", function()
+	LightHistory(true)
+	Beside(this, panel)
+	GameTooltip:SetText("Run History", 1, 0.82, 0)
+	GameTooltip:AddLine("Each run kept as it ends, fallen or won: the run tracker as it stood, the run's numbers, the build and jewelry, the damage by source, the biggest crits and the loot, with their tooltips. Also /sui history; what is kept: the options, Run History.", 1, 1, 1, 1)
+	GameTooltip:Show()
+end)
+history:SetScript("OnLeave", function()
+	LightHistory(false)
+	GameTooltip:Hide()
+end)
+history:SetScript("OnClick", function()
+	if SurvivorUI_ShowLastRuns then
+		SurvivorUI_ShowLastRuns()
+	end
+end)
 -- A row: a label and a value in one color, on a faint wash of that color, over
 -- a rule of it.
 local function MakeRow(valueSize, valueFlags, parent)
@@ -517,6 +560,19 @@ local function GoldTip(game)
 end
 RowTip("gold", GoldTip)
 RowTip("caches", GoldTip)
+
+-- For the last runs (RunHistory.lua): each row's tooltip as it would show
+-- now, by the row's key.
+function SurvivorUI_RunRowTips()
+	local tips = {}
+	if SurvivorUI_Photograph then
+		for index = 1, table.getn(RUN_ROWS) do
+			local key = RUN_ROWS[index].key
+			tips[key] = SurvivorUI_Photograph(runRows[key])
+		end
+	end
+	return tips
+end
 -- An ability's other numbers, in a card of the panel's own: each line over a
 -- rule in the ability's color, and the normal hits set apart under a heavier
 -- one.
@@ -675,7 +731,10 @@ local function Seconds1(value)
 	return string.format("%.1f sec", value)
 end
 
-local function CritTooltip(row)
+-- An ability's card as data: its title, color and lines ({ kind, label,
+-- value }), or nil with nothing to tell. kept: for the last runs, the lines
+-- of the moment only, not "ready in" nor "beaten ... ago".
+local function CardOf(row, kept)
 	-- The meter's line by its name in the game's language; the crits by the
 	-- combat log's, in English.
 	local ability = English(row.ability)
@@ -684,20 +743,13 @@ local function CritTooltip(row)
 	-- Its line in the game's damage meter, where the game shares it.
 	local meter = ability and MeterLine(ability)
 	if not (stats or hits or meter or SpellEntry(ability)) then
-		critTip:Hide()
-		return
+		return nil
 	end
 	-- The row's own color (the damage meter's), else the crit's.
 	local color = row.color or critColor[ability] or { 0.8, 0.8, 0.8 }
-
-	critTip.edge:SetVertexColor(color[1], color[2], color[3], 0.8)
-	critTip.title:SetText(ability)
-	critTip.title:SetTextColor(color[1], color[2], color[3])
-
-	local count, y = 0, 26
+	local card = { title = ability, color = { color[1], color[2], color[3] }, lines = {} }
 	local function Add(kind, label, value)
-		count = count + 1
-		y = y + TipLine(count, kind, label, value, color, y)
+		table.insert(card.lines, { kind, label, value })
 	end
 
 	-- Its rank and cooldown, from the game: the action bar's own count is gone
@@ -707,14 +759,18 @@ local function CritTooltip(row)
 		local left, full = Num(Field(spell, "cd", 4)), Num(Field(spell, "cdmax", 5))
 		Add("head", "Spell", "Rank "..Num(Field(spell, "rank", 3)))
 		Add("row", "Cooldown", full > 0 and Seconds1(full) or "none")
-		Add("row", "Ready in", left > 0.05 and Seconds1(left) or "ready")
+		if not kept then
+			Add("row", "Ready in", left > 0.05 and Seconds1(left) or "ready")
+		end
 		-- A buff also says how long it lasts and how long it has left.
 		local spellId = tonumber(Field(spell, "spell", 2))
 		local length = spellId and buffLength[spellId]
 		if length then
-			local up = BuffLeft(spellId)
 			Add("row", "Lasts", Seconds1(length))
-			Add("row", "Active", up and up > 0.05 and Seconds1(up).." left" or "not now")
+			if not kept then
+				local up = BuffLeft(spellId)
+				Add("row", "Active", up and up > 0.05 and Seconds1(up).." left" or "not now")
+			end
 		end
 	end
 	-- The racial: the race's traits too, as the game told them at a run's
@@ -747,7 +803,7 @@ local function CritTooltip(row)
 	Add("head", "Critical strikes", stats and stats.count or 0)
 	if stats then
 		Add("row", "Biggest", Short(critBest[ability]))
-		if critBestAt[ability] then
+		if critBestAt[ability] and not kept then
 			Add("row", "Beaten last", Clock(RunNow() - critBestAt[ability]).." ago")
 		end
 		Add("row", "Last", Short(stats.last))
@@ -764,8 +820,28 @@ local function CritTooltip(row)
 		Add("row", "None seen", "")
 	end
 	end
+	return card
+end
 
-	for index = count + 1, table.getn(critTip.lines) do
+local function CritTooltip(row)
+	-- A card kept with a past run (RunHistory.lua) shows as it was.
+	local card = row.keptCard or CardOf(row)
+	if not card then
+		critTip:Hide()
+		return
+	end
+	local color = card.color
+
+	critTip.edge:SetVertexColor(color[1], color[2], color[3], 0.8)
+	critTip.title:SetText(card.title)
+	critTip.title:SetTextColor(color[1], color[2], color[3])
+
+	local y = 26
+	for index = 1, table.getn(card.lines) do
+		local line = card.lines[index]
+		y = y + TipLine(index, line[1], line[2], line[3], color, y)
+	end
+	for index = table.getn(card.lines) + 1, table.getn(critTip.lines) do
 		critTip.lines[index]:Hide()
 	end
 
@@ -779,6 +855,13 @@ local function CritTooltip(row)
 		critTip:SetPoint("TOPRIGHT", row.cardFrame or row, "TOPLEFT", -6, 0)
 	end
 	critTip:Show()
+end
+
+-- For the last runs (RunHistory.lua): an ability's card as it stands, kept
+-- with the run. A frame carrying one (frame.keptCard) shows it again by
+-- SurvivorUI_CritCardShow.
+function SurvivorUI_CritCardData(ability, color, racial)
+	return CardOf({ ability = ability, color = color, racial = racial }, true)
 end
 
 -- The card, for the damage meter's lines (Meter.lua). frame.ability is the
@@ -796,6 +879,20 @@ end
 
 function SurvivorUI_CritBest(ability)
 	return critBest[ability]
+end
+
+-- For the last runs (RunHistory.lua): the run's biggest crits, the biggest
+-- first, at most this many: { ability, amount } each.
+function SurvivorUI_CritList(most)
+	local sorted = {}
+	for ability, amount in pairs(critBest) do
+		table.insert(sorted, { ability = ability, amount = amount })
+	end
+	table.sort(sorted, function(a, b) return a.amount > b.amount end)
+	while table.getn(sorted) > (most or 5) do
+		table.remove(sorted)
+	end
+	return sorted
 end
 
 local function Shown()

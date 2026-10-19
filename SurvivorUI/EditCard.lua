@@ -50,7 +50,7 @@ local PIECES = {
 	["Healing"] = { places = { "healLeft", "healTop" }, key = "ctHeals", toggle = "SurvivorUI_ToggleHealNumbers", noFont = true },
 	["Minimap button"] = { places = { "mapButtonX", "mapButtonY" }, noFont = true },
 	["XP bar"] = { places = { "xpBarX", "xpBarTop" }, key = "xpBar", offUnlessOn = true, toggle = "SurvivorUI_ToggleXpBar" },
-	["Level Up!"] = { part = "levelup", places = { "levelUpX", "levelUpTop" }, key = "levelUp", toggle = "SurvivorUI_ToggleLevelUp" },
+	["Level Up!"] = { part = "levelup", places = { "levelUpX", "levelUpTop" }, key = "levelUp", offUnlessOn = true, toggle = "SurvivorUI_ToggleLevelUp" },
 }
 
 local selected          -- the handle (Mover.lua) whose card is open

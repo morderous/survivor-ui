@@ -18,7 +18,7 @@ local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WIDTH = 228
-local BAR_HEIGHT = 16
+local BAR_HEIGHT = 18           -- as the build list's rows
 local BAR_GAP = 2
 local MAX_LINES = 10
 -- The bars start under the title and the strip of numbers (total, dps, now).
@@ -55,13 +55,12 @@ local function Num(value)
 end
 
 -- 950, 1.2k, 3.4m
+-- A big number as the whole addon writes it (SurvivorUI_Abbrev): 4.9k, 1.11M, 9.27B.
 local function Short(value)
-	if value >= 1000000 then
-		return string.format("%.2fm", value / 1000000)
-	elseif value >= 1000 then
-		return string.format("%.1fk", value / 1000)
+	if SurvivorUI_Abbrev then
+		return SurvivorUI_Abbrev(value)
 	end
-	return math.floor(value + 0.5)
+	return tostring(math.floor((tonumber(value) or 0) + 0.5))
 end
 
 local function Running()
@@ -699,6 +698,16 @@ local function Roman(number)
 	return text
 end
 
+-- A source's rank as the meter shows it after the name, and a number in Roman
+-- numerals (the last runs, RunHistory.lua).
+function SurvivorUI_MeterRank(name)
+	return RankOf(name)
+end
+
+function SurvivorUI_Roman(number)
+	return Roman(tonumber(number) or 0)
+end
+
 -- The same icon for a source anywhere in the interface (the Biggest Crits box).
 function SurvivorUI_MeterIcon(name)
 	return IconOf(name)
@@ -729,12 +738,18 @@ end
 local SHARE_WIDTH = 30
 local AMOUNT_WIDTH = 44
 local AMOUNT_RIGHT = SHARE_WIDTH + 6
-local NAME_ROOM = WIDTH - BAR_HEIGHT - 4 - (AMOUNT_RIGHT + AMOUNT_WIDTH + 2) - 4
+local NAME_ROOM = WIDTH - BAR_HEIGHT - 2 - (AMOUNT_RIGHT + AMOUNT_WIDTH + 2) - 4
+
+-- The filled part never shorter than the icon's square, so the source's
+-- color goes round its icon, as in the build list, however small its share.
+local function Filled(share)
+	return math.max(BAR_HEIGHT / WIDTH, share)
+end
 
 -- The edge around the bar's filled part only: its top and bottom as long as
 -- the fill, its right side at the fill's end (edges: top, bottom, left, right).
 local function PlaceEdges(bar, share)
-	local width = math.max(2, math.floor(WIDTH * share + 0.5))
+	local width = math.max(2, math.floor(WIDTH * Filled(share) + 0.5))
 	if bar.edgeWidth == width then
 		return
 	end
@@ -796,14 +811,15 @@ local function Bar(index)
 
 	bar.name = bar:CreateFontString(nil, "OVERLAY")
 	bar.name:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
-	-- The source's icon, square at the bar's left end.
+	-- The source's icon at the bar's left end, a little inside it: the color
+	-- goes round it, as in the build list.
 	bar.icon = bar:CreateTexture(nil, "OVERLAY")
-	bar.icon:SetWidth(BAR_HEIGHT)
-	bar.icon:SetHeight(BAR_HEIGHT)
-	bar.icon:SetPoint("LEFT", bar, "LEFT", 0, 0)
+	bar.icon:SetWidth(BAR_HEIGHT - 4)
+	bar.icon:SetHeight(BAR_HEIGHT - 4)
+	bar.icon:SetPoint("LEFT", bar, "LEFT", 2, 0)
 	bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-	bar.name:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 4, 0)
+	bar.name:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 2, 0)
 	-- Room for the numbers' columns on the right.
 	bar.name:SetWidth(NAME_ROOM)
 	bar.name:SetHeight(12)
@@ -960,7 +976,7 @@ local function Draw()
 		bar:ClearAllPoints()
 		bar:SetPoint("TOPLEFT", meter, "TOPLEFT", 4, -firstBar - (index - 1) * (BAR_HEIGHT + BAR_GAP))
 		local share = top > 0 and line.dmg / top or 0
-		bar:SetValue(share)
+		bar:SetValue(Filled(share))
 		bar:SetStatusBarColor(color[1], color[2], color[3], 0.45)
 		for _, edge in pairs(bar.edges) do
 			edge:SetVertexColor(color[1], color[2], color[3], 0.6)
@@ -993,7 +1009,7 @@ local function Draw()
 		bar.name:SetText(name..(rank and rank > 0 and "  |cffbdbdbd"..Roman(rank).."|r" or ""))
 		if proc then
 			bar.tag:ClearAllPoints()
-			bar.tag:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 4 + math.min(bar.name:GetStringWidth(), room) + 3, 0)
+			bar.tag:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 2 + math.min(bar.name:GetStringWidth(), room) + 3, 0)
 			bar.tag:Show()
 		else
 			bar.tag:Hide()

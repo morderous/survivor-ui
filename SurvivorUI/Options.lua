@@ -208,6 +208,7 @@ local TABS = {
 	{ key = "xpbar", label = "XP bar", color = { 0.72, 0.45, 1.00 } },
 	{ key = "levelup", label = "Level Up!", color = { 1.00, 0.86, 0.30 } },
 	{ key = "loot", label = "Loot list", color = { 0.55, 0.75, 1.00 } },
+	{ key = "history", label = "Run History", color = { 0.82, 0.62, 1.00 } },
 	{ group = "Combat" },
 	{ key = "combat", label = "Combat text", color = { 1.00, 0.38, 0.32 } },
 	{ key = "meter", label = "Damage meter", color = { 1.00, 0.58, 0.25 } },
@@ -701,7 +702,7 @@ local function Slider(page, label, low, high, step, get, set, format)
 	slider:SetThumbTexture(thumb)
 
 	local function Show(value)
-		holder.value:SetText(string.format(format or "%.2f", value))
+		holder.value:SetText(type(format) == "function" and format(value) or string.format(format or "%.2f", value))
 		local share = (value - low) / (high - low)
 		slider.fill:SetWidth(math.max(1, (slider:GetWidth() - 8) * share + 4))
 	end
@@ -921,6 +922,7 @@ local GAME = {
 	build = { key = "noGameBuild", hud = "build", name = "row of spells" },
 	loot = { key = "noGameLoot", hud = "loot", name = "loot notices" },
 	meter = { key = "noGameMeter", hud = "meter", name = "damage meter" },
+	levels = { key = "noGameLevels", hud = "levels", name = "Level Up! button" },
 }
 
 -- The Default shows while SurvivorUI's is off, and it is wanted.
@@ -1088,8 +1090,8 @@ local MODULES = {
 			"Your kills, your gold and the next cache's price. It puts the Default box away.", nil, nil, GAME.tally },
 		{ "XP bar", OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"),
 			"Your level and experience as a bar of its own, with the time to the next level." },
-		{ "Level Up! button", OnUnlessOff("levelUp"), Call("SurvivorUI_ToggleLevelUp"),
-			"With Store Level-Ups on, a button over the action bar for the levels waiting. Off: the game's button." },
+		{ "Level Up! button", OnlyIfOn("levelUp"), Call("SurvivorUI_ToggleLevelUp"),
+			"With Store Level-Ups on, a button over the action bar for the levels waiting. Off by default, the game's own showing: on a touch screen only it takes a tap.", nil, nil, GAME.levels },
 		{ "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"),
 			"What the run dropped. It puts the Default loot notices away.", nil, nil, GAME.loot },
 	} },
@@ -1246,7 +1248,7 @@ local function SizeSlider(page, x, y, width, label, low, high, step, get, set, f
 	slider:SetThumbTexture(thumb)
 
 	local function Show(value)
-		holder.value:SetText(string.format(format or "%.2f", value))
+		holder.value:SetText(type(format) == "function" and format(value) or string.format(format or "%.2f", value))
 		local share = (value - low) / (high - low)
 		slider.fill:SetWidth(math.max(1, (slider:GetWidth() - 7) * share + 3))
 	end
@@ -1519,8 +1521,24 @@ Check(page, "Time to the next level", OnUnlessOff("xpBarEta"), Flip("xpBarEta"),
 -- Store Level-Ups.
 
 page = pages.levelup
-Header(page, "Level Up!", "With Store Level-Ups on, a level-up no longer stops the fight: the levels wait, and this button over the action bar opens them, one card choice after another. It stands in for the game's own, which sits where the game's action bars were. Off: the game's button.")
-PanelHead(page, OnUnlessOff("levelUp"), Call("SurvivorUI_ToggleLevelUp"), "levelup", "Level Up!")
+Header(page, "Level Up!", "With Store Level-Ups on, a level-up no longer stops the fight: the levels wait, and a button opens them, one card choice after another: SurvivorUI's over the action bar, or the game's own where its action bars were.")
+Inline(page, "Button", {
+	{ "ours", "SurvivorUI's" },
+	{ "game", "The game's" },
+	{ "off", "Off" },
+}, function() return SurvivorUI_LevelUpButton and SurvivorUI_LevelUpButton() or "game" end,
+	function(choice) if SurvivorUI_SetLevelUpButton then SurvivorUI_SetLevelUpButton(choice) end end)
+Note(page, "The game's by default. On a touch screen only the game's takes a tap. Off: no button at all, so keep Store Level-Ups off then, or the levels wait with nothing to open them.")
+page.y = page.y - 4
+Button(page, "Back to its place", 150, 0, function()
+	if SurvivorUI_ResetPiece then
+		SurvivorUI_ResetPiece("Level Up!")
+	end
+end)
+page.y = page.y - 30
+Slider(page, "Size", 0.5, 2, 0.05,
+	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("levelup") or 1 end,
+	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("levelup", value) end end)
 Subheader(page, "Store Level-Ups")
 Check(page, "Level-ups wait until you are ready", function() return AZS_IsStoringLevels and AZS_IsStoringLevels() end,
 	function()
@@ -1653,6 +1671,119 @@ Check(page, "Damage a second right now", OnUnlessOff("meterNow"), Flip("meterNow
 page = pages.run
 Header(page, "This Run", "The run's numbers, as the game's victory screen gives them: time, level, kills, elites, guardians and bosses slain, damage, gold and caches. Hover a row for more.")
 PanelHead(page, OnUnlessOff("runPanel"), Call("SurvivorUI_ToggleRun"), "run", "This Run")
+Note(page, "Its History button opens the run history, each run as it ended: the Run History tab sets what it keeps.")
+
+------------------------------------------------------------------------------
+-- Run History (RunHistory.lua).
+
+page = pages.history
+Header(page, "Run History", "Every run as it ended: its run tracker, numbers, build and jewelry, damage, crits and loot, with their tooltips. Open it with This Run's History button, or /sui history.")
+Button(page, "Open Run History", 170, 0, function()
+	if SurvivorUI_ShowRunHistory then
+		SurvivorUI_ShowRunHistory()
+	end
+end)
+page.y = page.y - 32
+
+local function Sets(key)
+	return function(value) DB()[key] = value end
+end
+
+Subheader(page, "Which runs")
+Inline(page, "Keep", { { "all", "Every run" }, { "victories", "Victories only" }, { "none", "None" } },
+	function() return DB().historyWhich or "all" end, Sets("historyWhich"))
+Inline(page, "How many", { { 10, "10" }, { 25, "25" }, { 50, "50" }, { 100, "100" } },
+	function() return tonumber(DB().historyKeep) or 100 end, Sets("historyKeep"))
+Inline(page, "The 10 longest", { { true, "Always kept" }, { false, "Go like the others" } },
+	function() return DB().historyLongest ~= false end, Sets("historyLongest"))
+Note(page, "Past the limit, the oldest run goes as a new one is kept; the longest (when kept) and the pinned ones (Pin, in the window) never go. Changes here apply from the next run on, so nothing is deleted at a click.")
+
+Subheader(page, "Tooltips")
+Inline(page, "Keep them for", { { "all", "All" }, { "50", "Newest 50" }, { "25", "Newest 25" }, { "0", "None" } },
+	function() return DB().historyPhotos or "25" end, Sets("historyPhotos"))
+Note(page, "A run takes about 20 kB with its tooltips and 7 kB without, in the saved file the game reads at every login and reload. The pinned and the longest keep theirs. Taken off an older run, they do not come back.")
+
+Subheader(page, "Time zone")
+local clockLine
+local function ShowClock()
+	local hours = tonumber(DB().timeZone)
+	local now = time() + (hours or 0) * 3600
+	local clock = string.format("%02d:%02d", math.floor(math.mod(now, 86400) / 3600), math.floor(math.mod(now, 3600) / 60))
+	if hours then
+		clockLine:SetText("Your time now: |cffffffff"..clock.."|r, if this is your zone. The game's own clock runs in UTC, so the runs' dates take this one.")
+	else
+		clockLine:SetText("Not set: the runs' dates are in UTC (|cffffffff"..clock.."|r now), the game's own clock. Set yours: Brazil UTC-3, Portugal UTC+0 or +1.")
+	end
+end
+Slider(page, "Your time zone", -12, 14, 0.5,
+	function() return tonumber(DB().timeZone) or 0 end,
+	function(value)
+		DB().timeZone = value
+		ShowClock()
+	end,
+	function(value) return SurvivorUI_ZoneLabel and SurvivorUI_ZoneLabel(value) or tostring(value) end)
+clockLine = Text(page, 9, MUTED)
+clockLine:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+clockLine:SetWidth(PAGE_WIDTH)
+clockLine:SetJustifyH("LEFT")
+local clockHolder = {}
+function clockHolder:Refresh()
+	ShowClock()
+end
+table.insert(widgets, clockHolder)
+page.y = page.y - 30
+
+Subheader(page, "Saved now")
+local historyStats = Text(page, 10, TEXT)
+historyStats:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y)
+historyStats:SetWidth(PAGE_WIDTH)
+historyStats:SetJustifyH("LEFT")
+local historyPage = page
+local statsHolder = {}
+function statsHolder:Refresh()
+	-- Counted only with the tab open: the whole history is gone through.
+	if not historyPage:IsVisible() then
+		return
+	end
+	if not SurvivorUI_HistoryStats then
+		historyStats:SetText("")
+		return
+	end
+	local count, won, pinned, photos, bytes = SurvivorUI_HistoryStats()
+	local size = bytes >= 1048576 and string.format("%.1f MB", bytes / 1048576) or math.max(1, math.floor(bytes / 1024 + 0.5)).." kB"
+	local dot = "  |cff8a8a8a\194\183|r  "
+	historyStats:SetText("|cffffffff"..count.."|r"..(count == 1 and " run" or " runs")
+		..dot.."|cff73f280"..won.."|r won"
+		..dot.."|cffffd100"..pinned.."|r pinned"
+		..dot.."|cffffffff"..photos.."|r with their tooltips"
+		..dot.."about |cffffffff"..size.."|r")
+end
+table.insert(widgets, statsHolder)
+page.y = page.y - 24
+local clearAll = Button(page, "Delete all runs", 170, 0, nil, { 0.95, 0.40, 0.35 })
+local clearNote = Text(page, 9, MUTED)
+clearNote:SetPoint("LEFT", clearAll, "RIGHT", 12, 0)
+clearNote:SetText("Every run, the pinned ones too. Click twice.")
+clearAll:SetScript("OnClick", function()
+	if this.armed and GetTime() - this.armed < 3 then
+		this.armed = nil
+		this.text:SetText("Delete all runs")
+		if SurvivorUI_ClearHistory then
+			SurvivorUI_ClearHistory()
+		end
+		RefreshAll()
+		return
+	end
+	this.armed = GetTime()
+	this.text:SetText("Click again: all of them")
+end)
+clearAll:SetScript("OnUpdate", function()
+	if this.armed and GetTime() - this.armed >= 3 then
+		this.armed = nil
+		this.text:SetText("Delete all runs")
+	end
+end)
+page.y = page.y - 30
 
 ------------------------------------------------------------------------------
 -- Biggest Crits (RunPanel.lua).

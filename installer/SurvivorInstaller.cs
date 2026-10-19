@@ -24,6 +24,14 @@
 //     more bugs than usual and updates more often. A beta installed follows
 //     the betas (and the release once it is newer); the release's button
 //     takes it back. A version with "-beta" stands below its release;
+//   - gets the game: with no Azeroth Survivors by the AddOns folder nor in
+//     its usual place, Play turns to "Get the game". It is Aethus' game,
+//     taken from his own servers with his ok: the index the game updates
+//     itself by (wow.aethus.pl/exe/latest.json) gives its version, its size
+//     and sha256 and its parts, one gzip cut in pieces. Asked first; then
+//     downloaded, unpacked and checked, put in the usual place, and Survivor
+//     UI installed next; on its first start the game takes its data itself.
+//     A line at the bottom says whose game it is, with a link to his site;
 //   - updates itself: a release's SurvivorUI-Installer.zip carries its
 //     version in the asset's label ("Installer 1.3.0"). At the top right,
 //     its version and Check for updates; a newer one lights a green arrow
@@ -52,7 +60,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Survivor UI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.3.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.4.0.0")]
 
 namespace SurvivorInstaller
 {
@@ -210,6 +218,8 @@ namespace SurvivorInstaller
         static readonly Version OwnVersion = Assembly.GetExecutingAssembly().GetName().Version;
         Release selfRelease;        // the release with a newer installer, while one is out
         bool selfUpdating;
+        bool gettingGame;           // the game being asked for or downloaded
+        readonly LinkLabel creditLink = new LinkLabel();
         string toldOfSelf;          // the installer version the tray's note last told of
 
         // Starting with Windows: a line of the user's own Run key, the exe's
@@ -288,7 +298,7 @@ namespace SurvivorInstaller
         {
             startHidden = inTray;
             this.Text = "Survivor UI Launcher";
-            ClientSize = new Size(560, 524);
+            ClientSize = new Size(560, 542);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -527,7 +537,7 @@ namespace SurvivorInstaller
             playButton.Location = new Point(380, 394);
             playButton.Size = new Size(160, 40);
             playButton.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
-            playButton.Click += delegate { Play(); };
+            playButton.Click += delegate { if (GameMissing()) GetGame(); else Play(); };
             Controls.Add(playButton);
 
             // Start with Windows: under the install button, the same tick as
@@ -573,6 +583,24 @@ namespace SurvivorInstaller
             statusLabel.Size = new Size(520, 20);
             statusLabel.ForeColor = Muted;
             Controls.Add(statusLabel);
+
+            // Whose game it is, at the bottom, with a link to his site.
+            creditLink.Text = "Azeroth Survivors is a game by Aethus  \u00B7  wow.aethus.pl";
+            creditLink.Font = new Font("Segoe UI", 8f);
+            creditLink.AutoSize = false;
+            creditLink.Location = new Point(20, 522);
+            creditLink.Size = new Size(520, 18);
+            creditLink.ForeColor = Muted;
+            creditLink.LinkArea = new LinkArea(creditLink.Text.Length - "wow.aethus.pl".Length, "wow.aethus.pl".Length);
+            creditLink.LinkColor = Gold;
+            creditLink.ActiveLinkColor = Color.White;
+            creditLink.VisitedLinkColor = Gold;
+            creditLink.LinkBehavior = LinkBehavior.HoverUnderline;
+            creditLink.LinkClicked += delegate
+            {
+                try { Process.Start(GameSite); } catch { }
+            };
+            Controls.Add(creditLink);
 
             SetUpTray();
             ForgetBetaTick();
@@ -865,8 +893,15 @@ namespace SurvivorInstaller
             tray.Text = updateWaiting ? Trim("Survivor UI " + latest.Tag + " is out: click to update", 63)
                 : current ? "Survivor UI Launcher: up to date" : "Survivor UI Launcher";
             installItem.Enabled = updateWaiting && !installing;
-            bool playable = !installing && GameFor(folderBox.Text) != null;
-            playButton.Enabled = playable;
+            // Play, or Get the game while there is none: by the AddOns folder,
+            // nor in its usual place.
+            bool missing = GameMissing();
+            bool playable = !installing && !gettingGame && GameFor(folderBox.Text) != null;
+            playButton.Text = missing ? "\u2193  Get the game" : "\u25B6  Play";
+            playButton.Enabled = missing ? !installing && !gettingGame : playable;
+            tips.SetToolTip(playButton, missing
+                ? "Download Azeroth Survivors, Aethus' game, from his own servers (wow.aethus.pl)."
+                : "Start the game; the launcher steps into the tray.");
             playItem.Enabled = playable;
             installItem.Text = updateWaiting ? "Install " + latest.Tag : current ? "Up to date (" + latest.Tag + ")" : "Install the update";
             latestLabel.Text = stable != null ? "Latest:  " + stable.Tag : "Latest:  unknown";
@@ -1004,6 +1039,9 @@ namespace SurvivorInstaller
                 string exe = Path.Combine(dir, GameExe);
                 if (File.Exists(exe)) return AddonsFor(exe);
             }
+            // The game where it usually is.
+            string usual = Path.Combine(CommonGameFolder, GameExe);
+            if (File.Exists(usual)) return AddonsFor(usual);
             return null;
         }
 
@@ -1358,6 +1396,201 @@ namespace SurvivorInstaller
                 if (gone || tries > 30) cleanup.Stop();
             };
             cleanup.Start();
+        }
+
+        // --- The game itself --------------------------------------------------
+
+        // Azeroth Survivors, by Aethus, from his own servers, with his ok: the
+        // index the game updates itself by gives its version, its size and
+        // sha256, and its parts, one gzip cut in pieces.
+        const string GameServer = "https://wow.aethus.pl/exe/";
+        const string GameSite = "https://wow.aethus.pl";
+
+        class GameBuild
+        {
+            public string Version, Sha256;
+            public long Size, Download;
+            public readonly List<string> Urls = new List<string>();
+        }
+
+        // No game by the AddOns folder, nor in its usual place.
+        bool GameMissing()
+        {
+            return GameFor(folderBox.Text) == null && !File.Exists(Path.Combine(CommonGameFolder, GameExe));
+        }
+
+        static GameBuild ReadGameBuild()
+        {
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            Dictionary<string, object> data = (Dictionary<string, object>)serializer.DeserializeObject(Download(GameServer + "latest.json"));
+            GameBuild build = new GameBuild();
+            build.Version = Convert.ToString(data["version"]);
+            build.Sha256 = Convert.ToString(data["sha256"]).ToLowerInvariant();
+            build.Size = Convert.ToInt64(data["size"]);
+            foreach (object item in (System.Collections.IEnumerable)data["parts"])
+            {
+                Dictionary<string, object> part = (Dictionary<string, object>)item;
+                string url = Convert.ToString(part["url"]);
+                // A piece of the game's own folder on its server, nothing else.
+                if (url.Contains("..") || url.Contains(":")) throw new Exception("the game's index lists an odd part: " + url);
+                build.Urls.Add(GameServer + url);
+                build.Download += Convert.ToInt64(part["size"]);
+            }
+            if (build.Urls.Count == 0 || build.Sha256.Length != 64 || build.Size <= 0)
+                throw new Exception("the game's index holds no game");
+            return build;
+        }
+
+        static string Megabytes(long bytes)
+        {
+            return Math.Max(0, (int)Math.Round(bytes / 1048576.0)).ToString();
+        }
+
+        // Asked for: its version and size from the index, then a question.
+        void GetGame()
+        {
+            if (gettingGame || installing) return;
+            gettingGame = true;
+            ShowUpdateState();
+            Status("Asking wow.aethus.pl for the game...");
+            new Thread(delegate ()
+            {
+                GameBuild build = null;
+                string problem = null;
+                try { build = ReadGameBuild(); }
+                catch (Exception error) { problem = error.Message; }
+                BeginInvoke(new Action(delegate
+                {
+                    gettingGame = false;
+                    ShowUpdateState();
+                    if (build == null)
+                    {
+                        Status("Could not reach wow.aethus.pl: " + problem);
+                        return;
+                    }
+                    DialogResult go = MessageBox.Show(this,
+                        "Download Azeroth Survivors " + build.Version + " (about " + Megabytes(build.Download) + " MB)?\n\n" +
+                        "Azeroth Survivors is Aethus' game. The launcher takes it from his own servers (wow.aethus.pl), " +
+                        "checks it, and puts it where it usually is:\n" + CommonGameFolder + "\n\n" +
+                        "Then it installs Survivor UI. On its first start, the game downloads the rest of its data by itself.",
+                        "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (go != DialogResult.Yes)
+                    {
+                        Status("");
+                        return;
+                    }
+                    gettingGame = true;
+                    ShowUpdateState();
+                    new Thread(delegate () { DoGetGame(build); }) { IsBackground = true }.Start();
+                }));
+            }) { IsBackground = true }.Start();
+        }
+
+        // The download's progress, in the status line and on the taskbar
+        // button; done below 0 clears it.
+        void GameProgress(long done, long total)
+        {
+            if (InvokeRequired) { BeginInvoke(new Action<long, long>(GameProgress), done, total); return; }
+            try
+            {
+                if (taskbar != null && IsHandleCreated)
+                {
+                    if (done < 0) taskbar.SetProgressState(Handle, 0);
+                    else
+                    {
+                        taskbar.SetProgressState(Handle, 2);
+                        taskbar.SetProgressValue(Handle, (ulong)done, (ulong)Math.Max(1, total));
+                    }
+                }
+            }
+            catch { }
+            if (done >= 0)
+                Status("Downloading Azeroth Survivors: " + Megabytes(done) + " of " + Megabytes(total) + " MB (" + (total > 0 ? done * 100 / total : 0) + "%)");
+        }
+
+        // The parts one after another into one file, unpacked, checked against
+        // the index's size and sha256, and put in place; Survivor UI next.
+        void DoGetGame(GameBuild build)
+        {
+            string folder = CommonGameFolder;
+            string exe = Path.Combine(folder, GameExe);
+            string packed = Path.Combine(Path.GetTempPath(), "AzerothSurvivors-" + build.Version + ".gz");
+            string fresh = exe + ".download";
+            try
+            {
+                long done = 0;
+                long shown = -1;
+                using (FileStream output = File.Create(packed))
+                {
+                    foreach (string url in build.Urls)
+                    {
+                        using (WebClient client = Client())
+                        using (Stream input = client.OpenRead(url))
+                        {
+                            byte[] buffer = new byte[81920];
+                            int read;
+                            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                            {
+                                output.Write(buffer, 0, read);
+                                done += read;
+                                long percent = build.Download > 0 ? done * 100 / build.Download : 0;
+                                if (percent != shown)
+                                {
+                                    shown = percent;
+                                    GameProgress(done, build.Download);
+                                }
+                            }
+                        }
+                    }
+                }
+                Status("Checking the game...");
+                Directory.CreateDirectory(folder);
+                using (FileStream input = File.OpenRead(packed))
+                using (GZipStream unpack = new GZipStream(input, CompressionMode.Decompress))
+                using (FileStream output = File.Create(fresh))
+                    unpack.CopyTo(output);
+                string sha;
+                using (FileStream input = File.OpenRead(fresh))
+                using (System.Security.Cryptography.SHA256 hash = System.Security.Cryptography.SHA256.Create())
+                    sha = BitConverter.ToString(hash.ComputeHash(input)).Replace("-", "").ToLowerInvariant();
+                if (new FileInfo(fresh).Length != build.Size || sha != build.Sha256)
+                    throw new Exception("the download does not match the game's own check (sha256). Try again");
+                if (File.Exists(exe)) throw new Exception("a game is already in " + folder);
+                File.Move(fresh, exe);
+                string addons = AddonsFor(exe);
+                Directory.CreateDirectory(addons);
+                BeginInvoke(new Action(delegate
+                {
+                    GameProgress(-1, 0);
+                    folderBox.Text = addons;
+                    try { File.WriteAllText(ConfigPath, addons); } catch { }
+                    Status("Azeroth Survivors " + build.Version + " is ready.");
+                    // Survivor UI next, unless it is there already.
+                    if (stable != null && stable.ZipUrl != null && InstalledVersion(addons) == null) Install(stable);
+                    else MessageBox.Show(this,
+                        "Azeroth Survivors " + build.Version + " is ready.\n\nClick Play: on its first start the game downloads the rest of its data.",
+                        "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }));
+            }
+            catch (Exception error)
+            {
+                try { if (File.Exists(fresh)) File.Delete(fresh); } catch { }
+                BeginInvoke(new Action(delegate
+                {
+                    GameProgress(-1, 0);
+                    Status("Could not get the game: " + error.Message);
+                    MessageBox.Show(this, "Could not get the game:\n\n" + error.Message + ".", "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }));
+            }
+            finally
+            {
+                try { File.Delete(packed); } catch { }
+                BeginInvoke(new Action(delegate
+                {
+                    gettingGame = false;
+                    ShowUpdateState();
+                }));
+            }
         }
 
         // --- Install ----------------------------------------------------------

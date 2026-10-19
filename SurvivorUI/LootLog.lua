@@ -478,6 +478,30 @@ end
 SurvivorUI_GameHud = SurvivorUI_GameHud or {}
 SurvivorUI_GameHud.loot = ApplyGameHud
 
+-- For the last runs (RunHistory.lua): the run's loot, the newest first, at
+-- most this many: { name, color, count, new, at, item } each.
+function SurvivorUI_LootList(most)
+	local list = {}
+	for index = 1, math.min(most or 12, table.getn(entries)) do
+		local entry = entries[index]
+		table.insert(list, {
+			name = entry.name, color = entry.color, count = entry.count, new = entry.new,
+			at = entry.at, item = entry.item or Known()[entry.name],
+		})
+	end
+	return list
+end
+
+-- An item's quality by its link's color ("ffa335ee": "epic"), and the link
+-- kept for a piece worn in a run, by its name.
+function SurvivorUI_QualityName(hex)
+	return QUALITIES[string.lower(hex or "")]
+end
+
+function SurvivorUI_KnownItem(name)
+	return name and Known()[name]
+end
+
 function SurvivorUI_ToggleLoot()
 	local settings = Settings()
 	settings.lootLog = not settings.lootLog

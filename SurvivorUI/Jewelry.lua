@@ -841,6 +841,12 @@ local CLASS_ICON_COORDS = {
 	PALADIN = { 0, 0.25, 0.5, 0.75 },
 }
 
+-- The class's icon for other windows (the last runs): the texture and the
+-- class's part of it.
+function SurvivorUI_ClassIcon(class)
+	return CLASS_ICONS, class and CLASS_ICON_COORDS[class]
+end
+
 -- A group's title: its name, the count found, a bar of it under the line.
 local function Header(row, label, color, found, total, worn, slots, class)
 	row.entry, row.color = nil, nil

@@ -53,12 +53,24 @@ local NAMES = {
 	demo_shout = "Demoralizing Shout", hunters_mark = "Hunter's Mark",
 }
 
+-- "of", "the" and "and" small after the first word, as the meter has them:
+-- "Call of Flame". The colors go by the name, so the spelling must match.
+local LOWER_WORDS = { of = true, the = true, ["and"] = true }
+
 local function SpellName(key)
 	if NAMES[key] then
 		return NAMES[key]
 	end
 	local name = string.gsub(key or "?", "_", " ")
-	return (string.gsub(name, "(%a)([%w']*)", function(first, rest) return string.upper(first)..rest end))
+	local first = true
+	return (string.gsub(name, "(%a)([%w']*)", function(initial, rest)
+		local word = initial..rest
+		if not first and LOWER_WORDS[string.lower(word)] then
+			return string.lower(word)
+		end
+		first = false
+		return string.upper(initial)..rest
+	end))
 end
 
 local function Running()
@@ -904,6 +916,81 @@ end
 -- For the options: off, the Default one, or nothing ("When off").
 SurvivorUI_GameHud = SurvivorUI_GameHud or {}
 SurvivorUI_GameHud.build = ApplyGameHud
+
+-- For the last runs (RunHistory.lua): the build as it stands, the spells by
+-- rank, the highest first, then the racial: { name, rank, icon, color, racial,
+-- range, cd }, the range and the cooldown as the list shows them.
+function SurvivorUI_BuildSnapshot()
+	local spells = AZS_SPELLS or {}
+	local count = table.getn(spells)
+	local order = {}
+	for index = 1, math.max(0, count - 1) do
+		table.insert(order, index)
+	end
+	table.sort(order, function(a, b)
+		local ra = tonumber(Field(spells[a], "rank", 3)) or 0
+		local rb = tonumber(Field(spells[b], "rank", 3)) or 0
+		if ra ~= rb then
+			return ra > rb
+		end
+		return a < b
+	end)
+	local list = {}
+	local showRange, showCooldown = Shows()
+	local function Add(entry, slot, racial)
+		local name = SpellName(Field(entry, "key", 1))
+		local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(name) or { 0.8, 0.8, 0.8 }
+		local rank = tonumber(Field(entry, "rank", 3))
+		table.insert(list, {
+			name = name, rank = rank, racial = racial,
+			icon = GetActionTexture and GetActionTexture(slot) or nil,
+			color = { color[1], color[2], color[3] },
+			range = showRange and (Reach(slot, name, rank) or "") or nil,
+			cd = showCooldown and CooldownText(entry) or nil,
+		})
+	end
+	for index = 1, table.getn(order) do
+		Add(spells[order[index]], order[index], false)
+	end
+	if count >= 1 then
+		Add(spells[count], RACIAL_SLOT, true)
+	end
+	return list
+end
+
+-- For the last runs too: the jewelry lines as they read, one a slot: { label,
+-- tags, color, item, name, tip }, or { label, empty } for a slot with nothing.
+function SurvivorUI_GearSnapshot()
+	local gear = {}
+	for index = 1, table.getn(GEAR_SLOTS) do
+		local slot, label = GEAR_SLOTS[index][1], GEAR_SLOTS[index][2]
+		local link = GetInventoryItemLink and GetInventoryItemLink("player", slot)
+		if link then
+			local _, _, rr, gg, bb = string.find(link, "|c%x%x(%x%x)(%x%x)(%x%x)")
+			local _, _, item = string.find(link, "|H(item:[%d:%-]+)|h")
+			local _, _, name = string.find(link, "%[(.-)%]")
+			local piece = ReadPiece(slot, link)
+			-- Its tooltip as it reads now.
+			local tip
+			if SurvivorUI_ReadTooltip then
+				scan:SetOwner(WorldFrame, "ANCHOR_NONE")
+				scan:ClearLines()
+				scan:SetInventoryItem("player", slot)
+				tip = SurvivorUI_ReadTooltip(scan)
+				scan:Hide()
+			end
+			table.insert(gear, {
+				label = (piece.spell and Short(piece.spell) or label).."  "..piece.rank,
+				tags = piece.tags ~= "" and piece.tags or "-",
+				color = { (tonumber(rr or "cc", 16) or 204) / 255, (tonumber(gg or "cc", 16) or 204) / 255, (tonumber(bb or "cc", 16) or 204) / 255 },
+				item = item, name = name, tip = tip,
+			})
+		else
+			table.insert(gear, { label = label, empty = true })
+		end
+	end
+	return gear
+end
 
 function SurvivorUI_ToggleBuild()
 	local settings = Settings()
