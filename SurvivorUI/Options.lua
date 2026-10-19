@@ -1674,13 +1674,13 @@ Check(page, "Damage a second right now", OnUnlessOff("meterNow"), Flip("meterNow
 page = pages.run
 Header(page, "This Run", "The run's numbers, as the game's victory screen gives them: time, level, kills, elites, guardians and bosses slain, damage, gold and caches. Hover a row for more.")
 PanelHead(page, OnUnlessOff("runPanel"), Call("SurvivorUI_ToggleRun"), "run", "This Run")
-Note(page, "Its History button opens the run history, each run as it ended: the Run History tab sets what it keeps.")
+Note(page, "Run History, each run as it ended, opens from the hourglass by the minimap: the Run History tab sets what it keeps.")
 
 ------------------------------------------------------------------------------
 -- Run History (RunHistory.lua).
 
 page = pages.history
-Header(page, "Run History", "Every run as it ended: its run tracker, numbers, build and jewelry, damage, crits and loot, with their tooltips. Open it with This Run's History button, or /sui history.")
+Header(page, "Run History", "Every run as it ended: its run tracker, numbers, build and jewelry, damage, crits and loot, with their tooltips. Open it with the hourglass by the minimap, or /sui history.")
 Button(page, "Open Run History", 170, 0, function()
 	if SurvivorUI_ShowRunHistory then
 		SurvivorUI_ShowRunHistory()
@@ -1987,6 +1987,12 @@ SizeGrid(page, {
 page = pages.minimap
 Header(page, "Minimap", "Its look and its size, and the pins a run puts on it: each guardian's lair its own mark, a chest for each cache. While this tab is open, drag the minimap or its button to move them.")
 Check(page, "Square minimap", FeatureOn("minimap"), FeatureToggle("minimap"), "its buttons tidied; after a reload")
+Check(page, "Run History button", OnUnlessOff("historyMapButton"), function()
+	DB().historyMapButton = DB().historyMapButton == false
+	if SurvivorUI_PlaceMapButtons then
+		SurvivorUI_PlaceMapButtons()
+	end
+end, "the hourglass over the [S], opening Run History")
 Slider(page, "Size", 0.5, 2, 0.05,
 	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("minimap") or 1 end,
 	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("minimap", value) end end)

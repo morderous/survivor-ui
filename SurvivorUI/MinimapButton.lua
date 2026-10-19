@@ -3,8 +3,9 @@
 -- the addon's own icon in the class's color (Art\SurvivorIconWhite.tga,
 -- tinted), that opens the options (each tab's pieces movable while it is
 -- open); a right click moves the whole UI (the grid laid out, every piece
--- unlocked). Other minimap buttons stack over it, upward, in the
--- same square look: the game's battleground button (the crossed swords).
+-- unlocked). Over it, Run History's, in the same square: an hourglass. Other
+-- minimap buttons stack over them, upward, in the same square look: the
+-- game's battleground button (the crossed swords).
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIconWhite"
@@ -127,6 +128,49 @@ button:SetScript("OnLeave", function()
 end)
 
 ------------------------------------------------------------------------------
+-- Run History's: the same square over ours, an hourglass in its frame
+-- (Art\HistoryIconWhite, ours with the S taken out, tinted as ours); a click
+-- opens Run History. Off with "Run History button" (the options' Minimap tab).
+
+local historyButton = CreateFrame("Button", "SurvivorUIHistoryButton", Minimap or UIParent)
+historyButton:SetFrameStrata("MEDIUM")
+historyButton:SetFrameLevel((Minimap and Minimap:GetFrameLevel() or 1) + 5)
+historyButton:SetPoint("BOTTOM", button, "TOP", 0, 5)
+historyButton.icon = historyButton:CreateTexture(nil, "ARTWORK")
+historyButton.icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\HistoryIconWhite")
+historyButton.ownIcon = historyButton.icon
+Square(historyButton, historyButton.icon)
+if SurvivorUI_OnAccent then
+	SurvivorUI_OnAccent(function() historyButton.icon:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3]) end)
+end
+historyButton:SetScript("OnClick", function()
+	if SurvivorUI_ShowLastRuns then
+		SurvivorUI_ShowLastRuns()
+	end
+end)
+historyButton:SetScript("OnEnter", function()
+	Lit(this, true)
+	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
+	GameTooltip:SetText("Run History", ACCENT[1], ACCENT[2], ACCENT[3])
+	GameTooltip:AddLine("Click: your runs, each as it ended", 1, 1, 1)
+	GameTooltip:Show()
+end)
+historyButton:SetScript("OnLeave", function()
+	Lit(this, false)
+	GameTooltip:Hide()
+end)
+
+-- Shown or not by its option; what stacks over it then sits over it.
+local function HistoryShown()
+	return not (SurvivorUIDB and SurvivorUIDB.historyMapButton == false)
+end
+
+-- The top of the stack: Run History's when it shows, else ours.
+local function StackTop()
+	return HistoryShown() and historyButton or button
+end
+
+------------------------------------------------------------------------------
 -- The game's battleground button: square, beside ours. The stock code shows it
 -- and hides it as queues come and go; only its look and place change.
 
@@ -141,9 +185,9 @@ local function RestyleBattlefield()
 		border:SetAlpha(0)
 	end
 	Square(frame, getglobal("MiniMapBattlefieldIcon"))
-	-- Over ours, in the stack outside the minimap.
+	-- Over ours (and Run History's), in the stack outside the minimap.
 	frame:ClearAllPoints()
-	frame:SetPoint("BOTTOM", button, "TOP", 0, 5)
+	frame:SetPoint("BOTTOM", StackTop(), "TOP", 0, 5)
 	if not frame.squareHooked then
 		frame.squareHooked = true
 		local stockEnter, stockLeave = frame:GetScript("OnEnter"), frame:GetScript("OnLeave")
@@ -162,10 +206,21 @@ local function RestyleBattlefield()
 	end
 end
 
+-- The stack laid out again: Run History's shown or not, the battleground's over
+-- the top. For the options' Minimap tab too.
+function SurvivorUI_PlaceMapButtons()
+	if HistoryShown() then
+		historyButton:Show()
+	else
+		historyButton:Hide()
+	end
+	RestyleBattlefield()
+end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 loader:SetScript("OnEvent", function()
 	PlaceButton()
-	RestyleBattlefield()
+	SurvivorUI_PlaceMapButtons()
 end)

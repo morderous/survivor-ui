@@ -209,6 +209,15 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.10, 2026-10-19
+
+**Survivor UI**
+- **Run History on the minimap** (new art, the hourglass and the push pin: restart the game once): over the [S], a square of its own in the same look, an hourglass in the class's color; a click opens Run History. The game's battleground button now sits over it. Off with "Run History button" (the options, Minimap tab).
+- **Every run in a list**: a small arrow beside the run's number opens them all, a line each, "Fallen, Paladin 28 - EF": how it ended in its badge's color (Victory green, Fallen red, Endless purple, Left steel blue), the class and level in the class's color, the map short in green (EF, DW, SM, WSG...), and how long ago. A click goes to it; the wheel scrolls; it opens on the run shown, lit gold.
+- **Pin, Career and Runs, one kind of button**: at the foot of Run History, Pin (a push pin, lit gold while the run is pinned) and Career beside it (a crown), and Career's way back, Runs (Run History's hourglass): each a small gold button with its icon, lit under the mouse with a soft glow.
+- **This Run without its History button**: Run History opens from the hourglass by the minimap (or /sui history).
+- The photo's tooltip says it shorter: a screenshot of this page alone, to share, saved in the game's Screenshots folder.
+
 ### v3.0.9, 2026-10-19
 
 **Survivor UI**

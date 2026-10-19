@@ -17,7 +17,7 @@
 --
 -- Shown in a window of their own, one run at a time, < and > for the others,
 -- each panel in a frame of its own and in its own look, as it stood when the
--- run ended: This Run's History button, or /sui history. Which runs are
+-- run ended: the hourglass by the minimap, or /sui history. Which runs are
 -- kept, how many and with their tooltips: the options, Run History; a run
 -- pinned stays however many come after it.
 
@@ -881,7 +881,8 @@ camera:SetScript("OnEnter", function()
 	this.icon:SetVertexColor(1, 1, 1)
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
 	GameTooltip:SetText("Photo", 1, 0.82, 0)
-	GameTooltip:AddLine("This page alone, to share: the rest of the interface put away for a moment, a screenshot in the game's Screenshots folder.", 1, 1, 1, 1)
+	GameTooltip:AddLine("A screenshot of this page alone, to share.", 1, 1, 1, 1)
+	GameTooltip:AddLine("Saved in the game's Screenshots folder.", 0.65, 0.65, 0.7, 1)
 	GameTooltip:Show()
 end)
 camera:SetScript("OnLeave", function()
@@ -890,26 +891,230 @@ camera:SetScript("OnLeave", function()
 end)
 camera:SetScript("OnClick", function() TakePhoto() end)
 
--- Career: every run added up, by class and by map (Career.lua), in this
--- window's place; its Runs button comes back.
-TextButton("Career", 56, function()
-	if SurvivorUI_ShowCareer then
-		SurvivorUI_ShowCareer(window)
+------------------------------------------------------------------------------
+-- Every run in a list, from a small arrow beside the run's number: a line a
+-- run ("Fallen, Paladin 28 - EF": how it ended in its color, the class and
+-- level in the class's, the map short in green; how long ago, small); a click
+-- goes to it, the wheel scrolls. One table for it all: the file is near Lua
+-- 5.0's 200 locals.
+
+local pick = { rows = {}, offset = 0, SHOWN = 16, ROW = 16, WIDTH = 280 }
+-- The maps the game has, as players write them; another goes by its words'
+-- initials ("Stormwind City", SC), one word by its first three letters.
+pick.SHORT = {
+	["Elwynn Forest"] = "EF", ["Duskwood"] = "DW", ["Arathi Basin"] = "AB", ["Alterac Valley"] = "AV",
+	["Warsong Gulch"] = "WSG", ["Scarlet Monastery"] = "SM", ["Blackrock Mountain"] = "BRM", ["Feralas"] = "FER",
+	["Naxxramas"] = "NAXX", ["Un'Goro Crater"] = "UNG", ["Gurubashi Arena"] = "GA", ["Gates of Ahn'Qiraj"] = "AQ",
+}
+
+function pick.Short(name)
+	name = name or "?"
+	if pick.SHORT[name] then
+		return pick.SHORT[name]
 	end
-end):SetPoint("RIGHT", camera, "LEFT", -10, 0)
+	local letters, words = "", 0
+	for word in string.gfind(name, "[^%s%-]+") do
+		local lower = string.lower(word)
+		if lower ~= "the" and lower ~= "of" then
+			words = words + 1
+			letters = letters..string.upper(string.sub(word, 1, 1))
+		end
+	end
+	if words <= 1 then
+		return string.upper(string.sub(name, 1, 3))
+	end
+	return letters
+end
+
+function pick.Hex(color)
+	return string.format("|cff%02x%02x%02x", math.floor(color[1] * 255), math.floor(color[2] * 255), math.floor(color[3] * 255))
+end
+
+-- How a run ended, in its badge's colors: Victory green, Fallen red, Endless
+-- purple, Left steel blue.
+pick.ENDS = {
+	victory = { "Victory", { 0.40, 0.95, 0.45 } }, dead = { "Fallen", { 1.00, 0.38, 0.32 } },
+	endless = { "Endless", { 0.80, 0.56, 1.00 } }, left = { "Left", { 0.56, 0.78, 1.00 } },
+}
+
+-- A run's line: how it ended (an endless one as Endless), the class and level
+-- reached, the map.
+function pick.Line(run)
+	local final = run.endless or run
+	local ending = pick.ENDS[run.endless and "endless" or run.result] or pick.ENDS.dead
+	local r, g, b = 0.9, 0.9, 0.9
+	if SurvivorUI_ClassColor and run.classKey then
+		r, g, b = SurvivorUI_ClassColor(run.classKey)
+	end
+	return pick.Hex(ending[2])..ending[1]..",|r "..pick.Hex({ r, g, b })..(run.class or "?").." "..Num(final.level).."|r"
+		.." |cff9a9aa2-|r "..pick.Hex({ 0.40, 1.00, 0.42 })..pick.Short(run.zone).."|r"
+end
+
+pick.arrow = CreateFrame("Button", nil, window)
+pick.arrow:SetWidth(16)
+pick.arrow:SetHeight(16)
+pick.arrow:SetPoint("RIGHT", after, "LEFT", -4, 0)
+pick.arrow:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+pick.arrow:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down")
+-- The run's number box moves over for it.
+pageButton:ClearAllPoints()
+pageButton:SetPoint("RIGHT", pick.arrow, "LEFT", -3, 0)
+
+pick.list = CreateFrame("Frame", nil, window)
+pick.list:SetFrameStrata("FULLSCREEN_DIALOG")
+pick.list:SetWidth(pick.WIDTH)
+pick.list:SetPoint("TOPRIGHT", pick.arrow, "BOTTOMRIGHT", 26, -4)
+pick.list:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+pick.list:SetBackdropColor(0.04, 0.04, 0.07, 0.98)
+pick.list:SetBackdropBorderColor(1, 0.82, 0, 0.55)
+pick.list:EnableMouse(true)
+pick.list:EnableMouseWheel(true)
+pick.list:Hide()
+pick.more = Font(pick.list, 8, MUTED, nil, "CENTER")
+pick.more:SetPoint("BOTTOM", pick.list, "BOTTOM", 0, 4)
+
+function pick.Row(index)
+	local row = pick.rows[index]
+	if row then
+		return row
+	end
+	row = CreateFrame("Button", nil, pick.list)
+	row:SetWidth(pick.WIDTH - 8)
+	row:SetHeight(pick.ROW)
+	row.wash = Flat(row, "BACKGROUND")
+	row.wash:SetAllPoints(row)
+	row.text = Font(row, 9, WHITE)
+	row.text:SetPoint("LEFT", row, "LEFT", 4, 0)
+	row.when = Font(row, 8, MUTED, nil, "RIGHT")
+	row.when:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+	row:SetScript("OnEnter", function() this.wash:SetVertexColor(1, 1, 1, 0.10) end)
+	row:SetScript("OnLeave", function() pick.Paint(this) end)
+	row:SetScript("OnClick", function()
+		pick.list:Hide()
+		Go(this.index)
+	end)
+	pick.rows[index] = row
+	return row
+end
+
+-- The run shown lit gold in the list.
+function pick.Paint(row)
+	if row.index == shown then
+		row.wash:SetVertexColor(1, 0.82, 0, 0.16)
+	else
+		row.wash:SetVertexColor(0, 0, 0, 0)
+	end
+end
+
+function pick.Draw()
+	local history = History()
+	local total = table.getn(history)
+	local count = math.min(pick.SHOWN, total)
+	pick.offset = math.max(0, math.min(pick.offset, total - count))
+	for place = 1, count do
+		local index = pick.offset + place
+		local run = history[index]
+		local row = pick.Row(place)
+		row.index = index
+		row.text:SetText("|cff8a8a92"..index..".|r  "..pick.Line(run))
+		row.when:SetText(run.at and Ago(run.at) or (run.when or ""))
+		pick.Paint(row)
+		row:ClearAllPoints()
+		row:SetPoint("TOPLEFT", pick.list, "TOPLEFT", 4, -4 - (place - 1) * pick.ROW)
+		row:Show()
+	end
+	for place = count + 1, table.getn(pick.rows) do
+		pick.rows[place]:Hide()
+	end
+	local scrolls = total > count
+	pick.more:SetText(scrolls and ((pick.offset + 1).." - "..(pick.offset + count).." of "..total.."   \194\183   the wheel scrolls") or "")
+	pick.list:SetHeight(8 + count * pick.ROW + (scrolls and 14 or 0))
+end
+
+pick.list:SetScript("OnMouseWheel", function()
+	pick.offset = pick.offset - arg1 * 3
+	pick.Draw()
+end)
+pick.arrow:SetScript("OnClick", function()
+	if pick.list:IsShown() or table.getn(History()) == 0 then
+		pick.list:Hide()
+		return
+	end
+	-- Opened on the run shown, near the middle.
+	pick.offset = shown - math.floor(pick.SHOWN / 2)
+	pick.Draw()
+	pick.list:Show()
+end)
+pick.arrow:SetScript("OnEnter", function()
+	GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
+	GameTooltip:SetText("Every run", 1, 0.82, 0)
+	GameTooltip:AddLine("Pick one to go to it.", 1, 1, 1, 1)
+	GameTooltip:Show()
+end)
+pick.arrow:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 -- At the bottom: Pin on the left, the history's name in the middle, Delete
 -- on the right.
 local FOOTER = 28
 
+-- Survivor UI's small gold button: an icon and a word on a dark gold body in
+-- a gold edge, lit under the mouse with a soft glow; kept lit while .lit is
+-- set (a pinned run's Pin). Run History's Pin and Career, Career's Runs.
+-- .tipTitle and .tipText: its tooltip.
+function SurvivorUI_GoldButton(parent, width, texture, coords, label)
+	local button = CreateFrame("Button", nil, parent)
+	button:SetWidth(width)
+	button:SetHeight(17)
+	button:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	button.glow = button:CreateTexture(nil, "BACKGROUND")
+	button.glow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
+	button.glow:SetBlendMode("ADD")
+	button.glow:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
+	button.glow:SetWidth(width + 40)
+	button.glow:SetHeight(40)
+	button.glow:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button.icon = button:CreateTexture(nil, "ARTWORK")
+	button.icon:SetTexture(texture)
+	if coords then
+		button.icon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+	end
+	button.icon:SetWidth(14)
+	button.icon:SetHeight(14)
+	button.icon:SetPoint("LEFT", button, "LEFT", 2, 0)
+	button.text = Font(button, 9, WHITE)
+	button.text:SetPoint("LEFT", button.icon, "RIGHT", 4, 0)
+	button.text:SetText(label)
+	function button:Light(hot)
+		local on = hot or self.lit
+		self:SetBackdropColor(0.32 * (on and 1.4 or 1), 0.25 * (on and 1.4 or 1), 0.04, 0.95)
+		self:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], on and 1 or 0.6)
+		self.text:SetTextColor(1, on and 1 or 0.88, on and 1 or 0.5)
+		self.glow:SetAlpha(hot and 0.45 or (self.lit and 0.2 or 0))
+	end
+	button:Light(false)
+	button:SetScript("OnEnter", function()
+		this:Light(true)
+		if this.tipTitle then
+			GameTooltip:SetOwner(this, "ANCHOR_TOP")
+			GameTooltip:SetText(this.tipTitle, 1, 0.82, 0)
+			if this.tipText then
+				GameTooltip:AddLine(this.tipText, 1, 1, 1, 1)
+			end
+			GameTooltip:Show()
+		end
+	end)
+	button:SetScript("OnLeave", function()
+		this:Light(false)
+		GameTooltip:Hide()
+	end)
+	return button
+end
+
 -- Pin: the run shown kept however many come after it, its tooltips too;
--- Delete still takes it.
-local pinButton = CreateFrame("Button", nil, window)
-pinButton:SetWidth(90)
-pinButton:SetHeight(18)
-pinButton:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", PAD, 8)
-pinButton.text = Font(pinButton, 11, MUTED)
-pinButton.text:SetPoint("LEFT", pinButton, "LEFT", 2, 0)
+-- Delete still takes it. A push pin, lit while the run is pinned.
+local pinButton = SurvivorUI_GoldButton(window, 64, "Interface\\AddOns\\SurvivorUI\\Art\\Pin", nil, "Pin")
+pinButton:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", PAD, 9)
+pinButton.tipText = "A pinned run stays however many runs come after it, its tooltips too. Delete still takes it."
 pinButton:SetScript("OnClick", function()
 	local run = History()[shown]
 	if run then
@@ -917,17 +1122,18 @@ pinButton:SetScript("OnClick", function()
 		Draw()
 	end
 end)
-pinButton:SetScript("OnEnter", function()
-	local run = History()[shown]
-	this.text:SetTextColor(1, 1, 1)
-	GameTooltip:SetOwner(this, "ANCHOR_TOP")
-	GameTooltip:SetText(run and run.pinned and "Pinned" or "Pin this run", 1, 0.82, 0)
-	GameTooltip:AddLine("A pinned run stays however many runs come after it, its tooltips too. Delete still takes it.", 0.8, 0.8, 0.8, 1)
-	GameTooltip:Show()
-end)
-pinButton:SetScript("OnLeave", function()
-	GameTooltip:Hide()
-	Draw()
+
+-- Career (Career.lua): every run added up, in this window's place; a crown
+-- (the lair marks' own).
+local careerButton = SurvivorUI_GoldButton(window, 70, "Interface\\AddOns\\SurvivorUI\\Art\\LairMarks",
+	{ 0.5, 0.75, 0, 0.5 }, "Career")
+careerButton:SetPoint("LEFT", pinButton, "RIGHT", 6, 0)
+careerButton.tipTitle = "Career"
+careerButton.tipText = "Every run kept, added up by class and by map."
+careerButton:SetScript("OnClick", function()
+	if SurvivorUI_ShowCareer then
+		SurvivorUI_ShowCareer(window)
+	end
 end)
 
 local footer = Font(window, 9, MUTED, "", "CENTER")
@@ -2818,9 +3024,11 @@ local function DrawNavigation(history, total)
 	-- How many are kept, out of how many the options keep (the Run History tab).
 	local most = tonumber(Settings().historyKeep) or 100
 	footer:SetText("RUN HISTORY  \194\183  "..total..(total == 1 and " run" or " runs").." kept (up to "..most..")"..(pinned > 0 and ", "..pinned.." pinned" or ""))
-	local pinColor = history[shown].pinned and { 1, 0.82, 0 } or MUTED
-	pinButton.text:SetText(history[shown].pinned and "Pinned" or "Pin")
-	pinButton.text:SetTextColor(pinColor[1], pinColor[2], pinColor[3])
+	local pinnedRun = history[shown].pinned and true or false
+	pinButton.text:SetText(pinnedRun and "Pinned" or "Pin")
+	pinButton.lit = pinnedRun
+	pinButton.tipTitle = pinnedRun and "Pinned" or "Pin this run"
+	pinButton:Light(false)
 	pinButton:Show()
 	if total > 1 then
 		before:Enable()

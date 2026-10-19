@@ -111,8 +111,9 @@ end
 
 local close = TextButton("x", 18, function() window:Hide() end)
 close:SetPoint("TOPRIGHT", window, "TOPRIGHT", -6, -7)
--- Back to the runs, in the same place.
-local runs = TextButton("Runs", 50, function()
+-- Back to the runs, in the same place: Run History's gold button with its
+-- hourglass, the one by the minimap (RunHistory.lua's SurvivorUI_GoldButton).
+local function BackToRuns()
 	local history = getglobal("SurvivorUILastRuns")
 	if history and window:GetLeft() then
 		history:ClearAllPoints()
@@ -122,7 +123,18 @@ local runs = TextButton("Runs", 50, function()
 	if SurvivorUI_ShowRunHistory and not (history and history:IsShown()) then
 		SurvivorUI_ShowRunHistory()
 	end
-end)
+end
+
+local runs
+if SurvivorUI_GoldButton then
+	runs = SurvivorUI_GoldButton(window, 62, "Interface\\AddOns\\SurvivorUI\\Art\\HistoryIconWhite", nil, "Runs")
+	runs.icon:SetVertexColor(1, 0.85, 0.4)
+	runs.tipTitle = "Run History"
+	runs.tipText = "Back to the runs, one by one."
+	runs:SetScript("OnClick", BackToRuns)
+else
+	runs = TextButton("Runs", 50, BackToRuns)
+end
 runs:SetPoint("RIGHT", close, "LEFT", -10, 0)
 
 ------------------------------------------------------------------------------
