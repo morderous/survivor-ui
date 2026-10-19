@@ -25,13 +25,14 @@
 //     the betas (and the release once it is newer); the release's button
 //     takes it back. A version with "-beta" stands below its release;
 //   - gets the game: with no Azeroth Survivors by the AddOns folder nor in
-//     its usual place, Play turns to "Get the game". It is Aethus' game,
-//     taken from his own servers with his ok: the index the game updates
-//     itself by (wow.aethus.pl/exe/latest.json) gives its version, its size
-//     and sha256 and its parts, one gzip cut in pieces. Asked first; then
-//     downloaded, unpacked and checked, put in the usual place, and Survivor
-//     UI installed next; on its first start the game takes its data itself.
-//     A line at the bottom says whose game it is, with a link to his site;
+//     its usual place, or one without its base data, Play turns to "Get the
+//     game". It is Aethus' game, taken from his own servers with his ok, each
+//     piece only when missing: the site's full package (wow.aethus.pl/
+//     download) for the base data, Data\patch.MPQ, which nothing else
+//     carries, unpacked by Windows' own tar; the newest exe and the newest
+//     data patches, by the indexes the game updates itself by, each checked
+//     by its sha256. Asked first, with the sizes; then Survivor UI installed
+//     next. A line at the bottom says whose game it is, with a link to his site;
 //   - updates itself: a release's SurvivorUI-Installer.zip carries its
 //     version in the asset's label ("Installer 1.3.0"). At the top right,
 //     its version and Check for updates; a newer one lights a green arrow
@@ -60,7 +61,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Survivor UI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.4.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.4.1.0")]
 
 namespace SurvivorInstaller
 {
@@ -763,6 +764,12 @@ namespace SurvivorInstaller
                 Status("The game is not found by that AddOns folder: click \"Find game...\".");
                 return;
             }
+            if (GameMissing())
+            {
+                FromTray();
+                Status("The game's data is missing: click \"Get the game\".");
+                return;
+            }
             if (GameRunning())
             {
                 Status("The game is already open.");
@@ -902,7 +909,7 @@ namespace SurvivorInstaller
             tips.SetToolTip(playButton, missing
                 ? "Download Azeroth Survivors, Aethus' game, from his own servers (wow.aethus.pl)."
                 : "Start the game; the launcher steps into the tray.");
-            playItem.Enabled = playable;
+            playItem.Enabled = playable && !missing;
             installItem.Text = updateWaiting ? "Install " + latest.Tag : current ? "Up to date (" + latest.Tag + ")" : "Install the update";
             latestLabel.Text = stable != null ? "Latest:  " + stable.Tag : "Latest:  unknown";
             latestLabel.ForeColor = updateWaiting && !latest.Beta ? Color.FromArgb(90, 220, 110) : Gold;
@@ -1400,45 +1407,120 @@ namespace SurvivorInstaller
 
         // --- The game itself --------------------------------------------------
 
-        // Azeroth Survivors, by Aethus, from his own servers, with his ok: the
-        // index the game updates itself by gives its version, its size and
-        // sha256, and its parts, one gzip cut in pieces.
+        // Azeroth Survivors, by Aethus, from his own servers, with his ok. Three
+        // pieces, each only when missing: the full package his site offers, for
+        // the game's base data (Data\patch.MPQ, which nothing else carries), a
+        // RAR unpacked by Windows' own tar (libarchive reads RAR5); the newest
+        // exe and the newest data patches, by the indexes the game updates
+        // itself by (exe/latest.json, exe/data/patches.json: each file a gzip
+        // cut in parts, with its size and sha256).
         const string GameServer = "https://wow.aethus.pl/exe/";
         const string GameSite = "https://wow.aethus.pl";
+        const string GamePackage = "https://wow.aethus.pl/download";
 
-        class GameBuild
+        // One file of an index: its name, size, sha256 and parts.
+        class GameFile
         {
-            public string Version, Sha256;
+            public string Name, Sha256;
             public long Size, Download;
             public readonly List<string> Urls = new List<string>();
         }
 
-        // No game by the AddOns folder, nor in its usual place.
-        bool GameMissing()
+        // What getting the game takes: where it goes, and each piece missing.
+        class GamePlan
         {
-            return GameFor(folderBox.Text) == null && !File.Exists(Path.Combine(CommonGameFolder, GameExe));
+            public string Folder, Version;
+            public long PackageSize;            // 0: the base data is there
+            public GameFile Exe;                // null: the exe is there
+            public readonly List<GameFile> Patches = new List<GameFile>();
+            public long PatchesDownload
+            {
+                get
+                {
+                    long total = 0;
+                    foreach (GameFile patch in Patches) total += patch.Download;
+                    return total;
+                }
+            }
+            public long Download
+            {
+                get { return PackageSize + (Exe != null ? Exe.Download : 0) + PatchesDownload; }
+            }
         }
 
-        static GameBuild ReadGameBuild()
+        // The game's exe: by the AddOns folder, or where it usually is.
+        string GameExePath()
         {
-            JavaScriptSerializer serializer = new JavaScriptSerializer();
-            Dictionary<string, object> data = (Dictionary<string, object>)serializer.DeserializeObject(Download(GameServer + "latest.json"));
-            GameBuild build = new GameBuild();
-            build.Version = Convert.ToString(data["version"]);
-            build.Sha256 = Convert.ToString(data["sha256"]).ToLowerInvariant();
-            build.Size = Convert.ToInt64(data["size"]);
+            string exe = GameFor(folderBox.Text);
+            if (exe != null) return exe;
+            string usual = Path.Combine(CommonGameFolder, GameExe);
+            return File.Exists(usual) ? usual : null;
+        }
+
+        static string BaseData(string folder)
+        {
+            return Path.Combine(Path.Combine(folder, "Data"), "patch.MPQ");
+        }
+
+        // No game, or a game without its base data (an exe alone): Get the game.
+        bool GameMissing()
+        {
+            string exe = GameExePath();
+            return exe == null || !File.Exists(BaseData(Path.GetDirectoryName(exe)));
+        }
+
+        static GameFile ReadGameFile(Dictionary<string, object> data, string server, string name)
+        {
+            GameFile file = new GameFile();
+            file.Name = data.ContainsKey("name") ? Convert.ToString(data["name"]) : name;
+            if (file.Name.Contains("\\") || file.Name.Contains("/") || file.Name.Contains(".."))
+                throw new Exception("the game's index lists an odd file: " + file.Name);
+            file.Sha256 = Convert.ToString(data["sha256"]).ToLowerInvariant();
+            file.Size = Convert.ToInt64(data["size"]);
             foreach (object item in (System.Collections.IEnumerable)data["parts"])
             {
                 Dictionary<string, object> part = (Dictionary<string, object>)item;
                 string url = Convert.ToString(part["url"]);
                 // A piece of the game's own folder on its server, nothing else.
                 if (url.Contains("..") || url.Contains(":")) throw new Exception("the game's index lists an odd part: " + url);
-                build.Urls.Add(GameServer + url);
-                build.Download += Convert.ToInt64(part["size"]);
+                file.Urls.Add(server + url);
+                file.Download += Convert.ToInt64(part["size"]);
             }
-            if (build.Urls.Count == 0 || build.Sha256.Length != 64 || build.Size <= 0)
-                throw new Exception("the game's index holds no game");
-            return build;
+            if (file.Urls.Count == 0 || file.Sha256.Length != 64 || file.Size <= 0)
+                throw new Exception("the game's index holds no " + file.Name);
+            return file;
+        }
+
+        // The size of the site's full package, asked without taking it.
+        static long PackageSize()
+        {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(GamePackage);
+            request.Method = "HEAD";
+            request.UserAgent = "SurvivorUI-Installer";
+            using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                return Math.Max(1, response.ContentLength);
+        }
+
+        // What is missing in the game's folder: asked of the indexes and the site.
+        static GamePlan MakePlan(string folder)
+        {
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = int.MaxValue;
+            GamePlan plan = new GamePlan();
+            plan.Folder = folder;
+            Dictionary<string, object> latest = (Dictionary<string, object>)serializer.DeserializeObject(Download(GameServer + "latest.json"));
+            plan.Version = Convert.ToString(latest["version"]);
+            if (!File.Exists(Path.Combine(folder, GameExe))) plan.Exe = ReadGameFile(latest, GameServer, GameExe);
+            Dictionary<string, object> patches = (Dictionary<string, object>)serializer.DeserializeObject(Download(GameServer + "data/patches.json"));
+            foreach (object item in (System.Collections.IEnumerable)patches["patches"])
+            {
+                GameFile patch = ReadGameFile((Dictionary<string, object>)item, GameServer + "data/", null);
+                string target = Path.Combine(Path.Combine(folder, "Data"), patch.Name);
+                if (!File.Exists(target) || new FileInfo(target).Length != patch.Size) plan.Patches.Add(patch);
+            }
+            if (!File.Exists(BaseData(folder))) plan.PackageSize = PackageSize();
+            return plan;
         }
 
         static string Megabytes(long bytes)
@@ -1446,33 +1528,63 @@ namespace SurvivorInstaller
             return Math.Max(0, (int)Math.Round(bytes / 1048576.0)).ToString();
         }
 
-        // Asked for: its version and size from the index, then a question.
+        static string Gigabytes(long bytes)
+        {
+            return (bytes / 1073741824.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        // Room it takes on the disk while it works: the package and its
+        // unpacking (some 3.5 times the package), and each file twice.
+        static long RoomNeeded(GamePlan plan)
+        {
+            long room = plan.PackageSize * 4 + (plan.Exe != null ? plan.Exe.Size * 2 : 0);
+            foreach (GameFile patch in plan.Patches) room += patch.Size * 2;
+            return room + 100L * 1048576;
+        }
+
+        // Asked for: what is missing and its sizes, then a question.
         void GetGame()
         {
             if (gettingGame || installing) return;
+            if (GameRunning())
+            {
+                Status("The game is open: close it, then Get the game.");
+                return;
+            }
+            string exe = GameExePath();
+            string folder = exe != null ? Path.GetDirectoryName(exe) : CommonGameFolder;
             gettingGame = true;
             ShowUpdateState();
             Status("Asking wow.aethus.pl for the game...");
             new Thread(delegate ()
             {
-                GameBuild build = null;
+                GamePlan plan = null;
                 string problem = null;
-                try { build = ReadGameBuild(); }
+                try { plan = MakePlan(folder); }
                 catch (Exception error) { problem = error.Message; }
                 BeginInvoke(new Action(delegate
                 {
                     gettingGame = false;
                     ShowUpdateState();
-                    if (build == null)
+                    if (plan == null)
                     {
                         Status("Could not reach wow.aethus.pl: " + problem);
                         return;
                     }
+                    if (plan.Download == 0)
+                    {
+                        Status("The game is all there.");
+                        return;
+                    }
+                    string pieces = "";
+                    if (plan.PackageSize > 0) pieces += "\n  \u2022  the game's data, from its full package: " + Megabytes(plan.PackageSize) + " MB";
+                    if (plan.Exe != null) pieces += "\n  \u2022  the newest game, " + plan.Version + ": " + Megabytes(plan.Exe.Download) + " MB";
+                    if (plan.Patches.Count > 0) pieces += "\n  \u2022  its newest updates: " + Megabytes(plan.PatchesDownload) + " MB";
                     DialogResult go = MessageBox.Show(this,
-                        "Download Azeroth Survivors " + build.Version + " (about " + Megabytes(build.Download) + " MB)?\n\n" +
-                        "Azeroth Survivors is Aethus' game. The launcher takes it from his own servers (wow.aethus.pl), " +
-                        "checks it, and puts it where it usually is:\n" + CommonGameFolder + "\n\n" +
-                        "Then it installs Survivor UI. On its first start, the game downloads the rest of its data by itself.",
+                        "Download Azeroth Survivors (about " + Megabytes(plan.Download) + " MB in all)?\n\n" +
+                        "Azeroth Survivors is Aethus' game. The launcher takes it from his own servers (wow.aethus.pl) and checks it:" +
+                        pieces + "\n\nInto: " + plan.Folder + "\nIt needs about " + Gigabytes(RoomNeeded(plan)) + " GB free while it works. " +
+                        "Then it installs Survivor UI.",
                         "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                     if (go != DialogResult.Yes)
                     {
@@ -1481,16 +1593,16 @@ namespace SurvivorInstaller
                     }
                     gettingGame = true;
                     ShowUpdateState();
-                    new Thread(delegate () { DoGetGame(build); }) { IsBackground = true }.Start();
+                    new Thread(delegate () { DoGetGame(plan); }) { IsBackground = true }.Start();
                 }));
             }) { IsBackground = true }.Start();
         }
 
         // The download's progress, in the status line and on the taskbar
         // button; done below 0 clears it.
-        void GameProgress(long done, long total)
+        void GameProgress(long done, long total, string what)
         {
-            if (InvokeRequired) { BeginInvoke(new Action<long, long>(GameProgress), done, total); return; }
+            if (InvokeRequired) { BeginInvoke(new Action<long, long, string>(GameProgress), done, total, what); return; }
             try
             {
                 if (taskbar != null && IsHandleCreated)
@@ -1505,46 +1617,45 @@ namespace SurvivorInstaller
             }
             catch { }
             if (done >= 0)
-                Status("Downloading Azeroth Survivors: " + Megabytes(done) + " of " + Megabytes(total) + " MB (" + (total > 0 ? done * 100 / total : 0) + "%)");
+                Status("Downloading " + what + ": " + Megabytes(done) + " of " + Megabytes(total) + " MB (" + (total > 0 ? done * 100 / total : 0) + "%)");
         }
 
-        // The parts one after another into one file, unpacked, checked against
-        // the index's size and sha256, and put in place; Survivor UI next.
-        void DoGetGame(GameBuild build)
+        // One download into a file, its progress told along the whole; the
+        // bytes done after it come back.
+        long Fetch(string url, Stream output, long done, long total, string what)
         {
-            string folder = CommonGameFolder;
-            string exe = Path.Combine(folder, GameExe);
-            string packed = Path.Combine(Path.GetTempPath(), "AzerothSurvivors-" + build.Version + ".gz");
-            string fresh = exe + ".download";
-            try
+            long shown = -1;
+            using (WebClient client = Client())
+            using (Stream input = client.OpenRead(url))
             {
-                long done = 0;
-                long shown = -1;
-                using (FileStream output = File.Create(packed))
+                byte[] buffer = new byte[81920];
+                int read;
+                while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
                 {
-                    foreach (string url in build.Urls)
+                    output.Write(buffer, 0, read);
+                    done += read;
+                    long percent = total > 0 ? done * 100 / total : 0;
+                    if (percent != shown)
                     {
-                        using (WebClient client = Client())
-                        using (Stream input = client.OpenRead(url))
-                        {
-                            byte[] buffer = new byte[81920];
-                            int read;
-                            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
-                            {
-                                output.Write(buffer, 0, read);
-                                done += read;
-                                long percent = build.Download > 0 ? done * 100 / build.Download : 0;
-                                if (percent != shown)
-                                {
-                                    shown = percent;
-                                    GameProgress(done, build.Download);
-                                }
-                            }
-                        }
+                        shown = percent;
+                        GameProgress(done, total, what);
                     }
                 }
-                Status("Checking the game...");
-                Directory.CreateDirectory(folder);
+            }
+            return done;
+        }
+
+        // A file of an index: its parts into one gzip, unpacked, checked
+        // against its size and sha256, and put in place of any older one.
+        long FetchGameFile(GameFile file, string target, long done, long total, string what)
+        {
+            string packed = target + ".gz";
+            string fresh = target + ".download";
+            try
+            {
+                using (FileStream output = File.Create(packed))
+                    foreach (string url in file.Urls)
+                        done = Fetch(url, output, done, total, what);
                 using (FileStream input = File.OpenRead(packed))
                 using (GZipStream unpack = new GZipStream(input, CompressionMode.Decompress))
                 using (FileStream output = File.Create(fresh))
@@ -1553,38 +1664,113 @@ namespace SurvivorInstaller
                 using (FileStream input = File.OpenRead(fresh))
                 using (System.Security.Cryptography.SHA256 hash = System.Security.Cryptography.SHA256.Create())
                     sha = BitConverter.ToString(hash.ComputeHash(input)).Replace("-", "").ToLowerInvariant();
-                if (new FileInfo(fresh).Length != build.Size || sha != build.Sha256)
-                    throw new Exception("the download does not match the game's own check (sha256). Try again");
-                if (File.Exists(exe)) throw new Exception("a game is already in " + folder);
-                File.Move(fresh, exe);
-                string addons = AddonsFor(exe);
+                if (new FileInfo(fresh).Length != file.Size || sha != file.Sha256)
+                    throw new Exception(file.Name + " does not match the game's own check (sha256). Try again");
+                if (File.Exists(target)) File.Delete(target);
+                File.Move(fresh, target);
+            }
+            finally
+            {
+                try { if (File.Exists(packed)) File.Delete(packed); } catch { }
+                try { if (File.Exists(fresh)) File.Delete(fresh); } catch { }
+            }
+            return done;
+        }
+
+        // The full package unpacked by Windows' own tar.
+        static void Unpack(string package, string into)
+        {
+            string tar = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "tar.exe");
+            if (!File.Exists(tar)) tar = "tar.exe";
+            ProcessStartInfo info = new ProcessStartInfo(tar, "-xf \"" + package + "\" -C \"" + into + "\"");
+            info.UseShellExecute = false;
+            info.CreateNoWindow = true;
+            info.RedirectStandardError = true;
+            using (Process process = Process.Start(info))
+            {
+                string errors = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+                if (process.ExitCode != 0)
+                    throw new Exception("Windows could not unpack the game's package (" + errors.Trim() + "). " +
+                        "Download it from wow.aethus.pl/download and unpack its Data folder next to the game");
+            }
+        }
+
+        // Each piece missing, in turn: the base data from the full package, the
+        // newest exe, the newest patches; then Survivor UI.
+        void DoGetGame(GamePlan plan)
+        {
+            string folder = plan.Folder;
+            string data = Path.Combine(folder, "Data");
+            string staging = Path.Combine(folder, "_get-the-game");
+            long total = plan.Download, done = 0;
+            try
+            {
+                Directory.CreateDirectory(data);
+                DriveInfo drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(folder)));
+                if (drive.AvailableFreeSpace < RoomNeeded(plan))
+                    throw new Exception("not enough room on " + drive.Name + ": " + Gigabytes(drive.AvailableFreeSpace) +
+                        " GB free, about " + Gigabytes(RoomNeeded(plan)) + " GB needed");
+                if (plan.PackageSize > 0)
+                {
+                    if (Directory.Exists(staging)) Directory.Delete(staging, true);
+                    Directory.CreateDirectory(staging);
+                    string package = Path.Combine(staging, "AzerothSurvivors.rar");
+                    using (FileStream output = File.Create(package))
+                        done = Fetch(GamePackage, output, done, total, "the game's data");
+                    Status("Unpacking the game's data (a minute or two)...");
+                    Unpack(package, staging);
+                    File.Delete(package);
+                    string[] found = Directory.GetFiles(staging, "patch.MPQ", SearchOption.AllDirectories);
+                    if (found.Length == 0) throw new Exception("the game's package holds no Data\\patch.MPQ");
+                    foreach (string file in Directory.GetFiles(Path.GetDirectoryName(found[0]), "*.MPQ"))
+                    {
+                        string target = Path.Combine(data, Path.GetFileName(file));
+                        if (!File.Exists(target)) File.Move(file, target);
+                    }
+                    Directory.Delete(staging, true);
+                }
+                if (plan.Exe != null)
+                    done = FetchGameFile(plan.Exe, Path.Combine(folder, GameExe), done, total, "the game");
+                // The patches still missing, or not as the index has them (the
+                // package may have brought some).
+                foreach (GameFile patch in plan.Patches)
+                {
+                    string target = Path.Combine(data, patch.Name);
+                    if (File.Exists(target) && new FileInfo(target).Length == patch.Size)
+                    {
+                        done += patch.Download;
+                        continue;
+                    }
+                    done = FetchGameFile(patch, target, done, total, "the game's updates");
+                }
+                string addons = AddonsFor(Path.Combine(folder, GameExe));
                 Directory.CreateDirectory(addons);
                 BeginInvoke(new Action(delegate
                 {
-                    GameProgress(-1, 0);
+                    GameProgress(-1, 0, null);
                     folderBox.Text = addons;
                     try { File.WriteAllText(ConfigPath, addons); } catch { }
-                    Status("Azeroth Survivors " + build.Version + " is ready.");
+                    Status("Azeroth Survivors " + plan.Version + " is ready.");
                     // Survivor UI next, unless it is there already.
                     if (stable != null && stable.ZipUrl != null && InstalledVersion(addons) == null) Install(stable);
                     else MessageBox.Show(this,
-                        "Azeroth Survivors " + build.Version + " is ready.\n\nClick Play: on its first start the game downloads the rest of its data.",
+                        "Azeroth Survivors " + plan.Version + " is ready.\n\nClick Play.",
                         "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }));
             }
             catch (Exception error)
             {
-                try { if (File.Exists(fresh)) File.Delete(fresh); } catch { }
+                try { if (Directory.Exists(staging)) Directory.Delete(staging, true); } catch { }
                 BeginInvoke(new Action(delegate
                 {
-                    GameProgress(-1, 0);
+                    GameProgress(-1, 0, null);
                     Status("Could not get the game: " + error.Message);
                     MessageBox.Show(this, "Could not get the game:\n\n" + error.Message + ".", "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }));
             }
             finally
             {
-                try { File.Delete(packed); } catch { }
                 BeginInvoke(new Action(delegate
                 {
                     gettingGame = false;
