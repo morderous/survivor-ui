@@ -31,6 +31,13 @@
 -- Or only a count (the options, Run tracker): one line in the tracker, how
 -- many lairs hold their guardian, "3 / 5 alive", orange while one is awake.
 --
+-- Each lair wears its own mark, a heraldic charge (Art\LairMarks: crossed
+-- swords, a shield, a crown, a chalice, a fleur-de-lis, a war hammer, a tower,
+-- a helm), by its place among the run's lairs: the same mark on its stretch of
+-- the bar, its line of the list, the count, its pin on the minimap, its boss
+-- bar and the last runs, dimmed while the lair is empty. Off with the option
+-- "Lair marks".
+--
 -- Hold Alt to move it; /sui guardians hides it.
 
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
@@ -62,6 +69,11 @@ local NEARNESS = {
 }
 local BAR_HEIGHT, BAR_GAP, BAR_TOP = 9, 3, 6
 local LINE = 12                    -- the thin line over the bar
+local MARK_KINDS = 8               -- the marks' sheet: 4 x 2
+local MARK = 13                    -- a mark's size on the bar
+local ROW_MARK = 12                -- on a line of the list
+local COUNT_MARK = 11              -- in the count
+local MARK_NAMES = { "Crossed swords", "Shield", "Crown", "Chalice", "Fleur-de-lis", "War hammer", "Tower", "Helm" }
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
@@ -81,6 +93,64 @@ end
 local function Clock(seconds)
 	seconds = math.max(0, math.floor(seconds + 0.5))
 	return string.format("%d:%02d", math.floor(seconds / 60), math.mod(seconds, 60))
+end
+
+------------------------------------------------------------------------------
+-- The lairs' marks.
+
+-- Each lair's mark, 1 to 8 by its place among the run's lairs (a ninth lair
+-- starts them over): [place] = mark. Empty with the marks off.
+function SurvivorUI_LairMarks(lairs)
+	local marks = {}
+	if Settings().guardianMarks == false then
+		return marks
+	end
+	lairs = lairs or (AZS_GetLairs and AZS_GetLairs()) or {}
+	local places = {}
+	for index = 1, table.getn(lairs) do
+		table.insert(places, tonumber(Field(lairs[index], "index", 1)) or index)
+	end
+	table.sort(places)
+	for rank = 1, table.getn(places) do
+		marks[places[rank]] = math.mod(rank - 1, MARK_KINDS) + 1
+	end
+	return marks
+end
+
+-- The mark of the guardian with this unit id (a boss bar's), nil for none.
+function SurvivorUI_GuardianMark(id)
+	id = tonumber(id)
+	if not id or Settings().guardianMarks == false then
+		return nil
+	end
+	local lairs = AZS_GetLairs and AZS_GetLairs() or {}
+	for index = 1, table.getn(lairs) do
+		if tonumber(Field(lairs[index], "id", 4)) == id then
+			return SurvivorUI_LairMarks(lairs)[tonumber(Field(lairs[index], "index", 1)) or index]
+		end
+	end
+end
+
+function SurvivorUI_LairMarkName(mark)
+	return mark and MARK_NAMES[mark]
+end
+
+-- A texture showing a mark in its own colors, dimmed for an empty lair;
+-- hidden for none.
+function SurvivorUI_SetLairMark(texture, mark, dim)
+	if not mark then
+		texture:Hide()
+		return
+	end
+	local column, line = math.mod(mark - 1, 4), math.floor((mark - 1) / 4)
+	texture:SetTexture(ART.."LairMarks")
+	texture:SetTexCoord(column / 4, (column + 1) / 4, line / 2, (line + 1) / 2)
+	if dim then
+		texture:SetVertexColor(0.5, 0.5, 0.5, 0.8)
+	else
+		texture:SetVertexColor(1, 1, 1, 1)
+	end
+	texture:Show()
 end
 
 -- An angle brought within half a turn either way.
@@ -160,6 +230,13 @@ local function Row(index)
 	row.name:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, top)
 	row.name:SetHeight(12)
 	row.name:SetJustifyH("LEFT")
+	row.top, row.room = top, 0
+	-- Its lair's mark, before the name.
+	row.mark = frame:CreateTexture(nil, "ARTWORK")
+	row.mark:SetWidth(ROW_MARK)
+	row.mark:SetHeight(ROW_MARK)
+	row.mark:SetPoint("TOPLEFT", frame, "TOPLEFT", -1, top + 1)
+	row.mark:Hide()
 	-- The line to head for: a faint wash of its color, fading to the right.
 	row.light = frame:CreateTexture(nil, "BACKGROUND")
 	row.light:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
@@ -173,12 +250,13 @@ end
 
 local NAME_ROOM = WIDTH - 118
 
--- A name in its room: whole if it fits; else its first words by their initial,
--- the last whole ("K. Taskmaster"); else cut short.
-local function SetName(text, name)
+-- A name in its room (less a mark's): whole if it fits; else its first words
+-- by their initial, the last whole ("K. Taskmaster"); else cut short.
+local function SetName(text, name, taken)
+	local room = NAME_ROOM - (taken or 0)
 	text:SetWidth(0)
 	text:SetText(name)
-	if text:GetStringWidth() > NAME_ROOM then
+	if text:GetStringWidth() > room then
 		local words = {}
 		for word in string.gfind(name, "%S+") do
 			table.insert(words, word)
@@ -194,14 +272,15 @@ local function SetName(text, name)
 	-- Still too long (one long word, or a name with no spaces): cut, letter by
 	-- letter, whole characters only.
 	local shown = text:GetText() or ""
-	while text:GetStringWidth() > NAME_ROOM and string.len(shown) > 2 do
+	while text:GetStringWidth() > room and string.len(shown) > 2 do
 		shown = string.gsub(shown, "[%z\1-\127\194-\244][\128-\191]*%.?%.?$", "")
 		text:SetText(shown.."..")
 	end
-	text:SetWidth(NAME_ROOM)
+	text:SetWidth(room)
 end
 
 local function HideRow(row)
+	row.mark:Hide()
 	row.light:Hide()
 	row.arrow:Hide()
 	row.shadow:Hide()
@@ -324,6 +403,29 @@ local function Sorted(entries)
 	return list
 end
 
+-- Four before 8:00. Before 8:00 every guardian slain counts (the game's
+-- count, right after a reload too); after, the count stays as it was. A
+-- function apart from Draw: the game's Lua (5.0, from the game's 0.101) lets
+-- a function reach at most 32 of the file's locals.
+local function DrawGoal(time)
+	local slain = tonumber(AZS_RUN and AZS_RUN.gk) or 0
+	if time < GOAL_TIME then
+		before = math.max(before, slain)
+	end
+	if before >= GOAL then
+		goal:SetText("4/4 by 8:00 · done")
+		goal:SetTextColor(GREEN[1], GREEN[2], GREEN[3])
+	elseif time < GOAL_TIME then
+		goal:SetText(before.."/4 by 8:00 · "..Clock(GOAL_TIME - time))
+		goal:SetTextColor(0.9, 0.9, 0.92)
+	else
+		goal:SetText(before.."/4 by 8:00")
+		goal:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+	end
+	local r, g, b = goal:GetTextColor()
+	goalText, goalColor = goal:GetText() or "", { r, g, b }
+end
+
 local function Draw()
 	local lairs = AZS_GetLairs and AZS_GetLairs() or {}
 	local time = AZS_GetRunTime and AZS_GetRunTime() or 0
@@ -358,8 +460,9 @@ local function Draw()
 		since = 0
 	end
 
-	-- Each lair: what it is and where.
+	-- Each lair: what it is and where, and its mark.
 	local entries = {}
+	local marks = SurvivorUI_LairMarks(lairs)
 	for index = 1, table.getn(lairs) do
 		local lair = lairs[index]
 		local place = tonumber(Field(lair, "index", 1)) or index
@@ -373,7 +476,7 @@ local function Draw()
 		end
 		lastState[place] = state
 		local entry = { place = place, state = state, alive = state ~= "empty", name = Field(lair, "name", 3) or "?",
-			id = tonumber(Field(lair, "id", 4)) or 0 }
+			id = tonumber(Field(lair, "id", 4)) or 0, mark = marks[place] }
 		if state == "empty" then
 			entry.left = (tonumber(Field(lair, "left", 5)) or -1) - since
 		elseif state == "awake" then
@@ -418,9 +521,17 @@ local function Draw()
 		local entry = list[index]
 		local row = Row(index)
 		row.place = entry.place
+		-- The mark first, the name after it.
+		local room = entry.mark and ROW_MARK + 2 or 0
+		if row.room ~= room then
+			row.room = room
+			row.name:SetPoint("TOPLEFT", frame, "TOPLEFT", room, row.top)
+			row.shownName = nil
+		end
+		SurvivorUI_SetLairMark(row.mark, entry.mark, entry.state == "empty")
 		if row.shownName ~= entry.name then
 			row.shownName = entry.name
-			SetName(row.name, entry.name)
+			SetName(row.name, entry.name, room)
 		end
 		if entry.state == "empty" then
 			row.name:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
@@ -473,24 +584,7 @@ local function Draw()
 	end
 	frame:SetHeight(ROW * (table.getn(list) + 1) + 2)
 
-	-- Four before 8:00. Before 8:00 every guardian slain counts (the game's
-	-- count, right after a reload too); after, the count stays as it was.
-	local slain = tonumber(AZS_RUN and AZS_RUN.gk) or 0
-	if time < GOAL_TIME then
-		before = math.max(before, slain)
-	end
-	if before >= GOAL then
-		goal:SetText("4/4 by 8:00 · done")
-		goal:SetTextColor(GREEN[1], GREEN[2], GREEN[3])
-	elseif time < GOAL_TIME then
-		goal:SetText(before.."/4 by 8:00 · "..Clock(GOAL_TIME - time))
-		goal:SetTextColor(0.9, 0.9, 0.92)
-	else
-		goal:SetText(before.."/4 by 8:00")
-		goal:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
-	end
-	local r, g, b = goal:GetTextColor()
-	goalText, goalColor = goal:GetText() or "", { r, g, b }
+	DrawGoal(time)
 	return table.getn(list)
 end
 
@@ -583,8 +677,28 @@ local function Segment(index)
 	segment.time:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
 	segment.time:SetPoint("CENTER", segment.back, "CENTER", 0, 0)
 	segment.time:SetTextColor(1, 1, 1)
+	-- Its lair's mark at its left end, over the fill.
+	segment.mark = bar:CreateTexture(nil, "OVERLAY")
+	segment.mark:SetWidth(MARK)
+	segment.mark:SetHeight(MARK)
+	segment.mark:SetPoint("LEFT", segment.back, "LEFT", -1, 0)
+	segment.mark:Hide()
+	segment.shift = 0
 	segments[index] = segment
 	return segment
+end
+
+-- The arrow and the words in the middle of what the mark leaves of the
+-- stretch.
+local function Middle(segment, shift)
+	if segment.shift == shift then
+		return
+	end
+	segment.shift = shift
+	for _, piece in pairs({ segment.shadow, segment.glow, segment.arrow, segment.time }) do
+		piece:ClearAllPoints()
+		piece:SetPoint("CENTER", segment.back, "CENTER", shift, 0)
+	end
 end
 
 local function Docked()
@@ -640,7 +754,8 @@ function SurvivorUI_GuardianSnapshot()
 		if entry.alive then
 			shot.alive = shot.alive + 1
 		end
-		table.insert(shot.lairs, { color = { color[1], color[2], color[3] }, share = share, text = text })
+		table.insert(shot.lairs, { color = { color[1], color[2], color[3] }, share = share, text = text,
+			mark = entry.mark, empty = (not entry.alive) or nil })
 	end
 	return shot
 end
@@ -673,6 +788,32 @@ function SurvivorUI_GuardianBar(head, y)
 			counter.value = counter:CreateFontString(nil, "OVERLAY")
 			counter.value:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 			counter.value:SetPoint("RIGHT", counter, "RIGHT", 0, 0)
+			counter.marks = {}
+		end
+		-- Between the two, the lairs' marks in their order, the empty dimmed.
+		local places = {}
+		for place in pairs(byPlace) do
+			table.insert(places, place)
+		end
+		table.sort(places)
+		local marked = 0
+		for index = 1, table.getn(places) do
+			local entry = byPlace[places[index]]
+			if entry.mark then
+				marked = marked + 1
+				local texture = counter.marks[marked]
+				if not texture then
+					texture = counter:CreateTexture(nil, "ARTWORK")
+					texture:SetWidth(COUNT_MARK)
+					texture:SetHeight(COUNT_MARK)
+					texture:SetPoint("LEFT", counter.title, "RIGHT", 4 + (marked - 1) * (COUNT_MARK + 1), 0)
+					counter.marks[marked] = texture
+				end
+				SurvivorUI_SetLairMark(texture, entry.mark, not entry.alive)
+			end
+		end
+		for index = marked + 1, table.getn(counter.marks) do
+			counter.marks[index]:Hide()
 		end
 		local alive, total, awake = 0, 0, 0
 		for _, entry in pairs(byPlace) do
@@ -757,6 +898,8 @@ function SurvivorUI_GuardianBar(head, y)
 		segment.fill:SetWidth(math.max(1, each * share))
 		segment.fill:SetVertexColor(color[1], color[2], color[3], 0.9)
 		segment.fill:Show()
+		SurvivorUI_SetLairMark(segment.mark, entry.mark, not entry.alive)
+		Middle(segment, entry.mark and math.floor(MARK / 2) or 0)
 		local clickable = entry.alive
 		segment.button.target = clickable and entry.name or nil
 		segment.button:EnableMouse(clickable and true or false)
@@ -781,6 +924,7 @@ function SurvivorUI_GuardianBar(head, y)
 		end
 	end
 	for index = count + 1, table.getn(segments) do
+		segments[index].mark:Hide()
 		segments[index].fill:Hide()
 		segments[index].back:Hide()
 		segments[index].arrow:Hide()

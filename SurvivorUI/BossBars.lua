@@ -137,6 +137,14 @@ local function Bar(index)
 	bar.name:SetJustifyH("LEFT")
 	bar.name:SetTextColor(1, 1, 1)
 
+	-- A guardian's lair mark (Guardians.lua), before its name.
+	bar.mark = bar.health:CreateTexture(nil, "OVERLAY")
+	bar.mark:SetWidth(BAR_HEIGHT - 2)
+	bar.mark:SetHeight(BAR_HEIGHT - 2)
+	bar.mark:SetPoint("LEFT", bar, "LEFT", 2, 0)
+	bar.mark:Hide()
+	bar.markRoom = 0
+
 	bar.value = bar.health:CreateFontString(nil, "OVERLAY")
 	bar.value:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 	bar.value:SetPoint("RIGHT", bar, "RIGHT", -5, 0)
@@ -316,7 +324,7 @@ local function FillDebuffs(bar, id)
 		bar.debuffs[index]:Hide()
 	end
 	-- The name gives way to the icons.
-	bar.name:SetWidth(BAR_WIDTH - (bar.valueRoom or VALUE_ROOM) - 8 - count * (DEBUFF_SIZE + DEBUFF_GAP))
+	bar.name:SetWidth(BAR_WIDTH - (bar.valueRoom or VALUE_ROOM) - 8 - (bar.markRoom or 0) - count * (DEBUFF_SIZE + DEBUFF_GAP))
 end
 
 local KIND_LABELS = { final = "Final boss", boss = "Boss", guardian = "Lair guardian", elite = "Elite" }
@@ -335,6 +343,18 @@ local function Fill(bar, unit)
 	bar.kindLabel = KIND_LABELS[kind]
 	bar.health:SetStatusBarColor(style.color[1], style.color[2], style.color[3], 0.9)
 	bar.health:SetValue(share)
+
+	-- A guardian wears its lair's mark, the one of its stretch in the tracker
+	-- and its pin on the minimap.
+	local mark = kind == "guardian" and SurvivorUI_GuardianMark and SurvivorUI_GuardianMark(Field(unit, "id", 2))
+	if SurvivorUI_SetLairMark then
+		SurvivorUI_SetLairMark(bar.mark, mark)
+	end
+	local markRoom = mark and BAR_HEIGHT - 2 or 0
+	if bar.markRoom ~= markRoom then
+		bar.markRoom = markRoom
+		bar.name:SetPoint("LEFT", bar, "LEFT", 5 + markRoom, 0)
+	end
 
 	-- An enraged boss (state 1) wears its name in red.
 	bar.name:SetText(name)

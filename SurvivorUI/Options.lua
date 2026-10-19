@@ -1412,6 +1412,7 @@ end, function(choice)
 end)
 Note(page, "A bar: a stretch a lair in the tracker, red once slain with its time back. A list: a line a lair beside it, its name, state, yards and an arrow. A count: 3 / 5 alive, a line in the tracker. Off: no guardians at all, as their tick in Modules.")
 Check(page, "Arrows north up", OnlyIfOn("guardiansNorth"), Call("SurvivorUI_ToggleGuardians", "north"), "off: they turn with you, straight ahead up")
+Check(page, "Lair marks", OnUnlessOff("guardianMarks"), Flip("guardianMarks"), "each lair its own heraldic mark: the same in the tracker, on the minimap and on its boss bar")
 Slider(page, "The list's size", 0.5, 2, 0.05,
 	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("guardians") or 1 end,
 	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("guardians", value) end end)

@@ -209,6 +209,13 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.8, 2026-10-19
+
+**Survivor UI**
+- **Run History loads again on the game's 0.101.0** (fix): the game now runs addons on Lua 5.0, where a function may reach at most 32 of its file's locals. Run History's drawing reached 54, so on 0.101.0 its file did not load at all ("RunHistory.lua: too many upvalues (limit=32)") and Run History was gone. It now draws in four parts. Every file of both addons was checked the same way, and for what Lua 5.0 lacks only as the code runs (string methods such as `s:lower()`, later library functions): nothing else.
+- **Lair marks** (new art: restart the game once): each lair wears its own heraldic mark, crossed swords, a shield, a crown, a chalice, a fleur-de-lis, a war hammer, a tower or a helm, each its own shape and color, and the same mark wherever the lair shows: at the left of its stretch of the guardians' bar, before its name in the list, in the count's line, as its pin on the minimap, in place of the skull (its tooltip names it, "Crown lair"), before the guardian's name on its boss bar while you fight it, and in Run History's tracker. Dimmed while the lair is empty. So the stretch counting down 1:06 is the tower on your minimap. Off with "Lair marks" (Run tracker tab, Guardians). An idea from 0xpr1nceh8.
+- **Run History says how many it keeps**: its footer reads "11 runs kept (up to 100)", the limit set in the Run History tab; the "1 / 11" by the arrows counts the runs kept, growing to it as new ones come.
+
 ### v3.0.7, 2026-10-18
 
 **Survivor UI**

@@ -1316,7 +1316,7 @@ tracker.xpBack:SetWidth(INNER)
 tracker.xpBack:SetHeight(5)
 tracker.xpFill = Flat(tracker, "ARTWORK", { 0.58, 0.30, 0.85 }, 1)
 tracker.xpFill:SetHeight(5)
-tracker.ticks, tracker.segments, tracker.slots = {}, {}, {}
+tracker.ticks, tracker.segments, tracker.slots, tracker.guardMarks = {}, {}, {}, {}
 tracker:EnableMouse(true)
 tracker:SetScript("OnEnter", function() ShowKept(this, this.tip, 1) end)
 tracker:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1509,6 +1509,7 @@ local function DrawTracker(shot)
 	-- of the bar a lair, the 8:00 achievement over it.
 	local guard = shot.guardians
 	local lairs = guard and not guard.count and guard.lairs or {}
+	local marked = 0
 	if guard then
 		At(tracker.guardTitle, tracker, x, y - 6)
 		tracker.guardNote:ClearAllPoints()
@@ -1518,6 +1519,23 @@ local function DrawTracker(shot)
 			local color = Num(guard.awake) > 0 and AWAKE or (Num(guard.alive) > 0 and SPAWNED or DIM)
 			tracker.guardNote:SetText(Num(guard.alive).." / "..table.getn(guard.lairs or {}).." alive")
 			tracker.guardNote:SetTextColor(color[1], color[2], color[3])
+			-- The lairs' marks after the title, as the count showed them.
+			for index = 1, table.getn(guard.lairs or {}) do
+				local lair = guard.lairs[index]
+				if lair.mark and SurvivorUI_SetLairMark then
+					marked = marked + 1
+					local texture = tracker.guardMarks[marked]
+					if not texture then
+						texture = tracker:CreateTexture(nil, "ARTWORK")
+						texture:SetWidth(11)
+						texture:SetHeight(11)
+						tracker.guardMarks[marked] = texture
+					end
+					texture:ClearAllPoints()
+					texture:SetPoint("LEFT", tracker.guardTitle, "RIGHT", 4 + (marked - 1) * 12, 0)
+					SurvivorUI_SetLairMark(texture, lair.mark, lair.empty)
+				end
+			end
 			y = y - 6 - 12
 		else
 			local goal = guard.goalColor or DIM
@@ -1533,6 +1551,20 @@ local function DrawTracker(shot)
 				local color = lair.color or SPAWNED
 				piece.fill:SetWidth(math.max(1, each * Num(lair.share)))
 				piece.fill:SetVertexColor(color[1], color[2], color[3], 0.9)
+				-- Its lair's mark at its left end; the words in what is left.
+				if not piece.mark then
+					piece.mark = piece:CreateTexture(nil, "OVERLAY")
+					piece.mark:SetWidth(13)
+					piece.mark:SetHeight(13)
+					piece.mark:SetPoint("LEFT", piece, "LEFT", -1, 0)
+				end
+				if lair.mark and SurvivorUI_SetLairMark then
+					SurvivorUI_SetLairMark(piece.mark, lair.mark, lair.empty)
+					piece.text:SetPoint("CENTER", piece, "CENTER", 6, 0)
+				else
+					piece.mark:Hide()
+					piece.text:SetPoint("CENTER", piece, "CENTER", 0, 0)
+				end
 				piece.text:SetText(lair.text or "")
 				At(piece, tracker, x + (index - 1) * (each + 3), y)
 			end
@@ -1543,6 +1575,7 @@ local function DrawTracker(shot)
 		tracker.guardNote:Hide()
 	end
 	HideAll(tracker.segments, table.getn(lairs) + 1)
+	HideAll(tracker.guardMarks, marked + 1)
 
 	-- The elites alive as the run ended: a small bar each, bright once hurt.
 	local elites = shot.elites
@@ -2332,34 +2365,36 @@ local function Stack(box, column, y, height)
 	return y + height + GAP
 end
 
-Draw = function()
-	local history = History()
-	local total = table.getn(history)
-	shown = math.max(1, math.min(shown, total))
-	if total == 0 then
-		pageButton:Hide()
-		deleteButton:Hide()
-		pinButton:Hide()
-		footer:SetText("")
-		before:Disable()
-		after:Disable()
-		for _, text in pairs({ nameText, zoneText, whenText, heroText, modsText }) do
-			text:SetText("")
-		end
-		SetBadge(firstBadge, nil)
-		SetBadge(secondBadge, nil)
-		classIcon:Hide()
-		Theme(GOLD)
-		victoryTab:Hide()
-		endTab:Hide()
-		for _, box in pairs(BOXES) do
-			box:Hide()
-		end
-		rule:Hide()
-		empty:Show()
-		window:SetHeight(160)
-		return
+-- Draw in parts, a function each: the game's Lua (5.0, from the game's
+-- 0.101) lets a function reach at most 32 of the file's locals.
+
+-- No run kept: the window empty.
+local function DrawEmpty()
+	pageButton:Hide()
+	deleteButton:Hide()
+	pinButton:Hide()
+	footer:SetText("")
+	before:Disable()
+	after:Disable()
+	for _, text in pairs({ nameText, zoneText, whenText, heroText, modsText }) do
+		text:SetText("")
 	end
+	SetBadge(firstBadge, nil)
+	SetBadge(secondBadge, nil)
+	classIcon:Hide()
+	Theme(GOLD)
+	victoryTab:Hide()
+	endTab:Hide()
+	for _, box in pairs(BOXES) do
+		box:Hide()
+	end
+	rule:Hide()
+	empty:Show()
+	window:SetHeight(160)
+end
+
+-- Under and over the panels: the run's number, < and >, the pin, the footer.
+local function DrawNavigation(history, total)
 	empty:Hide()
 	rule:Show()
 	-- The run's number and the count in their box; < and > go round, so with
@@ -2374,7 +2409,9 @@ Draw = function()
 			pinned = pinned + 1
 		end
 	end
-	footer:SetText("RUN HISTORY  \194\183  "..total..(total == 1 and " run" or " runs").." kept"..(pinned > 0 and ", "..pinned.." pinned" or ""))
+	-- How many are kept, out of how many the options keep (the Run History tab).
+	local most = tonumber(Settings().historyKeep) or 100
+	footer:SetText("RUN HISTORY  \194\183  "..total..(total == 1 and " run" or " runs").." kept (up to "..most..")"..(pinned > 0 and ", "..pinned.." pinned" or ""))
 	local pinColor = history[shown].pinned and { 1, 0.82, 0 } or MUTED
 	pinButton.text:SetText(history[shown].pinned and "Pinned" or "Pin")
 	pinButton.text:SetTextColor(pinColor[1], pinColor[2], pinColor[3])
@@ -2386,14 +2423,10 @@ Draw = function()
 		before:Disable()
 		after:Disable()
 	end
-	local run = history[shown]
-	-- An endless run: its victory, or its end (the whole run), by the tabs.
-	local final = run.endless
-	local moment, base = run, nil
-	if final and view ~= "victory" then
-		moment, base = final, run
-	end
+end
 
+-- Over the panels: the map, the result and when, the hero, the tabs.
+local function DrawHeader(run, final, moment)
 	zoneText:SetText(run.zone or "?")
 	if run.result == "victory" then
 		SetBadge(firstBadge, "victory", "Victory", "The final boss slain at "..Clock(run.time)..".")
@@ -2453,7 +2486,10 @@ Draw = function()
 		victoryTab:Hide()
 		endTab:Hide()
 	end
+end
 
+-- The panels in their three columns, the window's height to hold them.
+local function DrawPanels(moment, base)
 	-- The run tracker and the run's numbers; the build and the damage; the
 	-- crits and the loot.
 	local first = HEADER
@@ -2469,6 +2505,26 @@ Draw = function()
 	local right = Stack(critBox, 3, first, DrawCrits(moment))
 	right = Stack(lootBox, 3, right, DrawLoot(moment))
 	window:SetHeight(math.max(left, middle, right) - GAP + PAD + FOOTER)
+end
+
+Draw = function()
+	local history = History()
+	local total = table.getn(history)
+	shown = math.max(1, math.min(shown, total))
+	if total == 0 then
+		DrawEmpty()
+		return
+	end
+	DrawNavigation(history, total)
+	local run = history[shown]
+	-- An endless run: its victory, or its end (the whole run), by the tabs.
+	local final = run.endless
+	local moment, base = run, nil
+	if final and view ~= "victory" then
+		moment, base = final, run
+	end
+	DrawHeader(run, final, moment)
+	DrawPanels(moment, base)
 end
 
 -- Once more on the next frame: a text not drawn yet measures nothing, and

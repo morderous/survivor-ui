@@ -9,9 +9,11 @@
 -- place comes from the map (GetPlayerMapPosition), and the yards a map unit
 -- spans are worked out from two shared places far apart.
 --
--- A cache is a golden chest; a lair a horned skull, bright while its guardian
--- holds it, grey once it is empty. One beyond the minimap's edge sits on the
--- edge, smaller and fainter, pointing the way. Hover a pin for what it is.
+-- A cache is a golden chest; a lair its own mark (the one the guardians' bar
+-- and list show, Guardians.lua), or with the marks off a horned skull, bright
+-- while its guardian holds it, dimmed once it is empty. One beyond the
+-- minimap's edge sits on the edge, smaller and fainter, pointing the way.
+-- Hover a pin for what it is.
 -- Off with the option "Caches and lairs on the minimap"; /sui pins prints what
 -- the addon reads, to check it.
 
@@ -312,27 +314,41 @@ local function Update()
 					shown = shown + 1
 					local pin = Pin(shown)
 					pin.art:SetTexture(ART.."PinCache")
+					pin.art:SetTexCoord(0, 1, 0, 1)
 					pin.art:SetVertexColor(1, 1, 1)
 					pin.title, pin.note = "Cache", nil
 					Place(pin, east, south, yardsAcross)
 				end
 			end
 			local lairs = AZS_GetLairs and AZS_GetLairs() or {}
+			local marks = SurvivorUI_LairMarks and SurvivorUI_LairMarks(lairs) or {}
 			for index = 1, table.getn(lairs) do
 				local lair = lairs[index]
 				local east, south = WayTo(lair, px, py, heroX, heroY, span)
 				if east then
 					shown = shown + 1
 					local pin = Pin(shown)
-					pin.art:SetTexture(ART.."PinLair")
+					-- Its mark, as the guardians' bar and list show it; with the
+					-- marks off, the skull.
+					local mark = marks[tonumber(lair.index) or index]
+					if mark and SurvivorUI_SetLairMark then
+						SurvivorUI_SetLairMark(pin.art, mark, not lair.active)
+					else
+						pin.art:SetTexture(ART.."PinLair")
+						pin.art:SetTexCoord(0, 1, 0, 1)
+						if lair.active then
+							pin.art:SetVertexColor(1, 1, 1)
+						else
+							pin.art:SetVertexColor(0.45, 0.45, 0.45)
+						end
+					end
 					if lair.active then
-						pin.art:SetVertexColor(1, 1, 1)
 						pin.note = "Guardian's lair: "..(lair.name and lair.name ~= "" and lair.name or "a guardian holds it")
 					else
-						pin.art:SetVertexColor(0.45, 0.45, 0.45)
 						pin.note = "Empty lair"
 					end
-					pin.title = "Lair"
+					local markName = SurvivorUI_LairMarkName and SurvivorUI_LairMarkName(mark)
+					pin.title = markName and (markName.." lair") or "Lair"
 					Place(pin, east, south, yardsAcross)
 				end
 			end
