@@ -36,7 +36,8 @@
 -- a helm), by its place among the run's lairs: the same mark on its stretch of
 -- the bar, its line of the list, the count, its pin on the minimap, its boss
 -- bar and the last runs, dimmed while the lair is empty. Off with the option
--- "Lair marks".
+-- "Lair marks". The lair the game's red flag points at (from 0.102) has its
+-- mark glowing gold, in place of the flag (the Minimap tab, "The game's flag").
 --
 -- Hold Alt to move it; /sui guardians hides it.
 
@@ -185,6 +186,18 @@ goal:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -1)
 
 local rows = {}
 
+-- The game's flag, ours (MapPins.lua, the options' Minimap tab): a gold glow
+-- breathing behind the mark of the lair it points at.
+local function FlagGlow(parent, mark, layer)
+	local glow = parent:CreateTexture(nil, layer)
+	glow:SetTexture(ART.."PaceGlow")
+	glow:SetBlendMode("ADD")
+	glow:SetVertexColor(1, 0.82, 0.2)
+	glow:SetPoint("CENTER", mark, "CENTER", 0, 0)
+	glow:Hide()
+	return glow
+end
+
 -- A line: the name on the left; on the right, where it stands, how far, and
 -- the arrow last of all.
 local function Row(index)
@@ -237,6 +250,7 @@ local function Row(index)
 	row.mark:SetHeight(ROW_MARK)
 	row.mark:SetPoint("TOPLEFT", frame, "TOPLEFT", -1, top + 1)
 	row.mark:Hide()
+	row.flagGlow = FlagGlow(frame, row.mark, "BORDER")
 	-- The line to head for: a faint wash of its color, fading to the right.
 	row.light = frame:CreateTexture(nil, "BACKGROUND")
 	row.light:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
@@ -291,6 +305,7 @@ local function HideRow(row)
 	row.yards:Hide()
 	row.place = nil
 	row.shownName = nil
+	row.flagged = nil
 end
 
 -- The arrow turned by angle (radians, clockwise from straight up): the cell of
@@ -476,7 +491,8 @@ local function Draw()
 		end
 		lastState[place] = state
 		local entry = { place = place, state = state, alive = state ~= "empty", name = Field(lair, "name", 3) or "?",
-			id = tonumber(Field(lair, "id", 4)) or 0, mark = marks[place] }
+			id = tonumber(Field(lair, "id", 4)) or 0, mark = marks[place],
+			flag = tonumber(Field(lair, "flag", 11)) == 1 or nil }
 		if state == "empty" then
 			entry.left = (tonumber(Field(lair, "left", 5)) or -1) - since
 		elseif state == "awake" then
@@ -529,6 +545,7 @@ local function Draw()
 			row.shownName = nil
 		end
 		SurvivorUI_SetLairMark(row.mark, entry.mark, entry.state == "empty")
+		row.flagged = entry.flag and SurvivorUI_GameFlag and SurvivorUI_GameFlag() == "ours"
 		if row.shownName ~= entry.name then
 			row.shownName = entry.name
 			SetName(row.name, entry.name, room)
@@ -683,6 +700,7 @@ local function Segment(index)
 	segment.mark:SetHeight(MARK)
 	segment.mark:SetPoint("LEFT", segment.back, "LEFT", -1, 0)
 	segment.mark:Hide()
+	segment.flagGlow = FlagGlow(bar, segment.mark, "ARTWORK")
 	segment.shift = 0
 	segments[index] = segment
 	return segment
@@ -755,7 +773,8 @@ function SurvivorUI_GuardianSnapshot()
 			shot.alive = shot.alive + 1
 		end
 		table.insert(shot.lairs, { color = { color[1], color[2], color[3] }, share = share, text = text,
-			mark = entry.mark, empty = (not entry.alive) or nil })
+			mark = entry.mark, empty = (not entry.alive) or nil,
+			flag = entry.flag and SurvivorUI_GameFlag and SurvivorUI_GameFlag() == "ours" or nil })
 	end
 	return shot
 end
@@ -899,6 +918,7 @@ function SurvivorUI_GuardianBar(head, y)
 		segment.fill:SetVertexColor(color[1], color[2], color[3], 0.9)
 		segment.fill:Show()
 		SurvivorUI_SetLairMark(segment.mark, entry.mark, not entry.alive)
+		segment.flagged = entry.flag and SurvivorUI_GameFlag and SurvivorUI_GameFlag() == "ours"
 		Middle(segment, entry.mark and math.floor(MARK / 2) or 0)
 		local clickable = entry.alive
 		segment.button.target = clickable and entry.name or nil
@@ -933,6 +953,7 @@ function SurvivorUI_GuardianBar(head, y)
 		segments[index].flash:Hide()
 		segments[index].time:Hide()
 		segments[index].place = nil
+		segments[index].flagged = nil
 	end
 	return y - BAR_TOP - LINE - BAR_HEIGHT
 end
@@ -986,14 +1007,29 @@ local function TurnOne(piece, place, step)
 	end
 end
 
+-- The flagged lair's glow breathes, every frame, while its mark shows.
+local function Breathe(piece)
+	if piece.flagged and piece.mark:IsShown() then
+		local size = piece.mark:GetWidth() * (2.4 + 0.35 * math.sin(clock * 4))
+		piece.flagGlow:SetWidth(size)
+		piece.flagGlow:SetHeight(size)
+		piece.flagGlow:SetAlpha(0.6 + 0.3 * math.sin(clock * 4))
+		piece.flagGlow:Show()
+	else
+		piece.flagGlow:Hide()
+	end
+end
+
 local function Turn(elapsed)
 	clock = clock + elapsed
 	local step = math.min(1, elapsed * TURN)
 	for _, row in pairs(rows) do
 		TurnOne(row, row.place, step)
+		Breathe(row)
 	end
 	for _, segment in pairs(segments) do
 		TurnOne(segment, segment.place, step)
+		Breathe(segment)
 	end
 end
 

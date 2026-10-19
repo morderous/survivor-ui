@@ -222,6 +222,7 @@ local TABS = {
 	{ key = "jewelry", label = "Jewelry", color = { 0.92, 0.76, 0.45 } },
 	{ group = "Interface" },
 	{ key = "units", label = "Frames & bar", color = { 1.00, 0.62, 0.25 } },
+	{ key = "minimap", label = "Minimap", color = { 0.55, 0.82, 0.40 } },
 	{ key = "chat", label = "Chat", color = { 0.60, 0.80, 0.95 } },
 	{ key = "plates", label = "Nameplates", color = { 0.70, 0.55, 1.00 } },
 }
@@ -251,7 +252,8 @@ local TAB_PIECES = {
 	build = { "Build list" },
 	character = { "Character pane" },
 	stats = { "Stats" },
-	units = { "Player frame", "Target frame", "Buffs", "Minimap", "Minimap button" },
+	units = { "Player frame", "Target frame", "Buffs" },
+	minimap = { "Minimap", "Minimap button" },
 	chat = { "Chat" },
 }
 
@@ -298,7 +300,7 @@ local function ShowPage(key)
 end
 
 -- The sidebar from its top down: a group's name over its tabs.
-local TAB_TOP, TAB_HEIGHT, TAB_STEP, GROUP_STEP = -54, 20, 21, 18
+local TAB_TOP, TAB_HEIGHT, TAB_STEP, GROUP_STEP = -54, 19, 20, 18
 local tabY = TAB_TOP
 for index = 1, table.getn(TABS) do
 	local tab = TABS[index]
@@ -1084,8 +1086,8 @@ local MODULES = {
 			"Each lair: which way, how far, alive or slain, as a bar in the tracker, a list beside it or a count." },
 		{ "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"),
 			"The bosses and the awake guardians with their debuffs, apart from the tracker. They put the Default bars away.", nil, nil, GAME.bosses },
-		{ "Caches on the minimap", FeatureOn("mapPins"), FeatureToggle("mapPins", true),
-			"A chest for each cache and a skull for each lair, on the minimap." },
+		{ "Minimap pins", FeatureOn("mapPins"), FeatureToggle("mapPins", true),
+			"On the minimap, a mark for each guardian's lair and a chest for each cache, set in the Minimap tab." },
 		{ "Kills and gold line", OnUnlessOff("tally"), Call("SurvivorUI_Tally"),
 			"Your kills, your gold and the next cache's price. It puts the Default box away.", nil, nil, GAME.tally },
 		{ "XP bar", OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"),
@@ -1951,7 +1953,7 @@ Note(page, "Click twice within 10 seconds: it forgets every piece, for every cla
 -- Frames & bar: the player's and the target's frames, and the action bar.
 
 page = pages.units
-Header(page, "Frames & bar", "Your frame and your target's, the action bar, the minimap and the tooltip. While this tab is open, drag the frames, the buffs or the minimap to move them.")
+Header(page, "Frames & bar", "Your frame and your target's, the action bar and the tooltip (the minimap has a tab of its own). While this tab is open, drag the frames or the buffs to move them.")
 Subheader(page, "Health numbers")
 Note(page, "The percent, the health left, the health left of the whole, or the health left and the percent. Always short: 1.2M for 1,200,000.")
 HealthRow("Player", "playerHealth", "absolutePercent")
@@ -1974,11 +1976,140 @@ Subheader(page, "Size")
 SizeGrid(page, {
 	PartSize("middle", "Whole center bar"), PartSize("bar", "Action bar"),
 	PartSize("frames", "Player and target"), PartSize("buffs", "Buffs"),
-	PartSize("minimap", "Minimap"),
 	{ "Tooltip", 0.6, 1.6, 0.05,
 		function() return SurvivorUI_TooltipSize and SurvivorUI_TooltipSize() or 1 end,
 		function(value) if SurvivorUI_SetTooltipSize then SurvivorUI_SetTooltipSize(value) end end },
 })
+
+------------------------------------------------------------------------------
+-- Minimap: its look and size, and the pins a run puts on it (MapPins.lua).
+
+page = pages.minimap
+Header(page, "Minimap", "Its look and its size, and the pins a run puts on it: each guardian's lair its own mark, a chest for each cache. While this tab is open, drag the minimap or its button to move them.")
+Check(page, "Square minimap", FeatureOn("minimap"), FeatureToggle("minimap"), "its buttons tidied; after a reload")
+Slider(page, "Size", 0.5, 2, 0.05,
+	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("minimap") or 1 end,
+	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("minimap", value) end end)
+page.y = page.y - 4
+Button(page, "Back to its place", 150, 0, function()
+	if SurvivorUI_ResetPiece then
+		SurvivorUI_ResetPiece("Minimap")
+	end
+end)
+page.y = page.y - 28
+
+-- The pins as they are set, drawn under the settings; each size slider redraws it.
+local pinPreview
+
+local function PinSizeSlider(label, kind)
+	Slider(page, label, 10, 28, 1,
+		function() return SurvivorUI_PinSize and SurvivorUI_PinSize(kind) or 16 end,
+		function(value)
+			if SurvivorUI_SetPinSize then
+				SurvivorUI_SetPinSize(kind, value)
+			end
+			if pinPreview then
+				pinPreview:Refresh()
+			end
+		end, "%d")
+end
+
+Subheader(page, "Pins")
+Check(page, "Pins on the minimap", FeatureOn("mapPins"), FeatureToggle("mapPins", true), "all of them; the same as Minimap pins in Modules")
+Check(page, "Lairs", OnUnlessOff("pinLairs"), Flip("pinLairs"), "each guardian's lair, alive or empty")
+PinSizeSlider("Lair size", "lair")
+Check(page, "Lair marks", OnUnlessOff("guardianMarks"), Flip("guardianMarks"), "off: a skull for each lair; the same marks as the run tracker's and the boss bars'")
+Inline(page, "An empty lair", { { "dim", "Dimmed" }, { "hide", "Hidden" } },
+	function() return DB().pinEmpty == "hide" and "hide" or "dim" end,
+	function(value) DB().pinEmpty = value == "hide" and "hide" or nil end)
+Check(page, "Caches", OnUnlessOff("pinCaches"), Flip("pinCaches"), "a chest for each one on the field")
+PinSizeSlider("Cache size", "cache")
+Inline(page, "Out of reach", { { "edge", "On the edge" }, { "hide", "Hidden" } },
+	function() return DB().pinEdge == "hide" and "hide" or "edge" end,
+	function(value) DB().pinEdge = value == "hide" and "hide" or nil end)
+Note(page, "On the edge: a pin past the minimap's reach sits on its edge, smaller and fainter, pointing the way. Hidden: only what the minimap reaches.")
+
+Subheader(page, "The game's flag")
+Inline(page, "Red flag", { { "ours", "Our glow" }, { "game", "The game's" }, { "none", "None" } },
+	function() return SurvivorUI_GameFlag and SurvivorUI_GameFlag() or "game" end,
+	function(value) if SurvivorUI_SetGameFlag then SurvivorUI_SetGameFlag(value) end end)
+Note(page, "The game flags the lair to head for: the nearest with its guardian, else the one back soonest. Our glow: the flag put away, that lair's mark glowing gold on the minimap and in the run tracker. The game's: its red flag. None: neither. From the game's 0.102.")
+
+-- The preview: the eight marks (or the skull) at the lairs' size and the chest
+-- at the caches', on a minimap's grass, as the settings stand.
+Subheader(page, "Preview")
+pinPreview = CreateFrame("Frame", nil, page)
+pinPreview:SetWidth(PAGE_WIDTH)
+pinPreview:SetHeight(40)
+pinPreview:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+pinPreview.back = Fill(pinPreview, "BACKGROUND", 0.20, 0.26, 0.13, 0.95)
+pinPreview.back:SetAllPoints(pinPreview)
+pinPreview.icons = {}
+for index = 1, 9 do
+	pinPreview.icons[index] = pinPreview:CreateTexture(nil, "ARTWORK")
+end
+-- The first lair as the flagged one, with our glow.
+pinPreview.glow = pinPreview:CreateTexture(nil, "BORDER")
+pinPreview.glow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
+pinPreview.glow:SetBlendMode("ADD")
+pinPreview.glow:SetVertexColor(1, 0.82, 0.2, 0.85)
+pinPreview.glow:SetPoint("CENTER", pinPreview.icons[1], "CENTER", 0, 0)
+pinPreview.none = Text(pinPreview, 10, MUTED)
+pinPreview.none:SetPoint("CENTER", pinPreview, "CENTER", 0, 0)
+pinPreview.none:SetText("No pins")
+function pinPreview:Refresh()
+	local pinsOn = not SurvivorUI_Feature or SurvivorUI_Feature("mapPins")
+	local lairsOn = pinsOn and DB().pinLairs ~= false
+	local cachesOn = pinsOn and DB().pinCaches ~= false
+	local lair = SurvivorUI_PinSize and SurvivorUI_PinSize("lair") or 16
+	local cache = SurvivorUI_PinSize and SurvivorUI_PinSize("cache") or 16
+	local x = 14
+	for index = 1, 8 do
+		local icon = self.icons[index]
+		if lairsOn and (index == 1 or DB().guardianMarks ~= false) then
+			icon:SetWidth(lair)
+			icon:SetHeight(lair)
+			icon:ClearAllPoints()
+			icon:SetPoint("CENTER", self, "LEFT", x + lair / 2, 0)
+			if DB().guardianMarks ~= false and SurvivorUI_SetLairMark then
+				SurvivorUI_SetLairMark(icon, index)
+			else
+				icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PinLair")
+				icon:SetTexCoord(0, 1, 0, 1)
+				icon:SetVertexColor(1, 1, 1, 1)
+				icon:Show()
+			end
+			x = x + lair + 8
+		else
+			icon:Hide()
+		end
+	end
+	if lairsOn and SurvivorUI_GameFlag and SurvivorUI_GameFlag() == "ours" then
+		self.glow:SetWidth(lair * 2.4)
+		self.glow:SetHeight(lair * 2.4)
+		self.glow:Show()
+	else
+		self.glow:Hide()
+	end
+	local chest = self.icons[9]
+	if cachesOn then
+		chest:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PinCache")
+		chest:SetWidth(cache)
+		chest:SetHeight(cache)
+		chest:ClearAllPoints()
+		chest:SetPoint("CENTER", self, "LEFT", x + 10 + cache / 2, 0)
+		chest:Show()
+	else
+		chest:Hide()
+	end
+	if lairsOn or cachesOn then
+		self.none:Hide()
+	else
+		self.none:Show()
+	end
+end
+table.insert(widgets, pinPreview)
+page.y = page.y - 46
 
 ------------------------------------------------------------------------------
 -- Chat.

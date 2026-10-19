@@ -211,6 +211,10 @@ local function Snapshot(phase)
 	record.gear = SurvivorUI_GearSnapshot and SurvivorUI_GearSnapshot() or nil
 	record.loot = SurvivorUI_LootList and SurvivorUI_LootList(12) or {}
 	record.tracker = SurvivorUI_TrackerSnapshot and SurvivorUI_TrackerSnapshot() or nil
+	-- Fallen: what struck last, the last hits, the damage taken by kind (RunPanel.lua).
+	if phase == "dead" and SurvivorUI_DeathRecap then
+		record.death = SurvivorUI_DeathRecap()
+	end
 	-- The cards of the spells, the sources and the crits (RunPanel.lua).
 	record.cards = {}
 	if SurvivorUI_CritCardData then
@@ -358,9 +362,52 @@ end
 
 -- Kept as the run ends; looked at twice a second. In endless mode, its
 -- endless moment taken every 10 seconds, so a run left from the menu keeps
--- its last; at the fall, for good.
+-- its last; at the fall, for good. From the game's 0.102 the end comes with
+-- the end screen's own numbers too (Settle), and a run left from the menu is
+-- kept as well.
 local captured
 local endlessWait = 0
+local lastKept                  -- the moment just kept by the watcher, the game's numbers awaited
+local summaryAt                 -- the game's last end settled (its AZS_END_UPDATED)
+local settledAt                 -- when (GetTime) it was
+
+local END_RESULTS = { defeat = "dead", victory = "victory", left = "left" }
+local SUMMARY_FIELDS = {
+	time = "t", level = "lvl", kills = "kills", elites = "elites", guardians = "guardians", bosses = "bosses",
+	dealt = "dmg", taken = "taken", gold = "gold", caches = "chests", magnets = "magnets",
+}
+
+-- The game's own end of the run (AZS_GetRunSummary): the moment the watcher
+-- just kept for it brought to the end screen's numbers; an endless run's
+-- moment taken while it lasted, brought to its end; else, a run the watcher
+-- did not see end (left from the menu), kept now.
+local function Settle(summary)
+	local result = END_RESULTS[summary.result] or "dead"
+	local moment = lastKept
+	lastKept = nil
+	if not (moment and math.abs(time() - Num(moment.at)) < 60) then
+		moment = nil
+		local last = History()[1]
+		if Num(summary.endl) == 1 and result ~= "victory" then
+			if last and last.result == "victory" and last.endless and last.endless.result ~= "dead"
+				and math.abs(time() - Num(last.endless.at)) < 30 then
+				moment = last.endless
+			end
+		elseif result == "victory" or (Settings().historyWhich or "all") ~= "victories" then
+			moment = Snapshot(result)
+			Keep(moment)
+		end
+	end
+	if not moment then
+		return
+	end
+	for field, key in pairs(SUMMARY_FIELDS) do
+		if summary[key] ~= nil then
+			moment[field] = Num(summary[key])
+		end
+	end
+	moment.result = result
+end
 local watcher = CreateFrame("Frame")
 local elapsed = 0
 watcher:SetScript("OnUpdate", function()
@@ -379,6 +426,16 @@ watcher:SetScript("OnUpdate", function()
 	if which == "none" then
 		return
 	end
+	-- The game's end, come since the last look (0.102 on).
+	if AZS_GetRunSummary and AZS_END_UPDATED and AZS_END_UPDATED ~= summaryAt then
+		summaryAt = AZS_END_UPDATED
+		local summary = AZS_GetRunSummary()
+		if summary then
+			Settle(summary)
+			captured = true
+			settledAt = GetTime()
+		end
+	end
 	if phase == "dead" or phase == "victory" then
 		if not captured then
 			captured = true
@@ -386,14 +443,20 @@ watcher:SetScript("OnUpdate", function()
 			if entry then
 				entry.endless = Snapshot("dead")
 				TalentFor(entry.endless)
+				lastKept = entry.endless
 			elseif phase == "victory" or which ~= "victories" then
-				Keep(Snapshot(phase))
+				local record = Snapshot(phase)
+				Keep(record)
+				lastKept = record
 			end
 		end
 	elseif phase == "playing" or phase == "choosing" or phase == "paused" then
-		if phase == "playing" then
+		-- A run going on, but not in the moment the game's end came in
+		-- (its message can come a moment before the phase turns).
+		if phase == "playing" and not (settledAt and GetTime() - settledAt < 5) then
 			captured = nil
 			awaitingTalent = nil
+			lastKept = nil
 		end
 		local entry = EndlessOf()
 		if entry then
@@ -442,10 +505,13 @@ local ROW = 18
 local TOP = 24                    -- a panel's first row, under its title
 local SLOTS = 6                   -- the build's spell slots
 
+-- Held by its top: a taller or a shorter run grows or shrinks it downward,
+-- the title bar (the arrows, the run's number) staying where it is. At first
+-- a little under the screen's top; dragged, held by its top where it is let go.
 local window = CreateFrame("Frame", "SurvivorUILastRuns", UIParent)
 window:SetWidth(WIDTH)
 window:SetHeight(200)
-window:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
+window:SetPoint("TOP", UIParent, "TOP", 0, -60)
 window:SetFrameStrata("DIALOG")
 window:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
 window:SetBackdropColor(0.04, 0.04, 0.07, 0.97)
@@ -457,7 +523,14 @@ if window.SetClampedToScreen then
 end
 window:RegisterForDrag("LeftButton")
 window:SetScript("OnDragStart", function() this:StartMoving() end)
-window:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+window:SetScript("OnDragStop", function()
+	this:StopMovingOrSizing()
+	local left, top = this:GetLeft(), this:GetTop()
+	if left and top then
+		this:ClearAllPoints()
+		this:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+	end
+end)
 window:Hide()
 if UISpecialFrames then
 	table.insert(UISpecialFrames, "SurvivorUILastRuns")
@@ -696,6 +769,135 @@ end)
 local before = TextButton("<", 18, function() Go(shown - 1) end)
 before:SetPoint("RIGHT", pageButton, "LEFT", -6, 0)
 
+------------------------------------------------------------------------------
+-- A photo of the page, to share: for a moment the rest of the interface put
+-- away (UIParent hidden, the window lent to the world's frame meanwhile, and
+-- the game's own HUD parts that show), the world dimmed behind it; the
+-- game's Screenshot taken (its Screenshots folder); then all as it was.
+
+local HUD_PARTS = { "clock", "bosses", "tally", "build", "banners", "loot", "meter", "levels", "flag" }
+
+local shade = CreateFrame("Frame", nil, WorldFrame)
+shade:SetAllPoints(WorldFrame)
+shade:SetFrameStrata("BACKGROUND")
+shade.fill = shade:CreateTexture(nil, "BACKGROUND")
+shade.fill:SetTexture(FLAT)
+shade.fill:SetVertexColor(0, 0, 0, 0.55)
+shade.fill:SetAllPoints(shade)
+shade:Hide()
+
+local photo = CreateFrame("Frame")
+photo:Hide()
+photo.hud = {}
+
+local camera
+
+-- The window held at the same place on the screen, by its top left, under
+-- parent: its scale set so it stays the same size there.
+local function LendTo(parent, scale)
+	local left, top = window:GetLeft(), window:GetTop()
+	local effective = window:GetEffectiveScale()
+	window:SetParent(parent)
+	window:SetScale(scale or effective / parent:GetEffectiveScale())
+	if left and top then
+		-- The same place in screen pixels, in the window's units at its new scale.
+		local ratio = effective / window:GetEffectiveScale()
+		window:ClearAllPoints()
+		window:SetPoint("TOPLEFT", parent, "BOTTOMLEFT", left * ratio, top * ratio)
+	end
+end
+
+local function PhotoDone(result)
+	photo:Hide()
+	photo:UnregisterAllEvents()
+	shade:Hide()
+	LendTo(UIParent, photo.scale)
+	window:SetFrameStrata("DIALOG")
+	UIParent:Show()
+	for _, part in pairs(photo.hud) do
+		AZS_SetHudShown(part, true)
+	end
+	photo.hud = {}
+	camera:Show()
+	if result == "SCREENSHOT_SUCCEEDED" then
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: Run History's page saved as a screenshot, in the game's Screenshots folder.")
+	elseif result == "SCREENSHOT_FAILED" then
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the game could not save the screenshot.")
+	end
+end
+
+-- Two frames drawn without the rest of the interface, then the picture; all
+-- back as the game says it is saved (or failed), or after 3 seconds.
+photo:SetScript("OnUpdate", function()
+	this.frames = this.frames + 1
+	this.waited = this.waited + arg1
+	if this.frames == 3 then
+		Screenshot()
+	elseif this.waited > 3 then
+		PhotoDone()
+	end
+end)
+photo:SetScript("OnEvent", function()
+	PhotoDone(event)
+end)
+
+local function TakePhoto()
+	if not Screenshot or photo:IsShown() then
+		return
+	end
+	GameTooltip:Hide()
+	photo.scale = window:GetScale()
+	camera:Hide()
+	LendTo(WorldFrame)
+	window:SetFrameStrata("FULLSCREEN_DIALOG")
+	shade:Show()
+	UIParent:Hide()
+	if AZS_IsHudShown and AZS_SetHudShown then
+		for _, part in pairs(HUD_PARTS) do
+			if AZS_IsHudShown(part) then
+				AZS_SetHudShown(part, false)
+				table.insert(photo.hud, part)
+			end
+		end
+	end
+	photo.frames, photo.waited = 0, 0
+	photo:RegisterEvent("SCREENSHOT_SUCCEEDED")
+	photo:RegisterEvent("SCREENSHOT_FAILED")
+	photo:Show()
+end
+
+-- Its button: a camera, left of < at the top.
+camera = CreateFrame("Button", nil, window)
+camera:SetWidth(22)
+camera:SetHeight(20)
+camera:SetPoint("RIGHT", before, "LEFT", -12, 0)
+camera.icon = camera:CreateTexture(nil, "ARTWORK")
+camera.icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\Camera")
+camera.icon:SetWidth(20)
+camera.icon:SetHeight(20)
+camera.icon:SetPoint("CENTER", camera, "CENTER", 0, 0)
+camera.icon:SetVertexColor(0.85, 0.85, 0.85)
+camera:SetScript("OnEnter", function()
+	this.icon:SetVertexColor(1, 1, 1)
+	GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
+	GameTooltip:SetText("Photo", 1, 0.82, 0)
+	GameTooltip:AddLine("This page alone, to share: the rest of the interface put away for a moment, a screenshot in the game's Screenshots folder.", 1, 1, 1, 1)
+	GameTooltip:Show()
+end)
+camera:SetScript("OnLeave", function()
+	this.icon:SetVertexColor(0.85, 0.85, 0.85)
+	GameTooltip:Hide()
+end)
+camera:SetScript("OnClick", function() TakePhoto() end)
+
+-- Career: every run added up, by class and by map (Career.lua), in this
+-- window's place; its Runs button comes back.
+TextButton("Career", 56, function()
+	if SurvivorUI_ShowCareer then
+		SurvivorUI_ShowCareer(window)
+	end
+end):SetPoint("RIGHT", camera, "LEFT", -10, 0)
+
 -- At the bottom: Pin on the left, the history's name in the middle, Delete
 -- on the right.
 local FOOTER = 28
@@ -909,14 +1111,21 @@ local function PaintIcon(color)
 	classIcon.glow:SetVertexColor(color[1], color[2], color[3])
 end
 
--- Beside it: the name, large in the class's color; "Level 29 Night Elf
--- Warrior" under it, lighter; the map last.
+-- Beside it: the name, large in the class's color; "Lv. 29  Night Elf
+-- Warrior" under it, lighter; the map last, by its own icon (Art\MapIcon: a
+-- parchment map folded in three, a dotted trail to an X), its name in green
+-- as the game writes a zone's name over the minimap.
 local nameText = Font(window, 17, WHITE)
 nameText:SetPoint("TOPLEFT", classIcon, "TOPRIGHT", 10, 1)
 local heroText = Font(window, 11, WHITE)
 heroText:SetPoint("TOPLEFT", classIcon, "TOPRIGHT", 10, -20)
-local zoneText = Font(window, 10, { 0.72, 0.72, 0.76 })
-zoneText:SetPoint("BOTTOMLEFT", classIcon, "BOTTOMRIGHT", 10, 1)
+local zoneIcon = window:CreateTexture(nil, "ARTWORK")
+zoneIcon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\MapIcon")
+zoneIcon:SetWidth(16)
+zoneIcon:SetHeight(16)
+zoneIcon:SetPoint("BOTTOMLEFT", classIcon, "BOTTOMRIGHT", 8, -1)
+local zoneText = Font(window, 10, { 0.40, 1.00, 0.42 })
+zoneText:SetPoint("LEFT", zoneIcon, "RIGHT", 3, 0)
 local whenText = Font(window, 9, MUTED, "")
 whenText:SetPoint("TOPRIGHT", window, "TOPRIGHT", -PAD - 2, -34)
 local modsText = Font(window, 9, MUTED, "")
@@ -957,8 +1166,10 @@ local RESULTS = {
 		sparks = { { 1.00, 0.42, 0.12 }, { 1.00, 0.20, 0.10 } }, breath = 3.2, motion = "fall", every = 0.42 },
 	endless = { word = "FALLEN", fill = { 0.48, 0.18, 0.80 }, edge = { 0.86, 0.66, 1.00 }, glow = { 0.68, 0.38, 1.00 },
 		sparks = { { 0.80, 0.58, 1.00 }, { 0.55, 0.75, 1.00 } }, breath = 2.2, motion = "circle", every = 0.2, stars = 0.7 },
-	left    = { word = "LEFT", fill = { 0.32, 0.18, 0.50 }, edge = { 0.70, 0.55, 0.90 }, glow = { 0.52, 0.32, 0.82 },
-		sparks = { { 0.70, 0.55, 0.95 } }, breath = 3.5, motion = "circle", every = 0.7 },
+	-- Left from the menu: neither won nor lost, in steel blue, its sparks
+	-- drifting out to the right, as one walking out.
+	left    = { word = "LEFT", fill = { 0.15, 0.33, 0.56 }, edge = { 0.62, 0.82, 1.00 }, glow = { 0.32, 0.62, 1.00 },
+		sparks = { { 0.62, 0.84, 1.00 }, { 0.86, 0.94, 1.00 } }, breath = 2.8, motion = "drift", every = 0.28 },
 	going   = { word = "ENDLESS", fill = { 0.48, 0.18, 0.80 }, edge = { 0.86, 0.66, 1.00 }, glow = { 0.68, 0.38, 1.00 },
 		sparks = { { 0.80, 0.58, 1.00 } }, breath = 2, motion = "circle", every = 0.3, stars = 0.9 },
 }
@@ -972,12 +1183,14 @@ local function Glowing(badge, art, layer)
 end
 
 -- A spark off the box: rising from its top, falling from its bottom, or
--- setting off around it.
+-- setting off around it. It keeps the way it was born to move: the badge's
+-- look can change under it (another run shown) while it is still in the air.
 local function Spark(badge, look)
 	for _, spark in pairs(badge.sparks) do
 		if not spark.life then
 			local width = badge:GetWidth()
 			spark.life = 0
+			spark.motion = look.motion
 			spark.color = look.sparks[math.random(table.getn(look.sparks))]
 			local size = 2.5 + math.random() * 2.5
 			spark:SetWidth(size)
@@ -986,6 +1199,12 @@ local function Spark(badge, look)
 				spark.length = 1.2 + math.random() * 0.8
 				spark.angle = math.random() * 6.283
 				spark.turn = (math.random() < 0.5 and -1 or 1) * (1.4 + math.random())
+			elseif look.motion == "drift" then
+				-- From over the box, out past its right edge.
+				spark.length = 1.0 + math.random() * 0.6
+				spark.x = (math.random() - 0.3) * width * 0.6
+				spark.y = (math.random() - 0.5) * 16
+				spark.reach = width * 0.45 + 12 + math.random() * 14
 			else
 				spark.length = (look.motion == "fall" and 1.3 or 0.9) + math.random() * 0.7
 				spark.x = (math.random() - 0.5) * (width - 6)
@@ -1087,10 +1306,12 @@ local function Animate()
 				spark:Hide()
 			else
 				spark:ClearAllPoints()
-				if look.motion == "circle" then
+				if spark.motion == "circle" then
 					local angle = spark.angle + spark.turn * spark.life
 					spark:SetPoint("CENTER", badge, "CENTER", math.cos(angle) * (width / 2 + 5), math.sin(angle) * 16)
-				elseif look.motion == "fall" then
+				elseif spark.motion == "drift" then
+					spark:SetPoint("CENTER", badge, "CENTER", spark.x + spark.reach * part, spark.y + 2 * math.sin(part * 6.283))
+				elseif spark.motion == "fall" then
 					spark:SetPoint("CENTER", badge, "BOTTOM", spark.x + spark.drift * part, -2 - spark.reach * part)
 				else
 					spark:SetPoint("CENTER", badge, "TOP", spark.x + spark.drift * part, 2 + spark.reach * part)
@@ -1376,11 +1597,17 @@ local function HideAll(list, from)
 end
 
 -- Lays the copy out, top to bottom; the panel's height comes back.
-local function DrawTracker(shot)
+local function DrawTracker(shot, result)
 	tracker.tip = shot.tip
 	local x, y = 6, -6
 	local parts = {}
-	if shot.phase == "victory" then
+	if result == "left" then
+		-- Left from the menu: the game passes through its fall on the way out,
+		-- so the tracker was kept "dead"; the run's result says it.
+		local edge = RESULTS.left.edge
+		table.insert(parts, string.format("|cff%02x%02x%02xLeft|r",
+			math.floor(edge[1] * 255), math.floor(edge[2] * 255), math.floor(edge[3] * 255)))
+	elseif shot.phase == "victory" then
 		table.insert(parts, "|cff4dd94dVictory|r")
 	elseif shot.phase == "dead" then
 		table.insert(parts, "|cffff4040Fallen|r")
@@ -1557,6 +1784,14 @@ local function DrawTracker(shot)
 					piece.mark:SetWidth(13)
 					piece.mark:SetHeight(13)
 					piece.mark:SetPoint("LEFT", piece, "LEFT", -1, 0)
+					-- The lair the game's flag pointed at, its mark glowing.
+					piece.flagGlow = piece:CreateTexture(nil, "ARTWORK")
+					piece.flagGlow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
+					piece.flagGlow:SetBlendMode("ADD")
+					piece.flagGlow:SetVertexColor(1, 0.82, 0.2, 0.8)
+					piece.flagGlow:SetWidth(32)
+					piece.flagGlow:SetHeight(32)
+					piece.flagGlow:SetPoint("CENTER", piece.mark, "CENTER", 0, 0)
 				end
 				if lair.mark and SurvivorUI_SetLairMark then
 					SurvivorUI_SetLairMark(piece.mark, lair.mark, lair.empty)
@@ -1564,6 +1799,11 @@ local function DrawTracker(shot)
 				else
 					piece.mark:Hide()
 					piece.text:SetPoint("CENTER", piece, "CENTER", 0, 0)
+				end
+				if lair.flag and lair.mark then
+					piece.flagGlow:Show()
+				else
+					piece.flagGlow:Hide()
 				end
 				piece.text:SetText(lair.text or "")
 				At(piece, tracker, x + (index - 1) * (each + 3), y)
@@ -1666,6 +1906,10 @@ local function RunRow(index)
 		-- In an endless run's end: what the endless part added.
 		row.more = Font(row, 8, { 0.62, 0.62, 0.66 }, nil, "RIGHT")
 		row.more:SetPoint("RIGHT", row.value, "LEFT", -6, -1)
+		-- A personal best: "NEW BEST" in gold after its name.
+		row.best = Font(row, 7, GOLD)
+		row.best:SetText("NEW BEST")
+		row.best:Hide()
 		row:EnableMouse(true)
 		row:SetScript("OnEnter", function() ShowKept(this, this.tip, 1) end)
 		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1701,6 +1945,47 @@ local function DrawRun(run, base)
 		{ "Gold earned",     Short(run.gold),            { 1.00, 0.86, 0.35 }, More("gold", Short), "gold" },
 		{ "Caches opened",   Num(run.caches),            { 0.55, 0.85, 0.55 }, More("caches", Plain), "caches" },
 	}
+	-- The magnets taken, from the game's own end (0.102 on).
+	if run.magnets then
+		table.insert(lines, { "Magnets taken", Num(run.magnets), { 0.55, 0.70, 1.00 }, More("magnets", Plain) })
+	end
+	-- Personal bests: each number against every earlier run of the same class
+	-- on the same map (an endless one by its end), "NEW BEST" where it beat
+	-- them all. The rates only between runs of 2 minutes or more, so a short
+	-- one does not win them by its few seconds; the damage taken not at all.
+	local best = {}
+	local function Value(x, key)
+		local time = Num(x.time)
+		if key == "kpm" then
+			return time >= 120 and Num(x.kills) / time * 60 or nil
+		elseif key == "dps" then
+			return time >= 120 and Num(x.dealt) / time or nil
+		end
+		return Num(x[key])
+	end
+	local earlier = {}
+	for _, other in pairs(History()) do
+		if other.classKey == run.classKey and other.zone == run.zone and Num(other.at) < Num(run.at)
+			and other ~= base and other.endless ~= run then
+			table.insert(earlier, other.endless or other)
+		end
+	end
+	if table.getn(earlier) > 0 then
+		for _, key in pairs({ "time", "level", "kills", "kpm", "elites", "guardians", "bosses", "dealt", "dps", "gold", "caches" }) do
+			local mine = Value(run, key)
+			if mine and mine > 0 then
+				local beaten = true
+				for _, other in pairs(earlier) do
+					local theirs = Value(other, key)
+					if theirs and theirs >= mine then
+						beaten = false
+					end
+				end
+				best[key] = beaten or nil
+			end
+		end
+	end
+
 	-- The talent experience: the victory's and the end's together, the end's
 	-- beside it.
 	local talent = Num(run.talentXp) + (base and Num(base.talentXp) or 0)
@@ -1719,7 +2004,15 @@ local function DrawRun(run, base)
 		row.label:SetTextColor(color[1], color[2], color[3])
 		row.value:SetTextColor(color[1], color[2], color[3])
 		row.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
-		row.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
+		if line[5] and best[line[5]] then
+			row.rule:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 0.85)
+			row.best:ClearAllPoints()
+			row.best:SetPoint("LEFT", row.label, "LEFT", math.min(row.label:GetStringWidth(), INNER - 66) + 6, 0)
+			row.best:Show()
+		else
+			row.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
+			row.best:Hide()
+		end
 		At(row, runBox, 6, -TOP - (index - 1) * ROW)
 	end
 	HideRows(runBox, table.getn(lines) + 1)
@@ -2351,9 +2644,121 @@ local function DrawLoot(run)
 end
 
 ------------------------------------------------------------------------------
+-- What felled the hero (a run fallen, kept since v3.0.9): the killing blow,
+-- large in red; the hits of its last 10 seconds, the newest first, how long
+-- before the fall; the damage taken by kind as the game counts it, each in a
+-- bar of its share. One table for it all: the file is near Lua 5.0's 200
+-- locals.
+
+local fallen = { box = Box("Fallen to"), heads = {}, colors = {
+	["boss melee"] = { 0.72, 0.32, 1.00 }, ["boss spell"] = { 0.86, 0.52, 1.00 }, elite = { 1.00, 0.55, 0.10 },
+	["mob melee"] = { 0.80, 0.80, 0.84 }, ["mob spell"] = { 0.58, 0.74, 1.00 }, area = { 0.40, 0.86, 0.56 },
+} }
+
+function fallen.Row(index)
+	local row = fallen.box.rows[index]
+	if row then
+		return row
+	end
+	row = CreateFrame("Frame", nil, fallen.box)
+	row:SetWidth(INNER)
+	row:SetHeight(ROW)
+	row.wash = Flat(row, "BACKGROUND")
+	row.wash:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+	row.wash:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
+	row.fill = Flat(row, "BORDER")
+	row.fill:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+	row.fill:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 1)
+	row.rule = Flat(row, "ARTWORK")
+	row.rule:SetHeight(1)
+	row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+	row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+	row.label = Font(row, 9, WHITE)
+	row.label:SetPoint("LEFT", row, "LEFT", 5, 0)
+	row.label:SetWidth(INNER - 66)
+	row.label:SetHeight(11)
+	row.value = Font(row, 10, WHITE, nil, "RIGHT")
+	row.value:SetPoint("RIGHT", row, "RIGHT", -5, 0)
+	fallen.box.rows[index] = row
+	return row
+end
+
+local function DrawFallen(run)
+	local death = run.death or {}
+	local y, used, heads = TOP, 0, 0
+	-- A row: its words, its value, its color, how much of it a bar fills.
+	local function Line(label, value, color, share, strong)
+		used = used + 1
+		local row = fallen.Row(used)
+		row.label:SetText(label)
+		row.value:SetText(value)
+		row.label:SetTextColor(color[1], color[2], color[3])
+		row.value:SetTextColor(color[1], color[2], color[3])
+		row.wash:SetVertexColor(color[1], color[2], color[3], strong and 0.42 or 0.07)
+		row.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
+		if share then
+			row.fill:SetWidth(math.max(1, INNER * share))
+			row.fill:SetVertexColor(color[1], color[2], color[3], 0.32)
+			row.fill:Show()
+		else
+			row.fill:Hide()
+		end
+		At(row, fallen.box, 6, -y)
+		y = y + ROW
+	end
+	-- A small title over a part.
+	local function Head(text)
+		heads = heads + 1
+		local head = fallen.heads[heads]
+		if not head then
+			head = Font(fallen.box, 8, MUTED)
+			fallen.heads[heads] = head
+		end
+		head:SetText(text)
+		At(head, fallen.box, 8, -y - 3)
+		y = y + 15
+	end
+	local killer = death.killer
+	if killer then
+		local name = killer.area and "A ground effect" or ((killer.who or "?")..(killer.what and ("  \194\183  "..killer.what) or ""))
+		Line(name, (killer.amount and Short(killer.amount) or "")..(killer.crit and " crit" or ""), { 1.00, 0.36, 0.30 }, nil, true)
+	end
+	local hits = death.hits or {}
+	if table.getn(hits) > 0 then
+		Head("ITS LAST 10 SECONDS")
+		for index = 1, math.min(4, table.getn(hits)) do
+			local hit = hits[index]
+			Line(string.format("%.1fs  ", Num(hit.ago))..(hit.who or "?")..(hit.what and ("  \194\183  "..hit.what) or ""),
+				Short(hit.amount)..(hit.crit and " crit" or ""), { 0.86, 0.86, 0.90 })
+		end
+	end
+	local kinds = death.kinds or {}
+	local total = 0
+	for _, kind in pairs(kinds) do
+		total = total + Num(kind.dmg)
+	end
+	if total > 0 then
+		Head("DAMAGE TAKEN, BY KIND")
+		for index = 1, math.min(4, table.getn(kinds)) do
+			local kind = kinds[index]
+			local share = Num(kind.dmg) / total
+			local word = kind.source or "?"
+			Line(string.upper(string.sub(word, 1, 1))..string.sub(word, 2), math.floor(share * 100 + 0.5).."%  "..Short(kind.dmg),
+				fallen.colors[word] or WHITE, share)
+		end
+	end
+	HideRows(fallen.box, used + 1)
+	for index = heads + 1, table.getn(fallen.heads) do
+		fallen.heads[index]:Hide()
+	end
+	local height = Nothing(fallen.box, used == 0 and "No hit seen before the fall." or nil)
+	return math.max(height, y + 6)
+end
+
+------------------------------------------------------------------------------
 -- Drawing a run: the header, then each column's panels top to bottom.
 
-local BOXES = { tracker, runBox, buildBox, damageBox, critBox, lootBox }
+local BOXES = { tracker, runBox, buildBox, damageBox, critBox, lootBox, fallen.box }
 
 -- A panel at its column's next place, its height given; the place under it
 -- comes back.
@@ -2376,6 +2781,7 @@ local function DrawEmpty()
 	footer:SetText("")
 	before:Disable()
 	after:Disable()
+	zoneIcon:Hide()
 	for _, text in pairs({ nameText, zoneText, whenText, heroText, modsText }) do
 		text:SetText("")
 	end
@@ -2428,8 +2834,11 @@ end
 -- Over the panels: the map, the result and when, the hero, the tabs.
 local function DrawHeader(run, final, moment)
 	zoneText:SetText(run.zone or "?")
+	zoneIcon:Show()
 	if run.result == "victory" then
 		SetBadge(firstBadge, "victory", "Victory", "The final boss slain at "..Clock(run.time)..".")
+	elseif run.result == "left" then
+		SetBadge(firstBadge, "left", "Left", "Left from the menu at "..Clock(run.time)..", level "..Num(run.level)..".")
 	else
 		SetBadge(firstBadge, "dead", "Fallen", "Fell at "..Clock(run.time)..", level "..Num(run.level)..".")
 	end
@@ -2472,7 +2881,9 @@ local function DrawHeader(run, final, moment)
 	nameText:SetText(run.hero or "?")
 	nameText:SetTextColor(r, g, b)
 	local light = Light({ r, g, b })
-	heroText:SetText("Level "..Num(moment.level).." "..(run.race or "").." "..(run.class or ""))
+	-- The level as the run tracker and the XP bar write it, "Lv. 18", in the
+	-- line's own color (the class's, lighter).
+	heroText:SetText("Lv. "..Num(moment.level).."  "..(run.race or "").." "..(run.class or ""))
 	heroText:SetTextColor(light[1], light[2], light[3])
 	modsText:SetText(run.mods and ("Modifiers: "..run.mods) or "")
 	if final then
@@ -2495,7 +2906,7 @@ local function DrawPanels(moment, base)
 	local first = HEADER
 	local left = first
 	if moment.tracker then
-		left = Stack(tracker, 1, left, DrawTracker(moment.tracker))
+		left = Stack(tracker, 1, left, DrawTracker(moment.tracker, moment.result))
 	else
 		tracker:Hide()
 	end
@@ -2504,6 +2915,12 @@ local function DrawPanels(moment, base)
 	middle = Stack(damageBox, 2, middle, DrawDamage(moment))
 	local right = Stack(critBox, 3, first, DrawCrits(moment))
 	right = Stack(lootBox, 3, right, DrawLoot(moment))
+	-- What felled the hero, on a fall kept since v3.0.9.
+	if moment.death and moment.result == "dead" then
+		right = Stack(fallen.box, 3, right, DrawFallen(moment))
+	else
+		fallen.box:Hide()
+	end
 	window:SetHeight(math.max(left, middle, right) - GAP + PAD + FOOTER)
 end
 
@@ -2598,3 +3015,4 @@ function SurvivorUI_ShowLastRuns()
 end
 
 SurvivorUI_ShowRunHistory = SurvivorUI_ShowLastRuns
+

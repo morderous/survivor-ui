@@ -209,6 +209,21 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.9, 2026-10-19
+
+**Survivor UI**
+- **The game's red flag, our way** (the game's 0.102): the flag the game puts on the minimap, on the lair to head for (the nearest with its guardian, else the one back soonest), is put away, and that lair's mark glows gold instead, on the minimap and in the run tracker's guardians (the bar and the list), and in Run History's tracker. The Minimap tab, "The game's flag": our glow, the game's red flag, or none. Hover the pin: "The game's flag points here."
+- **A photo of the page** (Run History, the camera at the top): the rest of the interface put away for a moment, the world dimmed behind the window, and a screenshot taken, in the game's Screenshots folder, ready to share; then all as it was.
+- **Fallen to** (Run History, a fall kept from now on): what struck last, large in red (its name and what with, how much, a crit or not; a ground effect when the ground's damage grew after the last hit the combat log wrote), the hits of its last 10 seconds with how long before the fall, and the damage taken by kind as the game counts it (boss melee, mob spell, area...), each in a bar of its share.
+- **Personal bests** (Run History, The Run): each number against every earlier run of the same class on the same map, **NEW BEST** in gold where it beat them all (the time, the level, the kills and kills a minute, elites, guardians, bosses, the damage and DPS, gold, caches; the rates only between runs of 2 minutes or more). Worked out as a run is shown, so the runs already kept have theirs too.
+- **Career** (new file: restart the game once; Run History's Career button): every run kept added up, by class (its icon and color) and by map (its icon, its name in green): the runs, won, fallen and left, the longest, the most kills, the best DPS, the kills in all; and under them all of it together, with the time played, the damage, the gold and the talent experience. Runs, at its top, goes back.
+- **Run History writes the level as the run tracker does**: "Lv. 18" before the race and class, all in the class's color (it was "Level 18").
+- **The map's own icon in Run History** (new art: restart the game once): by the map's name, now in green as the game writes a zone's name over the minimap, a parchment map folded in three, green land, a river and a dotted red trail to an X.
+- **Run History holds still by its top**: going from run to run, a taller or shorter one grows or shrinks the window downward, its title bar with < and > staying where it is (it was held by its middle, so the arrows moved under the mouse); dragged, it holds by its top where it is let go.
+- **Run History with the game's own end** (the game's 0.102): as a run ends, the game now tells addons its end screen's numbers (the result, time, level, kills, elites, guardians, bosses, damage dealt and taken, gold, caches), and Run History keeps those, the same as the end screen. A run **left from the menu** is kept too, as **Left**, in steel blue, its sparks drifting out to the right (an endless run left from the menu too), and **the magnets taken**, a number the end screen does not show, are a row of The Run.
+- **The Level Up! button shows its key**: the game's 0.102 gave opening the level-ups a key, Y unless changed in its Key Bindings; the button shows it as a key cap on its right, a glow breathing behind it and a tap now and then as if pressed, and its tooltip says so.
+- **A Minimap tab**: the minimap's settings in one place, in the options under Interface. **Square minimap** and the minimap's **size** (from Frames & bar, with Back to its place; drag the minimap or its button while the tab is open), and **the pins**: lairs and caches each on or off with **a size of their own, 10 to 28** (16 as before), the lair marks or the skull, **an empty lair dimmed or hidden**, and **a pin out of reach on the minimap's edge or hidden**. A preview under them draws the pins as set. "Caches on the minimap" in Modules is now **Minimap pins**, the same tick.
+
 ### v3.0.8, 2026-10-19
 
 **Survivor UI**
@@ -241,6 +256,17 @@ Newest first. The version is also in each addon's `.toc`, so it shows in the gam
 - **The race's traits on the racial's card**: hover the racial in the build list for what your race gives, as the game tells it in the chat as a run begins (Berserking's cooldowns, Regeneration's health a second, Throwing Specialization's crit...), kept for each race.
 - **New first places**, as the layout settled: the boss bars left of the run tracker a little under its top, the Stats panel at the top of the screen right of This Run, the chat low in the bottom left corner, and the new best crit right beside Biggest Crits near its top. A piece already moved stays where it is; Reset on its card, or Back to its place, takes it to the new one.
 - Fixed: a long name with `(proc)` on the meter ran its tag past the numbers and out of the meter; the name now ends in "..." first. The build list's **Rank** header broke in two lines. The run tracker's level sat right against the guardians' bar over it.
+
+### Survivor UI Launcher 1.4.2, 2026-10-19
+
+- **The game kept current**: under the AddOns folder, the game's version (read in its exe) and whether a newer one is out, asked of wow.aethus.pl as the launcher opens and with each look at GitHub: "Azeroth Survivors 0.101.0 · 0.102.0 is out: click Update game". Then Play turns to **Update game**: it asks first, with the size, then takes the newest exe and data patches the way Get the game does, each checked by its sha256; the tray says so once too. The game would also update itself as it starts: this is to know, and to have it ready.
+- **The game's own notes**: while a newer game is out, What's new opens on Aethus' notes for it, from the game's server, then Survivor UI's.
+- **Check version**, a small button under the AddOns folder: asks wow.aethus.pl again at once, the line beside it and the status line saying whether a newer game is out.
+- **The game's version on the green button**, small under its words: "Ver. 0.102.0" to play, "Ver. 0.101.0 → 0.102.0" to update.
+- **The versions together at the top right**: "Launcher ver. 1.4.2" and "Survivor UI ver. 3.0.9" (a newer one out: "→ 3.0.10", in green), Check for updates under them; the Installed and Latest line is gone, the install button saying the latest.
+- The install button in a deeper gold with white words, the beta button in lavender (both readable while they wait, no longer the system's dark grey), and the two ticks (Start with Windows, Update the launcher by itself) told at a glance: on, a box filled gold with a dark check and gold words; off, an empty dark box and grey words.
+- At the bottom, whose game it is on the left and his site, wow.aethus.pl, in the other corner.
+- **No game found, the way to it**: the status line opens on "No game found: click Get the game, or Find game... if yours is somewhere else", or, with the game's exe and no data, "The game's data is missing: click Get the game to fill it in". It sent a new player to Find game... before, with Get the game right beside it.
 
 ### Survivor UI Launcher 1.4.1, 2026-10-18
 

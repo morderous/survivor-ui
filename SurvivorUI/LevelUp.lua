@@ -7,7 +7,8 @@
 -- sits over the game's action bars, where Survivor UI's compact bar is not, so
 -- the addon draws its own in its place (AZS_SetHudShown("levels", false)):
 -- over the action bar, how many levels wait, breathing a gold glow; a click
--- opens them (AZS_OpenStoredLevels). Off until chosen (Modules): on a touch
+-- opens them (AZS_OpenStoredLevels), as the game's key does (Y, from 0.102),
+-- shown as a key cap on its right. Off until chosen (Modules): on a touch
 -- screen the game's button takes a tap and the addon's does not, and the
 -- addon cannot tell a touch screen; off, the game's shows.
 -- The levels waiting also show by the level, in the run tracker and on the XP
@@ -63,11 +64,93 @@ button.text:SetFont(SurvivorUI_FONT, 13 + FONT_BUMP, "OUTLINE")
 button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
 button.text:SetTextColor(1, 0.88, 0.35)
 
+-- The game's key for it (from 0.102: Open Level-Ups, Y unless changed in the
+-- game's Key Bindings), as a key cap on its right, in the middle of its
+-- height; the words move over to leave it room.
+button.cap = CreateFrame("Frame", nil, button)
+button.cap:SetHeight(20)
+button.cap:SetPoint("RIGHT", button, "RIGHT", -6, 0)
+button.cap:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+button.cap:SetBackdropColor(0, 0, 0, 0.45)
+button.cap:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 0.75)
+button.cap:Hide()
+-- The key in the middle of its cap, held by its own center alone, as Run
+-- History's run number in its box (the same size of type and of box): the
+-- game lays a text held by two corners from the top of their box, whatever
+-- SetJustifyV says, so a box the text's own size is never in the middle.
+-- A pixel to the right: a letter's own room ends in a little space after it,
+-- so its ink sits that much left of the room's middle (measured on a
+-- screenshot, 2026-10-19).
+button.key = button.cap:CreateFontString(nil, "OVERLAY")
+button.key:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
+button.key:SetPoint("CENTER", button.cap, "CENTER", 1, 0)
+button.key:SetJustifyH("CENTER")
+button.key:SetTextColor(1, 0.95, 0.80)
+-- A glow behind the cap, breathing with the button's.
+button.capGlow = button:CreateTexture(nil, "ARTWORK")
+button.capGlow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
+button.capGlow:SetBlendMode("ADD")
+button.capGlow:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
+button.capGlow:SetPoint("CENTER", button.cap, "CENTER", 0, 0)
+button.capGlow:Hide()
+
+-- The key cap shown with its key (as wide as it needs), or away.
+local function ShowKey(key)
+	if key == button.shownKey then
+		return
+	end
+	button.shownKey = key
+	if key then
+		button.key:SetText(key)
+		local measured = button.key:GetStringWidth()
+		-- Not drawn yet, a text measures nothing: measured again next time.
+		if measured == 0 then
+			button.shownKey = nil
+		end
+		-- Square for one letter; wider for a longer key, always an even width
+		-- so its middle falls on a whole pixel.
+		local width = math.max(20, math.ceil(measured) + 10)
+		width = width + math.mod(width, 2)
+		button.cap:SetWidth(width)
+		button.cap:Show()
+		button.capGlow:SetWidth(width + 26)
+		button.capGlow:SetHeight(44)
+		button.capGlow:Show()
+		button.text:SetPoint("CENTER", button, "CENTER", -math.floor((width + 6) / 2), 0)
+	else
+		button.cap:Hide()
+		button.capGlow:Hide()
+		button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
+	end
+end
+
+local function Key()
+	local key = GetBindingKey and GetBindingKey("AZS_OPENLEVELS")
+	return key and key ~= "" and key or nil
+end
+
 button.age = 0
 button:SetScript("OnUpdate", function()
 	this.age = this.age + arg1
 	local breath = 0.5 + 0.5 * math.sin(this.age * 3)
 	this.glow:SetAlpha((this.hot and 0.7 or 0.35) + 0.3 * breath)
+	-- The key cap: its glow breathing too, and every 3 seconds a tap, as if
+	-- pressed: a pixel down, its edge and key lit white.
+	if this.cap:IsShown() then
+		local tap = math.mod(this.age, 3) < 0.16
+		this.capGlow:SetAlpha(0.2 + 0.3 * breath + (tap and 0.45 or 0))
+		if tap ~= this.tapped then
+			this.tapped = tap
+			this.cap:SetPoint("RIGHT", this, "RIGHT", -6, tap and -1 or 0)
+			if tap then
+				this.cap:SetBackdropBorderColor(1, 1, 1, 1)
+				this.key:SetTextColor(1, 1, 1)
+			else
+				this.cap:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 0.75)
+				this.key:SetTextColor(1, 0.95, 0.80)
+			end
+		end
+	end
 end)
 
 button:SetScript("OnClick", function()
@@ -82,7 +165,7 @@ button:SetScript("OnEnter", function()
 	local stored = SurvivorUI_StoredLevels()
 	GameTooltip:SetOwner(this, "ANCHOR_TOP")
 	GameTooltip:SetText(stored == 1 and "1 level waiting" or stored.." levels waiting", GOLD[1], GOLD[2], GOLD[3])
-	GameTooltip:AddLine("Click to choose them, one after another.", 1, 1, 1, 1)
+	GameTooltip:AddLine("Click to choose them, one after another"..(Key() and ", or press "..Key().."." or "."), 1, 1, 1, 1)
 	GameTooltip:AddLine("Store Level-Ups: the game's Options, Controls, or /sui opt, Level Up!", 0.6, 0.6, 0.65, 1)
 	GameTooltip:Show()
 end)
@@ -109,6 +192,7 @@ watcher:SetScript("OnUpdate", function()
 	local placing = SurvivorUI_Placing and SurvivorUI_Placing(NAME)
 	if On() and (placing or (stored > 0 and Phase() == "playing")) then
 		button.text:SetText("LEVEL UP!  |cffffffffx"..(stored > 0 and stored or 2).."|r")
+		ShowKey(Key())
 		button:Show()
 	else
 		button:Hide()

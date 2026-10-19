@@ -14,11 +14,13 @@
 -- while its guardian holds it, dimmed once it is empty. One beyond the
 -- minimap's edge sits on the edge, smaller and fainter, pointing the way.
 -- Hover a pin for what it is.
--- Off with the option "Caches and lairs on the minimap"; /sui pins prints what
--- the addon reads, to check it.
+-- The options' Minimap tab sets them: lairs and caches each on or off and its
+-- size, an empty lair dimmed or hidden, a pin out of reach on the edge or
+-- hidden. All off with "Caches on the minimap" (Modules); /sui pins prints
+-- what the addon reads, to check it.
 
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
-local PIN_SIZE = 16
+local PIN_SIZE = 16                -- a pin's size untouched; on the edge, 11 of each 16
 local EDGE_SIZE = 11
 
 -- The yards across the minimap at each zoom level, as the 1.12 client draws
@@ -125,12 +127,22 @@ local function Pin(index)
 	pin:SetFrameLevel(Minimap:GetFrameLevel() + 4)
 	pin.art = pin:CreateTexture(nil, "OVERLAY")
 	pin.art:SetAllPoints(pin)
+	-- The game's flag, ours: a gold glow breathing behind the lair it points at.
+	pin.glow = pin:CreateTexture(nil, "ARTWORK")
+	pin.glow:SetTexture(ART.."PaceGlow")
+	pin.glow:SetBlendMode("ADD")
+	pin.glow:SetVertexColor(1, 0.82, 0.2)
+	pin.glow:SetPoint("CENTER", pin, "CENTER", 0, 0)
+	pin.glow:Hide()
 	pin:EnableMouse(true)
 	pin:SetScript("OnEnter", function()
 		GameTooltip:SetOwner(this, "ANCHOR_LEFT")
 		GameTooltip:SetText(this.title or "", 1, 0.82, 0)
 		if this.note then
 			GameTooltip:AddLine(this.note, 0.8, 0.8, 0.8)
+		end
+		if this.flagged then
+			GameTooltip:AddLine("The game's flag points here.", 1, 0.82, 0.2)
 		end
 		if this.yards then
 			GameTooltip:AddLine(math.floor(this.yards + 0.5).." yards away", 0.6, 0.6, 0.6)
@@ -253,6 +265,69 @@ prober:SetScript("OnEvent", function()
 	end
 end)
 
+-- The pins' settings (the options' Minimap tab): lairs and caches each on or
+-- off and its size, an empty lair dimmed or hidden, a pin out of reach on the
+-- edge or hidden.
+local function Settings()
+	SurvivorUIDB = SurvivorUIDB or {}
+	return SurvivorUIDB
+end
+
+-- A kind's pin size, "lair" or "cache": 10 to 28, 16 untouched.
+function SurvivorUI_PinSize(kind)
+	local size = tonumber(Settings()[kind == "cache" and "pinCacheSize" or "pinLairSize"])
+	return size and math.max(10, math.min(28, size)) or PIN_SIZE
+end
+
+function SurvivorUI_SetPinSize(kind, size)
+	Settings()[kind == "cache" and "pinCacheSize" or "pinLairSize"] = size ~= PIN_SIZE and size or nil
+end
+
+------------------------------------------------------------------------------
+-- The game's red flag on the minimap, on the lair it points at (from the
+-- game's 0.102: the nearest held, else the one back soonest; each lair's
+-- flag field): "ours" (untouched), the game's flag away and that lair's pin
+-- glowing instead, its mark in the run tracker too (Guardians.lua); "game",
+-- the game's flag; "none", neither. The setting is the game's and is saved,
+-- so the addon remembers that it was the one to turn it off.
+
+local function FlagChoice()
+	return Settings().gameFlag or "ours"
+end
+
+local function ApplyGameFlag()
+	if not (AZS_SetHudShown and AZS_IsHudShown and AZS_GetFlaggedLair) then
+		return
+	end
+	local settings = Settings()
+	if FlagChoice() ~= "game" then
+		if AZS_IsHudShown("flag") then
+			AZS_SetHudShown("flag", false)
+			settings.hidGameFlag = true
+		end
+	elseif settings.hidGameFlag then
+		AZS_SetHudShown("flag", true)
+		settings.hidGameFlag = nil
+	end
+end
+
+-- For the options' Minimap tab and the run tracker: "ours", "game" or "none";
+-- nil on a game without the flag (before 0.102).
+function SurvivorUI_GameFlag()
+	return AZS_GetFlaggedLair and FlagChoice() or nil
+end
+
+function SurvivorUI_SetGameFlag(choice)
+	Settings().gameFlag = choice ~= "ours" and choice or nil
+	ApplyGameFlag()
+end
+
+local flagLoader = CreateFrame("Frame")
+flagLoader:RegisterEvent("PLAYER_ENTERING_WORLD")
+flagLoader:SetScript("OnEvent", ApplyGameFlag)
+
+local flaggedPin                -- the pin glowing for the game's flag, if one
+
 -- The yards the minimap spans across, now.
 local function MinimapYards()
 	local zoom = Minimap:GetZoom() or 0
@@ -260,18 +335,23 @@ local function MinimapYards()
 	return yards[zoom] or yards[0], zoom
 end
 
-local function Place(pin, east, south, yardsAcross)
+-- A pin at its size: beyond the square's edge, on the edge (on the line toward
+-- it, smaller and fainter), or hidden with "Out of reach: hidden".
+local function Place(pin, east, south, yardsAcross, size)
 	local half = Minimap:GetWidth() / 2
 	local perYard = (2 * half) / yardsAcross
 	pin.yards = math.sqrt(east * east + south * south)
 	local px, py = east * perYard, -south * perYard
-	-- Beyond the square's edge: on the edge, on the line toward it.
+	local edge = math.floor(size * EDGE_SIZE / PIN_SIZE + 0.5)
 	local reach = math.max(math.abs(px), math.abs(py))
-	local limit = half - EDGE_SIZE / 2
-	local size = PIN_SIZE
+	local limit = half - edge / 2
 	if reach > limit then
+		if Settings().pinEdge == "hide" then
+			pin:Hide()
+			return
+		end
 		px, py = px * limit / reach, py * limit / reach
-		size = EDGE_SIZE
+		size = edge
 		pin:SetAlpha(0.7)
 	else
 		pin:SetAlpha(1)
@@ -298,6 +378,7 @@ end
 
 local function Update()
 	local shown = 0
+	flaggedPin = nil
 	if Enabled() and Playing() then
 		local px, py = HeroWorld()
 		local heroX, heroY, span
@@ -306,9 +387,12 @@ local function Update()
 			span = heroX and Span()
 		end
 		if px or span then
+			local settings = Settings()
 			local yardsAcross = MinimapYards()
-			for index = 1, table.getn(AZS_CHESTS) do
-				local chest = AZS_CHESTS[index]
+			local chests = settings.pinCaches ~= false and AZS_CHESTS or {}
+			local cacheSize = SurvivorUI_PinSize("cache")
+			for index = 1, table.getn(chests) do
+				local chest = chests[index]
 				local east, south = WayTo(chest, px, py, heroX, heroY, span)
 				if east then
 					shown = shown + 1
@@ -316,16 +400,18 @@ local function Update()
 					pin.art:SetTexture(ART.."PinCache")
 					pin.art:SetTexCoord(0, 1, 0, 1)
 					pin.art:SetVertexColor(1, 1, 1)
-					pin.title, pin.note = "Cache", nil
-					Place(pin, east, south, yardsAcross)
+					pin.glow:Hide()
+					pin.title, pin.note, pin.flagged = "Cache", nil, nil
+					Place(pin, east, south, yardsAcross, cacheSize)
 				end
 			end
-			local lairs = AZS_GetLairs and AZS_GetLairs() or {}
+			local lairs = settings.pinLairs ~= false and AZS_GetLairs and AZS_GetLairs() or {}
 			local marks = SurvivorUI_LairMarks and SurvivorUI_LairMarks(lairs) or {}
+			local lairSize = SurvivorUI_PinSize("lair")
 			for index = 1, table.getn(lairs) do
 				local lair = lairs[index]
 				local east, south = WayTo(lair, px, py, heroX, heroY, span)
-				if east then
+				if east and (lair.active or settings.pinEmpty ~= "hide") then
 					shown = shown + 1
 					local pin = Pin(shown)
 					-- Its mark, as the guardians' bar and list show it; with the
@@ -349,7 +435,13 @@ local function Update()
 					end
 					local markName = SurvivorUI_LairMarkName and SurvivorUI_LairMarkName(mark)
 					pin.title = markName and (markName.." lair") or "Lair"
-					Place(pin, east, south, yardsAcross)
+					pin.flagged = tonumber(lair.flag) == 1 or nil
+					if pin.flagged and FlagChoice() == "ours" then
+						flaggedPin = pin
+					else
+						pin.glow:Hide()
+					end
+					Place(pin, east, south, yardsAcross, lairSize)
 				end
 			end
 		end
@@ -360,12 +452,22 @@ local function Update()
 end
 
 local elapsed = 0
+local breath = 0
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
 	elapsed = elapsed + arg1
 	if elapsed >= 0.1 then
 		elapsed = 0
 		Update()
+	end
+	-- The flagged lair's glow breathes, every frame.
+	breath = breath + arg1
+	if flaggedPin and flaggedPin:IsShown() then
+		local size = flaggedPin:GetWidth() * (2.4 + 0.35 * math.sin(breath * 4))
+		flaggedPin.glow:SetWidth(size)
+		flaggedPin.glow:SetHeight(size)
+		flaggedPin.glow:SetAlpha(0.6 + 0.3 * math.sin(breath * 4))
+		flaggedPin.glow:Show()
 	end
 end)
 

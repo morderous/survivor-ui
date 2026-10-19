@@ -101,6 +101,7 @@ local function ResetRun()
 	run.bosses = 0
 	run.dealt = 0
 	run.taken = 0
+	run.hits = {}           -- the hits taken last, the newest last (Taken)
 
 	ResetCrits()
 end
@@ -1371,6 +1372,39 @@ local function Dealt(message)
 	end
 end
 
+-- The damage the game counts as from the ground ("area" in AZS_TAKEN), so far.
+local function AreaTaken()
+	for _, entry in pairs(AZS_TAKEN or {}) do
+		if Field(entry, "source", 1) == "area" then
+			return Num(Field(entry, "dmg", 2))
+		end
+	end
+	return 0
+end
+
+-- Who hit, with what (nil: a swing), and whether a crit, from the combat log:
+-- "Hogger hits you for 12.", "Hogger crits you for 30.", "Kobold Geomancer's
+-- Fireball crits you for 80 Fire damage.", "You suffer 3 Nature damage from
+-- Venom Spider's Poison."
+local function HitFrom(message)
+	local _, _, who, what, verb = string.find(message, "^(.-)'s (.-) (%a+) you for %d+")
+	if who and (verb == "hits" or verb == "crits") then
+		return who, what, verb == "crits"
+	end
+	_, _, who, verb = string.find(message, "^(.-) (%a+) you for %d+")
+	if who and (verb == "hits" or verb == "crits") then
+		return who, nil, verb == "crits"
+	end
+	_, _, who, what = string.find(message, "^You suffer %d+ .- damage from (.-)'s (.-)%.")
+	if who then
+		return who, what, false
+	end
+	_, _, who = string.find(message, "^You suffer %d+ .- damage from (.-)%.")
+	return who, nil, false
+end
+
+local KEEP_HITS = 8
+
 local function Taken(message)
 	-- "Kobold Vermin hits you for 5." / "You suffer 3 Nature damage from ..."
 	local _, _, amount = string.find(message, " you for (%d+)")
@@ -1379,7 +1413,50 @@ local function Taken(message)
 	end
 	if amount then
 		run.taken = run.taken + tonumber(amount)
+		-- Kept for the killing blow: the last few, with the ground's damage so far.
+		local who, what, crit = HitFrom(message)
+		run.hits = run.hits or {}
+		table.insert(run.hits, { at = GetTime(), who = who, what = what, crit = crit,
+			amount = tonumber(amount), area = AreaTaken() })
+		if table.getn(run.hits) > KEEP_HITS then
+			table.remove(run.hits, 1)
+		end
 	end
+end
+
+-- As the hero falls (Run History, RunHistory.lua): what struck last, the hits
+-- of the last 10 seconds (the newest first, how long before), and the damage
+-- taken by kind as the game counts it (AZS_TAKEN: boss melee, mob spell,
+-- area...). The killing blow is the last hit the combat log wrote, unless the
+-- ground's damage grew after it: then a ground effect (the log writes none).
+function SurvivorUI_DeathRecap()
+	local now = GetTime()
+	local hits = run.hits or {}
+	local last = hits[table.getn(hits)]
+	local area = AreaTaken()
+	local recap = { hits = {}, kinds = {} }
+	if last and area > last.area then
+		recap.killer = { area = true, amount = area - last.area }
+	elseif last then
+		recap.killer = { who = last.who, what = last.what, crit = last.crit, amount = last.amount }
+	elseif area > 0 then
+		recap.killer = { area = true }
+	end
+	for index = table.getn(hits), 1, -1 do
+		local hit = hits[index]
+		if now - hit.at <= 10 then
+			table.insert(recap.hits, { who = hit.who, what = hit.what, crit = hit.crit, amount = hit.amount,
+				ago = math.floor((now - hit.at) * 10 + 0.5) / 10 })
+		end
+	end
+	for _, entry in pairs(AZS_TAKEN or {}) do
+		local dmg = Num(Field(entry, "dmg", 2))
+		if dmg > 0 then
+			table.insert(recap.kinds, { source = Field(entry, "source", 1) or "?", dmg = dmg })
+		end
+	end
+	table.sort(recap.kinds, function(a, b) return a.dmg > b.dmg end)
+	return recap
 end
 
 local function Death(message)

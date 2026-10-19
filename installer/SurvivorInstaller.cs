@@ -33,6 +33,11 @@
 //     data patches, by the indexes the game updates itself by, each checked
 //     by its sha256. Asked first, with the sizes; then Survivor UI installed
 //     next. A line at the bottom says whose game it is, with a link to his site;
+//   - keeps the game current: under the folder, the game's version (read in
+//     its exe) against the newest its server lists, asked with each look at
+//     GitHub; a newer one out, Play turns to "Update game", which takes the
+//     newest exe and data patches the same way, checked (the game would also
+//     update itself as it starts), and the tray tells of it once;
 //   - updates itself: a release's SurvivorUI-Installer.zip carries its
 //     version in the asset's label ("Installer 1.3.0"). At the top right,
 //     its version and Check for updates; a newer one lights a green arrow
@@ -61,7 +66,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Survivor UI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.4.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.4.2.0")]
 
 namespace SurvivorInstaller
 {
@@ -170,14 +175,15 @@ namespace SurvivorInstaller
         static readonly Color Gold = Color.FromArgb(255, 209, 0);
         static readonly Color TextColor = Color.FromArgb(230, 230, 230);
         static readonly Color Muted = Color.FromArgb(150, 150, 160);
-        static readonly Color BetaColor = Color.FromArgb(255, 170, 70);
-        static readonly Color StableFill = Color.FromArgb(222, 172, 18);
-        static readonly Color StableText = Color.FromArgb(34, 26, 4);
+        static readonly Color BetaColor = Color.FromArgb(196, 168, 255);   // the betas' lavender
+        static readonly Color TickText = Color.FromArgb(232, 206, 128);    // the ticks' words and marks, gold
+        static readonly Color TickEdge = Color.FromArgb(150, 124, 48);
+        static readonly Color StableFill = Color.FromArgb(178, 128, 10);
+        static readonly Color StableText = Color.FromArgb(255, 248, 228);
         static readonly Color LauncherDim = Color.FromArgb(28, 120, 52);
         static readonly Color LauncherLit = Color.FromArgb(58, 190, 88);
 
-        readonly Label installedLabel = new Label();
-        readonly Label latestLabel = new Label();
+        readonly Label addonLabel = new Label();    // Survivor UI's version, under the launcher's
         readonly TextBox folderBox = new TextBox();
         readonly TextBox notesBox = new TextBox();
         readonly Button installButton = new Button();
@@ -220,6 +226,13 @@ namespace SurvivorInstaller
         Release selfRelease;        // the release with a newer installer, while one is out
         bool selfUpdating;
         bool gettingGame;           // the game being asked for or downloaded
+        readonly Label gameLabel = new Label();
+        readonly Button gameCheckButton = new Button();
+        GameState game;             // the game as last looked at, against the newest on its server
+        bool checkingGame;
+        bool gameByHand;            // Check version clicked: the answer said in the status line
+        string playNote = "";       // under Play's words: the game's version, or from which to which
+        string toldOfGame;          // the game version the tray's note last told of
         readonly LinkLabel creditLink = new LinkLabel();
         string toldOfSelf;          // the installer version the tray's note last told of
 
@@ -333,10 +346,11 @@ namespace SurvivorInstaller
             subtitle.Location = new Point(70, 44);
             Controls.Add(subtitle);
 
-            // Its own version at the top right, Check for updates under it; a
-            // newer launcher out: a green arrow by the version, and the button
-            // turns to it, green, breathing so it is seen.
-            arrowMark.Location = new Point(376, 13);
+            // At the top right, the versions together, the launcher's and Survivor
+            // UI's, Check for updates under them; a newer launcher out: a green
+            // arrow by its version, and the button turns to it, green, breathing
+            // so it is seen.
+            arrowMark.Location = new Point(360, 10);
             arrowMark.Size = new Size(16, 18);
             arrowMark.Visible = false;
             arrowMark.Paint += delegate (object sender, PaintEventArgs e)
@@ -353,15 +367,24 @@ namespace SurvivorInstaller
             Controls.Add(arrowMark);
 
             versionLabel.AutoSize = false;
-            versionLabel.Location = new Point(396, 14);
-            versionLabel.Size = new Size(150, 18);
+            versionLabel.Location = new Point(380, 10);
+            versionLabel.Size = new Size(170, 18);
+            versionLabel.Font = new Font("Segoe UI", 9f);
             versionLabel.TextAlign = ContentAlignment.MiddleLeft;
             Controls.Add(versionLabel);
 
+            addonLabel.AutoSize = false;
+            addonLabel.Location = new Point(380, 28);
+            addonLabel.Size = new Size(170, 18);
+            addonLabel.Font = new Font("Segoe UI", 9f);
+            addonLabel.TextAlign = ContentAlignment.MiddleLeft;
+            addonLabel.ForeColor = Muted;
+            Controls.Add(addonLabel);
+
             selfButton.FlatStyle = FlatStyle.Flat;
             selfButton.Cursor = Cursors.Hand;
-            selfButton.Location = new Point(396, 36);
-            selfButton.Size = new Size(144, 26);
+            selfButton.Location = new Point(380, 50);
+            selfButton.Size = new Size(160, 26);
             selfButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             selfButton.Click += delegate
             {
@@ -392,14 +415,6 @@ namespace SurvivorInstaller
             breathe.Start();
             ShowOwnVersion();
 
-            installedLabel.AutoSize = true;
-            installedLabel.Location = new Point(20, 80);
-            Controls.Add(installedLabel);
-
-            latestLabel.AutoSize = true;
-            latestLabel.Location = new Point(280, 80);
-            Controls.Add(latestLabel);
-
             Label folderLabel = new Label();
             folderLabel.Text = "Game's AddOns folder";
             folderLabel.ForeColor = Muted;
@@ -421,14 +436,29 @@ namespace SurvivorInstaller
             browseButton.Click += delegate { BrowseForGame(); };
             Controls.Add(browseButton);
 
-            // Where the game should be, under the box.
-            Label hint = new Label();
-            hint.Text = "Recommended: the game's " + GameExe + " in its benilla-config folder,\nusually " + CommonGameFolder;
-            hint.Font = new Font("Segoe UI", 8f);
-            hint.ForeColor = Muted;
-            hint.AutoSize = true;
-            hint.Location = new Point(20, 158);
-            Controls.Add(hint);
+            // Under the box: the game found, its version against the newest;
+            // none found, where it should be (ShowGameLine).
+            gameLabel.Font = new Font("Segoe UI", 8f);
+            gameLabel.ForeColor = Muted;
+            gameLabel.AutoSize = true;
+            gameLabel.Location = new Point(20, 158);
+            Controls.Add(gameLabel);
+
+            // Check version: wow.aethus.pl asked again, now; the line beside it
+            // and the status line say whether a newer game is out.
+            Style(gameCheckButton, "Check version");
+            gameCheckButton.Font = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+            gameCheckButton.Location = new Point(20, 157);
+            gameCheckButton.Size = new Size(92, 20);
+            gameCheckButton.Visible = false;
+            gameCheckButton.Click += delegate
+            {
+                if (checkingGame) return;
+                gameByHand = true;
+                CheckGame();
+            };
+            tips.SetToolTip(gameCheckButton, "Asks wow.aethus.pl now whether a newer Azeroth Survivors is out.");
+            Controls.Add(gameCheckButton);
 
             // The folder itself, opened: under Find game..., by the box.
             openLink.Text = "Open folder";
@@ -490,8 +520,8 @@ namespace SurvivorInstaller
             installButton.Location = new Point(20, 394);
             installButton.Size = new Size(260, 40);
             installButton.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-            installButton.Enabled = false;
-            installButton.Click += delegate { if (stable != null) Install(stable); };
+            Active(installButton, false, StableText);
+            installButton.Click += delegate { if (IsActive(installButton) && stable != null) Install(stable); };
             Controls.Add(installButton);
 
             upToDate.Location = installButton.Location;
@@ -507,15 +537,15 @@ namespace SurvivorInstaller
             // The beta: smaller, orange, its version on it; a warning first.
             betaButton.Text = "No beta right now";
             betaButton.FlatStyle = FlatStyle.Flat;
-            betaButton.FlatAppearance.BorderColor = Color.FromArgb(150, 96, 36);
-            betaButton.BackColor = Color.FromArgb(44, 30, 14);
+            betaButton.FlatAppearance.BorderColor = Color.FromArgb(112, 86, 176);
+            betaButton.BackColor = Color.FromArgb(34, 26, 58);
             betaButton.ForeColor = BetaColor;
             betaButton.Cursor = Cursors.Hand;
             betaButton.Location = new Point(20, 442);
             betaButton.Size = new Size(260, 28);
             betaButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            betaButton.Enabled = false;
-            betaButton.Click += delegate { InstallBeta(); };
+            Active(betaButton, false, BetaColor);
+            betaButton.Click += delegate { if (IsActive(betaButton)) InstallBeta(); };
             Controls.Add(betaButton);
 
             Label betaNote = new Label();
@@ -538,7 +568,17 @@ namespace SurvivorInstaller
             playButton.Location = new Point(380, 394);
             playButton.Size = new Size(160, 40);
             playButton.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
-            playButton.Click += delegate { if (GameMissing()) GetGame(); else Play(); };
+            playButton.Click += delegate { if (GameMissing() || GameBehind()) GetGame(); else Play(); };
+            // The game's version, small, at the bottom inside it (playNote).
+            playButton.Paint += delegate (object sender, PaintEventArgs e)
+            {
+                if (playNote == "") return;
+                using (Font small = new Font("Segoe UI", 7.5f))
+                    TextRenderer.DrawText(e.Graphics, playNote, small,
+                        new Rectangle(0, playButton.Height - 17, playButton.Width, 14),
+                        playButton.Enabled ? Color.FromArgb(165, 222, 175) : Muted,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
+            };
             Controls.Add(playButton);
 
             // Start with Windows: under the install button, the same tick as
@@ -546,8 +586,9 @@ namespace SurvivorInstaller
             startBox.Text = "Start with Windows, in the tray";
             startBox.AutoSize = true;
             startBox.Location = new Point(300, 446);
-            startBox.ForeColor = TextColor;
+            startBox.ForeColor = TickText;
             startBox.FlatStyle = FlatStyle.Flat;
+            startBox.FlatAppearance.BorderColor = TickEdge;
             startBox.Cursor = Cursors.Hand;
             startBox.Checked = StartsWithWindows();
             startBox.CheckedChanged += delegate
@@ -566,8 +607,9 @@ namespace SurvivorInstaller
             selfBox.Text = "Update the launcher by itself";
             selfBox.AutoSize = true;
             selfBox.Location = new Point(300, 472);
-            selfBox.ForeColor = TextColor;
+            selfBox.ForeColor = TickText;
             selfBox.FlatStyle = FlatStyle.Flat;
+            selfBox.FlatAppearance.BorderColor = TickEdge;
             selfBox.Cursor = Cursors.Hand;
             selfBox.Checked = SelfAuto();
             selfBox.CheckedChanged += delegate
@@ -579,20 +621,31 @@ namespace SurvivorInstaller
                 if (selfBox.Checked && selfRelease != null) UpdateSelf();
             };
             Controls.Add(selfBox);
+            TickLook(startBox);
+            TickLook(selfBox);
 
             statusLabel.Location = new Point(20, 502);
             statusLabel.Size = new Size(520, 20);
             statusLabel.ForeColor = Muted;
             Controls.Add(statusLabel);
 
-            // Whose game it is, at the bottom, with a link to his site.
-            creditLink.Text = "Azeroth Survivors is a game by Aethus  \u00B7  wow.aethus.pl";
+            // Whose game it is, at the bottom left; his site in the other corner.
+            Label credit = new Label();
+            credit.Text = "Azeroth Survivors is a game by Aethus";
+            credit.Font = new Font("Segoe UI", 8f);
+            credit.AutoSize = false;
+            credit.Location = new Point(20, 522);
+            credit.Size = new Size(320, 18);
+            credit.ForeColor = Muted;
+            credit.TextAlign = ContentAlignment.MiddleLeft;
+            Controls.Add(credit);
+
+            creditLink.Text = "wow.aethus.pl";
             creditLink.Font = new Font("Segoe UI", 8f);
             creditLink.AutoSize = false;
-            creditLink.Location = new Point(20, 522);
-            creditLink.Size = new Size(520, 18);
-            creditLink.ForeColor = Muted;
-            creditLink.LinkArea = new LinkArea(creditLink.Text.Length - "wow.aethus.pl".Length, "wow.aethus.pl".Length);
+            creditLink.Location = new Point(380, 522);
+            creditLink.Size = new Size(160, 18);
+            creditLink.TextAlign = ContentAlignment.MiddleRight;
             creditLink.LinkColor = Gold;
             creditLink.ActiveLinkColor = Color.White;
             creditLink.VisitedLinkColor = Gold;
@@ -607,7 +660,12 @@ namespace SurvivorInstaller
             ForgetBetaTick();
 
             folderBox.Text = FindAddonsFolder() ?? "";
-            if (folderBox.Text == "") Status("Click \"Find game...\" and pick " + GameExe + ".");
+            // No game found, or one without its data: the way to it, Get the game
+            // first (the game elsewhere: Find game...).
+            if (GameExePath() == null)
+                Status("No game found: click \"Get the game\", or \"Find game...\" if yours is somewhere else.");
+            else if (GameMissing())
+                Status("The game's data is missing: click \"Get the game\" to fill it in.");
             ShowInstalled();
 
             // Just updated: the old exe, set aside, goes once it has closed.
@@ -832,6 +890,7 @@ namespace SurvivorInstaller
         void CheckNow()
         {
             new Thread(FetchLatest) { IsBackground = true }.Start();
+            CheckGame();
         }
 
         protected override void SetVisibleCore(bool value)
@@ -888,8 +947,6 @@ namespace SurvivorInstaller
         void ShowUpdateState()
         {
             string installed = InstalledVersion(folderBox.Text);
-            installedLabel.Text = "Installed:  " + (installed != null ? "v" + installed : "not installed");
-            installedLabel.ForeColor = installed != null ? TextColor : Muted;
             // A beta installed follows the betas, the release once it is newer.
             bool betaOut = pre != null && pre.ZipUrl != null && (stable == null || Newer(pre.Tag, stable.Tag));
             latest = installed != null && IsBeta(installed) && betaOut ? pre : (stable ?? (betaOut ? pre : null));
@@ -903,16 +960,43 @@ namespace SurvivorInstaller
             // Play, or Get the game while there is none: by the AddOns folder,
             // nor in its usual place.
             bool missing = GameMissing();
+            bool behind = !missing && GameBehind();
             bool playable = !installing && !gettingGame && GameFor(folderBox.Text) != null;
-            playButton.Text = missing ? "\u2193  Get the game" : "\u25B6  Play";
-            playButton.Enabled = missing ? !installing && !gettingGame : playable;
+            playButton.Text = missing ? "\u2193  Get the game" : behind ? "\u2191  Update game" : "\u25B6  Play";
+            playButton.Enabled = missing || behind ? !installing && !gettingGame : playable;
             tips.SetToolTip(playButton, missing
                 ? "Download Azeroth Survivors, Aethus' game, from his own servers (wow.aethus.pl)."
+                : behind ? "Azeroth Survivors " + game.Latest + " is out: download it from wow.aethus.pl, checked. (The game would also update itself as it starts.)"
                 : "Start the game; the launcher steps into the tray.");
             playItem.Enabled = playable && !missing;
+            // Under its words, small: the game's version; an update out, from
+            // which to which (the newer data alone: its version and "new data").
+            string note = "";
+            if (!missing && game != null && game.Exe == GameExePath() && game.Version != null)
+            {
+                if (!behind) note = "Ver. " + game.Version;
+                else if (game.Latest != game.Version) note = "Ver. " + game.Version + " → " + game.Latest;
+                else note = "Ver. " + game.Version + "  ·  new data";
+            }
+            if (note != playNote)
+            {
+                playNote = note;
+                playButton.Padding = note != "" ? new Padding(0, 0, 0, 12) : Padding.Empty;
+                playButton.Invalidate();
+            }
+            ShowGameLine();
+            if (behind && toldOfGame != game.Latest)
+            {
+                toldOfGame = game.Latest;
+                tray.ShowBalloonTip(6000, "Azeroth Survivors " + game.Latest + " is out",
+                    "Click Update game in the launcher, or play: the game updates itself as it starts.", ToolTipIcon.Info);
+            }
             installItem.Text = updateWaiting ? "Install " + latest.Tag : current ? "Up to date (" + latest.Tag + ")" : "Install the update";
-            latestLabel.Text = stable != null ? "Latest:  " + stable.Tag : "Latest:  unknown";
-            latestLabel.ForeColor = updateWaiting && !latest.Beta ? Color.FromArgb(90, 220, 110) : Gold;
+            // Survivor UI's version under the launcher's, and the newer one out.
+            addonLabel.Text = installed == null ? "Survivor UI not installed"
+                : "Survivor UI ver. " + installed + (updateWaiting ? " → " + latest.Tag.TrimStart('v', 'V') : "");
+            addonLabel.ForeColor = updateWaiting ? Color.FromArgb(110, 225, 125) : Muted;
+            tips.SetToolTip(addonLabel, stable != null ? "Latest release on GitHub: " + stable.Tag : "GitHub not asked yet.");
 
             // The release's button: its version, and what installing it does.
             bool stableKnown = stable != null && stable.ZipUrl != null;
@@ -923,14 +1007,14 @@ namespace SurvivorInstaller
                 : IsBeta(installed) ? "Back to stable " + stable.Tag
                 : "Install " + stable.Tag;
             installButton.Visible = !onStable;
-            installButton.Enabled = stableKnown && !installing;
+            Active(installButton, stableKnown && !installing, StableText);
             upToDate.Text = onStable ? "\u2713  Up to date  \u00B7  " + stable.Tag : "";
             upToDate.Visible = onStable;
 
             // The beta's button: its version, or none newer than the release.
             bool onBeta = betaOut && installed != null && Same(pre.Tag, installed);
             betaButton.Text = !betaOut ? "No beta right now" : onBeta ? "\u2713  Beta " + pre.Tag + " installed" : "Install beta " + pre.Tag;
-            betaButton.Enabled = betaOut && !onBeta && !installing;
+            Active(betaButton, betaOut && !onBeta && !installing, BetaColor);
             ShowOverlay();
             // Asked from the tray: a newer one installed at once, or said so.
             if (installWhenNewer && latest != null)
@@ -997,6 +1081,64 @@ namespace SurvivorInstaller
             Match match = Regex.Match(version ?? "", @"-beta\.?(\d*)", RegexOptions.IgnoreCase);
             if (!match.Success) return int.MaxValue;
             return match.Groups[1].Value == "" ? 0 : int.Parse(match.Groups[1].Value);
+        }
+
+        // A button on or off by its look alone: a disabled button's words go the
+        // system's dark grey, unreadable on these colors. Off, its words fade
+        // into its own color, no hand nor hover, and a click does nothing.
+        static void Active(Button button, bool on, Color text)
+        {
+            button.Tag = on;
+            Color back = button.BackColor;
+            button.ForeColor = on ? text
+                : Color.FromArgb((text.R + back.R * 2) / 3, (text.G + back.G * 2) / 3, (text.B + back.B * 2) / 3);
+            button.Cursor = on ? Cursors.Hand : Cursors.Default;
+            button.FlatAppearance.MouseOverBackColor = on ? Color.Empty : back;
+            button.FlatAppearance.MouseDownBackColor = on ? Color.Empty : back;
+        }
+
+        static bool IsActive(Button button)
+        {
+            return button.Tag is bool && (bool)button.Tag;
+        }
+
+        // A tick told at a glance: on, a box filled gold with a dark check and
+        // its words in gold; off, an empty dark box with a grey edge and its
+        // words grey. The box is drawn over the system's own; the mouse on it
+        // lightens its edge.
+        void TickLook(CheckBox box)
+        {
+            bool hot = false;
+            Action words = delegate { box.ForeColor = box.Checked ? TickText : Muted; };
+            words();
+            box.CheckedChanged += delegate { words(); box.Invalidate(); };
+            box.MouseEnter += delegate { hot = true; box.Invalidate(); };
+            box.MouseLeave += delegate { hot = false; box.Invalidate(); };
+            box.Paint += delegate (object sender, PaintEventArgs e)
+            {
+                int size = 14;
+                Rectangle square = new Rectangle(0, (box.Height - size) / 2, size, size);
+                using (Brush cover = new SolidBrush(box.BackColor))
+                    e.Graphics.FillRectangle(cover, new Rectangle(0, 0, size + 2, box.Height));
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                if (box.Checked)
+                {
+                    using (Brush fill = new SolidBrush(hot ? Color.FromArgb(255, 222, 96) : Color.FromArgb(236, 188, 40)))
+                        e.Graphics.FillRectangle(fill, square);
+                    using (Pen check = new Pen(Color.FromArgb(28, 20, 4), 2.2f))
+                        e.Graphics.DrawLines(check, new PointF[] {
+                            new PointF(square.X + 3f, square.Y + 7.5f),
+                            new PointF(square.X + 6f, square.Y + 10.5f),
+                            new PointF(square.X + 11f, square.Y + 3.5f) });
+                }
+                else
+                {
+                    using (Brush fill = new SolidBrush(Color.FromArgb(22, 22, 28)))
+                        e.Graphics.FillRectangle(fill, square);
+                    using (Pen edge = new Pen(hot ? Color.FromArgb(200, 200, 210) : Color.FromArgb(110, 110, 122), 1f))
+                        e.Graphics.DrawRectangle(edge, square.X, square.Y, size - 1, size - 1);
+                }
+            };
         }
 
         static void Style(Button button, string text)
@@ -1093,9 +1235,6 @@ namespace SurvivorInstaller
 
         void ShowInstalled()
         {
-            string version = InstalledVersion(folderBox.Text);
-            installedLabel.Text = "Installed:  " + (version != null ? "v" + version : "not installed");
-            installedLabel.ForeColor = version != null ? TextColor : Muted;
             ShowUpdateState();
         }
 
@@ -1141,7 +1280,6 @@ namespace SurvivorInstaller
                         return;
                     }
                     notesBox.Text = "Could not reach GitHub: " + error.Message + "\r\n\r\nCheck your internet connection; it will ask again in half an hour.";
-                    latestLabel.Text = "Latest:  unknown";
                 }));
             }
         }
@@ -1186,9 +1324,7 @@ namespace SurvivorInstaller
             ShowUpdateState();
             if (latest != null)
             {
-                notesBox.Text = (latest.Beta
-                    ? "BETA BUILD, before a release: more bugs than usual may be in it, and it updates more often. The release's button takes you back.\r\n\r\n"
-                    : "") + Plain(latest.Notes);
+                ShowNotes();
                 if (latest.ZipUrl == null) Status("The latest release has no zip to install.");
             }
             Release newestInstaller = null;
@@ -1258,7 +1394,7 @@ namespace SurvivorInstaller
         {
             Release pending = selfUpdating ? updatingTo : selfRelease;
             arrowMark.Visible = pending != null;
-            versionLabel.Text = "Launcher " + Short(OwnVersion) + (pending != null ? "  \u2192  " + Short(pending.InstallerVersion) : "");
+            versionLabel.Text = "Launcher ver. " + Short(OwnVersion) + (pending != null ? " \u2192 " + Short(pending.InstallerVersion) : "");
             versionLabel.ForeColor = pending != null ? Color.FromArgb(110, 225, 125) : Muted;
             if (pending != null)
             {
@@ -1469,6 +1605,226 @@ namespace SurvivorInstaller
             return exe == null || !File.Exists(BaseData(Path.GetDirectoryName(exe)));
         }
 
+        // The game as last looked at: its exe's version and sha256 (read once
+        // per file, by its size and time), against the newest exe its server
+        // lists; and whether the server has data patches it lacks.
+        class GameState
+        {
+            public string Exe, Version, Sha256, Latest, LatestSha256, Notes;
+            public long Size;
+            public DateTime Written;
+            public bool PatchesBehind;
+            public bool Behind
+            {
+                get { return Latest != null && (PatchesBehind || (LatestSha256 != null && Sha256 != null && Sha256 != LatestSha256)); }
+            }
+        }
+
+        // What's new: while a newer game is out, its own notes first (Aethus',
+        // from the game's server), then the latest Survivor UI's. Set only when
+        // it changes, so a look every half hour leaves it scrolled as it was.
+        void ShowNotes()
+        {
+            string text = latest == null ? "" : (latest.Beta
+                ? "BETA BUILD, before a release: more bugs than usual may be in it, and it updates more often. The release's button takes you back.\r\n\r\n"
+                : "") + Plain(latest.Notes);
+            if (GameBehind() && !string.IsNullOrEmpty(game.Notes))
+            {
+                string notes = game.Notes.Trim().Replace("\r\n", "\n").Replace("\n", "\r\n");
+                text = "AZEROTH SURVIVORS " + game.Latest + " IS OUT, the game by Aethus:\r\n" + notes +
+                    "\r\n\r\nClick Update game to get it." +
+                    (text != "" ? "\r\n\r\n\u2014\u2014\u2014\r\n\r\n" + text : "");
+            }
+            if (text != "" && text != notesBox.Text) notesBox.Text = text;
+        }
+
+        // A newer game out than the one by the AddOns folder.
+        bool GameBehind()
+        {
+            return game != null && game.Behind && game.Exe == GameExePath();
+        }
+
+        // Under the folder box: the game's version and whether a newer one is
+        // out; with none found, where it should be.
+        void ShowGameLine()
+        {
+            string exe = GameExePath();
+            bool found = exe != null && !GameMissing();
+            // Check version by the line while there is a game to check.
+            gameCheckButton.Visible = found;
+            gameLabel.Location = found ? new Point(118, 160) : new Point(20, 158);
+            if (exe == null)
+            {
+                gameLabel.Text = "Recommended: the game's " + GameExe + " in its benilla-config folder,\nusually " + CommonGameFolder;
+                gameLabel.ForeColor = Muted;
+                return;
+            }
+            if (!found)
+            {
+                gameLabel.Text = "Azeroth Survivors found, without its data: click Get the game.";
+                gameLabel.ForeColor = Muted;
+                return;
+            }
+            if (checkingGame)
+            {
+                gameLabel.Text = "Asking wow.aethus.pl for the game's newest version...";
+                gameLabel.ForeColor = Muted;
+                return;
+            }
+            GameState state = game != null && game.Exe == exe ? game : null;
+            string name = "Azeroth Survivors" + (state != null && state.Version != null ? " " + state.Version : "");
+            if (state == null)
+            {
+                // Not looked at yet (or another game picked): asked now.
+                gameLabel.Text = name + "  ·  asking wow.aethus.pl...";
+                gameLabel.ForeColor = Muted;
+                CheckGame();
+            }
+            else if (state.Behind)
+            {
+                bool sameExe = state.LatestSha256 == state.Sha256;
+                gameLabel.Text = name + "  ·  " + (sameExe ? "new game data is out" : state.Latest + " is out") + ": click Update game";
+                gameLabel.ForeColor = Color.FromArgb(90, 220, 110);
+            }
+            else if (state.Latest != null)
+            {
+                gameLabel.Text = name + "  ·  up to date";
+                gameLabel.ForeColor = Muted;
+            }
+            else
+            {
+                gameLabel.Text = name + "  ·  could not reach wow.aethus.pl";
+                gameLabel.ForeColor = Muted;
+            }
+        }
+
+        // What the game writes just before its version in its exe ("0.101.0A
+        // new version is out!").
+        static readonly byte[] VersionMark = System.Text.Encoding.ASCII.GetBytes("A new version is out!");
+
+        // An exe's sha256, and its version as the game writes it (null when
+        // not found), in one read.
+        static void ReadExe(string path, out string sha, out string version)
+        {
+            version = null;
+            using (FileStream input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (System.Security.Cryptography.SHA256 hash = System.Security.Cryptography.SHA256.Create())
+            {
+                byte[] buffer = new byte[1 << 20];
+                byte[] tail = new byte[0];
+                int read;
+                while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    hash.TransformBlock(buffer, 0, read, null, 0);
+                    if (version != null) continue;
+                    // The last read's end before this one: a mark across the cut is found.
+                    byte[] window = new byte[tail.Length + read];
+                    Buffer.BlockCopy(tail, 0, window, 0, tail.Length);
+                    Buffer.BlockCopy(buffer, 0, window, tail.Length, read);
+                    version = VersionIn(window);
+                    int keep = Math.Min(window.Length, VersionMark.Length + 24);
+                    tail = new byte[keep];
+                    Buffer.BlockCopy(window, window.Length - keep, tail, 0, keep);
+                }
+                hash.TransformFinalBlock(new byte[0], 0, 0);
+                sha = BitConverter.ToString(hash.Hash).Replace("-", "").ToLowerInvariant();
+            }
+        }
+
+        static string VersionIn(byte[] data)
+        {
+            byte first = VersionMark[0];
+            for (int i = 1; i + VersionMark.Length <= data.Length; i++)
+            {
+                if (data[i] != first) continue;
+                int k = 1;
+                while (k < VersionMark.Length && data[i + k] == VersionMark[k]) k++;
+                if (k < VersionMark.Length) continue;
+                int start = Math.Max(0, i - 24);
+                Match match = Regex.Match(System.Text.Encoding.ASCII.GetString(data, start, i - start), @"(\d+\.\d+\.\d+)$");
+                if (match.Success) return match.Groups[1].Value;
+            }
+            return null;
+        }
+
+        // The game against the newest on its server, in the background: at the
+        // start, with each look at GitHub, after an update.
+        void CheckGame()
+        {
+            // No window handle yet (the constructor, a start in the tray): the
+            // answer would have nowhere to go; CheckNow asks once there is one.
+            if (checkingGame || gettingGame || !IsHandleCreated || GameMissing())
+            {
+                gameByHand = false;
+                return;
+            }
+            string exe = GameExePath();
+            GameState known = game != null && game.Exe == exe ? game : null;
+            checkingGame = true;
+            gameCheckButton.Enabled = false;
+            gameCheckButton.Text = "Checking...";
+            ShowGameLine();
+            new Thread(delegate ()
+            {
+                GameState state = new GameState();
+                state.Exe = exe;
+                try
+                {
+                    FileInfo info = new FileInfo(exe);
+                    state.Size = info.Length;
+                    state.Written = info.LastWriteTimeUtc;
+                    if (known != null && known.Size == state.Size && known.Written == state.Written)
+                    {
+                        state.Sha256 = known.Sha256;
+                        state.Version = known.Version;
+                    }
+                    else ReadExe(exe, out state.Sha256, out state.Version);
+                }
+                catch { }
+                try
+                {
+                    JavaScriptSerializer serializer = new JavaScriptSerializer();
+                    serializer.MaxJsonLength = int.MaxValue;
+                    Dictionary<string, object> latest = (Dictionary<string, object>)serializer.DeserializeObject(Download(GameServer + "latest.json"));
+                    GameFile newest = ReadGameFile(latest, GameServer, GameExe);
+                    Dictionary<string, object> patches = (Dictionary<string, object>)serializer.DeserializeObject(Download(GameServer + "data/patches.json"));
+                    string data = Path.Combine(Path.GetDirectoryName(exe), "Data");
+                    bool patchesBehind = false;
+                    foreach (object item in (System.Collections.IEnumerable)patches["patches"])
+                    {
+                        GameFile patch = ReadGameFile((Dictionary<string, object>)item, GameServer + "data/", null);
+                        string target = Path.Combine(data, patch.Name);
+                        if (!File.Exists(target) || new FileInfo(target).Length != patch.Size) patchesBehind = true;
+                    }
+                    state.Latest = Convert.ToString(latest["version"]);
+                    state.Notes = latest.ContainsKey("notes") ? Convert.ToString(latest["notes"]) : null;
+                    state.LatestSha256 = newest.Sha256;
+                    state.PatchesBehind = patchesBehind;
+                }
+                catch { }
+                if (IsDisposed) return;
+                BeginInvoke(new Action(delegate
+                {
+                    game = state;
+                    checkingGame = false;
+                    gameCheckButton.Enabled = true;
+                    gameCheckButton.Text = "Check version";
+                    ShowUpdateState();
+                    ShowNotes();
+                    // Asked by hand: the answer in the status line too.
+                    if (gameByHand)
+                    {
+                        gameByHand = false;
+                        string name = "Azeroth Survivors" + (state.Version != null ? " " + state.Version : "");
+                        Status(state.Latest == null ? "Could not reach wow.aethus.pl just now: try again later."
+                            : state.Behind ? (state.Latest != state.Version ? "Azeroth Survivors " + state.Latest + " is out" : "New game data is out")
+                                + ": click Update game."
+                            : name + " is the newest: up to date.");
+                    }
+                }));
+            }) { IsBackground = true }.Start();
+        }
+
         static GameFile ReadGameFile(Dictionary<string, object> data, string server, string name)
         {
             GameFile file = new GameFile();
@@ -1511,7 +1867,16 @@ namespace SurvivorInstaller
             plan.Folder = folder;
             Dictionary<string, object> latest = (Dictionary<string, object>)serializer.DeserializeObject(Download(GameServer + "latest.json"));
             plan.Version = Convert.ToString(latest["version"]);
-            if (!File.Exists(Path.Combine(folder, GameExe))) plan.Exe = ReadGameFile(latest, GameServer, GameExe);
+            string exe = Path.Combine(folder, GameExe);
+            GameFile newest = ReadGameFile(latest, GameServer, GameExe);
+            if (!File.Exists(exe)) plan.Exe = newest;
+            else
+            {
+                // An older exe than the newest: the newest in its place.
+                string sha, version;
+                ReadExe(exe, out sha, out version);
+                if (sha != newest.Sha256) plan.Exe = newest;
+            }
             Dictionary<string, object> patches = (Dictionary<string, object>)serializer.DeserializeObject(Download(GameServer + "data/patches.json"));
             foreach (object item in (System.Collections.IEnumerable)patches["patches"])
             {
@@ -1546,9 +1911,10 @@ namespace SurvivorInstaller
         void GetGame()
         {
             if (gettingGame || installing) return;
+            bool update = !GameMissing();
             if (GameRunning())
             {
-                Status("The game is open: close it, then Get the game.");
+                Status(update ? "The game is open: close it, then Update game." : "The game is open: close it, then Get the game.");
                 return;
             }
             string exe = GameExePath();
@@ -1573,7 +1939,8 @@ namespace SurvivorInstaller
                     }
                     if (plan.Download == 0)
                     {
-                        Status("The game is all there.");
+                        Status(update ? "The game is up to date: " + plan.Version + "." : "The game is all there.");
+                        CheckGame();
                         return;
                     }
                     string pieces = "";
@@ -1581,10 +1948,11 @@ namespace SurvivorInstaller
                     if (plan.Exe != null) pieces += "\n  \u2022  the newest game, " + plan.Version + ": " + Megabytes(plan.Exe.Download) + " MB";
                     if (plan.Patches.Count > 0) pieces += "\n  \u2022  its newest updates: " + Megabytes(plan.PatchesDownload) + " MB";
                     DialogResult go = MessageBox.Show(this,
-                        "Download Azeroth Survivors (about " + Megabytes(plan.Download) + " MB in all)?\n\n" +
+                        (update ? "Update Azeroth Survivors to " + plan.Version + " (about " + Megabytes(plan.Download) + " MB)?\n\n"
+                            : "Download Azeroth Survivors (about " + Megabytes(plan.Download) + " MB in all)?\n\n") +
                         "Azeroth Survivors is Aethus' game. The launcher takes it from his own servers (wow.aethus.pl) and checks it:" +
-                        pieces + "\n\nInto: " + plan.Folder + "\nIt needs about " + Gigabytes(RoomNeeded(plan)) + " GB free while it works. " +
-                        "Then it installs Survivor UI.",
+                        pieces + "\n\nInto: " + plan.Folder + "\nIt needs about " + Gigabytes(RoomNeeded(plan)) + " GB free while it works." +
+                        (update ? "" : " Then it installs Survivor UI."),
                         "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                     if (go != DialogResult.Yes)
                     {
@@ -1775,6 +2143,8 @@ namespace SurvivorInstaller
                 {
                     gettingGame = false;
                     ShowUpdateState();
+                    // The exe may have changed: its version read again.
+                    CheckGame();
                 }));
             }
         }
@@ -1792,8 +2162,8 @@ namespace SurvivorInstaller
             }
             if (installing) return;
             installing = true;
-            installButton.Enabled = false;
-            betaButton.Enabled = false;
+            Active(installButton, false, StableText);
+            Active(betaButton, false, BetaColor);
             browseButton.Enabled = false;
             installItem.Enabled = false;
             playButton.Enabled = false;
