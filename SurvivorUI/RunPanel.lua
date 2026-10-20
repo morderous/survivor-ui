@@ -1266,6 +1266,103 @@ local function RecordHit(ability, amount)
 	end
 end
 
+------------------------------------------------------------------------------
+-- A demon's spell the hero holds too (the Infernal's Hellfire and the
+-- hero's): the combat log writes both the same, by the hero's own event. The
+-- game's spell list (AZS_SPELLS, sent every 2 seconds or so) tells the
+-- hero's casts: a cast starts the cooldown over, so the list shows when it
+-- began. A line that came from then to 1.2 sec after (a spell's flight) is
+-- the hero's; any other is the demon's, once a list after the line has had
+-- its say (or 4 sec on). So such a line reaches Biggest Crits 2 sec or so
+-- late. A spell cooling faster than the list comes casts unseen between two
+-- lists: its lines stay the hero's, as before.
+
+local held = {}           -- lines waiting: { at, key, hero, demon, amount, crit }
+local casts = {}          -- [key] = the hero's cast times the lists told, the last ones
+local listSeen            -- AZS_SPELLS_UPDATED at the last look
+local SLOWEST_LIST = 1.9  -- a cooldown at least this long shows every cast
+
+local function Cooldown(key)
+	for index = 1, table.getn(AZS_SPELLS or {}) do
+		local entry = AZS_SPELLS[index]
+		if (entry.key or entry[1]) == key then
+			return tonumber(entry.cd or entry[4]), tonumber(entry.cdmax or entry[5])
+		end
+	end
+end
+
+-- Each new list: every spell's last cast, while its cooldown runs (a spell
+-- ready shows a tenth or two, which tells nothing).
+local function ReadCasts()
+	local sent = AZS_SPELLS_UPDATED
+	if not sent or sent == listSeen then
+		return
+	end
+	listSeen = sent
+	for index = 1, table.getn(AZS_SPELLS or {}) do
+		local entry = AZS_SPELLS[index]
+		local key = entry.key or entry[1] or ""
+		local cd, cdmax = tonumber(entry.cd or entry[4]), tonumber(entry.cdmax or entry[5])
+		if cd and cdmax and cd > 0.3 and cd <= cdmax + 0.1 then
+			local at = sent - (cdmax - cd)
+			casts[key] = casts[key] or {}
+			local told = casts[key]
+			local last = told[table.getn(told)]
+			if not last or math.abs(last - at) > 0.3 then
+				table.insert(told, at)
+				if table.getn(told) > 12 then
+					table.remove(told, 1)
+				end
+			end
+		end
+	end
+end
+
+-- A line kept back to tell whose, or false to record it as it is.
+local function Hold(name, amount, crit)
+	local key, demon = SurvivorUI_PetCast and SurvivorUI_PetCast(name)
+	if not key then
+		return false
+	end
+	local _, cdmax = Cooldown(key)
+	if not (cdmax and cdmax >= SLOWEST_LIST) then
+		return false
+	end
+	table.insert(held, { at = GetTime(), key = key, hero = name, demon = demon, amount = amount, crit = crit })
+	return true
+end
+
+local function Whose(line)
+	for _, at in pairs(casts[line.key] or {}) do
+		if at <= line.at + 0.15 and at >= line.at - 1.2 then
+			return line.hero
+		end
+	end
+	if (listSeen and listSeen > line.at + 0.15) or GetTime() - line.at > 4 then
+		return line.demon
+	end
+end
+
+local castWatch = CreateFrame("Frame")
+castWatch:SetScript("OnUpdate", function()
+	ReadCasts()
+	local index = 1
+	while index <= table.getn(held) do
+		local line = held[index]
+		local whose = Whose(line)
+		if whose then
+			table.remove(held, index)
+			if line.crit then
+				RecordCrit(whose, line.amount)
+			else
+				RecordHit(whose, line.amount)
+			end
+		else
+			index = index + 1
+		end
+	end
+end)
+
 -- The same four shapes as a crit's line, with "hits" in place of "crits".
 local function Hit(message)
 	-- Every shape below has one of these: a crit's line, the most of them in a
@@ -1281,12 +1378,19 @@ local function Hit(message)
 		end
 	end
 	if not ability then
-		_, _, _, ability, _, amount = string.find(message, "^(.+)'s (.+) hits (.+) for (%d+)")
+		local owner
+		_, _, owner, ability, _, amount = string.find(message, "^(.+)'s (.+) hits (.+) for (%d+)")
+		if owner and SurvivorUI_IsPet and SurvivorUI_IsPet(owner) then
+			ability = owner.."'s "..ability
+		end
 	end
 	if not ability then
 		_, _, ability, _, amount = string.find(message, "^(.+) hits (.+) for (%d+)")
 	end
-	RecordHit(SurvivorUI_SourceOf and SurvivorUI_SourceOf(ability, message) or ability, amount)
+	local name = SurvivorUI_SourceOf and SurvivorUI_SourceOf(ability, message) or ability
+	if not Hold(name, amount, false) then
+		RecordHit(name, amount)
+	end
 end
 
 local function Crit(message)
@@ -1309,14 +1413,23 @@ local function Crit(message)
 		end
 	end
 	if not ability then
-		-- "Magma Totem's Magma Totem crits Kobold Vermin for 90."
-		_, _, _, ability, _, amount = string.find(message, "^(.+)'s (.+) crits (.+) for (%d+)")
+		-- "Magma Totem's Magma Totem crits Kobold Vermin for 90." A pet's own
+		-- spell keeps its pet, as the combat numbers have it (SurvivorUI.lua):
+		-- "Imp's Fireball crits..." is the Imp's Fireball.
+		local owner
+		_, _, owner, ability, _, amount = string.find(message, "^(.+)'s (.+) crits (.+) for (%d+)")
+		if owner and SurvivorUI_IsPet and SurvivorUI_IsPet(owner) then
+			ability = owner.."'s "..ability
+		end
 	end
 	if not ability then
 		-- "Spirit Wolf crits Kobold Vermin for 30."
 		_, _, ability, _, amount = string.find(message, "^(.+) crits (.+) for (%d+)")
 	end
-	RecordCrit(SurvivorUI_SourceOf and SurvivorUI_SourceOf(ability, message) or ability, amount)
+	local name = SurvivorUI_SourceOf and SurvivorUI_SourceOf(ability, message) or ability
+	if not Hold(name, amount, true) then
+		RecordCrit(name, amount)
+	end
 end
 
 local function Dealt(message)

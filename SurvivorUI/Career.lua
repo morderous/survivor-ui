@@ -36,6 +36,15 @@ local function Num(value)
 	return tonumber(value) or 0
 end
 
+-- A run's damage as the meter counts it, not the end screen's with the
+-- overkill (RunHistory.lua's Dealt).
+local function Dealt(run)
+	if SurvivorUI_RunDealt then
+		return SurvivorUI_RunDealt(run)
+	end
+	return Num(run and run.dealt)
+end
+
 local function Short(value)
 	return SurvivorUI_Abbrev and SurvivorUI_Abbrev(value) or tostring(math.floor(Num(value) + 0.5))
 end
@@ -237,7 +246,7 @@ local function Add(groups, key, run)
 	group.kills = group.kills + Num(final.kills)
 	group.mostKills = math.max(group.mostKills, Num(final.kills))
 	if time >= 120 then
-		group.dps = math.max(group.dps, Num(final.dealt) / time)
+		group.dps = math.max(group.dps, Dealt(final) / time)
 	end
 	group.class = group.class or run.class
 	return group
@@ -288,7 +297,7 @@ local function Draw()
 		end
 		all.time = all.time + Num(final.time)
 		all.kills = all.kills + Num(final.kills)
-		all.dealt = all.dealt + Num(final.dealt)
+		all.dealt = all.dealt + Dealt(final)
 		all.gold = all.gold + Num(final.gold)
 		all.talent = all.talent + Num(run.talentXp) + (run.endless and Num(run.endless.talentXp) or 0)
 	end

@@ -248,6 +248,7 @@ end
 
 local function SetView(index)
 	view = index
+	meter.scrolled = 0
 	Settings().meterView = VIEWS[index].key
 	meter.title:SetText(VIEWS[index].title)
 	FitTitle()
@@ -529,8 +530,55 @@ local colors = {}               -- [source] = palette entry
 local colorsGiven = 0
 local bars = {}
 
+-- The pets and the summoned, by their own name in the meter: the game's
+-- summoning icons (its data has them all but the Felguard's, which came
+-- later in WoW). Looked at before the worn items, whose names an "Imp"
+-- could be found in.
+local PETS = {
+	["Imp"] = "Spell_Shadow_SummonImp",
+	["Succubus"] = "Spell_Shadow_SummonSuccubus",
+	["Voidwalker"] = "Spell_Shadow_SummonVoidWalker",
+	["Felhunter"] = "Spell_Shadow_SummonFelHunter",
+	["Felguard"] = "Spell_Shadow_Metamorphosis",
+	["Infernal"] = "Spell_Shadow_SummonInfernal",
+	["Doomguard"] = "Spell_Shadow_AntiMagicShell",
+	["Pit Lord"] = "Spell_Shadow_RitualOfSacrifice",
+	["Felseeker"] = "Spell_Fire_SoulBurn",        -- the Pit Lord's Searing Pain
+	["Water Elemental"] = "Spell_Frost_SummonWaterElemental",
+	["Spirit Wolf"] = "Spell_Nature_SpiritWolf",
+	["Treant"] = "Spell_Nature_ForceOfNature",
+	["Wolf"] = "Ability_Hunter_Pet_Wolf",
+	["Raptor"] = "Ability_Hunter_Pet_Raptor",
+}
+
+-- What pets cast that the hero may not have, so no button or spellbook shows
+-- it: the Imp's Fireball, the Infernal's fall from the sky (Inferno: a great
+-- fireball, a meteor; not the Infernal's own icon, so its row and the
+-- Infernal's blows' tell apart, nor Rain of Fire's, a warlock's own spell).
+local PET_SPELLS = {
+	["Fireball"] = "Spell_Fire_FlameBolt",
+	["Firebolt"] = "Spell_Fire_FireBolt",
+	["Inferno"] = "Spell_Fire_Fireball02",
+}
+
+-- A pet's own spell as Biggest Crits names it, "Imp's Fireball": its pet
+-- and its spell; nil for anything else ("Magma Totem's Magma Totem").
+local function PetSpell(name)
+	local _, _, owner, spell = string.find(name or "", "^(.-)'s (.+)$")
+	if owner and PETS[owner] then
+		return owner, spell
+	end
+end
+
+-- True for a pet's or a summon's name (Biggest Crits keeps it before its spell).
+function SurvivorUI_IsPet(name)
+	return PETS[English(name)] ~= nil
+end
+
 local function ColorOf(name)
 	name = English(name)
+	-- A pet's spell in the pet's color, as its bar in the meter.
+	name = PetSpell(name) or name
 	if not colors[name] then
 		colorsGiven = colorsGiven + 1
 		colors[name] = PALETTE[math.mod(colorsGiven - 1, table.getn(PALETTE)) + 1]
@@ -645,6 +693,14 @@ local function IconOf(name)
 	if weapon then
 		return weapon
 	end
+	if PETS[name] then
+		return "Interface\\Icons\\"..PETS[name]
+	end
+	-- "Imp's Fireball": the spell's icon, else its pet's.
+	local pet, spell = PetSpell(name)
+	if pet then
+		return IconOf(spell) or "Interface\\Icons\\"..PETS[pet]
+	end
 	if icons[name] then
 		return icons[name]
 	end
@@ -660,6 +716,9 @@ local function IconOf(name)
 		for _, source in pairs(BORROWED[name]) do
 			texture = texture or IconOf(source)
 		end
+	end
+	if not texture and PET_SPELLS[name] then
+		texture = "Interface\\Icons\\"..PET_SPELLS[name]
 	end
 	if texture then
 		icons[name] = texture
@@ -869,6 +928,13 @@ local function Bar(index)
 	bar:RegisterForDrag("LeftButton")
 	bar:SetScript("OnDragStart", StartMove)
 	bar:SetScript("OnDragStop", StopMove)
+	-- The wheel over a line slides the list, as over the meter (meter.Wheel).
+	bar:EnableMouseWheel(true)
+	bar:SetScript("OnMouseWheel", function()
+		if meter.Wheel then
+			meter.Wheel()
+		end
+	end)
 
 	bars[index] = bar
 	return bar
@@ -963,11 +1029,18 @@ local function Draw()
 		meter.empty:Hide()
 	end
 
-	local count = math.min(shownLines, table.getn(lines))
+	-- Rolled down by the wheel: the first lines out of sight and as many more
+	-- in at the bottom, never past the last. The bars keep the top line's
+	-- measure. Where the wheel left it is kept as it is: a list the game sends
+	-- shorter for a moment is drawn from higher up, and the next one from
+	-- where the wheel left it again (meter.most: the most it can roll now).
+	meter.most = math.max(0, table.getn(lines) - shownLines)
+	local skip = math.min(meter.scrolled or 0, meter.most)
+	local count = math.min(shownLines, table.getn(lines) - skip)
 	local top = count > 0 and lines[1].dmg or 0
 	local firstBar = BARS_TOP
 	for index = 1, count do
-		local line = lines[index]
+		local line = lines[index + skip]
 		local name = line.name
 		local proc = line.proc
 		local color = ColorOf(name)
@@ -1023,6 +1096,22 @@ local function Draw()
 		bars[index].ability = nil
 	end
 end
+
+-- The wheel over the meter: down, the first line goes up out of sight and the
+-- next comes in at the bottom; up, back. A view chosen starts at the top.
+meter.Wheel = function()
+	local most = meter.most or 0
+	meter.scrolled = math.max(0, math.min(most, math.min(meter.scrolled or 0, most) - (arg1 or 0)))
+	Draw()
+	-- The line under the mouse now holds another source: its card closed,
+	-- open again on the next line the mouse goes to.
+	GameTooltip:Hide()
+	if SurvivorUI_CritCardHide then
+		SurvivorUI_CritCardHide()
+	end
+end
+meter:EnableMouseWheel(true)
+meter:SetScript("OnMouseWheel", meter.Wheel)
 
 local elapsed = 0
 local viewRestored

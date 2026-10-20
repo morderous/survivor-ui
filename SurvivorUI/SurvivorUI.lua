@@ -380,9 +380,38 @@ local function ShortName(name)
 	return name
 end
 
+-- A warlock's demons' spells, which the combat log writes as the hero's own,
+-- by the hero's own event ("Your Hellfire hits...", CHAT_MSG_SPELL_SELF_DAMAGE,
+-- seen 2026-10-20), named as the meter counts them (the Imp's Fireball goes to
+-- the Imp's bar, the Pit Lord's Searing Pain is its Felseeker). The demon's
+-- when the hero doesn't hold the spell; when the hero does, the two read the
+-- same: Biggest Crits tells them apart by the hero's cooldown (RunPanel.lua,
+-- SurvivorUI_PetCast), the rest keeps them the hero's.
+local PET_CASTS = {
+	["Fireball"] = { "fireball", "Imp's Fireball" },
+	["Firebolt"] = { "firebolt", "Imp's Firebolt" },
+	["Inferno"] = { "inferno", "Infernal's Inferno" },
+	["Hellfire"] = { "hellfire", "Infernal's Hellfire" },
+	["Searing Pain"] = { "searing_pain", "Felseeker" },
+	["Shadow Bolt"] = { "shadow_bolt", "Doomguard's Shadow Bolt" },
+}
+
+-- A demon's spell the hero holds too: its key and the demon's name for it
+-- ("hellfire", "Infernal's Hellfire"); nil for any other name.
+function SurvivorUI_PetCast(name)
+	local cast = name and PET_CASTS[name]
+	if cast and Holds(cast[1]) then
+		return cast[1], cast[2]
+	end
+end
+
 function SurvivorUI_SourceOf(name, line)
 	if name == "Attack" and line and string.find(line, " Fire damage", 1, true) and Holds("searing_totem") then
 		return "Searing Totem"
+	end
+	local cast = name and PET_CASTS[name]
+	if cast and not Holds(cast[1]) then
+		return cast[2]
 	end
 	if name == "Fire Nova" and Holds("call_of_flame") and not Holds("fire_nova") then
 		return "Call of Flame"
@@ -411,8 +440,12 @@ local function CritAbility(line)
 	if string.find(line, "^You crit ") then
 		return "Melee"
 	end
-	local _, _, _, own = string.find(line, "^(.+)'s (.+) crits ")
+	local _, _, owner, own = string.find(line, "^(.+)'s (.+) crits ")
 	if own then
+		-- A pet's own spell keeps its pet: "Imp's Fireball" (Meter.lua's pets).
+		if SurvivorUI_IsPet and SurvivorUI_IsPet(owner) then
+			return owner.."'s "..own
+		end
 		return own
 	end
 	local _, _, who = string.find(line, "^(.+) crits ")
@@ -1451,13 +1484,14 @@ end
 
 ------------------------------------------------------------------------------
 -- The micro buttons (character, talents, map, menu, help) go to the bottom
--- right corner. The others are chained to the first, so moving it moves all.
+-- left corner, under the chat: the bottom right one is the damage meter's.
+-- The others are chained to the first, so moving it moves all.
 
 local function MoveMicroButtons()
 	local first = getglobal("CharacterMicroButton")
 	if first then
 		first:ClearAllPoints()
-		first:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMRIGHT", -140, 2)
+		first:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 4, 2)
 	end
 end
 
@@ -1472,7 +1506,7 @@ local MICRO_BUTTONS = {
 local microZone = CreateFrame("Frame", "SurvivorUIMicroZone", UIParent)
 microZone:SetWidth(170)
 microZone:SetHeight(60)
-microZone:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
+microZone:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, 0)
 
 local microAlpha = 0
 microZone:SetScript("OnUpdate", function()

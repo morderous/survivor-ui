@@ -1126,6 +1126,8 @@ local MODULES = {
 			"Each ability's biggest critical strike this run." },
 		{ "Counters", OnUnlessOff("counters"), Flip("counters"),
 			"Over the spells' buttons: the DoTs ticking, the enemies feared, the totems down, the shouts." },
+		{ "Soul shards", FeatureOn("soulShards"), FeatureToggle("soulShards", true),
+			"A warlock's, with Soul Fire: five gems under your frame, filling as your kills gather shards (one every few seconds at most), emptied by the free Soul Fire. The game tells no count: it is worked out from your kills, and set right at each Soul Fire. Dimmed, the count may be off (the chat says why)." },
 	} },
 	{ "Character", {
 		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
@@ -1155,7 +1157,7 @@ local MODULES = {
 		{ "Square minimap", FeatureOn("minimap"), FeatureToggle("minimap"),
 			"The minimap square, its buttons tidied.", true },
 		{ "Menu buttons on hover", FeatureOn("microMenu"), FeatureToggle("microMenu"),
-			"The game's menu buttons in the corner, shown on hover.", true },
+			"The game's menu buttons in the bottom left corner, shown on hover.", true },
 		{ "White outline", OnUnlessOff("hover"), Call("SurvivorUI_ToggleHover"),
 			"Around the frame or button the mouse is on." },
 		{ "Nameplates", PlatesOn, function() Plates("none") end,

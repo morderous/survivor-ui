@@ -93,7 +93,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - Action buttons 1 to 6 and the last button of the bar (the `=` key), with cooldown numbers. The rest of the bar and its art are put away.
 - The experience bar as a thin strip under the row.
 - A square minimap, zoomed with the mouse wheel.
-- The micro buttons in the bottom right corner, hidden until the mouse reaches them.
+- The micro buttons in the bottom left corner, hidden until the mouse reaches them.
 - A flat, dark chat panel without the scroll buttons, in 10 point text. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
 - A flat character pane in the hero's class color: the hero and the item slots on the left, the run's numbers in titled sections on the right. The numbers beside the hero can be switched off; the same numbers as a panel of their own on the screen all the time, the Stats panel, moved and resized like the other panels; each class picks which of them show and in what order.
 - A flat, dark tooltip with smaller type. An ability's tooltip is laid out again: its name in its school's color, the school, the cooldown, the range and the crit at a glance, the description's numbers standing out, then its upgrades, bonuses and talents, a line each.
@@ -208,6 +208,20 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.17, 2026-10-20
+
+**Survivor UI**
+
+A warlock's update: the soul shards on screen, and the demons named and drawn as what they are.
+
+- **Soul shards** (new, with new art: restart the game once; asked by Simops): five gems under your frame, lit violet as they fill, a pulse of light for each new one, a flash as Soul Fire goes. The game tells addons no shard count, so it is worked out from Soul Fire's own rule: each kill gathers one, at most one every few seconds, and the free Soul Fire at five empties them, which also sets the count right each time. The seconds and the five are read off Soul Fire's tooltip, in any of the game's languages, so a talent or a patch that changes them changes the gems too; should the tooltip stop reading as expected, or another of your spells speak of shards (a new talent or spell; this one with the game in English), the gems dim and the chat says once why. They go with your frame until you move them on their own in move mode ("Soul shards"; its card's reset puts them back). Only while you have Soul Fire. A module of its own: **Soul shards** (Modules, Combat), on.
+- **Your demons with their own icons**: Imp, Succubus, Voidwalker, Felhunter, Felguard, Infernal, Doomguard, the Pit Lord and its Felseeker, each with its summoning icon in the meter, Biggest Crits and Run History, instead of the Survivor UI one; in every language the game has. The other classes' summons too: the Water Elemental, spirit wolves, treants, the hunter's wolf and raptor.
+- **Your demons' crits as theirs**: the combat log writes a demon's spells as if they were yours, so Biggest Crits had a "Fireball" you never learned. Now each goes to its demon, named and colored as the meter counts it: "Imp's Fireball", "Infernal's Inferno" for the Infernal's fall (a meteor's icon, no longer two rows that looked the same), "Infernal's Hellfire" for its burning aura, the Pit Lord's Searing Pain as its "Felseeker", the Doomguard's Shadow Bolt as its own. With the same spell in your build, your cooldown tells the two apart: your cast starts it over in the game's spell list, so a Hellfire crit is yours only when it came as you cast it (such a crit comes into the box a couple of seconds late; for a spell cooling faster than the game sends that list, they stay together as yours).
+- **The damage meter scrolls with the mouse wheel**: in the right column it shows as many lines as fit, so a seventh source (a Doomguard, say) could be out of sight. Roll down over it and the first line goes up while the next comes in at the bottom; roll up to come back. Changing view (damage, healing, boss damage) starts at the top again.
+- **Run History's damage is the meter's**: "Damage dealt" and "Damage / sec" now show what reached the enemies, the same number as This Run during the run and the Damage Done total. The game's end of the run counts the blows' whole damage, overkill included, and with many weak enemies under big blows that came to nearly four times as much (960k against 252k), which made a run look far stronger than it was. That count is still kept, at the top of the row's tooltip in red ("Damage with overkill", with how much of it is overkill). The personal bests and the Career's totals go by the meter's too, older runs included where they kept it.
+- **The game's menu buttons in the bottom left corner**, under the chat, still hidden until the mouse reaches them: in the bottom right they came up over the damage meter.
+- **The addon's version at the foot of Run History**: its footer ends with "Survivor UI v3.0.17", read off the addon's own .toc, so a picture of the window tells which version took it.
 
 ### v3.0.16, 2026-10-20
 

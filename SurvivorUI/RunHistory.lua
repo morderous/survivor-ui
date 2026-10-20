@@ -44,6 +44,16 @@ local function Num(value)
 	return tonumber(value) or 0
 end
 
+-- The damage a run dealt as the meter counts it, what reached the enemies,
+-- as This Run shows it while the run lasts. The game's end screen counts it
+-- with the overkill too (2026-10-20: 960k against the meter's 252k, many weak
+-- enemies under big blows), and that is what dealt keeps. A run kept before
+-- the meter's total was, by dealt. Career.lua's too.
+local function Dealt(run)
+	return run and tonumber(run.meterTotal) or Num(run and run.dealt)
+end
+SurvivorUI_RunDealt = Dealt
+
 local function Short(value)
 	return SurvivorUI_Abbrev and SurvivorUI_Abbrev(value) or tostring(math.floor(Num(value) + 0.5))
 end
@@ -2270,6 +2280,22 @@ local function DrawRun(run, base)
 		local added = base and Num(run[key]) - Num(base[key]) or 0
 		return added > 0 and "+"..write(added) or nil
 	end
+	local addedDealt = base and Dealt(run) - Dealt(base) or 0
+	-- The damage's row tells the end screen's count too, with the overkill:
+	-- first under its title, in red, and what it is.
+	local dealtTip = run.rowTips and run.rowTips.dealt
+	if run.meterTotal and Num(run.dealt) > Dealt(run) + 0.5 then
+		local red = { 1, 0.35, 0.35 }
+		local tip = { (dealtTip and dealtTip[1]) or { l = "Damage dealt", lc = { 1, 0.76, 0.08 } } }
+		table.insert(tip, { l = "Damage with overkill", r = Short(run.dealt), lc = red, rc = red })
+		table.insert(tip, { l = "As the game's end of the run shows it. "..Short(Num(run.dealt) - Dealt(run))
+			.." of it is overkill: blows past what each enemy had left.", lc = MUTED })
+		table.insert(tip, { l = " " })
+		for index = 2, table.getn(dealtTip or {}) do
+			table.insert(tip, dealtTip[index])
+		end
+		dealtTip = tip
+	end
 	-- Label, value, color, what the endless part added, the row's key (for
 	-- its tooltip, as This Run's).
 	local lines = {
@@ -2280,8 +2306,8 @@ local function DrawRun(run, base)
 		{ "Elites slain",    Num(run.elites),            { 1.00, 0.55, 0.10 }, More("elites", Plain), "elites" },
 		{ "Guardians slain", Num(run.guardians),         { 0.20, 0.75, 0.95 }, More("guardians", Plain), "guardians" },
 		{ "Bosses slain",    Num(run.bosses),            { 0.72, 0.32, 1.00 }, More("bosses", Plain), "bosses" },
-		{ "Damage dealt",    Short(run.dealt),           { 1.00, 0.76, 0.08 }, More("dealt", Short), "dealt" },
-		{ "Damage / sec",    seconds > 0 and Short(Num(run.dealt) / seconds) or "-", { 0.95, 0.60, 0.20 }, nil, "dps" },
+		{ "Damage dealt",    Short(Dealt(run)),          { 1.00, 0.76, 0.08 }, addedDealt > 0 and "+"..Short(addedDealt) or nil, "dealt", dealtTip },
+		{ "Damage / sec",    seconds > 0 and Short(Dealt(run) / seconds) or "-", { 0.95, 0.60, 0.20 }, nil, "dps" },
 		{ "Damage taken",    Short(run.taken),           { 0.90, 0.25, 0.25 }, More("taken", Short), "taken" },
 		{ "Gold earned",     Short(run.gold),            { 1.00, 0.86, 0.35 }, More("gold", Short), "gold" },
 		{ "Caches opened",   Num(run.caches),            { 0.55, 0.85, 0.55 }, More("caches", Plain), "caches" },
@@ -2300,7 +2326,9 @@ local function DrawRun(run, base)
 		if key == "kpm" then
 			return time >= 120 and Num(x.kills) / time * 60 or nil
 		elseif key == "dps" then
-			return time >= 120 and Num(x.dealt) / time or nil
+			return time >= 120 and Dealt(x) / time or nil
+		elseif key == "dealt" then
+			return Dealt(x)
 		end
 		return Num(x[key])
 	end
@@ -2341,7 +2369,7 @@ local function DrawRun(run, base)
 		row.label:SetText(line[1])
 		row.value:SetText(line[2])
 		row.more:SetText(line[4] or "")
-		row.tip = line[5] and run.rowTips and run.rowTips[line[5]] or nil
+		row.tip = line[6] or (line[5] and run.rowTips and run.rowTips[line[5]]) or nil
 		row.label:SetTextColor(color[1], color[2], color[3])
 		row.value:SetTextColor(color[1], color[2], color[3])
 		row.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
@@ -3266,11 +3294,14 @@ local function DrawNavigation(history, total)
 	end
 	-- How many are kept, out of how many the options keep (the Run History tab).
 	local most = tonumber(Settings().historyKeep) or 100
-	-- "RUN HISTORY  ·  43 of 100 runs kept  ·  2 pinned": the name in soft gold,
-	-- the numbers white.
+	-- "RUN HISTORY  ·  43 of 100 runs kept  ·  2 pinned  ·  Survivor UI v3.0.16":
+	-- the name in soft gold, the numbers white; the addon's version (its .toc)
+	-- last, so a picture of the window tells which one took it.
 	local dot = "   \194\183   "
+	local version = GetAddOnMetadata and GetAddOnMetadata("SurvivorUI", "Version")
 	footer:SetText("|cffd9b44aRUN HISTORY|r"..dot.."|cffffffff"..total.."|r of "..most.." runs kept"
-		..(pinned > 0 and (dot.."|cffffffff"..pinned.."|r pinned") or ""))
+		..(pinned > 0 and (dot.."|cffffffff"..pinned.."|r pinned") or "")
+		..(version and (dot.."Survivor UI v"..version) or ""))
 	local pinnedRun = history[shown].pinned and true or false
 	pinButton.text:SetText(pinnedRun and "Pinned" or "Pin")
 	pinButton.lit = pinnedRun

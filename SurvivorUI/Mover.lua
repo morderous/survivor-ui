@@ -857,7 +857,7 @@ local PLACES = {
 	"buffsLeft", "buffsBottom", "tallyLeft", "tallyX", "tallyTop", "playerLeft", "playerTop", "targetLeft", "targetTop",
 	"guardiansLeft", "guardiansTop", "recordLeft", "recordTop",
 	"dealtLeft", "dealtTop", "critLeft", "critTop", "takenLeft", "takenTop", "healLeft", "healTop",
-	"mapButtonX", "mapButtonY", "xpBarX", "xpBarTop",
+	"mapButtonX", "mapButtonY", "xpBarX", "xpBarTop", "shardsX", "shardsTop",
 }
 
 -- A new layout starts everyone from the first places once: the pieces moved
