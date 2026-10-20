@@ -153,7 +153,13 @@ local function TargetKind()
 	end
 end
 
+-- The plates ask for the settings every frame: once the saved table is checked,
+-- it is handed back as is until the game replaces it.
+local settingsChecked
 local function Settings()
+	if settingsChecked and settingsChecked == SurvivorPlatesDB then
+		return settingsChecked
+	end
 	SurvivorPlatesDB = SurvivorPlatesDB or {}
 	local db = SurvivorPlatesDB
 	-- The defaults: a plate on every enemy, a name only on elites, guardians and
@@ -169,6 +175,7 @@ local function Settings()
 		db.hidden = true
 	end
 	db.scale = db.scale or 1
+	settingsChecked = db
 	return db
 end
 
@@ -183,6 +190,13 @@ local function Short(value)
 end
 
 local overlays = {}
+
+-- Asked once a frame for every plate to read: whether there is a target, and
+-- its kind as the game has it. auraVersion moves on when the target or its
+-- debuffs change, so the target's plate reads its debuffs only then.
+local hasTarget = false
+local targetKind
+local auraVersion = 0
 
 -- Other addons find the plates here: the art a plate is recognized by is
 -- blanked once it is skinned. Each entry has .plate and .stock.name.
@@ -207,7 +221,8 @@ local function ApplyKind(overlay, kind)
 	else
 		overlay.name:Hide()
 	end
-
+	-- The debuffs sit above the name, which may have moved.
+	overlay.auraVersion = nil
 end
 
 -- Debuffs on the target's plate, with their stacks. The 1.12 client only tells
@@ -216,25 +231,24 @@ end
 local PLATE_DEBUFFS = 6
 local DEBUFF_SIZE = 15
 
-local function UpdatePlateDebuffs(overlay, isTarget)
+local function HidePlateDebuffs(overlay)
 	local icons = overlay.debuffs
-	if not isTarget then
-		if icons and overlay.debuffsShown then
-			for index = 1, PLATE_DEBUFFS do
-				if icons[index] then
-					icons[index]:Hide()
-				end
+	if icons then
+		for index = 1, PLATE_DEBUFFS do
+			if icons[index] then
+				icons[index]:Hide()
 			end
-			overlay.debuffsShown = nil
 		end
-		return
 	end
+end
 
+-- Only when the target, its debuffs or the plate's kind changed.
+local function UpdatePlateDebuffs(overlay)
+	local icons = overlay.debuffs
 	if not icons then
 		icons = {}
 		overlay.debuffs = icons
 	end
-	overlay.debuffsShown = true
 
 	local lift = overlay.named and (overlay.style.nameSize * Settings().scale + 7) or 4
 	for index = 1, PLATE_DEBUFFS do
@@ -274,7 +288,7 @@ local function UpdatePlate()
 	local stock = overlay.stock
 
 	-- The client dims every plate but the target's.
-	local isTarget = UnitExists("target") and overlay.plate:GetAlpha() == 1
+	local isTarget = hasTarget and overlay.plate:GetAlpha() == 1
 
 	local name = stock.name:GetText()
 	if name ~= overlay.lastName or overlay.kindsVersion ~= kindsVersion then
@@ -286,7 +300,7 @@ local function UpdatePlate()
 	-- Only the target can be told apart as a guardian; it goes back to an elite
 	-- when it is no longer the target.
 	local kind = overlay.baseKind
-	if isTarget and overlay.targetKind == "guardian" then
+	if isTarget and targetKind == "guardian" then
 		kind = "guardian"
 	end
 	if kind ~= overlay.kind then
@@ -309,37 +323,56 @@ local function UpdatePlate()
 		end
 	end
 
+	-- The bar, its text and its color are redrawn only when the health or the
+	-- kind changed: the text is a new string each time, and a horde of plates
+	-- making them every frame keeps the garbage collector busy.
 	local low, high = stock.health:GetMinMaxValues()
 	local value = stock.health:GetValue()
-	local share = high > low and (value - low) / (high - low) or 0
-	local percent = math.floor(share * 100 + 0.5)
-	overlay.bar:SetValue(share)
+	if value ~= overlay.shownValue or high ~= overlay.shownHigh or low ~= overlay.shownLow
+		or overlay.kind ~= overlay.shownKind then
+		overlay.shownValue = value
+		overlay.shownHigh = high
+		overlay.shownLow = low
+		overlay.shownKind = overlay.kind
 
-	-- A 0 to 100 bar means the client only knows the percentage; anything else
-	-- is the unit's real health.
-	if high - low == 100 or high <= 1 then
-		overlay.health:SetText(percent.."%")
-	elseif overlay.kind == "normal" then
-		overlay.health:SetText(Short(value))
-	else
-		overlay.health:SetText(Short(value).." / "..Short(high).."  "..percent.."%")
+		local share = high > low and (value - low) / (high - low) or 0
+		local percent = math.floor(share * 100 + 0.5)
+		overlay.bar:SetValue(share)
+
+		-- A 0 to 100 bar means the client only knows the percentage; anything else
+		-- is the unit's real health.
+		if high - low == 100 or high <= 1 then
+			overlay.health:SetText(percent.."%")
+		elseif overlay.kind == "normal" then
+			overlay.health:SetText(Short(value))
+		else
+			overlay.health:SetText(Short(value).." / "..Short(high).."  "..percent.."%")
+		end
+
+		local color = overlay.style.color
+		if share <= EXECUTE_RANGE then
+			color = EXECUTE_COLOR
+			overlay.marker:Hide()
+		else
+			overlay.marker:Show()
+		end
+		overlay.bar:SetStatusBarColor(color[1], color[2], color[3], 1)
 	end
 
-	local color = overlay.style.color
-	if share <= EXECUTE_RANGE then
-		color = EXECUTE_COLOR
-		overlay.marker:Hide()
-	else
-		overlay.marker:Show()
+	if isTarget ~= overlay.isTarget then
+		overlay.isTarget = isTarget
+		if isTarget then
+			overlay.border:SetVertexColor(1, 1, 1, 1)
+		else
+			overlay.border:SetVertexColor(0, 0, 0, 1)
+			HidePlateDebuffs(overlay)
+		end
+		overlay.auraVersion = nil
 	end
-	overlay.bar:SetStatusBarColor(color[1], color[2], color[3], 1)
-
-	if isTarget then
-		overlay.border:SetVertexColor(1, 1, 1, 1)
-	else
-		overlay.border:SetVertexColor(0, 0, 0, 1)
+	if isTarget and overlay.auraVersion ~= auraVersion then
+		overlay.auraVersion = auraVersion
+		UpdatePlateDebuffs(overlay)
 	end
-	UpdatePlateDebuffs(overlay, isTarget)
 end
 
 local function IsNameplate(frame)
@@ -430,11 +463,8 @@ local scanned = 0
 local scanner = CreateFrame("Frame")
 scanner:SetScript("OnUpdate", function()
 	RefreshLiveKinds()
-	-- The target's kind, asked once a frame for every plate to read.
-	local targetKind = TargetKind()
-	for index = 1, table.getn(overlays) do
-		overlays[index].targetKind = targetKind
-	end
+	hasTarget = UnitExists("target") and true or false
+	targetKind = TargetKind()
 
 	local count = WorldFrame:GetNumChildren()
 	if count ~= scanned then
@@ -462,7 +492,15 @@ local function ApplyShown()
 end
 
 scanner:RegisterEvent("PLAYER_ENTERING_WORLD")
-scanner:SetScript("OnEvent", ApplyShown)
+scanner:RegisterEvent("PLAYER_TARGET_CHANGED")
+scanner:RegisterEvent("UNIT_AURA")
+scanner:SetScript("OnEvent", function()
+	if event == "PLAYER_ENTERING_WORLD" then
+		ApplyShown()
+	elseif event == "PLAYER_TARGET_CHANGED" or arg1 == "target" then
+		auraVersion = auraVersion + 1
+	end
+end)
 
 local function Restyle()
 	for index = 1, table.getn(overlays) do
