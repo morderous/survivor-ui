@@ -2485,21 +2485,28 @@ local function SourceOf(who)
 end
 
 local function ParseDamage(message)
-	local _, _, who, target, amount = string.find(message, "^(.-) crits (.+) for (%d+)")
-	if target then
-		return target, amount, true, false, SurvivorUI_SourceOf(SourceOf(who), message)
+	-- Each pair of patterns only where its word is in the line: a plain find
+	-- first, so a hit is not scanned for a crit, nor a tick for either.
+	local _, who, target, amount
+	if string.find(message, " crit", 1, true) then
+		_, _, who, target, amount = string.find(message, "^(.-) crits (.+) for (%d+)")
+		if target then
+			return target, amount, true, false, SurvivorUI_SourceOf(SourceOf(who), message)
+		end
+		_, _, who, target, amount = string.find(message, "^(.-) crit (.+) for (%d+)")
+		if target then
+			return target, amount, true, false, SurvivorUI_SourceOf(SourceOf(who), message)
+		end
 	end
-	_, _, who, target, amount = string.find(message, "^(.-) crit (.+) for (%d+)")
-	if target then
-		return target, amount, true, false, SurvivorUI_SourceOf(SourceOf(who), message)
-	end
-	_, _, who, target, amount = string.find(message, "^(.-) hits (.+) for (%d+)")
-	if target then
-		return target, amount, false, false, SurvivorUI_SourceOf(SourceOf(who), message)
-	end
-	_, _, who, target, amount = string.find(message, "^(.-) hit (.+) for (%d+)")
-	if target then
-		return target, amount, false, false, SurvivorUI_SourceOf(SourceOf(who), message)
+	if string.find(message, " hit", 1, true) then
+		_, _, who, target, amount = string.find(message, "^(.-) hits (.+) for (%d+)")
+		if target then
+			return target, amount, false, false, SurvivorUI_SourceOf(SourceOf(who), message)
+		end
+		_, _, who, target, amount = string.find(message, "^(.-) hit (.+) for (%d+)")
+		if target then
+			return target, amount, false, false, SurvivorUI_SourceOf(SourceOf(who), message)
+		end
 	end
 	-- "Kobold Vermin suffers 12 Fire damage from your Flame Shock."
 	local spell
