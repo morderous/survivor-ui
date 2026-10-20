@@ -209,6 +209,12 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.15, 2026-10-20
+
+**Survivor UI**
+- **No frozen bosses from the run before** (reported by Faya): the guardians or bosses fought in one run showed on the boss bars of the next, their health frozen, until new ones spawned. The game sends its special enemies when the list changes, not as a run begins, so its last list stayed. Now a list from before the run's clock went back, or one left while no run is on, is emptied until the game sends the next: the boss bars, the run tracker's boss health and elites, and the guardians' health all start the new run clean.
+- **Lighter combat log reading** (by Vaniron, pull request #3): each line of the combat log is first checked for the word its patterns need ("hit", "crit") before they run on it, so a line that has neither costs almost nothing. Most noticeable with area builds in big pulls, where the lines come by the thousand.
+
 ### v3.0.14, 2026-10-19
 
 **Survivor UI**

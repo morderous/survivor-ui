@@ -124,6 +124,34 @@ local function Settings()
 	return SurvivorUIDB
 end
 
+-- The game sends its special enemies (AZS_UNITS) when the list changes, not
+-- as a run begins: the list it sent last stays, and the guardians pulled in
+-- the run before showed frozen in the next (the boss bars, the run tracker)
+-- until a new one came. So each list is marked with the run's second it came
+-- at; the run's clock gone back before it (a new run), or no run on (back in
+-- the world), it is emptied until the game sends the next.
+do
+	local seen, seenAt
+	local watch = CreateFrame("Frame")
+	local wait = 0
+	watch:SetScript("OnUpdate", function()
+		wait = wait + arg1
+		if wait < 0.25 then
+			return
+		end
+		wait = 0
+		local now = AZS_GetRunTime and AZS_GetRunTime()
+		if AZS_UNITS_UPDATED ~= seen then
+			seen, seenAt = AZS_UNITS_UPDATED, now
+		end
+		local phase = AZS_GetPhase and AZS_GetPhase()
+		local stale = phase == "ready" or (now and seenAt and now + 3 < seenAt)
+		if stale and AZS_UNITS and table.getn(AZS_UNITS) > 0 then
+			AZS_UNITS = {}
+		end
+	end)
+end
+
 -- The game's own screens the addon puts its own in place of (the clock, the
 -- boss bars, the minimap's flag, the Level Up! button...) are switched off by
 -- the game's settings, which the game saves: left off, a game without the
@@ -2485,21 +2513,28 @@ local function SourceOf(who)
 end
 
 local function ParseDamage(message)
-	local _, _, who, target, amount = string.find(message, "^(.-) crits (.+) for (%d+)")
-	if target then
-		return target, amount, true, false, SurvivorUI_SourceOf(SourceOf(who), message)
+	-- Each pair of patterns only where its word is in the line: a plain find
+	-- first, so a hit is not scanned for a crit, nor a tick for either.
+	local _, who, target, amount
+	if string.find(message, " crit", 1, true) then
+		_, _, who, target, amount = string.find(message, "^(.-) crits (.+) for (%d+)")
+		if target then
+			return target, amount, true, false, SurvivorUI_SourceOf(SourceOf(who), message)
+		end
+		_, _, who, target, amount = string.find(message, "^(.-) crit (.+) for (%d+)")
+		if target then
+			return target, amount, true, false, SurvivorUI_SourceOf(SourceOf(who), message)
+		end
 	end
-	_, _, who, target, amount = string.find(message, "^(.-) crit (.+) for (%d+)")
-	if target then
-		return target, amount, true, false, SurvivorUI_SourceOf(SourceOf(who), message)
-	end
-	_, _, who, target, amount = string.find(message, "^(.-) hits (.+) for (%d+)")
-	if target then
-		return target, amount, false, false, SurvivorUI_SourceOf(SourceOf(who), message)
-	end
-	_, _, who, target, amount = string.find(message, "^(.-) hit (.+) for (%d+)")
-	if target then
-		return target, amount, false, false, SurvivorUI_SourceOf(SourceOf(who), message)
+	if string.find(message, " hit", 1, true) then
+		_, _, who, target, amount = string.find(message, "^(.-) hits (.+) for (%d+)")
+		if target then
+			return target, amount, false, false, SurvivorUI_SourceOf(SourceOf(who), message)
+		end
+		_, _, who, target, amount = string.find(message, "^(.-) hit (.+) for (%d+)")
+		if target then
+			return target, amount, false, false, SurvivorUI_SourceOf(SourceOf(who), message)
+		end
 	end
 	-- "Kobold Vermin suffers 12 Fire damage from your Flame Shock."
 	local spell
