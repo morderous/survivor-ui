@@ -1268,6 +1268,11 @@ end
 
 -- The same four shapes as a crit's line, with "hits" in place of "crits".
 local function Hit(message)
+	-- Every shape below has one of these: a crit's line, the most of them in a
+	-- fight, goes without the patterns.
+	if not (string.find(message, " hits ", 1, true) or string.find(message, "You hit ", 1, true)) then
+		return
+	end
 	local _, _, ability, _, amount = string.find(message, "^Your (.+) hits (.+) for (%d+)")
 	if not ability then
 		_, _, _, amount = string.find(message, "^You hit (.+) for (%d+)")
@@ -1285,6 +1290,10 @@ local function Hit(message)
 end
 
 local function Crit(message)
+	-- Every shape below has " crit": a plain hit goes without the patterns.
+	if not string.find(message, " crit", 1, true) then
+		return
+	end
 	-- Each ability's best crit, as the combat numbers see it (SurvivorUI.lua).
 	local _, _, any = string.find(message, " crits? .- for (%d+)")
 	if any and SurvivorUI_NoteCrit then
