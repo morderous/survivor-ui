@@ -146,7 +146,7 @@ Commands:
 | `/sui crits` | Biggest Crits box: on or off (on by default) |
 | `/sui scale 0.85` | Size of the whole interface, 0.6 to 1.4. Each part has its own size in `/sui opt`, Size |
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
-| `/sui bosses` | Switches the boss bars on or off (off by default: the run tracker shows the bosses) |
+| `/sui bosses` | Switches the boss bars on or off (on by default from v3.0.12) |
 | `/sui bosses elites` | Lists every elite in the boss bars too |
 | `/sui tally` | Switches between the kills and gold line (the default) and the Default box |
 
@@ -164,7 +164,7 @@ Each piece can wear a font of its own, on its card in move mode: the game's (Fri
 
 Azeroth Survivors shares its run with addons: its clock, phase, kills, bosses, guardians, damage meter and more. Survivor UI reads them where the game offers them, and falls back to its own count on a version of the game that does not.
 
-The run tracker, the damage meter, the boss bars and the kills and gold line put the Default clock, meter, boss bars and box away while they are on. That is a game setting, saved by the game: `/sui tracker`, `/sui meter`, `/sui bosses` and `/sui tally` bring them back, and so do the "Show ..." checkboxes in the game's Options, Interface. Do that before removing the addon, or the Default ones will stay hidden.
+The run tracker, the damage meter, the boss bars and the kills and gold line put the Default clock, meter, boss bars and box away while they are on. That is a game setting, saved by the game: `/sui tracker`, `/sui meter`, `/sui bosses` and `/sui tally` bring them back, and so do the "Show ..." checkboxes in the game's Options, Interface. From v3.0.12 the addon also puts every one it hid back on as the game closes (each goes away again as it starts), so removing the addon with the game closed leaves the game's own showing; removed before that version, the "Show ..." checkboxes bring them back, and for the minimap's flag, the Level Up! button and the damage numbers, which have none, `/script SetCVar("hudFlag", "1")`, `/script SetCVar("hudLevels", "1")` and `/script SetCVar("CombatDamage", "1")` in the chat.
 
 ## Install
 
@@ -208,6 +208,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.12, 2026-10-19
+
+**Survivor UI**
+- **Run History: the hero's numbers, a Stats panel of their own** in a fourth column, right of Biggest Crits and the loot: the Stats panel's numbers as they stood when the run ended (each moment of an endless run its own), in its groups and colors (Offense, Defense, Reach, Utility, Damage over time, Bonus damage). Only the ones that count: a number at nothing (+0%, 0) is left out, so a run shows what its build and jewelry gave. Hover one for what it means. Kept from this version on; a run kept before says so. The window is a column wider, its height the same; the tooltips of the first two columns show on its left, the other two on its right.
+- **Cooldown numbers on short cooldowns too** (asked by Nathan): the numbers left out every cooldown of 1.5 s or less, the global cooldown's length in WoW; with much haste a spell's own cooldown falls under it, and its number went. Now those count down too, in tenths, never red (the last two seconds of a longer one still are). A new tick under "Cooldown numbers on the buttons" (Frames & bar), **Short cooldowns too (1.5 s or less)**, on unless you untick it: off, it is as before (the global cooldown of a spell cast by hand shows no number either). A setting, so an update keeps it.
+- **Removing the addon leaves the game as it was** (reported by Emotong): to put its own in their place, the addon switches some of the game's own screens off (the clock, the boss bars, the kill tally, the build row, the loot, the meter, the minimap's flag towards the nearest guardian, the Level Up! button, the damage numbers), and those are the game's settings, which it saves; the addon gone, they stayed off, the flag and the Level Up! button with no switch in the game's options to bring them back. Now, as the game closes or reloads, every one the addon switched off goes back on, and at the next start each part switches its own off again (the game's may show for a blink as the game starts). The addon removed before this version, these lines in the chat bring them back (no addon needed): `/script SetCVar("hudFlag", "1")` for the flag, `/script SetCVar("hudLevels", "1")` for the Level Up! button, `/script SetCVar("CombatDamage", "1")` for the damage numbers; the others are on the game's Interface page.
+- **A new install starts with the author's look**: the Stats panel on (beside This Run), the XP bar on, SurvivorUI's Level Up! button on (switch it off on a touch screen, where only the game's takes a tap), the boss bars on, the bosses' health on the boss bars and not in the run tracker, no elite bars in the run tracker and its coin on, the cooldown column in the build list, the kills and gold line under the action bar, the loot list filled in its quality's color, with no background and no quality beside the names, the character pane's stats 2 steps larger, the map's cache and lair pins at 12 and 11, the damage meter's text a step smaller and the Jewelry Collection's two; the combat text's columns 140 from the hero, hits added up within half a second, a new best crit held 2.3 seconds. The Stats panel's groups go Offense, Defense, Reach, Utility, the crit first. An install from before keeps how it looks; only the stats' order changes, for a class whose order was never set by hand.
 
 ### v3.0.11, 2026-10-19
 

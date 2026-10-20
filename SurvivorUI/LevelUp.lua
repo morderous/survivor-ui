@@ -8,9 +8,10 @@
 -- the addon draws its own in its place (AZS_SetHudShown("levels", false)):
 -- over the action bar, how many levels wait, breathing a gold glow; a click
 -- opens them (AZS_OpenStoredLevels), as the game's key does (Y, from 0.102),
--- shown as a key cap on its right. Off until chosen (Modules): on a touch
--- screen the game's button takes a tap and the addon's does not, and the
--- addon cannot tell a touch screen; off, the game's shows.
+-- shown as a key cap on its right. On for a new install (v3.0.12; off until
+-- chosen before): on a touch screen the game's button takes a tap and the
+-- addon's does not, and the addon cannot tell a touch screen; off, the
+-- game's shows.
 -- The levels waiting also show by the level, in the run tracker and on the XP
 -- bar (Tracker.lua, XpBar.lua).
 

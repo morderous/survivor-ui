@@ -229,25 +229,25 @@ end
 -- label, value(s), what it means, and for the conditional rows when to show.
 local SECTIONS = {
 	{ title = "Offense", color = { 1.00, 0.45, 0.25 }, rows = {
-		{ "Damage",   function(s) return Pct(s.dmg - 1) end, "Every spell you cast deals this much more damage. It grows with your level, gear, talents, jewelry and buffs." },
 		{ "Crit",     function(s) return string.format("%.1f%%", s.crit * 100) end, "The chance a spell strikes critically. Past 100%, the rest adds to your critical damage." },
 		{ "Crit Dmg", function(s) return string.format("%.0f%%", s.cm * 100) end, "A critical strike deals this much of a spell's damage." },
+		{ "Damage",   function(s) return Pct(s.dmg - 1) end, "Every spell you cast deals this much more damage. It grows with your level, gear, talents, jewelry and buffs." },
 		{ "Haste",    function(s) return Pct(1 - s.cd) end, "Your spells come back this much sooner." },
 		{ "Echo",     function(s) return string.format("%.0f%%", s.echo * 100) end, "The chance a spell strikes twice. Past 100%, every spell strikes twice and the rest is the chance of a third." },
+	} },
+	{ title = "Defense", color = { 0.30, 0.65, 1.00 }, rows = {
+		{ "Health",    function(s) return string.format("%.0f", s.hp) end, "The most health you can have." },
+		{ "Regen",     function(s) return string.format("%.1f", s.reg) end, "Health you regain every second." },
+		{ "Lifesteal", function(s) return string.format("%.1f%%", s.lch * 100) end, "Heals you for this much of all the damage you deal." },
+		{ "Armor",     function(s) return string.format("%.0f%%", s.arm * 100) end, "Damage you take is reduced by this much (60% at most)." },
+		{ "Kill Heal", function(s) return string.format("%.0f", s.heal) end, "Every kill heals you for this much." },
+		{ "Thorns",    function(s) return string.format("%.0f%%", s.thn * 100) end, "This much of the melee damage you take is dealt back to the attacker." },
+		{ "Lives",     function(s) return string.format("%d", s.liv) end, "Times you rise again instead of dying." },
 	} },
 	{ title = "Reach", color = { 0.72, 0.45, 1.00 }, rows = {
 		{ "Area",     function(s) return Pct(s.area - 1) end, "Your spells' areas and ranges are this much larger." },
 		{ "Targets",  function(s) return string.format("+%d", s.cnt) end, "Every spell that picks its targets picks this many more." },
 		{ "Pickup",   function(s) return string.format("%.0f yd", s.pick) end, "Experience and gold fly to you from this far." },
-	} },
-	{ title = "Defense", color = { 0.30, 0.65, 1.00 }, rows = {
-		{ "Health",    function(s) return string.format("%.0f", s.hp) end, "The most health you can have." },
-		{ "Armor",     function(s) return string.format("%.0f%%", s.arm * 100) end, "Damage you take is reduced by this much (60% at most)." },
-		{ "Regen",     function(s) return string.format("%.1f", s.reg) end, "Health you regain every second." },
-		{ "Lifesteal", function(s) return string.format("%.1f%%", s.lch * 100) end, "Heals you for this much of all the damage you deal." },
-		{ "Kill Heal", function(s) return string.format("%.0f", s.heal) end, "Every kill heals you for this much." },
-		{ "Thorns",    function(s) return string.format("%.0f%%", s.thn * 100) end, "This much of the melee damage you take is dealt back to the attacker." },
-		{ "Lives",     function(s) return string.format("%d", s.liv) end, "Times you rise again instead of dying." },
 	} },
 	{ title = "Utility", color = { 0.35, 0.90, 0.55 }, rows = {
 		{ "Speed",      function(s) return Pct(s.spd - 1) end, "You run this much faster." },
@@ -283,8 +283,8 @@ end
 ------------------------------------------------------------------------------
 -- The numbers, in two places that stand on their own: the character pane's
 -- right side (on unless switched off: the options, Character pane), and the
--- Stats panel, a panel of its own on the screen all the time (a module, off
--- until chosen: the options, Stats panel), moved, sized and resized like the
+-- Stats panel, a panel of its own on the screen all the time (a module, on
+-- for a new install from v3.0.12: the options, Stats panel), moved, sized and resized like the
 -- other panels. Both can be on at once. Which numbers show, and their order,
 -- are the same in both.
 

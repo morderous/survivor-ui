@@ -1106,7 +1106,7 @@ local MODULES = {
 		{ "XP bar", OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"),
 			"Your level and experience as a bar of its own, with the time to the next level." },
 		{ "Level Up!", OnlyIfOn("levelUp"), Call("SurvivorUI_ToggleLevelUp"),
-			"With Store Level-Ups on, a button over the action bar for the levels waiting. Off by default, the game's own showing: on a touch screen only it takes a tap.", nil, nil, GAME.levels },
+			"With Store Level-Ups on, a button over the action bar for the levels waiting. On for a new install; on a touch screen only the game's own takes a tap: switch this off there.", nil, nil, GAME.levels },
 		{ "Loot list", OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"),
 			"What the run dropped. It puts the game's loot notices away.", nil, nil, GAME.loot },
 	} },
@@ -1574,7 +1574,7 @@ Check(page, "Time to the next level", OnUnlessOff("xpBarEta"), Flip("xpBarEta"),
 page = pages.levelup
 Header(page, "Level Up!", "With Store Level-Ups on, a level-up no longer stops the fight: the levels wait, and a button opens them, one card choice after another: SurvivorUI's over the action bar, or the game's own where its action bars were.")
 PanelHead(page, OnlyIfOn("levelUp"), Call("SurvivorUI_ToggleLevelUp"), "levelup", "Level Up!", nil, GAME.levels)
-Note(page, "On: SurvivorUI's button. Off with The game's ticked: the game's own, as by default; on a touch screen only it takes a tap. Both off: no button at all, so keep Store Level-Ups off then, or the levels wait with nothing to open them.")
+Note(page, "On: SurvivorUI's button. Off with The game's ticked: the game's own, which on a touch screen is the only one that takes a tap. Both off: no button at all, so keep Store Level-Ups off then, or the levels wait with nothing to open them.")
 Subheader(page, "Store Level-Ups")
 Check(page, "Level-ups wait until you are ready", function() return AZS_IsStoringLevels and AZS_IsStoringLevels() end,
 	function()
@@ -1999,6 +1999,14 @@ HealthRow("Target", "targetHealth", "absolutePercent")
 Note(page, "The boss bars' health: the Boss bars tab.")
 Subheader(page, "Action bar")
 Check(page, "Cooldown numbers on the buttons", FeatureOn("cooldownNumbers"), FeatureToggle("cooldownNumbers"), "OmniCC, when installed, does it instead")
+Check(page, "Short cooldowns too (1.5 s or less)", function() return DB().shortCooldowns ~= false end,
+	function()
+		if DB().shortCooldowns == false then
+			DB().shortCooldowns = nil
+		else
+			DB().shortCooldowns = false
+		end
+	end, "with much haste; and the global cooldown, cast by hand")
 Check(page, "Hide key labels on the buttons", FeatureOn("hideKeys"), FeatureToggle("hideKeys"), "after a reload")
 Check(page, "Player and target frames move with the action bar",
 	function() return SurvivorUI_LinkFrames and SurvivorUI_LinkFrames() end,

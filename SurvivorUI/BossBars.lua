@@ -30,9 +30,10 @@ local KINDS = {
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
-	-- Off on a new install: the run tracker shows the bosses already.
+	-- On on a new install (from v3.0.12; off before, the run tracker showing
+	-- the bosses' health, which a new install now leaves to these bars).
 	if SurvivorUIDB.bossBars == nil then
-		SurvivorUIDB.bossBars = false
+		SurvivorUIDB.bossBars = true
 	end
 	return SurvivorUIDB
 end

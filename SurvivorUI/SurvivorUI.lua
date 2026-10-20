@@ -124,6 +124,55 @@ local function Settings()
 	return SurvivorUIDB
 end
 
+-- The game's own screens the addon puts its own in place of (the clock, the
+-- boss bars, the minimap's flag, the Level Up! button...) are switched off by
+-- the game's settings, which the game saves: left off, a game without the
+-- addon would go on without them, two of them with no switch in its options.
+-- So as the game closes or reloads, each one the addon switched off goes back
+-- on, and the game's damage numbers too; at the next start each module
+-- switches its own off again. Every call to AZS_SetHudShown is seen here
+-- (this file loads first); each module's mark (hidGame...) covers the ones
+-- switched off before this version.
+do
+	local gameSetHud = AZS_SetHudShown
+	local switchedOff = {}
+	local MARKS = {
+		bosses = "hidGameBosses", build = "hidGameBuild", levels = "hidGameLevels", loot = "hidGameLoot",
+		flag = "hidGameFlag", meter = "hidGameMeter", tally = "hidGameTally", clock = "hidGameClock",
+	}
+	if gameSetHud then
+		AZS_SetHudShown = function(part, shown)
+			if not part or part == "all" then
+				for each in pairs(AZS_HUD_CVARS or {}) do
+					switchedOff[each] = not shown or nil
+				end
+			else
+				switchedOff[part] = not shown or nil
+			end
+			return gameSetHud(part, shown)
+		end
+	end
+	local closing = CreateFrame("Frame")
+	closing:RegisterEvent("PLAYER_LOGOUT")
+	closing:SetScript("OnEvent", function()
+		local db = SurvivorUIDB or {}
+		if gameSetHud then
+			for part, mark in pairs(MARKS) do
+				if db[mark] then
+					switchedOff[part] = true
+				end
+			end
+			for part in pairs(switchedOff) do
+				gameSetHud(part, true)
+			end
+		end
+		-- The addon's numbers, or none, switch the game's off (ApplyDamageText).
+		if db.damageText or db.damageNone then
+			SetCVar("CombatDamage", "1")
+		end
+	end)
+end
+
 -- A time zone in hours as its name: "UTC", "UTC-3", "UTC+5:30".
 function SurvivorUI_ZoneLabel(hours)
 	hours = tonumber(hours) or 0
@@ -996,7 +1045,8 @@ if CooldownFrame_SetTimer and not OmniCC_OnUpdate then
 			return
 		end
 		this.text:SetText(TimeText(left))
-		local soon = left <= 2
+		-- A short cooldown (shown when asked) is always nearly done: no red.
+		local soon = left <= 2 and this.duration > 1.5
 		if soon ~= this.soon then
 			this.soon = soon
 			if soon then
@@ -1037,8 +1087,11 @@ if CooldownFrame_SetTimer and not OmniCC_OnUpdate then
 			parent.survivorCounter = counter
 		end
 
-		-- The global cooldown's flicker is not worth a number.
-		if start and start > 0 and duration and duration > 1.5 and enable and enable > 0 then
+		-- Every cooldown counts, the short ones much haste makes too; unless the
+		-- options say otherwise (Frames & bar), which leaves out any of 1.5 s or
+		-- less, the global cooldown's flicker with them.
+		local shortest = SurvivorUIDB and SurvivorUIDB.shortCooldowns == false and 1.5 or 0
+		if start and start > 0 and duration and duration > shortest and enable and enable > 0 then
 			counter.start, counter.duration = start, duration
 			counter:Show()
 		else
@@ -1465,7 +1518,7 @@ local DEFAULTS = {
 	critBox = true,             -- Biggest Crits
 	bossBarsElites = true,      -- elites on the boss bars
 	guardiansDocked = true,     -- the guardians as a bar in the run tracker
-	trackerHealth = true,       -- the bosses' health in the run tracker
+	trackerHealth = false,      -- the bosses' health in the run tracker (the boss bars have it)
 	jewelryWithPane = true,     -- the Jewelry Collection beside the character pane
 }
 
@@ -1476,6 +1529,23 @@ globalFont:SetScript("OnEvent", function()
 		return
 	end
 	local settings = Settings()
+	-- A new install (no scaleVersion yet: Mover.lua writes it as the hero
+	-- enters the world) starts with the author's look (v3.0.12): these, put
+	-- in where nothing is set. One from before keeps what nothing meant to it.
+	if settings.scaleVersion == nil then
+		local look = {
+			statsPanel = true, statsPanelSize = { 150, 277 }, xpBar = true, levelUp = true,
+			buildCooldown = true, trackerCoin = true, trackerElites = false, tallyPlace = "bar",
+			lootBackground = false, lootQuality = false, lootFill = true,
+			paneStatsStep = 2, pinCacheSize = 12, pinLairSize = 11,
+			pieceFonts = { ["Damage meter"] = { step = -1 }, ["Jewelry"] = { step = -2 } },
+		}
+		for key, value in pairs(look) do
+			if settings[key] == nil then
+				settings[key] = value
+			end
+		end
+	end
 	for key, value in pairs(DEFAULTS) do
 		if settings[key] == nil then
 			settings[key] = value
@@ -1663,18 +1733,18 @@ end
 -- choices of the earlier versions carry over.
 
 local CT_DEFAULTS = {
-	ctLayout = "sides", ctDistance = 170, ctRise = 170, ctCritColumn = true,
+	ctLayout = "sides", ctDistance = 140, ctRise = 170, ctCritColumn = true,
 	ctIcons = true, ctMeterColors = true, ctSize = 0.85, ctCritSize = 1,
 	ctPeriodic = true, ctHeals = true, ctTaken = true, ctShort = true,
 	-- Hits from one source close together in one number (x3), each kind as
 	-- chosen (the hits taken's switch kept its first name), within so many
 	-- milliseconds; a heal shown once it comes to this much of max health, in
 	-- percent.
-	ctAddDealt = true, ctAddCrits = true, ctAddHeals = true, ctMergeTaken = true, ctAddWindow = 200,
+	ctAddDealt = true, ctAddCrits = true, ctAddHeals = true, ctMergeTaken = true, ctAddWindow = 500,
 	ctHealMin = 2,
 	-- The new best crit: held still, an ability's own best (or the run's
 	-- biggest), for so many seconds, at a size, over a glow.
-	ctRecord = true, ctRecordKind = "ability", ctRecordHold = 1.7, ctRecordSize = 1, ctRecordGlow = true,
+	ctRecord = true, ctRecordKind = "ability", ctRecordHold = 2.3, ctRecordSize = 1, ctRecordGlow = true,
 }
 
 local function CT()

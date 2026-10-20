@@ -210,6 +210,15 @@ local function Snapshot(phase)
 	record.build = SurvivorUI_BuildSnapshot and SurvivorUI_BuildSnapshot() or {}
 	record.gear = SurvivorUI_GearSnapshot and SurvivorUI_GearSnapshot() or nil
 	record.loot = SurvivorUI_LootList and SurvivorUI_LootList(12) or {}
+	-- The hero's numbers (the Stats panel's), every one, as they stand.
+	if AZS_STATS then
+		record.stats = {}
+		for key, value in pairs(AZS_STATS) do
+			if type(value) == "number" then
+				record.stats[key] = value
+			end
+		end
+	end
 	record.tracker = SurvivorUI_TrackerSnapshot and SurvivorUI_TrackerSnapshot() or nil
 	-- Fallen: what struck last, the last hits, the damage taken by kind (RunPanel.lua).
 	if phase == "dead" and SurvivorUI_DeathRecap then
@@ -493,13 +502,14 @@ end)
 
 ------------------------------------------------------------------------------
 -- The window: the run's header (the map, how it ended, the hero), then the
--- panels in three columns: the run tracker and the run's numbers; the build
--- with its jewelry, and the damage; Biggest Crits and the loot.
+-- panels in four columns: the run tracker and the run's numbers; the build
+-- with its jewelry, and the damage; Biggest Crits and the loot; the hero's
+-- numbers (Stats).
 
 local PAD, GAP = 10, 8            -- the window's margin, and between two panels
 local INNER = 220                 -- a panel's rows, as This Run's
 local BOX = INNER + 12            -- a panel: its rows 6 in from each side
-local WIDTH = PAD * 2 + BOX * 3 + GAP * 2
+local WIDTH = PAD * 2 + BOX * 4 + GAP * 3
 local HEADER = 72                 -- the result, the hero and the map, over the panels
 local ROW = 18
 local TOP = 24                    -- a panel's first row, under its title
@@ -618,12 +628,12 @@ local function Theme(color)
 end
 
 -- A kept tooltip beside the window, level with its row: on the window's left
--- for the first column, on its right for the others.
+-- for the first two columns, on its right for the other two.
 local function Aside(owner, column)
 	GameTooltip:SetOwner(owner, "ANCHOR_NONE")
 	GameTooltip:ClearAllPoints()
 	local scale = owner:GetEffectiveScale() / GameTooltip:GetEffectiveScale()
-	if column == 1 then
+	if column <= 2 then
 		local gap = ((owner:GetLeft() or 0) - (window:GetLeft() or 0)) * scale + 6
 		GameTooltip:SetPoint("TOPRIGHT", owner, "TOPLEFT", -gap, 0)
 	else
@@ -643,7 +653,7 @@ end
 -- A row with a kept card (RunPanel.lua's): beside the window, as the panels'.
 local function CardRow(row, column)
 	row.cardFrame = window
-	row.cardRight = column ~= 1
+	row.cardRight = column > 2
 	row:EnableMouse(true)
 	row:SetScript("OnEnter", function()
 		if this.keptCard and SurvivorUI_CritCardShow then
@@ -3074,9 +3084,107 @@ local function DrawFallen(run)
 end
 
 ------------------------------------------------------------------------------
+-- The hero's numbers as they stood (the Stats panel's, CharacterPane.lua's):
+-- in its groups and colors, every number but those at nothing (+0%, 0), each
+-- with what it means. Kept since v3.0.12. One table, for the file's locals.
+
+local statsPanel = { box = Box("Stats"), LINE = 16, HEAD = 18 }
+
+function statsPanel.Row(index)
+	local box = statsPanel.box
+	local row = box.rows[index]
+	if not row then
+		row = CreateFrame("Frame", nil, box)
+		row:SetWidth(INNER)
+		row.wash = Flat(row, "BACKGROUND")
+		row.wash:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+		row.wash:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
+		row.rule = Flat(row, "BORDER")
+		row.rule:SetHeight(1)
+		row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+		row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+		row.label = Font(row, 10, WHITE)
+		row.label:SetPoint("LEFT", row, "LEFT", 5, 0)
+		row.label:SetHeight(11)
+		row.value = Font(row, 10, WHITE, nil, "RIGHT")
+		row.value:SetPoint("RIGHT", row, "RIGHT", -5, 0)
+		row:EnableMouse(true)
+		row:SetScript("OnEnter", function()
+			if not this.tipText then
+				return
+			end
+			local color = this.color
+			Aside(this, 4)
+			GameTooltip:SetText(this.tipTitle, color[1], color[2], color[3])
+			GameTooltip:AddLine(this.tipText, 0.62, 0.62, 0.68, 1)
+			GameTooltip:Show()
+		end)
+		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		box.rows[index] = row
+	end
+	return row
+end
+
+function statsPanel.Draw(run)
+	local box, kept = statsPanel.box, run.stats
+	local sections = SurvivorUI_StatList and SurvivorUI_StatList()
+	if not (kept and sections) then
+		HideRows(box, 1)
+		return Nothing(box, "Not kept for runs before v3.0.12.")
+	end
+	Nothing(box, nil)
+	-- A number the game had not sent reads as 0, as in the Stats panel.
+	local stats = setmetatable({}, { __index = function(_, key) return kept[key] or 0 end })
+	local used, y = 0, TOP
+	local function Place(height, label, value, color, tip)
+		used = used + 1
+		local row = statsPanel.Row(used)
+		row:SetHeight(height)
+		row.label:SetText(label)
+		row.value:SetText(value or "")
+		row.label:SetTextColor(color[1], color[2], color[3])
+		row.value:SetTextColor(color[1], color[2], color[3])
+		row.color, row.tipTitle, row.tipText = color, label, tip
+		At(row, box, 6, -y)
+		y = y + height
+		return row
+	end
+	for index = 1, table.getn(sections) do
+		local section = sections[index]
+		local lines = {}
+		for each = 1, table.getn(section.rows) do
+			local entry = section.rows[each]
+			local ok, text = pcall(entry[2], stats)
+			text = ok and text and tostring(text)
+			if text and string.find(text, "[1-9]") then
+				table.insert(lines, { entry[1], text, entry[3] })
+			end
+		end
+		if table.getn(lines) > 0 then
+			local color = section.color
+			if used > 0 then
+				y = y + 4
+			end
+			-- The group's name, a rule of its color under it.
+			local head = Place(statsPanel.HEAD, string.upper(section.title), nil, color, nil)
+			head.wash:SetVertexColor(color[1], color[2], color[3], 0)
+			head.rule:SetVertexColor(color[1], color[2], color[3], 0.6)
+			for each = 1, table.getn(lines) do
+				local line = lines[each]
+				local row = Place(statsPanel.LINE, line[1], line[2], color, line[3])
+				row.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
+				row.rule:SetVertexColor(color[1], color[2], color[3], 0.2)
+			end
+		end
+	end
+	HideRows(box, used + 1)
+	return math.max(Nothing(box, used == 0 and "No numbers kept." or nil), y + 6)
+end
+
+------------------------------------------------------------------------------
 -- Drawing a run: the header, then each column's panels top to bottom.
 
-local BOXES = { tracker, runBox, buildBox, damageBox, critBox, lootBox, fallen.box }
+local BOXES = { tracker, runBox, buildBox, damageBox, critBox, lootBox, fallen.box, statsPanel.box }
 
 -- A panel at its column's next place, its height given; the place under it
 -- comes back.
@@ -3215,10 +3323,10 @@ local function DrawHeader(run, final, moment)
 	DrawMods(run.mods)
 end
 
--- The panels in their three columns, the window's height to hold them.
+-- The panels in their four columns, the window's height to hold them.
 local function DrawPanels(moment, base)
 	-- The run tracker and the run's numbers; the build and the damage; the
-	-- crits and the loot.
+	-- crits and the loot; the hero's numbers.
 	local first = HEADER
 	local left = first
 	if moment.tracker then
@@ -3237,7 +3345,9 @@ local function DrawPanels(moment, base)
 	else
 		fallen.box:Hide()
 	end
-	window:SetHeight(math.max(left, middle, right) - GAP + PAD + FOOTER)
+	-- The hero's numbers, a column of their own.
+	local fourth = Stack(statsPanel.box, 4, first, statsPanel.Draw(moment))
+	window:SetHeight(math.max(left, middle, right, fourth) - GAP + PAD + FOOTER)
 end
 
 Draw = function()

@@ -123,7 +123,8 @@ local function Running()
 end
 
 ------------------------------------------------------------------------------
--- The XP bar of its own (XP bar tab): off until chosen.
+-- The XP bar of its own (XP bar tab): on for a new install (v3.0.12), off
+-- until chosen before.
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
