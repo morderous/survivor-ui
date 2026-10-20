@@ -209,6 +209,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.16, 2026-10-20
+
+**Survivor UI**
+- **A note when a run worth a look was kept**: as the next run begins, if the last run in Run History was won or went on in endless mode, a small note by Run History's minimap button says "Last run summary is available!", with the zone (green), its time (white) and the result (its color): "Elwynn Forest 20:50 - ENDLESS"; the whole note is the result's box as Run History has it, alive (Victory green, its sparks rising and a shine; Endless purple, sparks circling), level with the button, growing up from its foot. A click opens Run History on it; it has an x, and goes by itself after 25 seconds. Once for each run kept.
+
 ### v3.0.15, 2026-10-20
 
 **Survivor UI**

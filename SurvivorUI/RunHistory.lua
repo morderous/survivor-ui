@@ -1573,8 +1573,8 @@ local function Animate()
 	end
 end
 
-local function Badge()
-	local badge = CreateFrame("Frame", nil, window)
+local function Badge(parent)
+	local badge = CreateFrame("Frame", nil, parent or window)
 	badge:SetHeight(24)
 	badge:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
 	badge.glow = Glowing(badge, "PaceGlow", "BACKGROUND")
@@ -1693,6 +1693,19 @@ local function SetBadge(badge, key, tipTitle, tipLine, time, moment)
 	end
 	badge.look = look
 	badge:Show()
+end
+
+-- A result's box anywhere else, in its look and alive (the note by the
+-- minimap, MinimapButton.lua): made for a parent, then set to a result and
+-- its time; it takes no click, its parent does.
+function SurvivorUI_ResultBadge(parent)
+	local badge = Badge(parent)
+	badge:EnableMouse(false)
+	return badge
+end
+
+function SurvivorUI_SetResultBadge(badge, key, time)
+	SetBadge(badge, key, nil, nil, time, nil)
 end
 
 -- A line of the class's color between the header and the panels.
@@ -3491,4 +3504,9 @@ function SurvivorUI_ShowLastRuns()
 end
 
 SurvivorUI_ShowRunHistory = SurvivorUI_ShowLastRuns
+
+-- The newest run kept, for the note by the minimap (MinimapButton.lua).
+function SurvivorUI_NewestRun()
+	return History()[1]
+end
 

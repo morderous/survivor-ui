@@ -224,3 +224,158 @@ loader:SetScript("OnEvent", function()
 	PlaceButton()
 	SurvivorUI_PlaceMapButtons()
 end)
+
+------------------------------------------------------------------------------
+-- A note beside Run History's button as a run begins, when the last run kept
+-- was won or went on in endless mode: "Last run summary is available!", and
+-- the zone (green), its time (white) and the result (its color). The whole note is the result's box as Run
+-- History has it (RunHistory.lua's), alive: its color, its breathing glow, its
+-- sparks (Victory green, sparks rising and a shine; Endless purple, sparks
+-- circling). Level with Run History's button at its foot. A click opens Run
+-- History on it; it goes by itself after a while, and comes once for each
+-- run kept.
+
+local NOTICE_SECONDS = 25
+-- Each result's word color: its box's edge.
+local RESULT_COLORS = { victory = { 0.62, 1.00, 0.66 }, endless = { 0.86, 0.66, 1.00 }, left = { 0.62, 0.82, 1.00 },
+	dead = { 1.00, 0.55, 0.48 } }
+local RESULT_WORDS = { victory = "VICTORY", endless = "ENDLESS", left = "LEFT", dead = "FALLEN" }
+-- The results that bring the note (an endless run's always does).
+local NOTICE_RESULTS = { victory = true }
+
+local notice = CreateFrame("Button", "SurvivorUIHistoryNotice", UIParent)
+notice:SetFrameStrata("HIGH")
+notice:SetWidth(120)
+notice:SetHeight(32)
+notice:Hide()
+
+-- The box and the words over it, made the first time: the box is Run
+-- History's, which loads after this file.
+local function NoticeParts()
+	if notice.face then
+		return
+	end
+	if SurvivorUI_ResultBadge then
+		notice.look = SurvivorUI_ResultBadge(notice)
+		notice.look:SetAllPoints(notice)
+		notice.look.text:Hide()
+		notice.look.time:Hide()
+	else
+		notice:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+		notice:SetBackdropColor(0.04, 0.04, 0.06, 0.95)
+	end
+	local face = CreateFrame("Frame", nil, notice)
+	face:SetAllPoints(notice)
+	face:SetFrameLevel(notice:GetFrameLevel() + 10)
+	notice.face = face
+	notice.title = face:CreateFontString(nil, "OVERLAY")
+	notice.title:SetFont(SurvivorUI_FONT, 8 + (SurvivorUI_FONT_BUMP or 0), "OUTLINE")
+	notice.title:SetPoint("TOPLEFT", face, "TOPLEFT", 7, -5)
+	notice.title:SetTextColor(1, 1, 1)
+	notice.title:SetText("Last run summary is available!")
+	notice.line = face:CreateFontString(nil, "OVERLAY")
+	notice.line:SetFont(SurvivorUI_FONT, 7 + (SurvivorUI_FONT_BUMP or 0), "OUTLINE")
+	notice.line:SetPoint("TOPLEFT", notice.title, "BOTTOMLEFT", 0, -3)
+	notice.line:SetTextColor(0.95, 0.95, 1)
+	local close = CreateFrame("Button", nil, face)
+	close:SetWidth(12)
+	close:SetHeight(12)
+	close:SetPoint("TOPRIGHT", face, "TOPRIGHT", -1, -1)
+	close.text = close:CreateFontString(nil, "OVERLAY")
+	close.text:SetFont(SurvivorUI_FONT, 8 + (SurvivorUI_FONT_BUMP or 0), "OUTLINE")
+	close.text:SetPoint("CENTER", close, "CENTER", 0, 0)
+	close.text:SetText("x")
+	close.text:SetTextColor(0.85, 0.85, 0.9)
+	close:SetScript("OnClick", function() notice:Hide() end)
+	close:SetScript("OnEnter", function() this.text:SetTextColor(1, 1, 1) end)
+	close:SetScript("OnLeave", function() this.text:SetTextColor(0.85, 0.85, 0.9) end)
+end
+
+notice:SetScript("OnClick", function()
+	this:Hide()
+	local history = getglobal("SurvivorUILastRuns")
+	if SurvivorUI_ShowLastRuns and not (history and history:IsShown()) then
+		SurvivorUI_ShowLastRuns()
+	end
+end)
+-- Under the mouse the box glows brighter, as Run History's does.
+notice:SetScript("OnEnter", function()
+	if this.look then
+		this.look.hot = true
+	end
+end)
+notice:SetScript("OnLeave", function()
+	if this.look then
+		this.look.hot = nil
+	end
+end)
+-- In over a third of a second, out the same way after its time.
+notice:SetScript("OnUpdate", function()
+	this.age = this.age + arg1
+	local left = NOTICE_SECONDS - this.age
+	if left <= 0 then
+		this:Hide()
+	else
+		this:SetAlpha(math.min(1, this.age * 3, left * 3))
+	end
+end)
+
+local function MinSec(seconds)
+	seconds = math.floor(tonumber(seconds) or 0)
+	return string.format("%d:%02d", math.floor(seconds / 60), math.mod(seconds, 60))
+end
+
+-- The note for the newest run kept, when it was won or went endless: once
+-- each (or always, asked by hand: /script SurvivorUI_HistoryNotice(true)).
+-- A look of a result to see it in (victory, endless, left, dead): with the
+-- newest run's zone and time, the run not marked as seen.
+function SurvivorUI_HistoryNotice(force, look)
+	local run = SurvivorUI_NewestRun and SurvivorUI_NewestRun()
+	if not run then
+		return
+	end
+	local kind = look or (run.endless and "endless" or (NOTICE_RESULTS[run.result] and run.result or nil))
+	SurvivorUIDB = SurvivorUIDB or {}
+	if not kind or not RESULT_WORDS[kind] or (not force and SurvivorUIDB.historyNoticed == run.at) then
+		return
+	end
+	if not look then
+		SurvivorUIDB.historyNoticed = run.at
+	end
+	NoticeParts()
+	local color = RESULT_COLORS[kind]
+	local seconds = kind == "endless" and run.endless and run.endless.time or run.time
+	if notice.look then
+		SurvivorUI_SetResultBadge(notice.look, kind, nil)
+	end
+	-- "Elwynn Forest 20:50 - ENDLESS": the zone green, the time white, the result its color.
+	notice.line:SetText(string.format("|cff4dff70%s|r  |cffffffff%s|r  -  |cff%02x%02x%02x%s|r",
+		run.zone or "", MinSec(seconds),
+		math.floor(color[1] * 255), math.floor(color[2] * 255), math.floor(color[3] * 255), RESULT_WORDS[kind]))
+	notice:SetWidth(math.max(notice.title:GetStringWidth() + 24, notice.line:GetStringWidth() + 16))
+	-- Level with Run History's button at its foot, growing up: apart from ours.
+	notice:ClearAllPoints()
+	notice:SetPoint("BOTTOMRIGHT", StackTop(), "BOTTOMLEFT", -6, 0)
+	notice.age = 0
+	notice:SetAlpha(0)
+	notice:Show()
+end
+
+-- As a run begins: playing, its clock in its first seconds, after no run.
+local noticePhase
+local noticeWatch = CreateFrame("Frame")
+local noticeWait = 0
+noticeWatch:SetScript("OnUpdate", function()
+	noticeWait = noticeWait + arg1
+	if noticeWait < 0.5 then
+		return
+	end
+	noticeWait = 0
+	local phase = AZS_GetPhase and AZS_GetPhase()
+	local now = AZS_GetRunTime and AZS_GetRunTime()
+	if phase == "playing" and noticePhase ~= "playing" and noticePhase ~= "choosing" and noticePhase ~= "paused"
+		and now and now < 15 then
+		SurvivorUI_HistoryNotice()
+	end
+	noticePhase = phase
+end)
