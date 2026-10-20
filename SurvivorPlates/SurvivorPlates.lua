@@ -18,13 +18,22 @@
 -- The bars sit exactly where the client seats its plates: position and
 -- stacking are the client's own.
 --
--- By default every enemy carries a plate, and only elites, guardians and
--- bosses carry a name on it.
+-- Each kind is chosen on its own (/splates, or Survivor UI's options): the
+-- enemies' four, normal, elites, guardians and bosses (all of them by
+-- default; a kind left out still shows as your target), and the friends'
+-- two, your pets and summons and your totems (none by default; asked for
+-- on Discord by Sedz and Amarolk, with a warlock's many demons about). Only elites, guardians and bosses carry a name, unless names
+-- are on every plate. The friends' plates are the client's friendly ones,
+-- told from an enemy's by the color it gives them, drawn small with the
+-- name and icon.
 --
 -- Slash commands:
---   /splates all        plates on every enemy, or only on elites, guardians and bosses
---   /splates names      names only on elites, guardians and bosses (default), or on every plate
 --   /splates none       no nameplates at all (the default), or back
+--   /splates normal | elites | guardians | bosses     each enemy kind, on or off
+--   /splates pets | totems                            each friend's, on or off
+--   /splates names      names only on elites, guardians and bosses (default), or on every plate
+--   /splates keys       V and Shift+V ignored (default), or let them work as the game has them
+--   /splates count      the plates on screen now, by kind (a check)
 --   /splates scale N    plate size, 0.5 to 2 (default 1)
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
@@ -58,7 +67,12 @@ local KINDS = {
 	elite    = { width = 130, height = 11, nameSize = 11, color = { 1.00, 0.55, 0.10 } },
 	guardian = { width = 150, height = 12, nameSize = 12, color = { 0.20, 0.75, 0.95 } },
 	boss     = { width = 170, height = 14, nameSize = 13, color = { 0.72, 0.32, 1.00 } },
+	-- A friend's plate, small and always named: your pets and summons green,
+	-- your totems blue.
+	pet       = { width = 80,  height = 6,  nameSize = 9,  color = { 0.25, 0.85, 0.35 } },
+	totem     = { width = 80,  height = 6,  nameSize = 9,  color = { 0.30, 0.65, 1.00 } },
 }
+local FRIEND_KINDS = { pet = true, totem = true }
 local EXECUTE_COLOR = { 1.00, 0.86, 0.25 }
 
 -- The five bosses of each zone.
@@ -106,8 +120,12 @@ for index = 1, table.getn(BOSSES) do
 end
 
 -- The elites and bosses the game lists right now, by name, rebuilt when the
--- list changes. kindsVersion tells the plates to look again.
+-- list changes; its guardians apart, with their health, since a zone's
+-- guardians are named as its elites (Elwynn's three). kindsVersion tells the
+-- plates to look again.
 local liveKind = {}
+local guardians = {}              -- [name] = the max health of each one alive
+local guardiansSeen = ""
 local liveUpdated
 local kindsVersion = 0
 
@@ -124,26 +142,53 @@ local function RefreshLiveKinds()
 	end
 	liveUpdated = AZS_UNITS_UPDATED
 	local changed = false
+	local found, seen = {}, ""
 	for index = 1, table.getn(AZS_UNITS) do
 		local unit = AZS_UNITS[index]
 		local name = Field(unit, "name", 3)
 		local kind = Field(unit, "kind", 1)
-		kind = (kind == "final" or kind == "boss") and "boss" or "elite"
-		if name and not kindByName[name] and liveKind[name] ~= kind then
-			liveKind[name] = kind
-			changed = true
+		if name and kind == "guardian" then
+			local most = tonumber(Field(unit, "hpm", 5)) or 0
+			found[name] = found[name] or {}
+			table.insert(found[name], most)
+			seen = seen..name..most..";"
+		elseif name and not kindByName[name] then
+			kind = (kind == "final" or kind == "boss") and "boss" or "elite"
+			if liveKind[name] ~= kind then
+				liveKind[name] = kind
+				changed = true
+			end
 		end
+	end
+	if seen ~= guardiansSeen then
+		guardians, guardiansSeen = found, seen
+		changed = true
 	end
 	if changed then
 		kindsVersion = kindsVersion + 1
 	end
 end
 
-local function Classify(name)
+-- An enemy's kind by its name, and its max health when the client knows it
+-- (most): a guardian the game lists, by its health against an elite of the
+-- same name.
+local function Classify(name, most)
 	if not name then
 		return "normal"
 	end
-	return kindByName[name] or liveKind[name] or "normal"
+	local named = kindByName[name] or liveKind[name]
+	local lair = guardians[name]
+	if lair then
+		for index = 1, table.getn(lair) do
+			if most and math.abs(most - lair[index]) <= 1 then
+				return "guardian"
+			end
+		end
+		if not named then
+			return "guardian"
+		end
+	end
+	return named or "normal"
 end
 
 -- The target's kind as the game has it, "guardian" included; nil without the API.
@@ -168,6 +213,16 @@ local function Settings()
 		db.defaults = 3
 		db.hidden = true
 	end
+	-- Each kind on its own (v3.0.18), from what was chosen before: "only the
+	-- dangerous ones" leaves the rank and file out, and the pets' plates are
+	-- as /splates friends had them.
+	if not db.show then
+		db.show = { normal = not db.important, elite = true, guardian = true, boss = true,
+			pet = db.friends == true, totem = false }
+		db.friendsChosen = db.friends ~= nil
+	end
+	-- The companions had plates of their own for a day: the game gives them none.
+	db.show.companion = nil
 	db.scale = db.scale or 1
 	return db
 end
@@ -202,6 +257,9 @@ local function ApplyKind(overlay, kind)
 	overlay.health:SetFont(SurvivorUI_FONT or FONT, math.max(8, (style.height - 1) * scale) + FONT_BUMP, "OUTLINE")
 
 	overlay.named = settings.names or kind ~= "normal"
+	if FRIEND_KINDS[kind] then
+		overlay.marker:Hide()
+	end
 	if overlay.named and not overlay.put then
 		overlay.name:Show()
 	else
@@ -269,6 +327,67 @@ local function UpdatePlateDebuffs(overlay, isTarget)
 	end
 end
 
+-- A friend's plate, told by the color the client gives its stock bar: green
+-- for a friendly creature (seen 2026-10-20: the warlock's demons, 0 1 0; the
+-- enemies 1 0 0), blue for a friendly player.
+local function IsFriend(stock)
+	local r, g, b = stock.health:GetStatusBarColor()
+	return r and g and b and r < 0.2 and (g > 0.8 or b > 0.8)
+end
+
+-- A name in English, the game in any language (Survivor UI's, when there).
+local function English(name)
+	return SurvivorUI_English and SurvivorUI_English(name) or name
+end
+
+-- A friend's kind: a totem (the game names every one plainly "Totem", seen
+-- 2026-10-20; "Searing Totem" too, should it name them), or (all the rest) a
+-- pet or summon.
+local function FriendKind(name)
+	local english = English(name or "")
+	if english == "Totem" or string.find(english, " Totem$") then
+		return "totem"
+	end
+	return "pet"
+end
+
+-- A plain "Totem"'s icon: the hero's one totem spell's, or a totem's when the
+-- hero has more than one (the plate can't tell which).
+local TOTEM_ICON = "Interface\\Icons\\Spell_Nature_StoneClawTotem"
+local function TotemIcon()
+	local found
+	for index = 1, table.getn(AZS_SPELLS or {}) do
+		local entry = AZS_SPELLS[index]
+		local key = entry.key or entry[1] or ""
+		if string.find(key, "_totem$") then
+			if found then
+				return TOTEM_ICON
+			end
+			found = key
+		end
+	end
+	-- "searing_totem" as its name, "Searing Totem".
+	local spell = found and string.gsub(string.gsub(found, "_", " "), "(%a)(%a*)",
+		function(first, rest) return string.upper(first)..rest end)
+	return spell and SurvivorUI_MeterIcon and SurvivorUI_MeterIcon(spell) or TOTEM_ICON
+end
+
+-- A friend's icon beside its name, Survivor UI's (its meter's), when it is there.
+local function FriendIcon(overlay, name)
+	local icon
+	if overlay.kind == "totem" and English(name or "") == "Totem" then
+		icon = TotemIcon()
+	elseif FRIEND_KINDS[overlay.kind] then
+		icon = SurvivorUI_MeterIcon and SurvivorUI_MeterIcon(name)
+	end
+	if icon then
+		overlay.icon:SetTexture(icon)
+		overlay.icon:Show()
+	else
+		overlay.icon:Hide()
+	end
+end
+
 local function UpdatePlate()
 	local overlay = this
 	local stock = overlay.stock
@@ -276,25 +395,46 @@ local function UpdatePlate()
 	-- The client dims every plate but the target's.
 	local isTarget = UnitExists("target") and overlay.plate:GetAlpha() == 1
 
+	-- The client fills a plate in over a frame or two as it hands it to
+	-- another unit: its name, then its bar's color and health. So the kind is
+	-- read again whenever any of them changes, not the name alone: a totem
+	-- read while its bar was still the last enemy's red stayed an enemy (and
+	-- hidden with the rank and file), until the game's list of units changed.
 	local name = stock.name:GetText()
-	if name ~= overlay.lastName or overlay.kindsVersion ~= kindsVersion then
-		overlay.lastName = name
+	local low, high = stock.health:GetMinMaxValues()
+	local friend = IsFriend(stock) and true or false
+	if name ~= overlay.lastName or friend ~= overlay.lastFriend or high ~= overlay.lastHigh
+		or overlay.kindsVersion ~= kindsVersion then
+		overlay.lastName, overlay.lastFriend, overlay.lastHigh = name, friend, high
 		overlay.kindsVersion = kindsVersion
 		overlay.name:SetText(name)
-		overlay.baseKind = Classify(name)
+		local known = high - low ~= 100 and high > 1
+		overlay.baseKind = friend and FriendKind(name) or Classify(name, known and high or nil)
+		overlay.iconFor = nil
 	end
-	-- Only the target can be told apart as a guardian; it goes back to an elite
-	-- when it is no longer the target.
+	-- The target's kind as the game tells it, an enemy's: a guardian and an
+	-- elite of the same name told apart for sure.
 	local kind = overlay.baseKind
-	if isTarget and overlay.targetKind == "guardian" then
-		kind = "guardian"
+	if isTarget and not FRIEND_KINDS[kind] then
+		local told = overlay.targetKind
+		if told == "final" or told == "boss" then
+			kind = "boss"
+		elseif told == "guardian" or told == "elite" or told == "normal" then
+			kind = told
+		end
 	end
 	if kind ~= overlay.kind then
 		ApplyKind(overlay, kind)
+		overlay.iconFor = nil
+	end
+	if overlay.iconFor ~= name then
+		overlay.iconFor = name
+		FriendIcon(overlay, name)
 	end
 
-	-- The rank and file go without a plate, unless one of them is the target.
-	if overlay.kind == "normal" and Settings().important and not isTarget then
+	-- A kind left out goes without a plate; an enemy's still shows as the target.
+	if not Settings().show[overlay.kind] and not (isTarget and not FRIEND_KINDS[overlay.kind]) then
+		overlay.icon:Hide()
 		if not overlay.put then
 			overlay.put = true
 			overlay.bar:Hide()
@@ -307,9 +447,9 @@ local function UpdatePlate()
 		if overlay.named then
 			overlay.name:Show()
 		end
+		overlay.iconFor = nil
 	end
 
-	local low, high = stock.health:GetMinMaxValues()
 	local value = stock.health:GetValue()
 	local share = high > low and (value - low) / (high - low) or 0
 	local percent = math.floor(share * 100 + 0.5)
@@ -317,7 +457,9 @@ local function UpdatePlate()
 
 	-- A 0 to 100 bar means the client only knows the percentage; anything else
 	-- is the unit's real health.
-	if high - low == 100 or high <= 1 then
+	if FRIEND_KINDS[overlay.kind] then
+		overlay.health:SetText("")
+	elseif high - low == 100 or high <= 1 then
 		overlay.health:SetText(percent.."%")
 	elseif overlay.kind == "normal" then
 		overlay.health:SetText(Short(value))
@@ -326,7 +468,9 @@ local function UpdatePlate()
 	end
 
 	local color = overlay.style.color
-	if share <= EXECUTE_RANGE then
+	if FRIEND_KINDS[overlay.kind] then
+		-- No execute mark on a friend.
+	elseif share <= EXECUTE_RANGE then
 		color = EXECUTE_COLOR
 		overlay.marker:Hide()
 	else
@@ -416,6 +560,14 @@ local function SkinPlate(plate)
 	overlay.name:SetPoint("BOTTOM", overlay.bar, "TOP", 0, 3)
 	overlay.name:SetTextColor(1, 1, 1)
 
+	-- A pet's icon, left of its name (PetIcon).
+	overlay.icon = overlay:CreateTexture(nil, "OVERLAY")
+	overlay.icon:SetWidth(12)
+	overlay.icon:SetHeight(12)
+	overlay.icon:SetPoint("RIGHT", overlay.name, "LEFT", -2, 0)
+	overlay.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	overlay.icon:Hide()
+
 	overlay.health = overlay.bar:CreateFontString(nil, "OVERLAY")
 	overlay.health:SetPoint("RIGHT", overlay.bar, "RIGHT", -2, 0)
 	overlay.health:SetTextColor(1, 1, 1)
@@ -449,20 +601,73 @@ scanner:SetScript("OnUpdate", function()
 	end
 end)
 
--- Enemy nameplates are off by default; a run is unreadable without them. Off
--- again for whoever chose no plates at all (/splates none).
+-- Whether any kind of the enemies' (friends false) or the friends' is on.
+local function AnyShown(friends)
+	for kind, on in pairs(Settings().show) do
+		if on and (FRIEND_KINDS[kind] == true) == friends then
+			return true
+		end
+	end
+	return false
+end
+
+-- The client's enemy plates on while any enemy kind is (none for whoever chose
+-- no plates at all, /splates none); its friendly plates while any friend's
+-- is, and left as the game has them until one was chosen.
 local function ApplyShown()
-	if Settings().hidden then
+	local settings = Settings()
+	if settings.hidden or not AnyShown(false) then
 		HideNameplates()
 		NAMEPLATES_ON = nil
 	else
 		ShowNameplates()
 		NAMEPLATES_ON = 1
 	end
+	if not settings.hidden and AnyShown(true) and ShowFriendNameplates then
+		ShowFriendNameplates()
+		FRIENDNAMEPLATES_ON = 1
+	elseif settings.friendsChosen and HideFriendNameplates then
+		HideFriendNameplates()
+		FRIENDNAMEPLATES_ON = nil
+	end
 end
 
 scanner:RegisterEvent("PLAYER_ENTERING_WORLD")
 scanner:SetScript("OnEvent", ApplyShown)
+
+-- V and Shift+V are the client's own keys, out of any addon's reach. With
+-- them ignored (the default; /splates keys, or Options, Nameplates), what they
+-- turn on or off is put back as chosen here within half a second; the
+-- friends' plates only once a friend's kind was chosen.
+local function ClientShows(cvar, global)
+	if GetCVar then
+		local ok, value = pcall(GetCVar, cvar)
+		if ok and value ~= nil and value ~= "" then
+			return value == "1"
+		end
+	end
+	return global and true or false
+end
+
+local guardWait = 0
+local guard = CreateFrame("Frame")
+guard:SetScript("OnUpdate", function()
+	guardWait = guardWait + arg1
+	if guardWait < 0.5 then
+		return
+	end
+	guardWait = 0
+	local settings = Settings()
+	if settings.keysAllowed then
+		return
+	end
+	local enemies = not settings.hidden and AnyShown(false)
+	local friends = not settings.hidden and AnyShown(true)
+	if ClientShows("nameplateShowEnemies", NAMEPLATES_ON) ~= enemies
+		or (settings.friendsChosen and ClientShows("nameplateShowFriends", FRIENDNAMEPLATES_ON) ~= friends) then
+		ApplyShown()
+	end
+end)
 
 local function Restyle()
 	for index = 1, table.getn(overlays) do
@@ -474,15 +679,53 @@ local function Say(text)
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor Plates: "..text)
 end
 
+-- Each kind's command (all, friends: the earlier ones) and its name.
+local COMMAND_KINDS = { normal = "normal", all = "normal", elites = "elite", guardians = "guardian", bosses = "boss",
+	pets = "pet", friends = "pet", totems = "totem" }
+local KIND_NAMES = { normal = "The rank and file", elite = "Elites", guardian = "Guardians", boss = "Bosses",
+	pet = "Your pets and summons", totem = "Your totems" }
+
 SLASH_SURVIVORPLATES1 = "/splates"
 SlashCmdList["SURVIVORPLATES"] = function(msg)
 	local settings = Settings()
 	local _, _, command, argument = string.find(msg or "", "^(%S*)%s*(.*)$")
 	local number = tonumber(argument)
 
-	if command == "all" then
-		settings.important = not settings.important
-		Say(settings.important and "plates on elites, guardians and bosses only." or "plates on every enemy.")
+	local kind = COMMAND_KINDS[command]
+	if kind then
+		settings.show[kind] = not settings.show[kind]
+		if FRIEND_KINDS[kind] then
+			settings.friendsChosen = true
+		end
+		ApplyShown()
+		Say(KIND_NAMES[kind]..(settings.show[kind] and ": plates on." or ": plates off."))
+	elseif command == "keys" then
+		settings.keysAllowed = not settings.keysAllowed
+		Say(settings.keysAllowed and "V and Shift+V turn the plates on and off again, as the game has them."
+			or "V and Shift+V ignored: the plates stay as chosen here.")
+		ApplyShown()
+		return
+	elseif command == "count" then
+		-- The plates the client has on screen now, by kind, and how many of them
+		-- are drawn: a check of whether it holds back plates past some number.
+		local total, drawn, byKind = 0, 0, {}
+		for index = 1, table.getn(overlays) do
+			local overlay = overlays[index]
+			if overlay.plate:IsVisible() then
+				total = total + 1
+				local kind = overlay.kind or "?"
+				byKind[kind] = (byKind[kind] or 0) + 1
+				if not overlay.put then
+					drawn = drawn + 1
+				end
+			end
+		end
+		local parts = {}
+		for kind, count in pairs(byKind) do
+			table.insert(parts, kind.." "..count)
+		end
+		Say(total.." plates on screen, "..drawn.." drawn: "..(table.getn(parts) > 0 and table.concat(parts, ", ") or "none")..".")
+		return
 	elseif command == "names" then
 		settings.names = not settings.names
 		Say("names on "..(settings.names and "every plate" or "elites, guardians and bosses only")..".")
@@ -494,13 +737,22 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		settings.scale = math.max(0.5, math.min(2, number))
 		Say("scale "..settings.scale..".")
 	else
-		Say("/splates all | names | none | scale 0.5-2")
+		Say("/splates none | normal | elites | guardians | bosses | pets | totems | names | keys | count | scale 0.5-2")
 		return
 	end
 	Restyle()
 end
 
--- For Survivor UI's options: the plates' size and whether they show, quietly.
+-- For Survivor UI's options: whether a kind's plates show (normal, elite,
+-- guardian, boss, pet, totem), the plates' size, quietly.
+function SurvivorPlates_Shown(kind)
+	return Settings().show[kind] == true
+end
+
+function SurvivorPlates_KeysAllowed()
+	return Settings().keysAllowed == true
+end
+
 function SurvivorPlates_GetScale()
 	return Settings().scale or 1
 end

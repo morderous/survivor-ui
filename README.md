@@ -209,6 +209,18 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.18, 2026-10-20
+
+**Survivor Plates**
+- **Each kind of plate on its own** (Options, Nameplates, a box each, or /splates and the kind):
+  - **Friendly** (new; asked by Sedz and Amarolk, with so many warlock demons about): **pets and summons** (a warlock's demons, the Water Elemental, spirit wolves, treants, a hunter's pets) in green, **totems** in blue (the game names each one just "Totem": the icon of your one totem spell, or a totem's when you have both). Small, with the name and its icon (Survivor UI's), and none by default. They are the game's friendly plates, told from an enemy's by the color the game gives them, so an Infernal of yours is never drawn as the enemy elite of that name; they show even with the enemies' plates off.
+  - **Enemy**: **normal**, **elites**, **guardians** and **bosses**, each on or off (all on by default; whoever had chosen "elites, guardians and bosses only" keeps the rank and file off). A kind left out still shows as your target. A zone's guardians are named as its elites, so a guardian the game lists is told apart by its health, and your target always by what the game says it is.
+- **The plates hold steady**: the game hands a plate to another unit over a frame or two (its name, then its color and health), and a plate read too soon kept the last unit's kind: a totem drawn as a hidden enemy, a guardian as a pet, one coming as the other went. A plate's kind is now read again whenever its name, color or health changes.
+- **V and Shift+V ignored** (on by default; Options, Nameplates, or /splates keys): the game's own keys for its plates turned them on and off behind these choices. What they change now goes back within half a second.
+
+**Survivor UI**
+- **The Nameplates tab redone**: **Friendly** (Pets and summons, Totems) and **Enemy** (Normal, Elites, Guardians, Bosses), a box each, in place of the choice between every enemy and only the dangerous ones; "Ignore V and Shift+V" under Look. The totems' plain "Totem" is read in every language the game has.
+
 ### v3.0.17, 2026-10-20
 
 **Survivor UI**

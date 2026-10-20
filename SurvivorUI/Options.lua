@@ -2205,26 +2205,27 @@ Check(page, "The Combat Log window", OnUnlessOff("chatFilterCombat"), Flip("chat
 -- Nameplates.
 
 page = pages.plates
-Header(page, "Nameplates", "Survivor Plates: a plate over each enemy within 20 yards of the hero (off by default: the run tracker shows the bosses, guardians and elites).")
+Header(page, "Nameplates", "Survivor Plates: a plate over the enemies within 20 yards of the hero, and over your own pets and totems, each kind as you choose (off by default: the run tracker shows the bosses, guardians and elites).")
 if PlatesThere() then
 	PanelHead(page, PlatesOn, function() Plates("none") end)
-	local function PlatesMode()
-		local db = SurvivorPlatesDB or {}
-		return db.important and "important" or "all"
+	-- Each kind on its own (Survivor Plates' show), a box each.
+	local function Kind(label, kind, command, note)
+		Check(page, label, function() return SurvivorPlates_Shown and SurvivorPlates_Shown(kind) end,
+			function() Plates(command) end, note)
 	end
-	Subheader(page, "Which enemies")
-	Choice(page, {
-		{ "all", "On every enemy", "Every enemy near you gets a plate." },
-		{ "important", "Elites, guardians and bosses", "Only the dangerous ones: a cleaner screen." },
-	}, PlatesMode, function(mode)
-		local db = SurvivorPlatesDB or {}
-		if (mode == "important") ~= (db.important == true) then
-			Plates("all")
-		end
-	end)
+	Subheader(page, "Friendly")
+	Kind("Pets and summons", "pet", "pets", "a warlock's demons, the Water Elemental, spirit wolves, treants, a hunter's pets: small and green, with the name and icon")
+	Kind("Totems", "totem", "totems", "a shaman's: small and blue")
+	Subheader(page, "Enemy")
+	Kind("Normal", "normal", "normal", "the rank and file of the horde")
+	Kind("Elites", "elite", "elites", nil)
+	Kind("Guardians", "guardian", "guardians", "told from an elite of the same name by its health")
+	Kind("Bosses", "boss", "bosses", "a kind left out still shows as your target")
 	Subheader(page, "Look")
 	Check(page, "Names on every plate", function() return SurvivorPlatesDB and SurvivorPlatesDB.names == true end,
-		function() Plates("names") end, "off: only on elites, guardians and bosses")
+		function() Plates("names") end, "off: only on elites, guardians, bosses and friends")
+	Check(page, "Ignore V and Shift+V", function() return not (SurvivorPlates_KeysAllowed and SurvivorPlates_KeysAllowed()) end,
+		function() Plates("keys") end, "the game's keys for its plates: what they turn on or off goes back to the choices here")
 	Slider(page, "Size", 0.5, 2, 0.05,
 		function() return SurvivorPlates_GetScale and SurvivorPlates_GetScale() or 1 end,
 		function(value) if SurvivorPlates_SetScale then SurvivorPlates_SetScale(value) end end)
