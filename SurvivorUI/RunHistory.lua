@@ -3117,6 +3117,13 @@ function statsPanel.Row(index)
 			Aside(this, 4)
 			GameTooltip:SetText(this.tipTitle, color[1], color[2], color[3])
 			GameTooltip:AddLine(this.tipText, 0.62, 0.62, 0.68, 1)
+			-- Its parts as the run stood: the gear worn, and the rest.
+			if this.gear then
+				GameTooltip:AddDoubleLine("Worn gear", this.gear, 0.12, 1, 0, 0.12, 1, 0)
+				if this.rest then
+					GameTooltip:AddDoubleLine("Everything else", this.rest, 0.62, 0.62, 0.65, 0.85, 0.85, 0.85)
+				end
+			end
 			GameTooltip:Show()
 		end)
 		row:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -3145,6 +3152,7 @@ function statsPanel.Draw(run)
 		row.label:SetTextColor(color[1], color[2], color[3])
 		row.value:SetTextColor(color[1], color[2], color[3])
 		row.color, row.tipTitle, row.tipText = color, label, tip
+		row.gear, row.rest = nil, nil
 		At(row, box, 6, -y)
 		y = y + height
 		return row
@@ -3172,6 +3180,9 @@ function statsPanel.Draw(run)
 			for each = 1, table.getn(lines) do
 				local line = lines[each]
 				local row = Place(statsPanel.LINE, line[1], line[2], color, line[3])
+				if SurvivorUI_StatGear then
+					row.gear, row.rest = SurvivorUI_StatGear(line[1], kept)
+				end
 				row.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
 				row.rule:SetVertexColor(color[1], color[2], color[3], 0.2)
 			end

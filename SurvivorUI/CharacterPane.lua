@@ -271,6 +271,45 @@ local SECTIONS = {
 	} },
 }
 
+-- What the gear worn adds to a number, as the game's own pane tells it
+-- (AZS_STATS's keys with a g: gdmg, gcrit...), and what the rest gives
+-- (level, talents, cards, buffs, race): each as text, the rest nil where it
+-- cannot be told apart (the pickup's yards against the gear's share). Of the
+-- stats given, the run's now unless told: the last runs keep theirs.
+local GEAR = {
+	-- label = { gear key, total's key, how the total reads as a bonus, format }
+	Health = { "ghp", "hp", nil, "+%.0f" }, Regen = { "greg", "reg", nil, "+%.1f" },
+	Targets = { "gcnt", "cnt", nil, "+%d" }, Armor = { "garm", "arm" }, Crit = { "gcrit", "crit" },
+	Echo = { "gecho", "echo" }, ["Crit Dmg"] = { "gcm" }, Pickup = { "gpick" },
+	Damage = { "gdmg", "dmg", "less1" }, Area = { "garea", "area", "less1" },
+	Speed = { "gspd", "spd", "less1" }, Gold = { "ggold", "gold", "less1" }, Haste = { "gcd", "cd", "from1" },
+}
+
+local function Share(value)
+	local share = value * 100
+	return string.format(math.abs(share - math.floor(share + 0.5)) > 0.05 and "%+.1f%%" or "%+.0f%%", share)
+end
+
+function SurvivorUI_StatGear(label, stats)
+	stats = stats or AZS_STATS
+	local gear = GEAR[label]
+	local value = gear and stats and tonumber(stats[gear[1]])
+	if not value or value == 0 then
+		return nil
+	end
+	local total = gear[2] and tonumber(stats[gear[2]])
+	if total and gear[3] == "less1" then
+		total = total - 1
+	elseif total and gear[3] == "from1" then
+		total = 1 - total
+	end
+	local rest = total and total - value
+	if gear[4] then
+		return string.format(gear[4], value), rest and rest > 0.001 and string.format(gear[4], rest) or nil
+	end
+	return Share(value), rest and rest > 0.0001 and Share(rest) or nil
+end
+
 -- A missing number reads as 0, so a row the game has not learned yet shows a
 -- plain zero instead of breaking the panel.
 local function Stats()
@@ -540,6 +579,14 @@ local function MakeView(alone)
 		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
 		GameTooltip:SetText(this.title, 1, 1, 1)
 		GameTooltip:AddLine(this.text, 1, 0.82, 0, 1)
+		-- Its parts: what the gear worn gives, and the rest.
+		local gear, rest = SurvivorUI_StatGear(this.key)
+		if gear then
+			GameTooltip:AddDoubleLine("Worn gear", gear, 0.12, 1, 0, 0.12, 1, 0)
+			if rest then
+				GameTooltip:AddDoubleLine("Everything else", rest, 0.62, 0.62, 0.65, 0.85, 0.85, 0.85)
+			end
+		end
 		if Arranging() then
 			GameTooltip:AddLine("Drag to move it within its group. Which numbers show: /sui opt, Stats panel.", 0.6, 0.6, 0.65, 1)
 		end
