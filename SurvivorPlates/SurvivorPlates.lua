@@ -198,7 +198,14 @@ local function TargetKind()
 	end
 end
 
+-- Every nameplate asks for the settings many times a second. Checking and
+-- fixing them up each time is wasted work, so they are checked once, and
+-- after that the same settings are simply handed back.
+local settingsChecked
 local function Settings()
+	if settingsChecked and settingsChecked == SurvivorPlatesDB then
+		return settingsChecked
+	end
 	SurvivorPlatesDB = SurvivorPlatesDB or {}
 	local db = SurvivorPlatesDB
 	-- The defaults: a plate on every enemy, a name only on elites, guardians and
@@ -224,6 +231,7 @@ local function Settings()
 	-- The companions had plates of their own for a day: the game gives them none.
 	db.show.companion = nil
 	db.scale = db.scale or 1
+	settingsChecked = db
 	return db
 end
 
@@ -238,6 +246,17 @@ local function Short(value)
 end
 
 local overlays = {}
+
+-- Shared answers, worked out once per screen refresh instead of once per
+-- nameplate:
+--   hasTarget    do you have something targeted?
+--   targetKind   what the game says your target is (elite, guardian, boss...)
+--   auraVersion  goes up by one whenever your target changes or gains or
+--                loses an effect (poison, slow...). The target's nameplate
+--                only looks at the effects again when this number changes.
+local hasTarget = false
+local targetKind
+local auraVersion = 0
 
 -- Other addons find the plates here: the art a plate is recognized by is
 -- blanked once it is skinned. Each entry has .plate and .stock.name.
@@ -265,7 +284,9 @@ local function ApplyKind(overlay, kind)
 	else
 		overlay.name:Hide()
 	end
-
+	-- The plate may have changed size, so the effect icons above it need to
+	-- be put back in the right place: forget they were drawn.
+	overlay.auraVersion = nil
 end
 
 -- Debuffs on the target's plate, with their stacks. The 1.12 client only tells
@@ -274,25 +295,26 @@ end
 local PLATE_DEBUFFS = 6
 local DEBUFF_SIZE = 15
 
-local function UpdatePlateDebuffs(overlay, isTarget)
+local function HidePlateDebuffs(overlay)
 	local icons = overlay.debuffs
-	if not isTarget then
-		if icons and overlay.debuffsShown then
-			for index = 1, PLATE_DEBUFFS do
-				if icons[index] then
-					icons[index]:Hide()
-				end
+	if icons then
+		for index = 1, PLATE_DEBUFFS do
+			if icons[index] then
+				icons[index]:Hide()
 			end
-			overlay.debuffsShown = nil
 		end
-		return
 	end
+end
 
+-- Draws the effect icons over your target's nameplate. Called only when
+-- something changed (new target, an effect added or ended, the plate resized),
+-- not on every screen refresh.
+local function UpdatePlateDebuffs(overlay)
+	local icons = overlay.debuffs
 	if not icons then
 		icons = {}
 		overlay.debuffs = icons
 	end
-	overlay.debuffsShown = true
 
 	local lift = overlay.named and (overlay.style.nameSize * Settings().scale + 7) or 4
 	for index = 1, PLATE_DEBUFFS do
@@ -393,7 +415,7 @@ local function UpdatePlate()
 	local stock = overlay.stock
 
 	-- The client dims every plate but the target's.
-	local isTarget = UnitExists("target") and overlay.plate:GetAlpha() == 1
+	local isTarget = hasTarget and overlay.plate:GetAlpha() == 1
 
 	-- The client fills a plate in over a frame or two as it hands it to
 	-- another unit: its name, then its bar's color and health. So the kind is
@@ -416,7 +438,7 @@ local function UpdatePlate()
 	-- elite of the same name told apart for sure.
 	local kind = overlay.baseKind
 	if isTarget and not FRIEND_KINDS[kind] then
-		local told = overlay.targetKind
+		local told = targetKind
 		if told == "final" or told == "boss" then
 			kind = "boss"
 		elseif told == "guardian" or told == "elite" or told == "normal" then
@@ -434,9 +456,11 @@ local function UpdatePlate()
 
 	-- A kind left out goes without a plate; an enemy's still shows as the target.
 	if not Settings().show[overlay.kind] and not (isTarget and not FRIEND_KINDS[overlay.kind]) then
-		overlay.icon:Hide()
+		-- Hide everything once, when the plate is first hidden, not again on
+		-- every screen refresh.
 		if not overlay.put then
 			overlay.put = true
+			overlay.icon:Hide()
 			overlay.bar:Hide()
 			overlay.name:Hide()
 		end
@@ -450,40 +474,65 @@ local function UpdatePlate()
 		overlay.iconFor = nil
 	end
 
+	-- Redraw the health bar, its number and its color only when the health
+	-- (or the kind of enemy) actually changed. Before, this was done for every
+	-- nameplate on every screen refresh, even when nothing had changed. Each
+	-- time it wrote out a new health number, which leaves leftover data the
+	-- game must clean up now and then, and that clean-up briefly freezes it.
+	-- The last values drawn are remembered here to spot a change.
 	local value = stock.health:GetValue()
-	local share = high > low and (value - low) / (high - low) or 0
-	local percent = math.floor(share * 100 + 0.5)
-	overlay.bar:SetValue(share)
+	if value ~= overlay.shownValue or high ~= overlay.shownHigh or low ~= overlay.shownLow
+		or overlay.kind ~= overlay.shownKind then
+		overlay.shownValue = value
+		overlay.shownHigh = high
+		overlay.shownLow = low
+		overlay.shownKind = overlay.kind
 
-	-- A 0 to 100 bar means the client only knows the percentage; anything else
-	-- is the unit's real health.
-	if FRIEND_KINDS[overlay.kind] then
-		overlay.health:SetText("")
-	elseif high - low == 100 or high <= 1 then
-		overlay.health:SetText(percent.."%")
-	elseif overlay.kind == "normal" then
-		overlay.health:SetText(Short(value))
-	else
-		overlay.health:SetText(Short(value).." / "..Short(high).."  "..percent.."%")
+		local share = high > low and (value - low) / (high - low) or 0
+		local percent = math.floor(share * 100 + 0.5)
+		overlay.bar:SetValue(share)
+
+		-- A 0 to 100 bar means the client only knows the percentage; anything else
+		-- is the unit's real health.
+		if FRIEND_KINDS[overlay.kind] then
+			overlay.health:SetText("")
+		elseif high - low == 100 or high <= 1 then
+			overlay.health:SetText(percent.."%")
+		elseif overlay.kind == "normal" then
+			overlay.health:SetText(Short(value))
+		else
+			overlay.health:SetText(Short(value).." / "..Short(high).."  "..percent.."%")
+		end
+
+		local color = overlay.style.color
+		if FRIEND_KINDS[overlay.kind] then
+			-- No execute mark on a friend.
+		elseif share <= EXECUTE_RANGE then
+			color = EXECUTE_COLOR
+			overlay.marker:Hide()
+		else
+			overlay.marker:Show()
+		end
+		overlay.bar:SetStatusBarColor(color[1], color[2], color[3], 1)
 	end
 
-	local color = overlay.style.color
-	if FRIEND_KINDS[overlay.kind] then
-		-- No execute mark on a friend.
-	elseif share <= EXECUTE_RANGE then
-		color = EXECUTE_COLOR
-		overlay.marker:Hide()
-	else
-		overlay.marker:Show()
+	-- The white frame and the effect icons: changed only when this plate
+	-- becomes your target or stops being it.
+	if isTarget ~= overlay.isTarget then
+		overlay.isTarget = isTarget
+		if isTarget then
+			overlay.border:SetVertexColor(1, 1, 1, 1)
+		else
+			overlay.border:SetVertexColor(0, 0, 0, 1)
+			HidePlateDebuffs(overlay)
+		end
+		overlay.auraVersion = nil
 	end
-	overlay.bar:SetStatusBarColor(color[1], color[2], color[3], 1)
-
-	if isTarget then
-		overlay.border:SetVertexColor(1, 1, 1, 1)
-	else
-		overlay.border:SetVertexColor(0, 0, 0, 1)
+	-- Your target gained or lost an effect since its icons were drawn.
+	if isTarget and overlay.auraVersion ~= auraVersion then
+		overlay.auraVersion = auraVersion
+		UpdatePlateDebuffs(overlay)
 	end
-	UpdatePlateDebuffs(overlay, isTarget)
 end
 
 local function IsNameplate(frame)
@@ -582,11 +631,9 @@ local scanned = 0
 local scanner = CreateFrame("Frame")
 scanner:SetScript("OnUpdate", function()
 	RefreshLiveKinds()
-	-- The target's kind, asked once a frame for every plate to read.
-	local targetKind = TargetKind()
-	for index = 1, table.getn(overlays) do
-		overlays[index].targetKind = targetKind
-	end
+	-- Ask about the target once here, for all nameplates to share.
+	hasTarget = UnitExists("target") and true or false
+	targetKind = TargetKind()
 
 	local count = WorldFrame:GetNumChildren()
 	if count ~= scanned then
@@ -633,7 +680,17 @@ local function ApplyShown()
 end
 
 scanner:RegisterEvent("PLAYER_ENTERING_WORLD")
-scanner:SetScript("OnEvent", ApplyShown)
+-- The game announces when you change target and when a unit gains or loses an
+-- effect. Those are the moments the target's effect icons need redrawing.
+scanner:RegisterEvent("PLAYER_TARGET_CHANGED")
+scanner:RegisterEvent("UNIT_AURA")
+scanner:SetScript("OnEvent", function()
+	if event == "PLAYER_ENTERING_WORLD" then
+		ApplyShown()
+	elseif event == "PLAYER_TARGET_CHANGED" or arg1 == "target" then
+		auraVersion = auraVersion + 1
+	end
+end)
 
 -- V and Shift+V are the client's own keys, out of any addon's reach. With
 -- them ignored (the default; /splates keys, or Options, Nameplates), what they
