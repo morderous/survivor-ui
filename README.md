@@ -209,6 +209,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.13, 2026-10-19
+
+**Survivor UI**
+- **The game's red flag in Modules**: the minimap's flag on the lair to head for (the game's, from its 0.102) gets its **The game's** tick beside **Minimap pins**, as every part with a game's own of it has. With the pins on, as before: the lair glows gold in place of the flag (the Minimap tab still chooses Our glow, The game's or Off). With the pins off, the game's flag is back, at once; untick its The game's for neither. Before, the pins off left the flag put away with no glow in its place, and its one switch was deep in the Minimap tab.
+
 ### v3.0.12, 2026-10-19
 
 **Survivor UI**

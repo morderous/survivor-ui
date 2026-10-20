@@ -938,6 +938,7 @@ local GAME = {
 	loot = { key = "noGameLoot", hud = "loot", name = "loot notices" },
 	meter = { key = "noGameMeter", hud = "meter", name = "damage meter" },
 	levels = { key = "noGameLevels", hud = "levels", name = "Level Up! button" },
+	flag = { key = "noGameFlag", hud = "flag", name = "red flag on the minimap" },
 }
 
 -- The Default shows while SurvivorUI's is off, and it is wanted.
@@ -1100,7 +1101,7 @@ local MODULES = {
 		{ "Boss bars", OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"),
 			"The bosses and the awake guardians with their debuffs, apart from the tracker. They put the game's bars away.", nil, nil, GAME.bosses },
 		{ "Minimap pins", FeatureOn("mapPins"), FeatureToggle("mapPins", true),
-			"On the minimap, a mark for each guardian's lair and a chest for each cache, set in the Minimap tab." },
+			"On the minimap, a mark for each guardian's lair and a chest for each cache, set in the Minimap tab; the lair to head for glowing gold in place of the game's red flag.", nil, nil, GAME.flag },
 		{ "Kills & gold", OnUnlessOff("tally"), Call("SurvivorUI_Tally"),
 			"Your kills, your gold and the next cache's price. It puts the game's box away.", nil, nil, GAME.tally },
 		{ "XP bar", OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"),
@@ -2090,7 +2091,7 @@ Subheader(page, "The game's flag")
 Inline(page, "Red flag", { { "ours", "Our glow" }, { "game", "The game's" }, { "none", "Off" } },
 	function() return SurvivorUI_GameFlag and SurvivorUI_GameFlag() or "game" end,
 	function(value) if SurvivorUI_SetGameFlag then SurvivorUI_SetGameFlag(value) end end)
-Note(page, "The game flags the lair to head for: the nearest with its guardian, else the one back soonest. Our glow: the flag put away, that lair's mark glowing gold on the minimap and in the run tracker. The game's: its red flag. Off: neither. From the game's 0.102.")
+Note(page, "The game flags the lair to head for: the nearest with its guardian, else the one back soonest. Our glow: the flag put away, that lair's mark glowing gold on the minimap and in the run tracker. The game's: its red flag. Off: neither. With the pins off (Modules), the game's flag is back, unless its The game's is unticked there. From the game's 0.102.")
 
 -- The preview: the eight marks (or the skull) at the lairs' size and the chest
 -- at the caches', on a minimap's grass, as the settings stand.

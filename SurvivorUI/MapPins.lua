@@ -295,12 +295,20 @@ local function FlagChoice()
 	return Settings().gameFlag or "ours"
 end
 
+-- With the pins off (Modules), the game's flag is back, as every part's own
+-- is with SurvivorUI's off, unless The game's is unticked there (noGameFlag).
 local function ApplyGameFlag()
 	if not (AZS_SetHudShown and AZS_IsHudShown and AZS_GetFlaggedLair) then
 		return
 	end
 	local settings = Settings()
-	if FlagChoice() ~= "game" then
+	local away
+	if Enabled() then
+		away = FlagChoice() ~= "game"
+	else
+		away = settings.noGameFlag
+	end
+	if away then
 		if AZS_IsHudShown("flag") then
 			AZS_SetHudShown("flag", false)
 			settings.hidGameFlag = true
@@ -325,6 +333,10 @@ end
 local flagLoader = CreateFrame("Frame")
 flagLoader:RegisterEvent("PLAYER_ENTERING_WORLD")
 flagLoader:SetScript("OnEvent", ApplyGameFlag)
+
+-- For the options' Modules: the game's flag ticked or not.
+SurvivorUI_GameHud = SurvivorUI_GameHud or {}
+SurvivorUI_GameHud.flag = ApplyGameFlag
 
 local flaggedPin                -- the pin glowing for the game's flag, if one
 
@@ -376,9 +388,16 @@ local function WayTo(place, px, py, heroX, heroY, span)
 	end
 end
 
+local pinsWere                  -- the pins on or off at the last look
+
 local function Update()
 	local shown = 0
 	flaggedPin = nil
+	-- The pins switched on or off (Modules, at once): the game's flag follows.
+	if Enabled() ~= pinsWere then
+		pinsWere = Enabled()
+		ApplyGameFlag()
+	end
 	if Enabled() and Playing() then
 		local px, py = HeroWorld()
 		local heroX, heroY, span
