@@ -1125,7 +1125,7 @@ local MODULES = {
 		{ "Biggest Crits", OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"),
 			"Each ability's biggest critical strike this run." },
 		{ "Counters", OnUnlessOff("counters"), Flip("counters"),
-			"Over the spells' buttons: the DoTs ticking, the enemies feared, the totems down." },
+			"Over the spells' buttons: the DoTs ticking, the enemies feared, the totems down, the shouts." },
 	} },
 	{ "Character", {
 		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
@@ -1137,7 +1137,9 @@ local MODULES = {
 		{ "Jewelry", OnUnlessOff("jewelry"), Flip("jewelry"),
 			"Every amulet, ring and trinket found, and what is left to find." },
 		{ "Ability tooltips", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"),
-			"A spell's tooltip laid out again: its school, cooldown, upgrades.", true },
+			"A spell's tooltip laid out again: what it does, its numbers in colors, its upgrades, bonuses and talents.", true },
+		{ "Item tooltips", FeatureOn("itemTooltip"), FeatureToggle("itemTooltip", true),
+			"An item's tooltip laid out again: no bind line, its health green, each effect a line of its own, its numbers in colors." },
 	} },
 	{ "Interface", {
 		{ "Unit frames", FeatureOn("unitFrames"), FeatureToggle("unitFrames"),
@@ -1826,12 +1828,13 @@ PanelHead(page, OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"), "crits", "B
 -- Counters: the numbers over the spells' buttons (DotCounter.lua).
 
 page = pages.counters
-Header(page, "Counters", "A number over a spell's button: how many of it are out right now, in the spell's damage meter color. The game tells none of these outright: each is worked out from the combat log and your spells' cooldowns, so it can be off now and then.")
+Header(page, "Counters", "A number over a spell's button: how many of it are out right now (Battle Shout: the seconds it has left), in the spell's damage meter color. The game tells none of these outright: each is worked out from the combat log and your spells' cooldowns, so it can be off now and then.")
 PanelHead(page, OnUnlessOff("counters"), Flip("counters"))
 Subheader(page, "What is counted")
 Check(page, "DoTs", OnUnlessOff("dotCounter"), Flip("dotCounter"), "how many of each are ticking on the enemies, by their ticks over the last two seconds; one on an enemy that dies stays up to two seconds")
 Check(page, "Fears", OnUnlessOff("fearCounter"), Flip("fearCounter"), "how many enemies each one holds; the game writes a fear's hit but not its end, so each enemy hit counts for the fear's full time")
-Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, and the seconds until the next one ends: each cast counts one totem for its tooltip's time; two set down at once by a talent count as one, and one that drops on its own is not seen")
+Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, and the seconds until the next one ends: each cast counts a totem for its tooltip's time; two with Call of the Elements, and Totemic Wrath's Searing Totem every 14 sec, told by the spells a run starts with")
+Check(page, "Shouts", OnUnlessOff("shoutCounter"), Flip("shoutCounter"), "Demoralizing Shout: how many enemies its last cast weakened, for its time; Battle Shout: the seconds it has left")
 
 Subheader(page, "Look")
 Slider(page, "Size", 0.5, 2, 0.05, function() return tonumber(DB().counterSize) or 1 end,
@@ -2052,6 +2055,11 @@ Check(page, "Run History button", OnUnlessOff("historyMapButton"), function()
 		SurvivorUI_PlaceMapButtons()
 	end
 end, "the hourglass over the [S], opening Run History")
+Check(page, "Clock and FPS", OnUnlessOff("minimapClock"), Flip("minimapClock"),
+	"along its bottom: your time (the time zone in This Run) and the frames a second")
+Inline(page, "Clock", { { "24", "24 hours" }, { "12", "12 hours" } },
+	function() return DB().clock12 and "12" or "24" end,
+	function(value) DB().clock12 = value == "12" or nil end)
 Slider(page, "Size", 0.5, 2, 0.05,
 	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("minimap") or 1 end,
 	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("minimap", value) end end)

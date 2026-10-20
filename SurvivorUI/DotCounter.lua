@@ -16,10 +16,18 @@
 -- them.
 --
 -- The totems are not written either, set down or ending: each cast is told by
--- its spell's cooldown starting over (AZS_SPELLS), and counts one totem for
--- the time its button's tooltip gives then ("Drops a totem beside you for 20
--- sec"), by the run's clock, so a pause stops it too. Two set down at once by
--- a talent count as one, and a totem that drops on its own is not seen.
+-- its spell's cooldown starting over (AZS_SPELLS), and counts a totem for the
+-- time its button's tooltip gives then ("Drops a totem beside you for 20
+-- sec"), by the run's clock, so a pause stops it too. The shaman's talents
+-- are not told to addons, but two say themselves in the spells a run starts
+-- with: Searing Totem from the first second is Call of the Elements, every
+-- totem set down with a second beside it (each cast counts two); Magma Totem
+-- is Totemic Wrath, a Searing Totem more dropping on its own every 14 sec
+-- (counted by the run's clock, as the game tells nothing of it).
+--
+-- A shout: Demoralizing Shout's hits are written, not its end, so the enemies
+-- its last cast hit count for its time (its tooltip's "for 6 sec"), bosses
+-- too; Battle Shout, a buff on the hero, shows the seconds it has left.
 --
 -- The number stands over the spell's action button, in the spell's damage
 -- meter color, and goes once nothing is out; a totem's has the seconds until
@@ -36,6 +44,8 @@ local BASE = 1          -- seconds between two ticks of a DoT, before DoT Haste
 local FEARS = {
 	["Psychic Scream"] = 3, ["Intimidating Shout"] = 3, ["Howl of Terror"] = 3, ["Fear"] = 3,
 }
+-- The shouts that weaken the enemies they hit, the same way.
+local SHOUTS = { ["Demoralizing Shout"] = 6 }
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
@@ -45,8 +55,8 @@ local function Settings()
 	return SurvivorUIDB
 end
 
--- Each counter, on unless switched off: dotCounter, fearCounter, totemCounter;
--- none while the counters are off as a whole (the Modules tab).
+-- Each counter, on unless switched off: dotCounter, fearCounter, totemCounter,
+-- shoutCounter; none while the counters are off as a whole (the Modules tab).
 local function On(key)
 	local settings = Settings()
 	return settings.counters ~= false and settings[key] ~= false
@@ -54,6 +64,7 @@ end
 
 local ticks = {}        -- [spell] = { the GetTime() of each DoT tick, oldest first }
 local hits = {}         -- [fear] = { the GetTime() of each enemy it hit, oldest first }
+local shouts = {}       -- [shout] = its last cast: { at, last hit, enemies hit }
 local shown = {}        -- [spell] = the count on screen, eased toward the ticks'
 local badges = {}       -- [action button] = its number
 
@@ -63,7 +74,8 @@ local function Interval()
 	return BASE / (1 + math.max(0, haste))
 end
 
--- How long a fear holds: its button's tooltip, read now and then, else the list.
+-- How long a fear or a shout holds: its button's tooltip ("They flee for 3
+-- sec", "deal 20% less damage for 6 sec"), read now and then, else the lists.
 local scan = CreateFrame("GameTooltip", "SurvivorUIDotScan", nil, "GameTooltipTemplate")
 local held, heldAt = {}, {}
 local function Holds(spell)
@@ -71,7 +83,7 @@ local function Holds(spell)
 		return held[spell]
 	end
 	heldAt[spell] = GetTime()
-	held[spell] = FEARS[spell]
+	held[spell] = FEARS[spell] or SHOUTS[spell]
 	local button = SurvivorUI_SpellButton and SurvivorUI_SpellButton(spell)
 	local _, _, slot = string.find(button and button:GetName() or "", "(%d+)$")
 	if slot and scan.SetAction then
@@ -80,7 +92,11 @@ local function Holds(spell)
 		scan:SetAction(tonumber(slot))
 		for index = 1, scan:NumLines() do
 			local line = getglobal("SurvivorUIDotScanTextLeft"..index)
-			local _, _, seconds = string.find(line and line:GetText() or "", "flee for (%d+%.?%d*) sec")
+			local text = line and line:GetText() or ""
+			local _, _, seconds = string.find(text, "flee for (%d+%.?%d*) sec")
+			if not seconds then
+				_, _, seconds = string.find(text, "less damage for (%d+%.?%d*) sec")
+			end
 			if seconds then
 				held[spell] = tonumber(seconds)
 			end
@@ -119,6 +135,17 @@ events:SetScript("OnEvent", function()
 			hits[spell] = hits[spell] or {}
 			table.insert(hits[spell], GetTime())
 		end
+		-- A shout's hits come all at once: a hit long after the last is a new cast.
+		if spell and SHOUTS[spell] and On("shoutCounter") then
+			local now = GetTime()
+			local cast = shouts[spell]
+			if not cast or now - cast.last > 0.5 then
+				cast = { at = now, last = now, count = 0 }
+				shouts[spell] = cast
+			end
+			cast.last = now
+			cast.count = cast.count + 1
+		end
 		return
 	end
 	local _, _, spell = string.find(message, " suffers %d+ .- from your (.-)%.")
@@ -148,7 +175,7 @@ local function Badge(button)
 end
 
 -- A spell's number over its button, in its meter color; a totem's with its
--- seconds left.
+-- seconds left; no count (a buff's): the seconds left as the number.
 local function Light(lit, spell, count, seconds)
 	local button = SurvivorUI_SpellButton and SurvivorUI_SpellButton(spell)
 	if not (button and button:IsVisible()) then
@@ -162,7 +189,11 @@ local function Light(lit, spell, count, seconds)
 		badge:SetFont(SurvivorUI_FONT, math.floor(13 * size + 0.5) + FONT_BUMP, "THICKOUTLINE")
 		badge.timer:SetFont(SurvivorUI_FONT, math.floor(9 * size + 0.5) + FONT_BUMP, "OUTLINE")
 	end
-	badge:SetText(math.max(1, math.floor(count + 0.5)))
+	if count then
+		badge:SetText(math.max(1, math.floor(count + 0.5)))
+	else
+		badge:SetText(math.ceil(seconds).."s")
+	end
 	local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(spell)
 	if color then
 		badge:SetTextColor(color[1], color[2], color[3])
@@ -170,7 +201,7 @@ local function Light(lit, spell, count, seconds)
 		badge:SetTextColor(1, 1, 1)
 	end
 	badge:Show()
-	if seconds then
+	if count and seconds then
 		badge.timer:SetText(math.ceil(seconds).."s")
 		badge.timer:Show()
 	else
@@ -187,6 +218,9 @@ local kinds = {}        -- [key] = true for a totem, false for a spell that is n
 local lastCd = {}       -- [key] = its cooldown left at the last look
 local spellsSeen        -- AZS_SPELLS_UPDATED at the last look
 local lastRunTime
+local started           -- this run's first spells looked at
+local wrathDone         -- Totemic Wrath's drops counted, by 14 sec of the run
+local WRATH_EVERY = 14
 
 -- "searing_totem" as "Searing Totem".
 local function Title(key)
@@ -217,19 +251,77 @@ local function RunTime()
 	return AZS_GetRunTime and AZS_GetRunTime() or GetTime()
 end
 
--- A cooldown that starts over is a cast: a totem's sets one down.
+-- The talents the run's first spells told (Settings().totemStart), for this
+-- hero: { twice = Call of the Elements, wrath = Totemic Wrath }.
+local function Talents()
+	local start = Settings().totemStart
+	if start and start.hero == UnitName("player") then
+		return start
+	end
+	return {}
+end
+
+-- Searing Totem's button, for its time: the racial on the twelfth, the rest in order.
+local function SearingSlot()
+	local count = table.getn(AZS_SPELLS or {})
+	for index = 1, count do
+		local entry = AZS_SPELLS[index]
+		if (entry.key or entry[1]) == "searing_totem" then
+			return index == count and 12 or index
+		end
+	end
+end
+
+-- A totem set down now, for so many seconds, so many times.
+local function SetDown(key, name, ends, copies)
+	local totem = totems[key] or { name = name, ends = {} }
+	for copy = 1, copies do
+		table.insert(totem.ends, ends)
+	end
+	table.sort(totem.ends)
+	totems[key] = totem
+end
+
+-- A cooldown that starts over is a cast: a totem's sets one down (two with
+-- Call of the Elements); Totemic Wrath drops a Searing Totem every 14 sec.
 local function WatchTotems()
 	local now = RunTime()
 	-- A new run: the clock went back.
 	if lastRunTime and now + 3 < lastRunTime then
-		totems, lastCd = {}, {}
+		totems, lastCd, started, wrathDone = {}, {}, nil, nil
 	end
 	lastRunTime = now
+	local talents = Talents()
+	if talents.wrath then
+		local due = math.floor(now / WRATH_EVERY)
+		-- Looked at first mid-run (a reload): the drops from before are let go.
+		wrathDone = math.min(wrathDone or due, due)
+		while wrathDone < due do
+			wrathDone = wrathDone + 1
+			local slot = SearingSlot()
+			local seconds = slot and TotemTime(slot)
+			if seconds then
+				SetDown("searing_totem", "Searing Totem", wrathDone * WRATH_EVERY + seconds, 1)
+			end
+		end
+	end
 	if not AZS_SPELLS or AZS_SPELLS_UPDATED == spellsSeen then
 		return
 	end
 	spellsSeen = AZS_SPELLS_UPDATED
 	local count = table.getn(AZS_SPELLS)
+	-- The run's first seconds: Searing Totem there from the start is Call of
+	-- the Elements, Magma Totem Totemic Wrath.
+	if not started and now < 5 then
+		started = true
+		local has = {}
+		for index = 1, count do
+			local entry = AZS_SPELLS[index]
+			has[entry.key or entry[1] or ""] = true
+		end
+		Settings().totemStart = { hero = UnitName("player"), twice = has.searing_totem, wrath = has.magma_totem }
+		talents = Talents()
+	end
 	for index = 1, count do
 		local entry = AZS_SPELLS[index]
 		local key = entry.key or entry[1]
@@ -242,12 +334,38 @@ local function WatchTotems()
 				local seconds = TotemTime(index == count and 12 or index)
 				kinds[key] = seconds ~= nil
 				if seconds then
-					local totem = totems[key] or { name = Title(key), ends = {} }
-					table.insert(totem.ends, now + seconds)
-					table.sort(totem.ends)
-					totems[key] = totem
+					SetDown(key, Title(key), now + seconds, talents.twice and 2 or 1)
 				end
 			end
+		end
+	end
+end
+
+-- A buff of the hero's, by its spell's key: the seconds it has left, by the
+-- run's clock since the game last told the buffs (it tells them on a change).
+local buffsSeen, buffsAt
+local function BuffLeft(key)
+	if not (AZS_SPELLS and AZS_BUFFS) then
+		return nil
+	end
+	local id
+	for index = 1, table.getn(AZS_SPELLS) do
+		local entry = AZS_SPELLS[index]
+		if (entry.key or entry[1]) == key then
+			id = tonumber(entry.spell or entry[2])
+		end
+	end
+	if not id then
+		return nil
+	end
+	if AZS_BUFFS_UPDATED ~= buffsSeen then
+		buffsSeen, buffsAt = AZS_BUFFS_UPDATED, RunTime()
+	end
+	for index = 1, table.getn(AZS_BUFFS) do
+		local entry = AZS_BUFFS[index]
+		if tonumber(entry.spell or entry[1]) == id then
+			local left = (tonumber(entry.left or entry[2]) or 0) - (RunTime() - buffsAt)
+			return left > 0 and left or nil
 		end
 	end
 end
@@ -314,6 +432,19 @@ frame:SetScript("OnUpdate", function()
 			end
 		end
 	end
+	-- The shouts: the enemies Demoralizing Shout's last cast hit, while it
+	-- holds; Battle Shout's seconds left.
+	if On("shoutCounter") then
+		for spell, cast in pairs(shouts) do
+			if now - cast.at < (Holds(spell) or 6) then
+				Light(lit, spell, cast.count)
+			end
+		end
+		local left = BuffLeft("battle_shout")
+		if left then
+			Light(lit, "Battle Shout", nil, left)
+		end
+	end
 	for _, badge in pairs(badges) do
 		if not lit[badge] then
 			badge:Hide()
@@ -325,7 +456,7 @@ end)
 -- /sui dots: every counter at once, off while any is on, else on.
 function SurvivorUI_ToggleDots()
 	local settings = Settings()
-	local on = not (On("dotCounter") or On("fearCounter") or On("totemCounter"))
-	settings.dotCounter, settings.fearCounter, settings.totemCounter = on, on, on
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the counters over the action bar (DoTs, fears, totems) are "..(on and "on." or "off."))
+	local on = not (On("dotCounter") or On("fearCounter") or On("totemCounter") or On("shoutCounter"))
+	settings.dotCounter, settings.fearCounter, settings.totemCounter, settings.shoutCounter = on, on, on, on
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the counters over the action bar (DoTs, fears, totems, shouts) are "..(on and "on." or "off."))
 end

@@ -313,19 +313,21 @@ local function Row(index)
 		PlaceRow(row)
 	end
 
-	-- The spell's card, as on the damage meter: beside the list, on its left.
-	row.cardFrame = list
+	-- The spell's tooltip, as on its action button (AbilityTooltip.lua lays it
+	-- out): beside the list, on its left, level with the row. Its damage and
+	-- crits are the damage meter's and Biggest Crits' cards.
 	row:EnableMouse(true)
 	row:SetScript("OnEnter", function()
-		if this.ability and SurvivorUI_CritCardShow then
-			SurvivorUI_CritCardShow(this)
+		if not (this.ability and this.actionSlot) then
+			return
 		end
+		GameTooltip:SetOwner(this, "ANCHOR_NONE")
+		GameTooltip:ClearAllPoints()
+		GameTooltip:SetPoint("TOPRIGHT", this, "TOPLEFT", -((this:GetLeft() or 0) - (list:GetLeft() or 0)) - 6, 0)
+		GameTooltip:SetAction(this.actionSlot)
+		GameTooltip:Show()
 	end)
-	row:SetScript("OnLeave", function()
-		if SurvivorUI_CritCardHide then
-			SurvivorUI_CritCardHide()
-		end
-	end)
+	row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 	rows[index] = row
 	return row
@@ -441,8 +443,10 @@ local function Fill(row, entry, actionSlot, isRacial)
 	local name = SpellName(key)
 	local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(name) or { 0.8, 0.8, 0.8 }
 	row.ability, row.color = name, color
-	-- The racial's card tells the race's traits too (RunPanel.lua).
+	-- Its tooltip is its action button's; the racial's tells the race's
+	-- traits too (AbilityTooltip.lua).
 	row.racial = isRacial
+	row.actionSlot = actionSlot
 	row.icon:SetTexture(GetActionTexture and GetActionTexture(actionSlot) or nil)
 	row.icon:SetAlpha(1)
 	row.name:SetText(isRacial and name.."  |cff8a8a8a(racial)|r" or name)

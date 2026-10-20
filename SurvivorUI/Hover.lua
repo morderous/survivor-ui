@@ -64,7 +64,7 @@ local function Wanted(frame)
 	-- tabs, edit box and buttons) is text to read; and the minimap, its zone
 	-- name and the buttons around it are a map, and so is the run tracker
 	-- under it. None gets one.
-	local node = frame
+	local node, inPane = frame, false
 	while node do
 		if node == WorldFrame then
 			return false
@@ -74,7 +74,13 @@ local function Wanted(frame)
 			or name == "SurvivorUITracker") then
 			return false
 		end
+		inPane = inPane or name == "CharacterFrame"
 		node = node.GetParent and node:GetParent()
+	end
+	-- In the character pane, only what answers the mouse (an item's slot, a
+	-- stat): its frames that only hold the rest are its background.
+	if inPane and not (frame.GetScript and frame:GetScript("OnEnter")) then
+		return false
 	end
 	local width, height = frame:GetWidth(), frame:GetHeight()
 	if not width or not height or width <= 0 or height <= 0 then

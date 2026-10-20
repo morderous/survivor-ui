@@ -1103,6 +1103,191 @@ end
 ------------------------------------------------------------------------------
 -- A square minimap with a thin border, zoomed with the mouse wheel.
 
+-- The minimap clock's time, and its setter: a click on the time opens a box
+-- by the minimap with the time as the clock shows it, large, and a slider of
+-- the time zone; moved until that time is the player's own, it is set (the
+-- same time zone as This Run's, which dates Run History too).
+do
+	-- The time now as the clock shows it: the game's clock (UTC) moved by the
+	-- time zone set, 24 or 12 hours; and whether a time zone is set at all.
+	function SurvivorUI_ClockText()
+		local db = SurvivorUIDB or {}
+		local hours = tonumber(db.timeZone)
+		local now = time() + (hours or 0) * 3600
+		local hour, minute = math.floor(math.mod(now, 86400) / 3600), math.floor(math.mod(now, 3600) / 60)
+		if db.clock12 then
+			return string.format("%d:%02d %s", math.mod(hour + 11, 12) + 1, minute, hour < 12 and "am" or "pm"), hours ~= nil
+		end
+		return string.format("%02d:%02d", hour, minute), hours ~= nil
+	end
+
+	local LOW, HIGH, STEP = -12, 14, 0.5
+	local GOLD, MUTED = { 1, 0.82, 0 }, { 0.6, 0.6, 0.65 }
+	local setter
+
+	local function TextButton(parent, label, onClick)
+		local button = CreateFrame("Button", nil, parent)
+		button:SetHeight(16)
+		button.text = Text(button, 11, "CENTER", 0, 0)
+		button.text:SetText(label)
+		button:SetWidth(button.text:GetStringWidth() + 12)
+		button:SetScript("OnClick", onClick)
+		button:SetScript("OnEnter", function() this.text:SetTextColor(1, 1, 1) end)
+		button:SetScript("OnLeave", function() this:Paint() end)
+		function button:Paint()
+			local color = self.lit and GOLD or MUTED
+			self.text:SetTextColor(color[1], color[2], color[3])
+		end
+		return button
+	end
+
+	local function Refresh()
+		local text, set = SurvivorUI_ClockText()
+		local hours = tonumber(SurvivorUIDB and SurvivorUIDB.timeZone)
+		setter.time:SetText(text)
+		setter.zone:SetText(set and (SurvivorUI_ZoneLabel and SurvivorUI_ZoneLabel(hours) or tostring(hours))
+			or "UTC, the game's clock: no time zone set yet")
+		local value = hours or 0
+		setter.fill:SetWidth(math.max(1, (setter.slider:GetWidth() - 8) * (value - LOW) / (HIGH - LOW) + 4))
+		setter.h24.lit = not (SurvivorUIDB and SurvivorUIDB.clock12)
+		setter.h12.lit = not setter.h24.lit
+		setter.h24:Paint()
+		setter.h12:Paint()
+		-- The strip under the minimap at once, not at its next half second.
+		local strip = getglobal("SurvivorUIMinimapClock")
+		if strip then
+			strip.counted = 1
+		end
+	end
+
+	local function SetZone(value)
+		SurvivorUIDB = SurvivorUIDB or {}
+		SurvivorUIDB.timeZone = math.max(LOW, math.min(HIGH, math.floor(value / STEP + 0.5) * STEP))
+		Refresh()
+	end
+
+	local function Build()
+		setter = CreateFrame("Frame", "SurvivorUIClockSetter", UIParent)
+		setter:SetWidth(240)
+		setter:SetHeight(168)
+		setter:SetFrameStrata("DIALOG")
+		setter:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+		setter:SetBackdropColor(0.04, 0.04, 0.06, 0.96)
+		setter:SetBackdropBorderColor(0, 0, 0, 1)
+		setter:EnableMouse(true)
+		if setter.SetClampedToScreen then
+			setter:SetClampedToScreen(true)
+		end
+		-- Escape closes it, as the game's own boxes.
+		if UISpecialFrames then
+			table.insert(UISpecialFrames, "SurvivorUIClockSetter")
+		end
+
+		local title = Text(setter, 12, "TOPLEFT", 10, -8)
+		title:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+		title:SetText("Your time")
+		local close = TextButton(setter, "x", function() setter:Hide() end)
+		close:SetPoint("TOPRIGHT", setter, "TOPRIGHT", -4, -5)
+		close:Paint()
+
+		setter.time = Text(setter, 26, "TOP", 0, -30)
+		setter.zone = Text(setter, 10, "TOP", 0, -64)
+		setter.zone:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+
+		-- The slider, in the options' look, with a step each way beside it.
+		local slider = CreateFrame("Slider", nil, setter)
+		slider:SetOrientation("HORIZONTAL")
+		slider:SetWidth(170)
+		slider:SetHeight(14)
+		slider:SetPoint("TOP", setter, "TOP", 0, -84)
+		slider:SetMinMaxValues(LOW, HIGH)
+		slider:SetValueStep(STEP)
+		slider:EnableMouseWheel(true)
+		local track = slider:CreateTexture(nil, "BACKGROUND")
+		track:SetTexture(FLAT)
+		track:SetVertexColor(0.14, 0.14, 0.18, 1)
+		track:SetHeight(4)
+		track:SetPoint("LEFT", slider, "LEFT", 0, 0)
+		track:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
+		setter.fill = slider:CreateTexture(nil, "BORDER")
+		setter.fill:SetTexture(FLAT)
+		setter.fill:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 0.8)
+		setter.fill:SetHeight(4)
+		setter.fill:SetPoint("LEFT", slider, "LEFT", 0, 0)
+		local thumb = slider:CreateTexture(nil, "OVERLAY")
+		thumb:SetTexture(FLAT)
+		thumb:SetWidth(8)
+		thumb:SetHeight(14)
+		slider:SetThumbTexture(thumb)
+		slider:SetScript("OnValueChanged", function()
+			if not this.quiet then
+				SetZone(this:GetValue())
+			end
+		end)
+		slider:SetScript("OnMouseWheel", function()
+			this:SetValue(this:GetValue() + arg1 * STEP)
+		end)
+		setter.slider = slider
+		local function Nudge(by)
+			slider:SetValue((tonumber(SurvivorUIDB and SurvivorUIDB.timeZone) or 0) + by)
+		end
+		local less = TextButton(setter, "-", function() Nudge(-STEP) end)
+		less:SetPoint("RIGHT", slider, "LEFT", -4, 0)
+		less.lit = true
+		less:Paint()
+		local more = TextButton(setter, "+", function() Nudge(STEP) end)
+		more:SetPoint("LEFT", slider, "RIGHT", 4, 0)
+		more.lit = true
+		more:Paint()
+
+		setter.h24 = TextButton(setter, "24 hours", function()
+			SurvivorUIDB = SurvivorUIDB or {}
+			SurvivorUIDB.clock12 = nil
+			Refresh()
+		end)
+		setter.h24:SetPoint("TOPRIGHT", setter, "TOP", -2, -106)
+		setter.h12 = TextButton(setter, "12 hours", function()
+			SurvivorUIDB = SurvivorUIDB or {}
+			SurvivorUIDB.clock12 = true
+			Refresh()
+		end)
+		setter.h12:SetPoint("TOPLEFT", setter, "TOP", 2, -106)
+
+		local note = Text(setter, 9, "BOTTOM", 0, 8)
+		note:SetWidth(220)
+		note:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+		note:SetText("Slide until the time above is yours. The game's clock runs in UTC; this time zone also dates Run History.")
+
+		-- The minutes go on while it is open.
+		setter.wait = 0
+		setter:SetScript("OnUpdate", function()
+			this.wait = this.wait + arg1
+			if this.wait >= 1 then
+				this.wait = 0
+				Refresh()
+			end
+		end)
+	end
+
+	-- A click on the minimap's time: the box opens beside the minimap, or closes.
+	function SurvivorUI_ToggleClockSetter()
+		if not setter then
+			Build()
+		end
+		if setter:IsShown() then
+			setter:Hide()
+			return
+		end
+		setter:ClearAllPoints()
+		setter:SetPoint("TOPRIGHT", Minimap, "TOPLEFT", -10, 0)
+		setter.slider.quiet = true
+		setter.slider:SetValue(tonumber(SurvivorUIDB and SurvivorUIDB.timeZone) or 0)
+		setter.slider.quiet = nil
+		Refresh()
+		setter:Show()
+	end
+end
+
 local function SquareMinimap()
 	if not Minimap then
 		return
@@ -1145,6 +1330,93 @@ local function SquareMinimap()
 			else
 				Minimap:SetZoom(math.max(0, Minimap:GetZoom() - 1))
 			end
+		end)
+
+		-- Along its bottom, inside: the time and the frames a second (the
+		-- options, Minimap: on unless switched off, 24 or 12 hours). The game's
+		-- clock runs in UTC, so the time takes the time zone set in This Run,
+		-- "UTC" beside it while none is; the game has no GetFramerate, so the
+		-- frames are counted here, one OnUpdate a frame. Under the pins.
+		local strip = CreateFrame("Frame", "SurvivorUIMinimapClock", Minimap)
+		strip:SetPoint("BOTTOMLEFT", Minimap, "BOTTOMLEFT", 0, 0)
+		strip:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", 0, 0)
+		strip:SetHeight(14)
+		strip:SetFrameLevel(Minimap:GetFrameLevel() + 3)
+		strip.shade = strip:CreateTexture(nil, "BACKGROUND")
+		strip.shade:SetTexture(FLAT)
+		strip.shade:SetVertexColor(0, 0, 0, 0.55)
+		strip.shade:SetAllPoints(strip)
+		strip.clock = Text(strip, 10, "LEFT", 4, 0)
+		strip.fps = Text(strip, 10, "RIGHT", -4, 0)
+		strip.frames, strip.counted = 0, 0.5
+		-- A click on the time: the box to set it (SurvivorUI_ToggleClockSetter).
+		strip.button = CreateFrame("Button", nil, strip)
+		strip.button:SetPoint("TOPLEFT", strip, "TOPLEFT", 0, 0)
+		strip.button:SetPoint("BOTTOMLEFT", strip, "BOTTOMLEFT", 0, 0)
+		strip.button:SetWidth(76)
+		strip.button:SetFrameLevel(strip:GetFrameLevel() + 3)
+		-- A gold edge around the time while the mouse is over it: it takes a click.
+		strip.button.edges = {}
+		for _, side in pairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+			local line = strip.button:CreateTexture(nil, "OVERLAY")
+			line:SetTexture(FLAT)
+			line:SetVertexColor(1, 0.82, 0, 0.9)
+			if side == "TOP" or side == "BOTTOM" then
+				line:SetHeight(1)
+				line:SetPoint(side.."LEFT", strip.button, side.."LEFT", 0, 0)
+				line:SetPoint(side.."RIGHT", strip.button, side.."RIGHT", 0, 0)
+			else
+				line:SetWidth(1)
+				line:SetPoint("TOP"..side, strip.button, "TOP"..side, 0, 0)
+				line:SetPoint("BOTTOM"..side, strip.button, "BOTTOM"..side, 0, 0)
+			end
+			line:Hide()
+			table.insert(strip.button.edges, line)
+		end
+		strip.button:SetScript("OnClick", function()
+			if SurvivorUI_ToggleClockSetter then
+				SurvivorUI_ToggleClockSetter()
+			end
+		end)
+		strip.button:SetScript("OnEnter", function()
+			for _, line in pairs(this.edges) do
+				line:Show()
+			end
+			GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
+			GameTooltip:SetText("Your time", 1, 0.82, 0)
+			GameTooltip:AddLine("Click to set it: the game's clock runs in UTC, so the time takes your time zone.", 1, 1, 1, 1)
+			GameTooltip:Show()
+		end)
+		strip.button:SetScript("OnLeave", function()
+			for _, line in pairs(this.edges) do
+				line:Hide()
+			end
+			GameTooltip:Hide()
+		end)
+		strip:SetScript("OnUpdate", function()
+			this.frames = this.frames + 1
+			this.counted = this.counted + arg1
+			if this.counted < 0.5 then
+				return
+			end
+			local fps = this.frames / this.counted
+			this.frames, this.counted = 0, 0
+			local db = SurvivorUIDB or {}
+			if db.minimapClock == false then
+				this.shade:Hide()
+				this.button:Hide()
+				this.clock:SetText("")
+				this.fps:SetText("")
+				return
+			end
+			this.shade:Show()
+			this.button:Show()
+			local text, set = SurvivorUI_ClockText()
+			this.clock:SetText(text..(set and "" or " |cff8a8a8aUTC|r"))
+			-- The click's place, and its edge, as wide as the time.
+			this.button:SetWidth(math.max(24, this.clock:GetStringWidth() + 8))
+			local color = fps >= 60 and "66ff66" or (fps >= 30 and "ffd100" or "ff5050")
+			this.fps:SetText("|cff"..color..math.floor(fps + 0.5).."|r |cff8a8a8afps|r")
 		end)
 	end
 end
