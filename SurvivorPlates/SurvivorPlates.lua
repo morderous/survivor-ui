@@ -20,7 +20,7 @@
 --
 -- Each kind is chosen on its own (/splates, or Survivor UI's options): the
 -- enemies' four, normal, elites, guardians and bosses (all of them by
--- default; a kind left out still shows as your target), and the friends'
+-- default; a kind left out shows as your target only with /splates target), and the friends'
 -- two, your pets and summons and your totems (none by default; asked for
 -- on Discord by Sedz and Amarolk, with a warlock's many demons about). Only elites, guardians and bosses carry a name, unless names
 -- are on every plate. The friends' plates are the client's friendly ones,
@@ -31,6 +31,7 @@
 --   /splates none       no nameplates at all (the default), or back
 --   /splates normal | elites | guardians | bosses     each enemy kind, on or off
 --   /splates pets | totems                            each friend's, on or off
+--   /splates target     your target's plate even when its kind is off, or not (default: not)
 --   /splates names      names only on elites, guardians and bosses (default), or on every plate
 --   /splates keys       V and Shift+V ignored (default), or let them work as the game has them
 --   /splates count      the plates on screen now, by kind (a check)
@@ -247,16 +248,19 @@ end
 
 local overlays = {}
 
--- Shared answers, worked out once per screen refresh instead of once per
--- nameplate:
---   hasTarget    do you have something targeted?
+-- Shared by all nameplates, so each one does not have to ask the game:
 --   targetKind   what the game says your target is (elite, guardian, boss...)
 --   auraVersion  goes up by one whenever your target changes or gains or
 --                loses an effect (poison, slow...). The target's nameplate
 --                only looks at the effects again when this number changes.
-local hasTarget = false
 local targetKind
 local auraVersion = 0
+
+-- A plate handed to another enemy is hidden this many screen refreshes,
+-- and a move of more than JUMP (in screen units) in one refresh counts as
+-- such a hand-over. See UpdatePlate.
+local SETTLE_FRAMES = 2
+local JUMP = 40
 
 -- Other addons find the plates here: the art a plate is recognized by is
 -- blanked once it is skinned. Each entry has .plate and .stock.name.
@@ -414,15 +418,44 @@ local function UpdatePlate()
 	local overlay = this
 	local stock = overlay.stock
 
-	-- The client dims every plate but the target's.
-	local isTarget = hasTarget and overlay.plate:GetAlpha() == 1
+	local name = stock.name:GetText()
+
+	-- Is this plate your target? The game shows your target's plate at full
+	-- brightness and dims the others, but for a moment after you pick or lose
+	-- a target every plate is still at full brightness. So the plate must
+	-- also carry your target's name; otherwise, in that moment, every enemy
+	-- counted as the target and the ones you turned off flashed up. The
+	-- target is asked about only for plates at full brightness (usually one).
+	local isTarget = overlay.plate:GetAlpha() == 1 and name ~= nil
+		and name == UnitName("target")
+
+	-- The game reuses a plate for another enemy, and for a frame or two it
+	-- can still show the last one's bar in the new spot: an elite's plate
+	-- seemed to jump around the middle of the screen, where enemies come and
+	-- go. So when a plate leaps across the screen or changes name, it stays
+	-- invisible for SETTLE_FRAMES screen refreshes (too short to notice) while
+	-- the game fills it in.
+	local x, y = overlay.plate:GetCenter()
+	if name ~= overlay.lastName or (x and overlay.lastX
+		and math.abs(x - overlay.lastX) + math.abs(y - overlay.lastY) > JUMP) then
+		if not overlay.settle then
+			overlay:SetAlpha(0)
+		end
+		overlay.settle = SETTLE_FRAMES
+	elseif overlay.settle then
+		overlay.settle = overlay.settle - 1
+		if overlay.settle == 0 then
+			overlay.settle = nil
+			overlay:SetAlpha(1)
+		end
+	end
+	overlay.lastX, overlay.lastY = x, y
 
 	-- The client fills a plate in over a frame or two as it hands it to
 	-- another unit: its name, then its bar's color and health. So the kind is
 	-- read again whenever any of them changes, not the name alone: a totem
 	-- read while its bar was still the last enemy's red stayed an enemy (and
 	-- hidden with the rank and file), until the game's list of units changed.
-	local name = stock.name:GetText()
 	local low, high = stock.health:GetMinMaxValues()
 	local friend = IsFriend(stock) and true or false
 	if name ~= overlay.lastName or friend ~= overlay.lastFriend or high ~= overlay.lastHigh
@@ -454,8 +487,11 @@ local function UpdatePlate()
 		FriendIcon(overlay, name)
 	end
 
-	-- A kind left out goes without a plate; an enemy's still shows as the target.
-	if not Settings().show[overlay.kind] and not (isTarget and not FRIEND_KINDS[overlay.kind]) then
+	-- A kind left out goes without a plate. An enemy you target still shows
+	-- only if that is switched on (/splates target; off until first used).
+	local settings = Settings()
+	if not settings.show[overlay.kind]
+		and not (settings.targetShows and isTarget and not FRIEND_KINDS[overlay.kind]) then
 		-- Hide everything once, when the plate is first hidden, not again on
 		-- every screen refresh.
 		if not overlay.put then
@@ -631,8 +667,7 @@ local scanned = 0
 local scanner = CreateFrame("Frame")
 scanner:SetScript("OnUpdate", function()
 	RefreshLiveKinds()
-	-- Ask about the target once here, for all nameplates to share.
-	hasTarget = UnitExists("target") and true or false
+	-- Ask about the target's kind once here, for all nameplates to share.
 	targetKind = TargetKind()
 
 	local count = WorldFrame:GetNumChildren()
@@ -687,7 +722,13 @@ scanner:RegisterEvent("UNIT_AURA")
 scanner:SetScript("OnEvent", function()
 	if event == "PLAYER_ENTERING_WORLD" then
 		ApplyShown()
-	elseif event == "PLAYER_TARGET_CHANGED" or arg1 == "target" then
+	elseif event == "PLAYER_TARGET_CHANGED" then
+		-- A new target's kind right away, so its plate never takes the last
+		-- target's look for a moment.
+		targetKind = TargetKind()
+		auraVersion = auraVersion + 1
+	elseif arg1 == "target" then
+		-- UNIT_AURA for your target: its effects changed.
 		auraVersion = auraVersion + 1
 	end
 end)
@@ -783,6 +824,10 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		end
 		Say(total.." plates on screen, "..drawn.." drawn: "..(table.getn(parts) > 0 and table.concat(parts, ", ") or "none")..".")
 		return
+	elseif command == "target" then
+		settings.targetShows = not settings.targetShows
+		Say(settings.targetShows and "your target always gets a plate, even of a kind turned off."
+			or "a kind turned off has no plate, even as your target.")
 	elseif command == "names" then
 		settings.names = not settings.names
 		Say("names on "..(settings.names and "every plate" or "elites, guardians and bosses only")..".")
@@ -794,7 +839,7 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		settings.scale = math.max(0.5, math.min(2, number))
 		Say("scale "..settings.scale..".")
 	else
-		Say("/splates none | normal | elites | guardians | bosses | pets | totems | names | keys | count | scale 0.5-2")
+		Say("/splates none | normal | elites | guardians | bosses | pets | totems | target | names | keys | count | scale 0.5-2")
 		return
 	end
 	Restyle()
