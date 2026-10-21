@@ -224,6 +224,7 @@ local TABS = {
 	{ key = "units", label = "Frames & bar", color = { 1.00, 0.62, 0.25 } },
 	{ key = "minimap", label = "Minimap", color = { 0.55, 0.82, 0.40 } },
 	{ key = "chat", label = "Chat", color = { 0.60, 0.80, 0.95 } },
+	{ key = "tooltips", label = "Tooltips", color = { 0.90, 0.86, 0.62 } },
 	{ key = "plates", label = "Nameplates", color = { 0.70, 0.55, 1.00 } },
 }
 
@@ -1127,7 +1128,13 @@ local MODULES = {
 		{ "Counters", OnUnlessOff("counters"), Flip("counters"),
 			"Over the spells' buttons: the DoTs ticking, the enemies feared, the totems down, the shouts." },
 		{ "Soul shards", FeatureOn("soulShards"), FeatureToggle("soulShards", true),
-			"A warlock's, with Soul Fire: five gems under your frame, filling as your kills gather shards (one every few seconds at most), emptied by the free Soul Fire. The game tells no count: it is worked out from your kills, and set right at each Soul Fire. Dimmed, the count may be off (the chat says why)." },
+			"A warlock's, with Soul Fire: five violet gems under your frame, filling as the game counts your shards, emptied by the free Soul Fire. With a game before 0.105, worked out from your kills; dimmed, the count may be off (the chat says why)." },
+		{ "Combo points", FeatureOn("comboPoints"), FeatureToggle("comboPoints", true),
+			"A rogue's: five red orbs under your frame, filling as the game counts your combo points, emptied by a finisher. Moved with the soul shards: move mode, Class gems." },
+		{ "Lightwell", FeatureOn("lightwell"), FeatureToggle("lightwell", true),
+			"A priest's: three fonts of light under your frame, one for each well standing, the newest at the left, its beam of light as high as its time left, fading through its last seconds; a new one comes with a flash. Dim, filling, while the next one waits. Moved with the class gems." },
+		{ "Bloodrage", FeatureOn("bloodrage"), FeatureToggle("bloodrage", true),
+			"A warrior's: five iron chevrons under your frame, a fifth of your rage each, filling as the game counts it; near the top the full ones beat, and they blaze white as Bloodrage is set off. While on, your frame shows no rage bar of its own. Moved with the class gems." },
 	} },
 	{ "Character", {
 		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
@@ -1438,12 +1445,6 @@ Inline(page, "Health shows as", {
 }, function() return DB().trackerHealthLook or "percent" end, function(look) DB().trackerHealthLook = look end)
 
 Subheader(page, "Guardians")
--- The list's Back to its place, at the right of its first row, as a head's.
-Button(page, "Back to its place", 150, PAGE_WIDTH - 150, function()
-	if SurvivorUI_ResetPiece then
-		SurvivorUI_ResetPiece("Guardians")
-	end
-end)
 Inline(page, "Show as", {
 	{ "bar", "A bar" },
 	{ "list", "A list" },
@@ -1467,6 +1468,17 @@ end)
 Note(page, "Bar: a stretch a lair in the tracker, red once slain. List: a line a lair beside it, yards and an arrow. Count: 3 / 5 alive. Off: none, as in Modules.")
 Check(page, "Arrows north up", OnlyIfOn("guardiansNorth"), Call("SurvivorUI_ToggleGuardians", "north"), "off: they turn with you, straight ahead up")
 Check(page, "Lair marks", OnUnlessOff("guardianMarks"), Flip("guardianMarks"), "each lair its own heraldic mark: the same in the tracker, on the minimap and on its boss bar")
+-- The list's Back to its place, on a row of its own: by Show as, its four
+-- choices reach the page's edge.
+local listPlace = Text(page, 10, TEXT)
+listPlace:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 6)
+listPlace:SetText("List place")
+Button(page, "Back to its place", 150, PAGE_WIDTH - 150, function()
+	if SurvivorUI_ResetPiece then
+		SurvivorUI_ResetPiece("Guardians")
+	end
+end)
+page.y = page.y - 30
 Slider(page, "List size", 0.5, 2, 0.05,
 	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("guardians") or 1 end,
 	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("guardians", value) end end)
@@ -1596,14 +1608,9 @@ Note(page, "The levels waiting also show by your level, in the run tracker and o
 -- Loot list (LootLog.lua).
 
 page = pages.loot
-Header(page, "Loot list", "What the run dropped, a bar a piece in its quality's color, with the second it came.")
+Header(page, "Loot list", "What the run dropped, a bar a piece filled with its quality's color, with the second it came.")
 PanelHead(page, OnUnlessOff("lootLog"), Call("SurvivorUI_ToggleLoot"), "loot", "Loot list", nil, GAME.loot)
 Subheader(page, "Look")
-Inline(page, "Rows", {
-	{ "wash", "A faint wash" },
-	{ "fill", "Filled with its color" },
-}, function() return DB().lootFill and "fill" or "wash" end, function(choice) DB().lootFill = choice == "fill" or nil end)
-Check(page, "Quality beside the name", OnUnlessOff("lootQuality"), Flip("lootQuality"), "small, in brackets: (rare), (epic), (legendary)")
 Check(page, "Background behind the list", OnUnlessOff("lootBackground"), Flip("lootBackground"), "off: the rows on the world itself")
 Slider(page, "Lines shown", 3, 15, 1, function() return DB().lootLines or 8 end,
 	function(value) DB().lootLines = math.floor(value + 0.5) end, "%d")
@@ -2200,6 +2207,16 @@ Check(page, "What the banners show", OnUnlessOff("chatFilterBanners"), Flip("cha
 Check(page, "Boss yells", OnUnlessOff("chatFilterYells"), Flip("chatFilterYells"), "\"Hogger yells: Grrr... fresh meat!\"")
 Check(page, "Loot, while the loot list is on", OnUnlessOff("chatFilterLoot"), Flip("chatFilterLoot"), "the list has it")
 Check(page, "The Combat Log window", OnUnlessOff("chatFilterCombat"), Flip("chatFilterCombat"), "fed 13 lines a second, opened or not; SurvivorUI reads the fight from the game's own events, never from it")
+
+------------------------------------------------------------------------------
+-- Tooltips: the spells' (AbilityTooltip.lua) and the Biggest Crits' cards;
+-- the ranks' option also the meter's.
+
+page = pages.tooltips
+Header(page, "Tooltips", "Your spells' tooltips, on the action bar and the build list, and the Biggest Crits' cards.")
+Subheader(page, "Spell ranks")
+Check(page, "Roman spell ranks (also applied to the meter)", OnlyIfOn("romanRanks"), function() DB().romanRanks = not DB().romanRanks or nil end,
+	"LXIII instead of Rank 63: in the spells' tooltips, the Biggest Crits' cards and after the spells' names in the damage meter, the run's and the Run History's")
 
 ------------------------------------------------------------------------------
 -- Nameplates.

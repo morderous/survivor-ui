@@ -2816,7 +2816,7 @@ local function DrawDamage(run)
 		local rank = source.rank or ranks[source.name]
 		local room = NAME_ROOM - (source.proc and 30 or 0)
 		bar.name:SetWidth(room)
-		bar.name:SetText((source.name or "?")..((rank and rank > 0 and SurvivorUI_Roman) and "  |cffbdbdbd"..SurvivorUI_Roman(rank).."|r" or ""))
+		bar.name:SetText((source.name or "?")..((rank and rank > 0 and SurvivorUI_RankText) and "  |cffbdbdbd"..SurvivorUI_RankText(rank).."|r" or ""))
 		bar.tag:ClearAllPoints()
 		if source.proc then
 			bar.tag:SetPoint("LEFT", bar, "LEFT", BAR + 2 + math.min(bar.name:GetStringWidth(), room) + 3, 0)
@@ -2906,9 +2906,8 @@ local function DrawCrits(run)
 end
 
 ------------------------------------------------------------------------------
--- The loot, in the loot list's look (LootLog.lua) and as it is set (the
--- options, Loot list): each piece in its quality's color, or filled with it
--- in a black edge; the quality small after the name; the run second it came.
+-- The loot, in the loot list's look (LootLog.lua): each piece filled with
+-- its quality's color in a black edge; the run second it came.
 
 local lootBox = Box("Loot")
 
@@ -2923,15 +2922,12 @@ local function LootRow(index)
 		row.wash = Flat(row, "BORDER")
 		row.wash:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
 		row.wash:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
-		row.rule = Flat(row, "ARTWORK")
-		row.rule:SetHeight(1)
-		row.rule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-		row.rule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
 		row.name = Font(row, 10, WHITE)
 		row.name:SetPoint("LEFT", row, "LEFT", 5, 0)
 		row.name:SetHeight(11)
-		row.quality = Font(row, 8, WHITE)
-		row.at = Font(row, 11, WHITE, nil, "RIGHT")
+		-- The count and "new" after the name, never cut with it.
+		row.extra = Font(row, 10, WHITE)
+		row.at = Font(row, 11, { 0.88, 0.88, 0.88 }, nil, "RIGHT")
 		row.at:SetPoint("RIGHT", row, "RIGHT", -5, 0)
 		-- Its tooltip: the link kept, else its name and quality.
 		row:EnableMouse(true)
@@ -2961,49 +2957,29 @@ end
 
 local function DrawLoot(run)
 	local loot = run.loot or {}
-	local db = Settings()
-	local filled = db.lootFill
 	for index = 1, table.getn(loot) do
 		local item = loot[index]
 		local row = LootRow(index)
 		local color = HexColor(item.color)
 		local quality = SurvivorUI_QualityName and SurvivorUI_QualityName(item.color)
 		row.item, row.itemName, row.color, row.qualityName, row.tip = item.item, item.name, color, quality, item.tip
-		if filled then
-			row.name:SetTextColor(1, 1, 1)
-			row.at:SetTextColor(0.88, 0.88, 0.88)
-			row.quality:SetTextColor(0.92, 0.92, 0.92)
-			row.wash:SetVertexColor(color[1], color[2], color[3], 0.75)
-			row.border:Show()
-			row.rule:Hide()
-		else
-			row.name:SetTextColor(color[1], color[2], color[3])
-			row.at:SetTextColor(color[1], color[2], color[3])
-			row.quality:SetTextColor(color[1] * 0.8, color[2] * 0.8, color[3] * 0.8)
-			row.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
-			row.border:Hide()
-			row.rule:Show()
-		end
-		row.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
-		local text = item.name or "?"
+		row.wash:SetVertexColor(color[1], color[2], color[3], 0.75)
+		local extra = ""
 		if item.count and item.count > 1 then
-			text = text.."  x"..item.count
+			extra = "  x"..item.count
 		end
 		if item.new then
-			text = text.."  |cff7dff7dnew|r"
+			extra = extra.."  |cff7dff7dnew|r"
 		end
-		local shownQuality = db.lootQuality ~= false and quality
-		local room = INNER - 48 - (shownQuality and 54 or 0)
+		row.extra:SetText(extra)
+		local extraWidth = extra ~= "" and row.extra:GetStringWidth() or 0
+		-- A long name is cut, the count and "new" after it not.
+		local room = INNER - 48 - extraWidth
 		row.name:SetWidth(room)
-		row.name:SetText(text)
-		row.quality:ClearAllPoints()
-		if shownQuality then
-			row.quality:SetPoint("LEFT", row, "LEFT", 5 + math.min(row.name:GetStringWidth(), room) + 4, 0)
-			row.quality:SetText("("..shownQuality..")")
-			row.quality:Show()
-		else
-			row.quality:Hide()
-		end
+		row.name:SetText(item.name or "?")
+		local nameWidth = math.min(row.name:GetStringWidth(), room)
+		row.extra:ClearAllPoints()
+		row.extra:SetPoint("LEFT", row, "LEFT", 5 + nameWidth, 0)
 		row.at:SetText(item.at and Clock(item.at) or "")
 		At(row, lootBox, 6, -TOP - (index - 1) * ROW)
 	end

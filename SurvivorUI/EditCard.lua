@@ -51,7 +51,7 @@ local PIECES = {
 	["Minimap button"] = { places = { "mapButtonX", "mapButtonY" }, noFont = true },
 	["XP bar"] = { places = { "xpBarX", "xpBarTop" }, key = "xpBar", offUnlessOn = true, toggle = "SurvivorUI_ToggleXpBar" },
 	["Level Up!"] = { part = "levelup", places = { "levelUpX", "levelUpTop" }, key = "levelUp", offUnlessOn = true, toggle = "SurvivorUI_ToggleLevelUp" },
-	["Soul shards"] = { places = { "shardsX", "shardsTop" }, noFont = true },
+	["Class gems"] = { places = { "shardsX", "shardsTop" }, noFont = true },
 }
 
 local selected          -- the handle (Mover.lua) whose card is open

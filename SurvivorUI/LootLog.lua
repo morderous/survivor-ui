@@ -9,8 +9,7 @@
 -- Hover an item for its tooltip, once the hero has worn it in a run (the
 -- game's loot line has no details). Hold Alt and drag to move; /sui loot
 -- hides it.
--- Its tab in the options: the rows in a faint wash of their quality's color or
--- filled with it, the quality small beside the name, how many lines.
+-- Its tab in the options: the background behind it, how many lines.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
@@ -42,8 +41,8 @@ end
 
 ------------------------------------------------------------------------------
 -- The frame, in This Run's manner (RunPanel.lua): a dark box, a gold title,
--- then a row per item, its name and the run second in its quality's color
--- over a faint wash of it, a thin line of it under each.
+-- then a row per item, filled with its quality's color in a black edge, its
+-- name and the run second white over it.
 
 local ROW_HEIGHT = 18
 local TITLE_HEIGHT = 24
@@ -160,23 +159,16 @@ local function Bar(index)
 	bar:SetHeight(ROW_HEIGHT)
 	bar:SetPoint("TOPLEFT", log, "TOPLEFT", 8, -TOP - TITLE_HEIGHT - (index - 1) * ROW_HEIGHT)
 
-	-- Filled, each row a solid bar in a black edge, as up to v2.10.
+	-- Each row a solid bar in a black edge, as up to v2.10.
 	bar.border = bar:CreateTexture(nil, "BACKGROUND")
 	bar.border:SetTexture(FLAT)
 	bar.border:SetVertexColor(0, 0, 0, 1)
 	bar.border:SetAllPoints(bar)
-	bar.border:Hide()
 
 	bar.wash = bar:CreateTexture(nil, "BORDER")
 	bar.wash:SetTexture(FLAT)
 	bar.wash:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, -1)
 	bar.wash:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 1)
-
-	bar.rule = bar:CreateTexture(nil, "ARTWORK")
-	bar.rule:SetTexture(FLAT)
-	bar.rule:SetHeight(1)
-	bar.rule:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
-	bar.rule:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 0, 0)
 
 	bar.name = bar:CreateFontString(nil, "OVERLAY")
 	bar.name:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
@@ -184,14 +176,17 @@ local function Bar(index)
 	bar.name:SetWidth(WIDTH - 48)
 	bar.name:SetHeight(11)
 	bar.name:SetJustifyH("LEFT")
+	bar.name:SetTextColor(1, 1, 1)
 
 	bar.at = bar:CreateFontString(nil, "OVERLAY")
 	bar.at:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 	bar.at:SetPoint("RIGHT", bar, "RIGHT", -5, 0)
+	bar.at:SetTextColor(0.88, 0.88, 0.88)
 
-	-- "(epic)", small, after the name.
-	bar.quality = bar:CreateFontString(nil, "OVERLAY")
-	bar.quality:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
+	-- The count and "new" after the name, never cut with it.
+	bar.extra = bar:CreateFontString(nil, "OVERLAY")
+	bar.extra:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
+	bar.extra:SetTextColor(1, 1, 1)
 
 	-- Its tooltip: the line's link, or the one kept from wearing it; else its
 	-- name and quality, and that its details come once it has been worn.
@@ -243,7 +238,6 @@ local function Draw()
 		log.back = back
 		log:SetBackdropColor(0.04, 0.04, 0.07, back and 0.55 or 0)
 	end
-	local filled = settings.lootFill
 	local count = math.min(settings.lootLines or MAX_LINES, table.getn(entries))
 	for index = 1, count do
 		local entry = entries[index]
@@ -253,48 +247,28 @@ local function Draw()
 		bar.itemName = entry.name
 		bar.color = color
 		bar.qualityName = QUALITIES[string.lower(entry.color or "")]
-		-- In its quality's color, as This Run's rows are in theirs; or filled
-		-- with it, strong, in a black edge, the words white over it, as the
-		-- list was up to v2.10.
-		if filled then
-			bar.name:SetTextColor(1, 1, 1)
-			bar.at:SetTextColor(0.88, 0.88, 0.88)
-			bar.quality:SetTextColor(0.92, 0.92, 0.92)
-			bar.wash:SetVertexColor(color[1], color[2], color[3], 0.75)
-			bar.border:Show()
-			bar.rule:Hide()
-		else
-			bar.name:SetTextColor(color[1], color[2], color[3])
-			bar.at:SetTextColor(color[1], color[2], color[3])
-			bar.quality:SetTextColor(color[1] * 0.8, color[2] * 0.8, color[3] * 0.8)
-			bar.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
-			bar.border:Hide()
-			bar.rule:Show()
-		end
-		bar.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
-		local text = entry.name
+		-- Filled with its quality's color, strong, the words white over it.
+		bar.wash:SetVertexColor(color[1], color[2], color[3], 0.75)
+		local extra = ""
 		if entry.count and entry.count > 1 then
-			text = text.."  x"..entry.count
+			extra = "  x"..entry.count
 		end
 		if entry.new then
-			text = text.."  |cff7dff7dnew|r"
+			extra = extra.."  |cff7dff7dnew|r"
 		end
-		-- The quality after the name, the name giving it room.
-		local quality = settings.lootQuality ~= false and QUALITIES[string.lower(entry.color or "")]
-		local room = WIDTH - 48 - (quality and 54 or 0)
+		bar.extra:SetText(extra)
+		local extraWidth = extra ~= "" and bar.extra:GetStringWidth() or 0
+		-- The count and "new" after the name, the name giving them room: a
+		-- long one is cut, they are not.
+		local room = WIDTH - 48 - extraWidth
 		if bar.room ~= room then
 			bar.room = room
 			bar.name:SetWidth(room)
 		end
-		bar.name:SetText(text)
-		bar.quality:ClearAllPoints()
-		if quality then
-			bar.quality:SetPoint("LEFT", bar, "LEFT", 5 + math.min(bar.name:GetStringWidth(), room) + 4, 0)
-			bar.quality:SetText("("..quality..")")
-			bar.quality:Show()
-		else
-			bar.quality:Hide()
-		end
+		bar.name:SetText(entry.name)
+		local nameWidth = math.min(bar.name:GetStringWidth(), room)
+		bar.extra:ClearAllPoints()
+		bar.extra:SetPoint("LEFT", bar, "LEFT", 5 + nameWidth, 0)
 		bar.at:SetText(entry.at and Clock(entry.at) or "")
 		bar:Show()
 	end

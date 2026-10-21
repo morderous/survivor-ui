@@ -310,9 +310,9 @@ local function Write(ability)
 	local what, tint, school = What(ability)
 
 	if ability.rank then
-		-- "Rank 2" as the meter has it, a Roman numeral: II.
+		-- "Rank 2", or a Roman numeral, II, as set (the options, Tooltips).
 		local _, _, number = string.find(ability.rank, "^Rank (%d+)$")
-		local rank = number and SurvivorUI_Roman and SurvivorUI_Roman(number) or ability.rank
+		local rank = number and SurvivorUI_RankText and SurvivorUI_RankText(number) or ability.rank
 		GameTooltip:AddDoubleLine(ability.title, rank, tint[1], tint[2], tint[3], MUTED[1], MUTED[2], MUTED[3])
 	else
 		GameTooltip:AddLine(ability.title, tint[1], tint[2], tint[3])

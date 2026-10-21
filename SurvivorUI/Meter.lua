@@ -587,7 +587,7 @@ local function ColorOf(name)
 end
 
 -- A spell's rank, from the game's list (AZS_SPELLS names it by key: "holy_wrath"
--- for "Holy Wrath"), as a Roman numeral: XII.
+-- for "Holy Wrath"): "Rank 12", or XII (SurvivorUI_RankText).
 local SPELL_KEYS = {
 	["shadow word: pain"] = "sw_pain", ["power word: shield"] = "pw_shield",
 	["demoralizing shout"] = "demo_shout", ["hunter's mark"] = "hunters_mark",
@@ -765,6 +765,16 @@ end
 
 function SurvivorUI_Roman(number)
 	return Roman(tonumber(number) or 0)
+end
+
+-- A spell's rank as the tooltips and the meter show it: "Rank 63", or LXIII
+-- with the Roman ranks on (the options, Tooltips).
+function SurvivorUI_RankText(number)
+	number = tonumber(number) or 0
+	if SurvivorUIDB and SurvivorUIDB.romanRanks then
+		return Roman(number)
+	end
+	return "Rank "..number
 end
 
 -- The same icon for a source anywhere in the interface (the Biggest Crits box).
@@ -1060,7 +1070,7 @@ local function Draw()
 		bar.color = color
 
 		-- A talent's or amulet's own damage says so, as the game's meter does.
-		-- The spell's rank after its name, as a Roman numeral: "Holy Wrath XII".
+		-- The spell's rank after its name: "Holy Wrath  Rank 12", or XII.
 		local rank = RankOf(name)
 		-- With no icon of its own found, the addon's (the minimap button's), whole.
 		local icon = IconOf(name)
@@ -1079,7 +1089,7 @@ local function Draw()
 			bar.room = room
 			bar.name:SetWidth(room)
 		end
-		bar.name:SetText(name..(rank and rank > 0 and "  |cffbdbdbd"..Roman(rank).."|r" or ""))
+		bar.name:SetText(name..(rank and rank > 0 and "  |cffbdbdbd"..SurvivorUI_RankText(rank).."|r" or ""))
 		if proc then
 			bar.tag:ClearAllPoints()
 			bar.tag:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 2 + math.min(bar.name:GetStringWidth(), room) + 3, 0)

@@ -383,16 +383,17 @@ end
 -- A warlock's demons' spells, which the combat log writes as the hero's own,
 -- by the hero's own event ("Your Hellfire hits...", CHAT_MSG_SPELL_SELF_DAMAGE,
 -- seen 2026-10-20), named as the meter counts them (the Imp's Fireball goes to
--- the Imp's bar, the Pit Lord's Searing Pain is its Felseeker). The demon's
--- when the hero doesn't hold the spell; when the hero does, the two read the
--- same: Biggest Crits tells them apart by the hero's cooldown (RunPanel.lua,
--- SurvivorUI_PetCast), the rest keeps them the hero's.
+-- the Imp's bar, the Pit Lord's Searing Pain is its Felseeker, under the Pit
+-- Lord's bar since the game's 0.105). The demon's when the hero doesn't hold
+-- the spell; when the hero does, the two read the same: Biggest Crits tells
+-- them apart by the hero's cooldown (RunPanel.lua, SurvivorUI_PetCast), the
+-- rest keeps them the hero's.
 local PET_CASTS = {
 	["Fireball"] = { "fireball", "Imp's Fireball" },
 	["Firebolt"] = { "firebolt", "Imp's Firebolt" },
 	["Inferno"] = { "inferno", "Infernal's Inferno" },
 	["Hellfire"] = { "hellfire", "Infernal's Hellfire" },
-	["Searing Pain"] = { "searing_pain", "Felseeker" },
+	["Searing Pain"] = { "searing_pain", "Pit Lord's Felseeker" },
 	["Shadow Bolt"] = { "shadow_bolt", "Doomguard's Shadow Bolt" },
 }
 
@@ -794,6 +795,18 @@ local function UpdateUnitFrame(frame)
 		frame.value:SetText(SurvivorUI_HealthText(hp, hpm, style))
 	end
 
+	-- Rage has no bar here while the Bloodrage module shows it (SoulShards.lua):
+	-- the health takes its room.
+	local noPower = UnitPowerType(unit) == 1 and Feature("bloodrage")
+	if noPower ~= frame.noPower then
+		frame.noPower = noPower
+		frame.health:SetHeight(noPower and BUTTON_SIZE or HEALTH_HEIGHT)
+		if noPower then
+			frame.power:Hide()
+		else
+			frame.power:Show()
+		end
+	end
 	local power, powerMax = UnitMana(unit), UnitManaMax(unit)
 	if powerMax > 0 then
 		local color = POWER_COLORS[UnitPowerType(unit)] or POWER_COLORS[0]
@@ -1870,7 +1883,7 @@ globalFont:SetScript("OnEvent", function()
 		local look = {
 			statsPanel = true, statsPanelSize = { 150, 277 }, xpBar = true, levelUp = true,
 			buildCooldown = true, trackerCoin = true, trackerElites = false, tallyPlace = "bar",
-			lootBackground = false, lootQuality = false, lootFill = true,
+			lootBackground = false,
 			paneStatsStep = 2, pinCacheSize = 12, pinLairSize = 11,
 			pieceFonts = { ["Damage meter"] = { step = -1 }, ["Jewelry"] = { step = -2 } },
 		}

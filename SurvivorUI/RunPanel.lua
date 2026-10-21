@@ -710,9 +710,9 @@ local function CardOf(row, kept)
 	local spell = SpellEntry(ability)
 	if spell then
 		local left, full = Num(Field(spell, "cd", 4)), Num(Field(spell, "cdmax", 5))
-		-- Its rank as a Roman numeral, as the meter and the tooltips have it: II.
+		-- Its rank as the spells' tooltips have it: "Rank 2", or II.
 		local rank = Num(Field(spell, "rank", 3))
-		Add("head", "Spell", SurvivorUI_Roman and SurvivorUI_Roman(rank) or "Rank "..rank)
+		Add("head", "Spell", SurvivorUI_RankText and SurvivorUI_RankText(rank) or "Rank "..rank)
 		Add("row", "Cooldown", full > 0 and Seconds1(full) or "none")
 		if not kept then
 			Add("row", "Ready in", left > 0.05 and Seconds1(left) or "ready")
