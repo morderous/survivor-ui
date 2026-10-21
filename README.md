@@ -209,6 +209,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.20, 2026-10-21
+
+**Survivor UI**
+- **Ready for the game's 0.108 action bar**: the game's new bar between the gryphons left three of its pieces showing through Survivor UI's own row (Modules, Interface, Action bar): a slice of its art at the bottom of the screen, the racial's gold rim around the = button, and its experience numbers, now always up, over the thin experience strip. All three are kept away with the row on; with it off, the game's bar is as the game made it.
+
 ### v3.0.19, 2026-10-20
 
 **A meter for each class the game tells us about.** Until now an addon could only guess at a class's own resource: the soul shards were worked out from your kills and Soul Fire's tooltip, and for every other class there was nothing to show at all. The game's 0.105 (Aethus, 2026-10-20) changed that: it now tells addons, live, how full four classes' own proc is, a number from empty to full (`AZS_RUN.proc`, `pv` and `pm`). Those four are the warrior's **Bloodrage**, the rogue's **Seal Fate**, the warlock's **Soul Fire** and the priest's **Lightwell**, and so these are the four that get a meter: each drawn its own way under your frame, with art of our own, and nothing on it guessed. When the game tells us about another class's proc, that class gets its meter too: the module is built so that one more is a line and its art.

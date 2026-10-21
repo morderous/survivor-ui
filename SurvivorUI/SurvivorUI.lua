@@ -968,8 +968,19 @@ local function LayoutBar()
 		"BonusActionBarTexture0", "BonusActionBarTexture1",
 		"MainMenuXPBarTexture0", "MainMenuXPBarTexture1", "MainMenuXPBarTexture2", "MainMenuXPBarTexture3",
 		"ExhaustionTick",
+		-- The game's 0.108 bar: a fifth slice of its art, and the racial's gold rim,
+		-- which would follow the = button into the row.
+		"AZS_MainMenuBarTexture4", "AZS_RacialRim",
 	}) do
 		Hide(name)
+	end
+
+	-- Its experience numbers, always up on the bar since the game's 0.108 (shown
+	-- again at every change): kept away, the XP bar and the run tracker show them.
+	local xpText = getglobal("MainMenuBarExpText")
+	if xpText then
+		xpText:Hide()
+		xpText.Show = function() end
 	end
 
 	-- The bar the client puts in the experience bar's place at the top level
