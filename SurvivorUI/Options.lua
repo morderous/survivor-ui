@@ -1709,6 +1709,8 @@ Header(page, "Damage meter", "Each source's damage and its share, its crits on h
 PanelHead(page, OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "meter", "Damage meter", nil, GAME.meter)
 Subheader(page, "What shows")
 Check(page, "Damage a second right now", OnUnlessOff("meterNow"), Flip("meterNow"), "under the run's, over the last 5 seconds, as the game's meter has it")
+Check(page, "Spell ranks after the names", OnlyIfOn("meterRanks"), function() DB().meterRanks = not DB().meterRanks or nil end,
+	"Holy Shock  2, here and in the Run History's meter; in Roman numerals with Roman spell ranks on (Tooltips)")
 
 ------------------------------------------------------------------------------
 -- This Run (RunPanel.lua).
@@ -1857,7 +1859,7 @@ Header(page, "Build list", "Your spells with their icons and ranks, the free slo
 PanelHead(page, OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "build", "Build list", nil, GAME.build)
 Subheader(page, "Beside each spell")
 InlineChecks(page, {
-	{ "Range", function() return DB().buildRange ~= false and DB().buildShows ~= "cooldown" end, function()
+	{ "Info", function() return DB().buildRange ~= false and DB().buildShows ~= "cooldown" end, function()
 		DB().buildShows = nil
 		DB().buildRange = DB().buildRange == false
 	end },
@@ -1866,7 +1868,7 @@ InlineChecks(page, {
 		DB().buildCooldown = not DB().buildCooldown
 	end },
 })
-Note(page, "Either or both. The range read off the spell's own tooltip, its radius for one with no range; the cooldown as the game has it now, haste in.")
+Note(page, "Either or both. Info: the range read off the spell's own tooltip, or its radius for one with no range (a measuring arrow); for the buffs on you (Divine Shield, Holy Shield, Battle Shout, Slice and Dice, Adrenaline Rush, Lightning Shield, Thorns, and your demons' Demonic Empowerment) how long they last (an hourglass), the row a timer while one is up; for Holy Light, Renew, Healing Wave, Rejuvenation and Regrowth how much they heal (a cross); for Power Word: Shield and Ice Barrier how much they hold back (a shield). A totem's reach is its own, not where it is dropped from. The cooldown as the game has it now, haste in.")
 
 -- Character pane (CharacterPane.lua): it opens with this tab.
 
@@ -2216,7 +2218,7 @@ page = pages.tooltips
 Header(page, "Tooltips", "Your spells' tooltips, on the action bar and the build list, and the Biggest Crits' cards.")
 Subheader(page, "Spell ranks")
 Check(page, "Roman spell ranks (also applied to the meter)", OnlyIfOn("romanRanks"), function() DB().romanRanks = not DB().romanRanks or nil end,
-	"LXIII instead of Rank 63: in the spells' tooltips, the Biggest Crits' cards and after the spells' names in the damage meter, the run's and the Run History's")
+	"LXIII instead of Rank 63 in the spells' tooltips and the Biggest Crits' cards, and instead of 63 after the spells' names in the damage meter, the run's and the Run History's")
 
 ------------------------------------------------------------------------------
 -- Nameplates.

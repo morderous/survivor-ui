@@ -5,7 +5,9 @@
 -- Every spell slot, filled or not: each spell with its icon, its name in the
 -- same color the damage meter gives it, its rank, and its range, its cooldown
 -- or both (as chosen: Build list tab), then the racial apart (it takes no
--- slot). Empty slots show, since how many
+-- slot). The third column, Info, holds what matters most besides the
+-- cooldown: a range, a radius, how long a spell lasts (its row a timer while
+-- it is up), or how much a heal gives back. Empty slots show, since how many
 -- are left matters at every card choice. Hover a spell for its card: rank,
 -- cooldown, damage and crits. The spells run from the highest rank down, each
 -- in a border of its color.
@@ -18,6 +20,7 @@
 -- and drag to move; /sui build hides it.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
+local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WIDTH = 224
@@ -128,7 +131,8 @@ list.count:SetPoint("TOPRIGHT", list, "TOPRIGHT", -7, -7)
 -- and between dividers. Laid out from the right edge; the name takes the
 -- rest.
 
-local COLUMN_WIDTH = { rank = 24, cd = 30, range = 34 }
+-- Info's symbol a column of its own at its left, no name over it.
+local COLUMN_WIDTH = { rank = 24, cd = 30, range = 34, symbol = 13 }
 local columns                   -- [key] = { right, width, divider }, the ones shown
 local columnsKey
 local nameRoom = WIDTH - ROW_HEIGHT - 70
@@ -146,6 +150,7 @@ local function Columns(showRange, showCooldown)
 	end
 	if showRange then
 		table.insert(order, "range")
+		table.insert(order, "symbol")
 	end
 	local right = 2
 	for index = 1, table.getn(order) do
@@ -181,7 +186,7 @@ local function HeadLabel(text)
 	label:SetText(text)
 	return label
 end
-head.range = HeadLabel("Range")
+head.range = HeadLabel("Info")
 head.cd = HeadLabel("CD")
 head.rank = HeadLabel("Rank")
 
@@ -191,7 +196,7 @@ local rules = CreateFrame("Frame", nil, list)
 rules:SetAllPoints(list)
 rules:SetFrameLevel(list:GetFrameLevel() + 6)
 rules.lines = {}
-for _, key in pairs({ "rank", "cd", "range" }) do
+for _, key in pairs({ "rank", "cd", "range", "symbol" }) do
 	local line = rules:CreateTexture(nil, "OVERLAY")
 	line:SetTexture(FLAT)
 	line:SetVertexColor(1, 1, 1, 0.14)
@@ -215,14 +220,23 @@ local function PlaceHead()
 		local column = columns[key]
 		line:ClearAllPoints()
 		if column then
-			line:SetPoint("TOPLEFT", list, "TOPLEFT", 6 + WIDTH - column.divider, -TITLE_HEIGHT - 1)
-			line:SetHeight(HEAD_HEIGHT + (SLOTS + 1) * ROW_HEIGHT - 1)
+			-- Between Info's symbols and its numbers, from the rows down only:
+			-- the name over them is the two columns'.
+			local under = key == "range" and columns.symbol and HEAD_HEIGHT or 0
+			line:SetPoint("TOPLEFT", list, "TOPLEFT", 6 + WIDTH - column.divider, -TITLE_HEIGHT - 1 - under)
+			line:SetHeight(HEAD_HEIGHT + (SLOTS + 1) * ROW_HEIGHT - 1 - under)
 			line:Show()
 		else
 			line:Hide()
 		end
 	end
-	PlaceLabel(head.range, columns.range)
+	-- Info's name over its symbols and its numbers together.
+	local info = columns.range
+	if info and columns.symbol then
+		local left = columns.symbol.right + columns.symbol.width
+		info = { right = info.right, width = left - info.right }
+	end
+	PlaceLabel(head.range, info)
 	PlaceLabel(head.cd, columns.cd)
 	PlaceLabel(head.rank, columns.rank)
 end
@@ -300,6 +314,22 @@ local function Row(index)
 	row.range:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
 	row.range:SetJustifyH("CENTER")
 	row.range:SetTextColor(0.6, 0.6, 0.6)
+
+	-- A lasting spell's hourglass or a heal's cross in the Info cell; the part
+	-- of a lasting spell's row its time has run out of, and the timer's edge.
+	row.glass = row:CreateTexture(nil, "OVERLAY")
+	row.glass:SetWidth(9)
+	row.glass:SetHeight(9)
+	row.glass:Hide()
+	row.spent = row:CreateTexture(nil, "BACKGROUND")
+	row.spent:SetTexture(FLAT)
+	row.spent:Hide()
+	row.tick = row:CreateTexture(nil, "BORDER")
+	row.tick:SetTexture(FLAT)
+	row.tick:SetVertexColor(1, 0.94, 0.78, 0.9)
+	row.tick:SetWidth(1)
+	row.tick:SetHeight(ROW_HEIGHT - 2)
+	row.tick:Hide()
 
 	row.cd = row:CreateFontString(nil, "OVERLAY")
 	row.cd:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
@@ -398,6 +428,11 @@ local function Reach(actionSlot, name, rank)
 	for line = 2, scan:NumLines() do
 		local text = getglobal("SurvivorUIBuildScanTextLeft"..line)
 		text = text and text:GetText() or ""
+		-- "Cast once enemies are within 30 yd", a totem's "once enemies are
+		-- within 25 yd", Blizzard's "once enemies come within 30 yd": where it
+		-- is cast from, not how far it reaches.
+		text = string.gsub(string.gsub(text, "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
+		text = string.gsub(text, "once enemies [ac][ro][em]e? within [%d%.]+ yd", "")
 		local _, _, yards = string.find(text, "(%d+%.?%d*) yd")
 		if yards then
 			if string.find(text, "radius", 1, true) then
@@ -438,6 +473,204 @@ local function CooldownText(entry)
 	return string.format("%.1fs", cd)
 end
 
+------------------------------------------------------------------------------
+-- A spell whose time it lasts matters more than its reach (option A of the
+-- build list's mockup, 2026-10-21): in its range cell an hourglass and its
+-- length in gold, "8"; while it is up its row drains as a timer, the cell
+-- counting down, "5.2". Buffs only (Divine Shield, Holy Shield, Battle Shout,
+-- Slice and Dice, Adrenaline Rush, Lightning Shield, Thorns, and your demons'
+-- Demonic Empowerment, which the game may not list among your own buffs, so
+-- its length only; the shields' and the shout's reach is only where they are
+-- cast from); a weakening on the enemies, Demoralizing Shout's, was tried and
+-- left out. Its length is the game's: the time
+-- left as its buff last went up (AZS_BUFFS, by its spell id
+-- in AZS_SPELLS; kept for the account, an upgrade can lengthen it), else read
+-- off its tooltip ("for 8 sec", "For 14 sec").
+
+local LASTING = { divine_shield = true, holy_shield = true, battle_shout = true,
+	slice_and_dice = true, adrenaline_rush = true, lightning_shield = true, thorns = true,
+	demonic_empowerment = true }
+local HOURGLASS = { 1, 0.84, 0.43 }
+local buffs = { last = {} }      -- the run time the buffs were last told at; each spell's left then
+local timing = false             -- a lasting spell up: the list drawn more often
+
+local function RunSeconds()
+	return AZS_GetRunTime and AZS_GetRunTime() or GetTime()
+end
+
+-- The seconds left on a spell's buff now, and its length as last seen.
+local function Lasting(entry, key)
+	local db = Settings()
+	db.buildLasting = db.buildLasting or {}
+	if AZS_BUFFS_UPDATED ~= buffs.seen then
+		buffs.seen, buffs.at = AZS_BUFFS_UPDATED, RunSeconds()
+	end
+	local id = tonumber(Field(entry, "spell", 2))
+	local left
+	for index = 1, table.getn(AZS_BUFFS or {}) do
+		local buff = AZS_BUFFS[index]
+		if id and tonumber(Field(buff, "spell", 1)) == id then
+			left = tonumber(Field(buff, "left", 2)) or 0
+		end
+	end
+	-- Gone up, or up again: the time it has left is its length.
+	if left and left > (buffs.last[key] or 0) + 0.3 then
+		db.buildLasting[key] = math.floor(left * 10 + 0.5) / 10
+	end
+	buffs.last[key] = left
+	if left then
+		left = left - (RunSeconds() - (buffs.at or RunSeconds()))
+	end
+	return left and left > 0 and left or nil, db.buildLasting[key]
+end
+
+------------------------------------------------------------------------------
+-- A heal on yourself (2026-10-21): how much of your health it gives back says
+-- more than a range it has none of (Holy Light at once, Renew over its time). A green cross and its share, "48%", off
+-- its tooltip ("48% of your max health"), else its amount ("Heals you for 287").
+
+local HEALING = { holy_light = true, renew = true, healing_wave = true, rejuvenation = true, regrowth = true }
+local CROSS = { 0.42, 1, 0.5 }
+-- An absorb on yourself, Power Word: Shield's: how much of your health it
+-- holds back, "25%", under a blue shield (it lasts until it breaks, so no
+-- hourglass); else its amount ("Absorbs the next 120 damage").
+-- Each with the words its amount follows in its tooltip.
+local ABSORBING = { pw_shield = "[Aa]bsorbs the next (%d+)", ice_barrier = "up to (%d+)" }
+local SHIELD = { 0.59, 0.82, 1 }
+-- And a range or a radius, "22 yd", under a measuring arrow in gray, |<->| (idea C):
+-- the most common, so the plainest; each color one meaning, gold a time, green
+-- a heal, blue a shield.
+local RANGE = { 0.8, 0.8, 0.83 }
+local heals = {}                 -- [name:rank] = { text or false, when read }
+
+-- A tooltip's line as plain text, its colors taken out.
+local function Plain(text)
+	text = string.gsub(text or "", "|c%x%x%x%x%x%x%x%x", "")
+	return (string.gsub(text, "|r", ""))
+end
+
+local function HealText(actionSlot, name, rank, amountPattern)
+	local key = tostring(name)..":"..tostring(rank)
+	local known = heals[key]
+	if known and GetTime() - known[2] < 5 then
+		return known[1] or nil
+	end
+	scan:SetOwner(WorldFrame, "ANCHOR_NONE")
+	scan:ClearLines()
+	scan:SetAction(actionSlot)
+	local share, amount
+	for line = 2, scan:NumLines() do
+		local text = getglobal("SurvivorUIBuildScanTextLeft"..line)
+		text = Plain(text and text:GetText())
+		local _, _, p = string.find(text, "(%d+%.?%d*)%% of your max health")
+		local _, _, n = string.find(text, amountPattern or "[Hh]eals you for (%d+)")
+		share, amount = share or p, amount or n
+	end
+	scan:Hide()
+	local shown = share and (share.."%") or amount or false
+	heals[key] = { shown, GetTime() }
+	return shown or nil
+end
+
+-- Its length off its tooltip, before the game has shown it once.
+local lengths = {}               -- [name:rank] = seconds, or false
+local function TipLength(actionSlot, name, rank)
+	local key = tostring(name)..":"..tostring(rank)
+	if lengths[key] == nil then
+		lengths[key] = false
+		scan:SetOwner(WorldFrame, "ANCHOR_NONE")
+		scan:ClearLines()
+		scan:SetAction(actionSlot)
+		for line = 2, scan:NumLines() do
+			local text = getglobal("SurvivorUIBuildScanTextLeft"..line)
+			local _, _, secs = string.find(Plain(text and text:GetText()), "[Ff]or (%d+%.?%d*) sec")
+			if secs and not lengths[key] then
+				lengths[key] = tonumber(secs)
+			end
+		end
+		scan:Hide()
+	end
+	return lengths[key] or nil
+end
+
+-- The hourglass stands for the seconds: "8" or "5.5" beside it, no "s".
+local function Length(seconds)
+	if math.mod(seconds, 1) == 0 then
+		return string.format("%d", seconds)
+	end
+	return string.format("%.1f", seconds)
+end
+
+-- The Info cell's number, centered as every column's, and its symbol in its
+-- tint, centered in the symbols' column at its left: the hourglass, the cross,
+-- the shield, the measuring arrow.
+local function PlaceReach(row, symbol, tint)
+	local column = columns and columns.range
+	local place = columns and columns.symbol
+	row.range:ClearAllPoints()
+	if not column then
+		row.glass:Hide()
+		row.range:Hide()
+		return
+	end
+	row.range:SetPoint("RIGHT", row, "RIGHT", -column.right, 0)
+	row.range:SetWidth(column.width)
+	row.range:SetJustifyH("CENTER")
+	row.range:Show()
+	if symbol and place then
+		if row.symbol ~= symbol then
+			row.symbol = symbol
+			row.glass:SetTexture(ART..symbol)
+		end
+		-- Square between the column's two dividers, on whole pixels: 15 free
+		-- between them, 3 either side of the 9 of the symbol.
+		row.glass:ClearAllPoints()
+		row.glass:SetPoint("RIGHT", row, "RIGHT", -place.right - 1, 0)
+		row.glass:SetVertexColor(tint[1], tint[2], tint[3])
+		row.glass:Show()
+	else
+		row.glass:Hide()
+	end
+end
+
+-- The row as a timer: its color as far as the time left reaches, the rest
+-- faint, a bright edge between; whole again otherwise.
+local function Drain(row, share, color)
+	row.wash:ClearAllPoints()
+	row.wash:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1)
+	if share then
+		local x = math.max(1, WIDTH * share)
+		row.wash:SetPoint("BOTTOMRIGHT", row, "BOTTOMLEFT", x, 1)
+		row.spent:ClearAllPoints()
+		row.spent:SetPoint("TOPLEFT", row, "TOPLEFT", x, -1)
+		row.spent:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
+		row.spent:SetVertexColor(color[1], color[2], color[3], 0.12)
+		row.spent:Show()
+		row.tick:ClearAllPoints()
+		row.tick:SetPoint("TOP", row, "TOPLEFT", x, -1)
+		row.tick:Show()
+	else
+		row.wash:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
+		row.spent:Hide()
+		row.tick:Hide()
+	end
+end
+
+-- A lasting spell's cell: its time left while it is up, else its length.
+-- Returns the share of its time left, for the row's timer.
+local function FillLasting(row, entry, key, actionSlot, name, showRange)
+	local left, length = Lasting(entry, key)
+	length = length or TipLength(actionSlot, name, Field(entry, "rank", 3))
+	if left then
+		timing = true
+		row.range:SetText(showRange and string.format("%.1f", left) or "")
+		row.range:SetTextColor(1, 1, 1)
+		return length and math.min(1, left / length) or 1
+	end
+	row.range:SetText(showRange and length and Length(length) or "")
+	row.range:SetTextColor(HOURGLASS[1], HOURGLASS[2], HOURGLASS[3])
+end
+
 local function Fill(row, entry, actionSlot, isRacial)
 	local key = Field(entry, "key", 1)
 	local name = SpellName(key)
@@ -452,9 +685,40 @@ local function Fill(row, entry, actionSlot, isRacial)
 	row.name:SetText(isRacial and name.."  |cff8a8a8a(racial)|r" or name)
 	row.rank:SetText(tonumber(Field(entry, "rank", 3)) or "")
 	local showRange, showCooldown = Shows()
-	row.range:SetText(showRange and Reach(actionSlot, name, Field(entry, "rank", 3)) or "")
+	local lasting = LASTING[key] and not isRacial
+	if lasting and showRange then
+		-- Up, or its length known or told; else its range, as any spell's.
+		local left, length = Lasting(entry, key)
+		lasting = (left or length or TipLength(actionSlot, name, Field(entry, "rank", 3))) and true
+	end
+	-- A heal's or an absorb's share of your health, when its tooltip tells it;
+	-- else its range, as any spell's.
+	local healing = HEALING[key] and not isRacial and showRange
+		and HealText(actionSlot, name, Field(entry, "rank", 3))
+	local absorbing = ABSORBING[key] and not isRacial and showRange
+		and HealText(actionSlot, name, Field(entry, "rank", 3), ABSORBING[key])
+	if lasting then
+		PlaceReach(row, showRange and "Hourglass", HOURGLASS)
+	elseif healing then
+		PlaceReach(row, "HealCross", CROSS)
+		row.range:SetText(healing)
+	elseif absorbing then
+		PlaceReach(row, "Shield", SHIELD)
+		row.range:SetText(absorbing)
+	else
+		-- The measuring arrow stands for the yards: "22" beside it, not "22 yd".
+		local reach = showRange and Reach(actionSlot, name, Field(entry, "rank", 3))
+		PlaceReach(row, reach and "Range", RANGE)
+		row.range:SetText(reach and (string.gsub(reach, " yd$", "")) or "")
+	end
 	row.cd:SetText(showCooldown and CooldownText(entry) or "")
 	Paint(row, color, isRacial and 0.5 or 1, not isRacial)
+	if healing then
+		row.range:SetTextColor(CROSS[1], CROSS[2], CROSS[3])
+	elseif absorbing then
+		row.range:SetTextColor(SHIELD[1], SHIELD[2], SHIELD[3])
+	end
+	Drain(row, lasting and FillLasting(row, entry, key, actionSlot, name, showRange), color)
 	row:Show()
 end
 
@@ -465,9 +729,11 @@ local function Empty(row)
 	row.icon:SetAlpha(0.8)
 	row.name:SetText("empty slot")
 	row.rank:SetText("")
+	PlaceReach(row, false)
 	row.range:SetText("")
 	row.cd:SetText("")
 	Paint(row, MUTED, 0.6)
+	Drain(row, nil)
 	row:Show()
 end
 
@@ -548,6 +814,7 @@ racialWatch:SetScript("OnEvent", function()
 end)
 
 local function Draw()
+	timing = false
 	-- The columns as chosen; changed, every row laid out again.
 	if Columns(Shows()) then
 		PlaceHead()
@@ -883,7 +1150,8 @@ local elapsed = 0
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
 	elapsed = elapsed + arg1
-	if elapsed < 0.25 then
+	-- A lasting spell's timer counts down in tenths.
+	if elapsed < (timing and 0.1 or 0.25) then
 		return
 	end
 	elapsed = 0

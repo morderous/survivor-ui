@@ -705,7 +705,28 @@ local function UnitFrame(unit, name, side, dropdown)
 	frame.power = FlatBar(frame, FRAME_WIDTH, POWER_HEIGHT)
 	frame.power:SetPoint("TOP", frame.health, "BOTTOM", 0, -1)
 
-	frame.name = Text(frame.health, 10, "LEFT", 5, 0)
+	-- The player's shield over the health (UpdateShield, below), and the name
+	-- and the numbers a level over both.
+	if unit == "player" then
+		local shield = CreateFrame("Frame", nil, frame.health)
+		shield:SetAllPoints(frame.health)
+		shield:SetFrameLevel(frame.health:GetFrameLevel() + 1)
+		shield.fill = shield:CreateTexture(nil, "BACKGROUND")
+		shield.fill:SetTexture(FLAT)
+		shield.fill:SetVertexColor(0.59, 0.82, 1, 0.45)
+		shield.stripes = shield:CreateTexture(nil, "BORDER")
+		shield.stripes:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\ShieldStripes")
+		shield.edge = shield:CreateTexture(nil, "ARTWORK")
+		shield.edge:SetTexture(FLAT)
+		shield.edge:SetVertexColor(0.9, 0.97, 1, 1)
+		shield:Hide()
+		frame.shield = shield
+	end
+	frame.texts = CreateFrame("Frame", nil, frame.health)
+	frame.texts:SetAllPoints(frame.health)
+	frame.texts:SetFrameLevel(frame.health:GetFrameLevel() + 2)
+
+	frame.name = Text(frame.texts, 10, "LEFT", 5, 0)
 	-- The player's health reads "524 | 100%", a target's only "67%": the target's
 	-- name gets the room the numbers leave.
 	frame.nameRoom = unit == "player" and FRAME_WIDTH - 82 or FRAME_WIDTH - 44
@@ -714,7 +735,7 @@ local function UnitFrame(unit, name, side, dropdown)
 	frame.name:SetJustifyH("LEFT")
 	frame.name:SetTextColor(1, 1, 1)
 
-	frame.value = Text(frame.health, 10, "RIGHT", -5, 0)
+	frame.value = Text(frame.texts, 10, "RIGHT", -5, 0)
 	frame.value:SetTextColor(1, 1, 1)
 
 	-- Left click targets, right click opens the stock menu, Alt-drag moves the row.
@@ -738,6 +759,57 @@ local function UpdatePortrait(frame)
 	end
 end
 
+-- What the shields on you still hold (AZS_RUN's sh, the game's), on the
+-- health bar: from where the health ends, a bright edge at its end; past the
+-- bar's end, over its right end instead, the edge where it begins. Over the
+-- health of a light color (a priest's white, a rogue's yellow) the light
+-- stripes would not show: there it goes deep blue, its stripes and edge dark.
+local SHIELD_LOOKS = {
+	light = { fill = { 0.59, 0.82, 1, 0.45 }, stripes = { 1, 1, 1, 1 }, edge = { 0.9, 0.97, 1, 1 } },
+	dark = { fill = { 0.22, 0.5, 1, 0.6 }, stripes = { 0.08, 0.2, 0.55, 0.95 }, edge = { 0.06, 0.22, 0.65, 1 } },
+}
+
+local function ShieldLook(shield, look)
+	if shield.look == look then
+		return
+	end
+	shield.look = look
+	local colors = SHIELD_LOOKS[look]
+	shield.fill:SetVertexColor(colors.fill[1], colors.fill[2], colors.fill[3], colors.fill[4])
+	shield.stripes:SetVertexColor(colors.stripes[1], colors.stripes[2], colors.stripes[3], colors.stripes[4])
+	shield.edge:SetVertexColor(colors.edge[1], colors.edge[2], colors.edge[3], colors.edge[4])
+end
+
+local function UpdateShield(frame, health, r, g, b)
+	local shield = frame.shield
+	local run = AZS_RUN or {}
+	local most = tonumber(run.hpm) or 0
+	local held = most > 0 and (tonumber(run.sh) or 0) / most or 0
+	if held <= 0.002 then
+		shield:Hide()
+		return
+	end
+	held = math.min(1, held)
+	local from, to, edge = health, health + held, health + held
+	local over = false
+	if to > 1 then
+		from, to, edge, over = 1 - held, 1, 1 - held, true
+	end
+	ShieldLook(shield, over and (0.3 * r + 0.59 * g + 0.11 * b) > 0.75 and "dark" or "light")
+	local bar = frame.health
+	shield.fill:ClearAllPoints()
+	shield.fill:SetPoint("TOPLEFT", bar, "TOPLEFT", FRAME_WIDTH * from, 0)
+	shield.fill:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", FRAME_WIDTH * to, 0)
+	shield.stripes:ClearAllPoints()
+	shield.stripes:SetPoint("TOPLEFT", bar, "TOPLEFT", FRAME_WIDTH * from, 0)
+	shield.stripes:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", FRAME_WIDTH * to, 0)
+	shield.stripes:SetTexCoord(from, to, 0, 1)
+	shield.edge:ClearAllPoints()
+	shield.edge:SetPoint("TOPLEFT", bar, "TOPLEFT", FRAME_WIDTH * edge - 1, 0)
+	shield.edge:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", FRAME_WIDTH * edge + 1, 0)
+	shield:Show()
+end
+
 local function UpdateUnitFrame(frame)
 	local unit = frame.unit
 	if not UnitExists(unit) then
@@ -751,6 +823,9 @@ local function UpdateUnitFrame(frame)
 	local r, g, b = HealthColor(unit)
 	frame.health:SetValue(share)
 	frame.health:SetStatusBarColor(r, g, b, 1)
+	if frame.shield then
+		UpdateShield(frame, share, r, g, b)
+	end
 	-- The health as the option reads it (/sui opt, Unit frames): the player's
 	-- "1.2k | 100%" by default, a target's "73%". The game's API has an enemy's
 	-- numbers (AZS_TARGET); the client alone only its share. The name gets the
@@ -973,6 +1048,16 @@ local function LayoutBar()
 		"AZS_MainMenuBarTexture4", "AZS_RacialRim",
 	}) do
 		Hide(name)
+	end
+
+	-- The game's bar itself, empty under the row: 397 wide since the game's
+	-- 0.108, small enough for the hover outline to frame it, and its clicks
+	-- went nowhere. It no longer takes the mouse; its buttons still do.
+	for _, name in pairs({ "MainMenuBar", "MainMenuBarArtFrame" }) do
+		local frame = getglobal(name)
+		if frame and frame.EnableMouse then
+			frame:EnableMouse(false)
+		end
 	end
 
 	-- Its experience numbers, always up on the bar since the game's 0.108 (shown

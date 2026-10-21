@@ -209,6 +209,22 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.21, 2026-10-21
+
+**What matters about each spell, at a glance.** The Build list's third column, once Range, is now **Info**: for each spell the one number that matters most besides its cooldown, and a symbol of its own beside it, in a column of its own, so you can tell at a glance what the number is. Tuned by hand, one class at a time: every class played and every spell's tooltip read, to give each spell its row. New art of our own: **restart the game once** after updating.
+
+**Survivor UI**
+- **The Build list's Info column** (new):
+  - **An hourglass, gold: how long a buff lasts.** While it is up, its row drains as a timer and the cell counts the seconds down ("5.2"). Divine Shield, Holy Shield, Battle Shout, Slice and Dice, Adrenaline Rush, Lightning Shield, Thorns, and your demons' Demonic Empowerment (its length only: the game lists your own buffs, not your demons'). The length is the game's own, as the buff last went up, so an upgrade that lengthens it shows, and it is kept for your next runs.
+  - **A cross, green: how much a heal gives back**, as a share of your health: Holy Light, Renew, Healing Wave, Rejuvenation, Regrowth.
+  - **A shield, blue: how much a shield holds back**, as a share of your health: Power Word: Shield, Ice Barrier. They last until they break, so no hourglass.
+  - **A measuring arrow, gray: how far a spell reaches**, or its radius around you, for everything else: the number alone, "22", no "yd".
+  - **The right reach**: the distance a spell is cast from ("Cast once enemies are within 30 yd", a totem's "once enemies are within 25 yd", Blizzard's "once enemies come within 30 yd") is no longer taken for its reach. Magma Totem shows its 16 yd of fire, not 25; Holy Shield, Battle Shout and their like show their time.
+  - A heal, a shield or a buff whose tooltip tells no number shows its reach instead, never an empty cell under a symbol. The column's name over the symbols and the numbers together; the numbers centered, as CD's and Rank's are.
+- **Your shield on your frame** (new): what the shields on you still hold, from the game's own count (Power Word: Shield, Ice Barrier, Stoneform and the rest), drawn on your unit frame's health bar: pale blue with white stripes from where your health ends, a bright edge at its end. With your health whole, it lies over the bar's right end instead; over a light bar (a priest's white, a rogue's yellow) it goes deep blue with dark stripes, so it still shows. Your name and numbers stay over it.
+- **The damage meter's ranks, now your choice**: off by default, the meter shows each spell's name alone. On (Options, Damage meter: **Spell ranks after the names**), the rank follows the name as a bare number, "Holy Shock  2", in the run's meter and the Run History's; with **Roman spell ranks** on (Options, Tooltips), as II. The tooltips keep "Rank 2".
+- **The game's empty bar no longer outlined**: since the game's 0.108 its main bar is small enough for the mouse-over outline to frame it where it stands empty under Survivor UI's own row. With the row on, that bar no longer takes the mouse; its buttons in the row still do.
+
 ### v3.0.20, 2026-10-21
 
 **Survivor UI**

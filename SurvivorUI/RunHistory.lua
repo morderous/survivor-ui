@@ -2816,7 +2816,8 @@ local function DrawDamage(run)
 		local rank = source.rank or ranks[source.name]
 		local room = NAME_ROOM - (source.proc and 30 or 0)
 		bar.name:SetWidth(room)
-		bar.name:SetText((source.name or "?")..((rank and rank > 0 and SurvivorUI_RankText) and "  |cffbdbdbd"..SurvivorUI_RankText(rank).."|r" or ""))
+		local ranked = rank and rank > 0 and SurvivorUI_RankText and SurvivorUIDB and SurvivorUIDB.meterRanks
+		bar.name:SetText((source.name or "?")..(ranked and "  |cffbdbdbd"..SurvivorUI_RankText(rank, true).."|r" or ""))
 		bar.tag:ClearAllPoints()
 		if source.proc then
 			bar.tag:SetPoint("LEFT", bar, "LEFT", BAR + 2 + math.min(bar.name:GetStringWidth(), room) + 3, 0)
