@@ -521,9 +521,15 @@ end)
 ------------------------------------------------------------------------------
 -- The bars.
 
--- A name or bonus line in English, whatever language the game is in (Locale.lua).
+-- A name or bonus line in English, whatever language the game is in
+-- (Locale.lua). The combat log still writes "Soul Fire", the 1.12 spell's
+-- name, where the game's meter, cards and tooltips spell it "Soulfire" since
+-- its 0.110: one source, under the game's spelling.
+local SPELLINGS = { ["Soul Fire"] = "Soulfire" }
+
 local function English(name)
-	return SurvivorUI_English and SurvivorUI_English(name) or name
+	name = SurvivorUI_English and SurvivorUI_English(name) or name
+	return SPELLINGS[name] or name
 end
 
 local colors = {}               -- [source] = palette entry
@@ -594,7 +600,8 @@ local SPELL_KEYS = {
 }
 
 -- A source's icon. A spell of the build: its action button's (the game puts
--- them on buttons 1 to 6, the racial on the last). Anything else, a talent's or
+-- them on buttons 1 to 6, the racial on the last, until one is dragged
+-- elsewhere: SurvivorUI_SpellSlot). Anything else, a talent's or
 -- an item's own damage: the spellbook, the talents, then the worn items, by
 -- name. Found icons are kept; a miss is asked again now and then, as talents
 -- and items come during a run.
@@ -619,6 +626,14 @@ local function SpellIndex(name)
 	for index = 1, count do
 		local entry = AZS_SPELLS[index]
 		if (entry.key or entry[1]) == key then
+			return index, index == count
+		end
+	end
+	-- By the letters alone: a button's tooltip calls soul_fire "Soulfire".
+	local letters = string.gsub(lower, "[^%a]", "")
+	for index = 1, count do
+		local entry = AZS_SPELLS[index]
+		if string.gsub(tostring(entry.key or entry[1]), "[^%a]", "") == letters then
 			return index, index == count
 		end
 	end
@@ -704,8 +719,8 @@ local function IconOf(name)
 	if icons[name] then
 		return icons[name]
 	end
-	local index, racial = SpellIndex(name)
-	local texture = index and GetActionTexture and GetActionTexture(racial and 12 or index)
+	local index = SpellIndex(name)
+	local texture = index and GetActionTexture and GetActionTexture(SurvivorUI_SpellSlot(index))
 	if not texture then
 		if missedAt[name] and GetTime() - missedAt[name] < 10 then
 			return nil
@@ -788,14 +803,81 @@ function SurvivorUI_MeterColor(name)
 	return ColorOf(name)
 end
 
--- The action button a spell sits on (the DoT counter, DotCounter.lua): its
--- place in the game's spell list is its slot, the racial on the = key.
+-- The action button a spell sits on (the build list, the DoT counters, the
+-- totems, the soul shards). The game lays its spells on the bar in its list's
+-- order, AZS_SPELLS: the first on button 1, the racial on the = key, button 12;
+-- but a spell can be dragged to any button, as in 1.12, and stays there until
+-- the next new spell lays the whole bar out again (2026-10-22: a dragged
+-- spell took the icon, the range and the tooltip of the one on its old
+-- button). So each button is read: its tooltip names its spell, looked up in
+-- the list. Read again half a second after the bar changes
+-- (ACTIONBAR_SLOT_CHANGED) or the list changes size, never in the instant a
+-- card is taken (the game hung once, v3.0.17, with a tooltip read right at
+-- the choice), and every few seconds besides. A spell on no button keeps its
+-- place in the list as its button.
+local slotOf = {}               -- [index in AZS_SPELLS] = action button
+local slotsRead                 -- GetTime() of the last reading, nil to read again
+local slotsCount                -- the list's size then
+local slotsDue                  -- GetTime() from which to read again, after a change
+local slotScan = CreateFrame("GameTooltip", "SurvivorUISlotScan", nil, "GameTooltipTemplate")
+
+local function ReadSlots()
+	slotOf = {}
+	slotsRead, slotsCount, slotsDue = GetTime(), table.getn(AZS_SPELLS or {}), nil
+	if not (slotScan.SetAction and GetActionTexture) then
+		return
+	end
+	for slot = 1, 120 do
+		local held
+		if HasAction then
+			held = HasAction(slot)
+		else
+			held = GetActionTexture(slot)
+		end
+		if held then
+			slotScan:SetOwner(WorldFrame, "ANCHOR_NONE")
+			slotScan:ClearLines()
+			slotScan:SetAction(slot)
+			local title = getglobal("SurvivorUISlotScanTextLeft1")
+			title = title and title:GetText()
+			slotScan:Hide()
+			if title and title ~= "" then
+				title = string.gsub(string.gsub(title, "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
+				local index = SpellIndex(English(title))
+				if index and not slotOf[index] then
+					slotOf[index] = slot
+				end
+			end
+		end
+	end
+end
+
+local slotWatch = CreateFrame("Frame")
+slotWatch:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+slotWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
+slotWatch:SetScript("OnEvent", function()
+	slotsDue = GetTime() + 0.5
+end)
+
+-- The action button of the spell at this index of AZS_SPELLS.
+function SurvivorUI_SpellSlot(index)
+	local count = table.getn(AZS_SPELLS or {})
+	local now = GetTime()
+	if count ~= slotsCount and not slotsDue then
+		slotsDue = now + 0.5
+	end
+	if not slotsRead or (slotsDue and now >= slotsDue) or now - slotsRead > 5 then
+		ReadSlots()
+	end
+	return slotOf[index] or (index == count and 12 or index)
+end
+
 function SurvivorUI_SpellButton(name)
 	if not name then
 		return nil
 	end
-	local index, racial = SpellIndex(English(name))
-	return index and getglobal("ActionButton"..(racial and 12 or index))
+	local index = SpellIndex(English(name))
+	return index and getglobal("ActionButton"..SurvivorUI_SpellSlot(index))
 end
 
 -- A source's share of the meter's damage as shown, 0 to 1, or nil.

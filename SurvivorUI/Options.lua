@@ -1849,6 +1849,7 @@ Check(page, "DoTs", OnUnlessOff("dotCounter"), Flip("dotCounter"), "how many of 
 Check(page, "Fears", OnUnlessOff("fearCounter"), Flip("fearCounter"), "how many enemies each one holds; the game writes a fear's hit but not its end, so each enemy hit counts for the fear's full time")
 Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, and the seconds until the next one ends: each cast counts a totem for its tooltip's time; two with Call of the Elements, and Totemic Wrath's Searing Totem every 14 sec, told by the spells a run starts with")
 Check(page, "Shouts", OnUnlessOff("shoutCounter"), Flip("shoutCounter"), "Demoralizing Shout: how many enemies its last cast weakened, for its time; Battle Shout: the seconds it has left")
+Check(page, "Marks", OnUnlessOff("markCounter"), Flip("markCounter"), "Faerie Fire: how many enemies carry it, bosses too; each one it hits counts for the mark's time (its tooltip's), so one hit again before it fades counts twice until it does")
 
 Subheader(page, "Look")
 Slider(page, "Size", 0.5, 2, 0.05, function() return tonumber(DB().counterSize) or 1 end,
@@ -1882,7 +1883,12 @@ InlineChecks(page, {
 		DB().buildCooldown = not DB().buildCooldown
 	end },
 })
-Note(page, "Either or both. Info: the range read off the spell's own tooltip, or its radius for one with no range (a measuring arrow); for the buffs on you (Divine Shield, Holy Shield, Battle Shout, Slice and Dice, Adrenaline Rush, Lightning Shield, Thorns, and your demons' Demonic Empowerment) how long they last (an hourglass), the row a timer while one is up; for Holy Light, Renew, Healing Wave, Rejuvenation and Regrowth how much they heal (a cross); for Power Word: Shield and Ice Barrier how much they hold back (a shield). A totem's reach is its own, not where it is dropped from. The cooldown as the game has it now, haste in.")
+Note(page, "Either or both. Info: the range read off the spell's own tooltip, or its radius for one with no range (a measuring arrow); for the buffs on you (Divine Shield, Holy Shield, Battle Shout, Slice and Dice, Adrenaline Rush, Lightning Shield, Thorns, and your demons' Demonic Empowerment) how long they last (an hourglass), the row a timer while one is up; for Holy Light, Renew, Healing Wave, Rejuvenation and Regrowth how much they heal (a cross); for Power Word: Shield and Ice Barrier how much they hold back (a shield). A totem's reach is its own, not where it is dropped from. The cooldown as the game has it now, haste in.")Check(page, "Keep the game's row of spells too", OnlyIfOn("gameBuildToo"), function()
+	DB().gameBuildToo = DB().gameBuildToo ~= true
+	if SurvivorUI_GameHud and SurvivorUI_GameHud.build then
+		SurvivorUI_GameHud.build()
+	end
+end, "The game's own row stays under the list. Since the game's 0.111 it is the only place that counts down to the next Felguard or Pit Lord (Butcher, Pact of the Annihilan), on the talent's icon.")
 
 -- Character pane (CharacterPane.lua): it opens with this tab.
 

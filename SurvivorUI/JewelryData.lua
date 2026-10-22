@@ -34,9 +34,11 @@ SurvivorUI_JEWELRY = {
 		{ "Mark of the Chosen", { "+22% luck", "+32% luck", "+41% luck", "+54% luck", "+72% luck" } },
 		{ "Onyxia Blood Talisman", { "Each kill heals 3.0", "Each kill heals 4.2", "Each kill heals 5.4", "Each kill heals 6.0", "Each kill heals 6.0" } },
 		{ "Royal Seal of Eldre'Thalas", { "+38% gold", "+52% gold", "+67% gold", "+90% gold", "+120% gold" } },
+		{ "Star of Mystaria", { "+25% max health, +4% damage reduction", nil, nil, nil, nil } },
 		{ "Talisman of Ephemeral Power", { "-10% cooldowns", "-15% cooldowns", "-19% cooldowns", "-25% cooldowns", "-34% cooldowns" } },
 	},
-	-- Amulets: name, rarity, bonuses: the codex's 17.
+	-- Amulets: name, rarity, bonuses: the codex's 16 (the Star of Mystaria is
+	-- a trinket since the game's 0.111).
 	Neck = {
 		{ "Amulet of Vek'nilash", "Epic", { "Your spells: +1 target", "+5% damage" } },
 		{ "Amulet of the Darkmoon", "Uncommon", { "-12% cooldowns", "+8% movement speed" } },
@@ -51,7 +53,6 @@ SurvivorUI_JEWELRY = {
 		{ "Pendant of the Fallen Dragon", "Epic", { "A killing blow leaves you at 50% health, once every 60 sec", "+20% max health", "+5.0 health per second" } },
 		{ "Prestor's Talisman of Connivery", "Uncommon", { "+16% damage", "+4% critical strike" } },
 		{ "Pristine Enchanted South Seas Kelp", "Common", { "+30% luck", "+25% gold" } },
-		{ "Star of Mystaria", "Common", { "+25% max health", "+4% damage reduction" } },
 		{ "Talvash's Enhancing Necklace", "Common", { "-10% cooldowns" } },
 		{ "The Eye of Hakkar", "Rare", { "+5% critical strike", "Crits burn and bleed for 80% more over 4 sec" } },
 		{ "Woven Ivy Necklace", "Uncommon", { "+6.0 health per second", "+12% max health", "+12% movement speed" } },

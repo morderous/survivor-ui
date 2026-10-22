@@ -209,6 +209,16 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.23, 2026-10-22
+
+**Survivor UI**
+- **A counter for Faerie Fire** (Counters tab, Marks), asked for by a druid: over its button, how many enemies carry the mark right now, bosses too. The game writes each enemy it hits but not the mark's end, so each one counts for the mark's time (read off the tooltip); one hit again before its mark fades counts twice until it does.
+- **The build list follows a spell dragged to another button**: the game lays the spells on the bar in its own order and the addon took that order for the buttons, so a spell dragged onto another button (as in 1.12) wore the icon, the range and the tooltip of the one that was there, and one dragged off the row lost them. Now each button is read for the spell it holds, and the DoT and fear counters, the totems and the soul shards follow the spell too. The game lays the bar out again at each new spell, which puts the moved ones back where they were.
+- **The Star of Mystaria is a trinket** (the game's 0.111): the Jewelry Collection lists it among the trinkets now, not the amulets.
+- **"Soulfire", one name.** The game spells it "Soulfire" since its 0.110 (its meter, its cards and its tooltips) while the combat log still writes "Soul Fire", and the addon took them for two spells: the meter gave Soulfire a placeholder icon and a color of its own, and the soul shards never read its tooltip, so the seconds between shards and how many it takes stayed at their first values. Both are one spell now, and the build list calls it Soulfire too.
+- **Keep the game's row of spells too** (Build list tab): the game's own row stays under the list. Since the game's 0.111 it is the only place that counts down to the next Felguard or Pit Lord of Butcher and Pact of the Annihilan, on the talent's icon (it was a buff before, which the buffs row showed).
+- The game's words for its 0.111 and 0.112 (Trauma, Bloodlust, the Star as a trinket) in every language.
+
 ### v3.0.22, 2026-10-22
 
 **Your summons, at a glance.** The game's 0.110 tells addons about every summon out, and Survivor UI now shows them over your frame: how many of each kind against the game's limit, and how long the longest-lived one has left.

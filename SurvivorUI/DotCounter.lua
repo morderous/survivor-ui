@@ -46,6 +46,10 @@ local FEARS = {
 }
 -- The shouts that weaken the enemies they hit, the same way.
 local SHOUTS = { ["Demoralizing Shout"] = 6 }
+-- The marks: a debuff laid on every enemy it hits, written as a hit, not its
+-- end, so each enemy hit counts for the mark's time (its tooltip's "for N
+-- sec", else this). Asked for by a druid (Faerie Fire) in 2026-10.
+local MARKS = { ["Faerie Fire"] = 10 }
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
@@ -56,7 +60,8 @@ local function Settings()
 end
 
 -- Each counter, on unless switched off: dotCounter, fearCounter, totemCounter,
--- shoutCounter; none while the counters are off as a whole (the Modules tab).
+-- shoutCounter, markCounter; none while the counters are off as a whole (the
+-- Modules tab).
 local function On(key)
 	local settings = Settings()
 	return settings.counters ~= false and settings[key] ~= false
@@ -64,6 +69,7 @@ end
 
 local ticks = {}        -- [spell] = { the GetTime() of each DoT tick, oldest first }
 local hits = {}         -- [fear] = { the GetTime() of each enemy it hit, oldest first }
+local marks = {}        -- [mark] = the same, bosses too
 local shouts = {}       -- [shout] = its last cast: { at, last hit, enemies hit }
 local shown = {}        -- [spell] = the count on screen, eased toward the ticks'
 local badges = {}       -- [action button] = its number
@@ -83,7 +89,7 @@ local function Holds(spell)
 		return held[spell]
 	end
 	heldAt[spell] = GetTime()
-	held[spell] = FEARS[spell] or SHOUTS[spell]
+	held[spell] = FEARS[spell] or SHOUTS[spell] or MARKS[spell]
 	local button = SurvivorUI_SpellButton and SurvivorUI_SpellButton(spell)
 	local _, _, slot = string.find(button and button:GetName() or "", "(%d+)$")
 	if slot and scan.SetAction then
@@ -96,6 +102,10 @@ local function Holds(spell)
 			local _, _, seconds = string.find(text, "flee for (%d+%.?%d*) sec")
 			if not seconds then
 				_, _, seconds = string.find(text, "less damage for (%d+%.?%d*) sec")
+			end
+			-- A mark's tooltip: the first "for N sec" it says.
+			if not seconds and MARKS[spell] then
+				_, _, seconds = string.find(text, "for (%d+%.?%d*) sec")
 			end
 			if seconds then
 				held[spell] = tonumber(seconds)
@@ -134,6 +144,11 @@ events:SetScript("OnEvent", function()
 		if spell and FEARS[spell] and On("fearCounter") and not IsBoss(target) then
 			hits[spell] = hits[spell] or {}
 			table.insert(hits[spell], GetTime())
+		end
+		-- A mark takes bosses too.
+		if spell and MARKS[spell] and On("markCounter") then
+			marks[spell] = marks[spell] or {}
+			table.insert(marks[spell], GetTime())
 		end
 		-- A shout's hits come all at once: a hit long after the last is a new cast.
 		if spell and SHOUTS[spell] and On("shoutCounter") then
@@ -267,7 +282,7 @@ local function SearingSlot()
 	for index = 1, count do
 		local entry = AZS_SPELLS[index]
 		if (entry.key or entry[1]) == "searing_totem" then
-			return index == count and 12 or index
+			return SurvivorUI_SpellSlot and SurvivorUI_SpellSlot(index) or (index == count and 12 or index)
 		end
 	end
 end
@@ -330,8 +345,9 @@ local function WatchTotems()
 			local before = lastCd[key]
 			lastCd[key] = cd
 			if before and cd > before + 0.5 and kinds[key] ~= false then
-				-- The racial sits on the twelfth button, the rest in order.
-				local seconds = TotemTime(index == count and 12 or index)
+				-- Its button (Meter.lua): the twelfth for the racial, the rest
+				-- in order, unless one was dragged elsewhere.
+				local seconds = TotemTime(SurvivorUI_SpellSlot and SurvivorUI_SpellSlot(index) or (index == count and 12 or index))
 				kinds[key] = seconds ~= nil
 				if seconds then
 					SetDown(key, Title(key), now + seconds, talents.twice and 2 or 1)
@@ -419,6 +435,16 @@ frame:SetScript("OnUpdate", function()
 			Light(lit, spell, table.getn(list))
 		end
 	end
+	-- The marks: the enemies hit within the time one holds.
+	for spell, list in pairs(marks) do
+		local holds = Holds(spell) or MARKS[spell] or 10
+		while list[1] and list[1] < now - holds do
+			table.remove(list, 1)
+		end
+		if On("markCounter") and list[1] then
+			Light(lit, spell, table.getn(list))
+		end
+	end
 	-- The totems: the ones set down whose time has not run out.
 	WatchTotems()
 	if On("totemCounter") then
@@ -456,7 +482,7 @@ end)
 -- /sui dots: every counter at once, off while any is on, else on.
 function SurvivorUI_ToggleDots()
 	local settings = Settings()
-	local on = not (On("dotCounter") or On("fearCounter") or On("totemCounter") or On("shoutCounter"))
-	settings.dotCounter, settings.fearCounter, settings.totemCounter, settings.shoutCounter = on, on, on, on
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the counters over the action bar (DoTs, fears, totems, shouts) are "..(on and "on." or "off."))
+	local on = not (On("dotCounter") or On("fearCounter") or On("totemCounter") or On("shoutCounter") or On("markCounter"))
+	settings.dotCounter, settings.fearCounter, settings.totemCounter, settings.shoutCounter, settings.markCounter = on, on, on, on, on
+	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the counters over the action bar (DoTs, fears, totems, shouts, marks) are "..(on and "on." or "off."))
 end

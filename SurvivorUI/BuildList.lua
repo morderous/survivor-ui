@@ -50,10 +50,22 @@ local function Field(entry, name, index)
 	return entry[index]
 end
 
--- "holy_wrath" as the meter and the cards name it: "Holy Wrath".
+-- The action button of the spell at this index of the game's list (Meter.lua,
+-- SurvivorUI_SpellSlot: the list's order, unless a spell was dragged
+-- elsewhere), for its icon and its tooltip.
+local function Slot(index, count)
+	if SurvivorUI_SpellSlot then
+		return SurvivorUI_SpellSlot(index)
+	end
+	return index == count and RACIAL_SLOT or index
+end
+
+-- "holy_wrath" as the meter and the cards name it: "Holy Wrath". The game
+-- spells soul_fire "Soulfire" (its 0.110), as the meter does (Meter.lua).
 local NAMES = {
 	sw_pain = "Shadow Word: Pain", pw_shield = "Power Word: Shield",
 	demo_shout = "Demoralizing Shout", hunters_mark = "Hunter's Mark",
+	soul_fire = "Soulfire",
 }
 
 -- "of", "the" and "and" small after the first word, as the meter has them:
@@ -848,7 +860,7 @@ local function Draw()
 		row.icon:SetVertexColor(1, 1, 1)
 		local index = order[place]
 		if index then
-			Fill(row, spells[index], index, false)
+			Fill(row, spells[index], Slot(index, count), false)
 		else
 			Empty(row)
 		end
@@ -865,7 +877,7 @@ local function Draw()
 	local racialRow = Row(SLOTS + 1)
 	racialRow.icon:SetVertexColor(1, 1, 1)
 	if count >= 1 then
-		Fill(racialRow, spells[count], RACIAL_SLOT, true)
+		Fill(racialRow, spells[count], Slot(count, count), true)
 	else
 		racialRow.base:Hide()
 		racialRow:Hide()
@@ -1167,14 +1179,17 @@ watcher:SetScript("OnUpdate", function()
 end)
 
 -- The game's own build, its row of spells and jewelry with their cooldowns:
--- away while this list is on. The setting is the game's and is saved, so the
--- addon remembers that it was the one to turn it off.
+-- away while this list is on, unless asked to stay (gameBuildToo: since the
+-- game's 0.111 its talent icon is the only place that counts down to the
+-- next Felguard or Pit Lord of Butcher and Pact of the Annihilan). The
+-- setting is the game's and is saved, so the addon remembers that it was the
+-- one to turn it off.
 local function ApplyGameHud()
 	if not (AZS_SetHudShown and AZS_IsHudShown) then
 		return
 	end
 	local settings = Settings()
-	if settings.buildList or settings.noGameBuild then
+	if (settings.buildList and not settings.gameBuildToo) or settings.noGameBuild then
 		if AZS_IsHudShown("build") then
 			AZS_SetHudShown("build", false)
 			settings.hidGameBuild = true
@@ -1222,10 +1237,10 @@ function SurvivorUI_BuildSnapshot()
 		})
 	end
 	for index = 1, table.getn(order) do
-		Add(spells[order[index]], order[index], false)
+		Add(spells[order[index]], Slot(order[index], count), false)
 	end
 	if count >= 1 then
-		Add(spells[count], RACIAL_SLOT, true)
+		Add(spells[count], Slot(count, count), true)
 	end
 	return list
 end
@@ -1269,7 +1284,8 @@ function SurvivorUI_ToggleBuild()
 	settings.buildList = not settings.buildList
 	ApplyGameHud()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.buildList
-		and "build list shown; the Default row of spells is put away."
+		and (settings.gameBuildToo and "build list shown, and the Default row of spells stays with it."
+			or "build list shown; the Default row of spells is put away.")
 		or (settings.noGameBuild and "build list hidden, and the Default row of spells stays away." or "build list hidden; the Default row of spells is back.")))
 end
 

@@ -53,10 +53,10 @@ local style = STYLES.soul_fire   -- the gems' look now
 
 -- The game's words this counts by, all of them here.
 local WORDS = {
-	name = "^Soul Fire",                        -- its tooltip's first line (the game in English)
+	name = "^Soul ?Fire",                       -- its tooltip's first line (the game in English; "Soulfire" since its 0.110)
 	every = "at most one every ([%d%.]+) sec",  -- the seconds between two shards
 	most = "At (%d+) shards",                   -- how many it takes
-	spent = "^Your Soul Fire [hc][ir]",         -- its hit in the combat log: all spent
+	spent = "^Your Soul ?Fire [hc][ir]",        -- its hit in the combat log: all spent
 	other = "shard",                            -- another spell's tooltip on them (lower case)
 	notOther = "ice shard",                     -- the mage's Ice Shards are no soul shards
 }
@@ -202,6 +202,9 @@ end
 -- A spell's button: the racial on the twelfth, the rest in order (as the
 -- totems' counter has them).
 local function Button(index, count)
+	if SurvivorUI_SpellSlot then
+		return SurvivorUI_SpellSlot(index)
+	end
 	return index == count and 12 or index
 end
 
@@ -234,7 +237,7 @@ end
 
 -- Dim, and the chat told once, while the count may be off.
 local function Report()
-	local why = reworded and "Soul Fire's tooltip reads differently now."
+	local why = reworded and "Soulfire's tooltip reads differently now."
 		or rival and (rival.." also speaks of soul shards.")
 	holder:SetAlpha(why and 0.45 or 1)
 	if why and not told[why] then
@@ -252,7 +255,8 @@ local function Read(all)
 	local lines = Lines(slot)
 	-- Soul Fire's name, in a language known: its tooltip can be read.
 	local name = lines[1] or ""
-	if not (string.find(name, WORDS.name) or (SurvivorUI_English and SurvivorUI_English(name) == "Soul Fire")) then
+	local english = SurvivorUI_English and SurvivorUI_English(name)
+	if not (string.find(name, WORDS.name) or english == "Soul Fire" or english == "Soulfire") then
 		return
 	end
 	local seconds, count
