@@ -215,6 +215,7 @@ local TABS = {
 	{ key = "run", label = "This Run", color = { 0.45, 0.60, 1.00 } },
 	{ key = "crits", label = "Biggest Crits", color = { 1.00, 0.76, 0.10 } },
 	{ key = "counters", label = "Counters", color = { 0.40, 0.92, 0.70 } },
+	{ key = "summons", label = "Summons", color = { 0.62, 0.42, 0.95 } },
 	{ group = "Character" },
 	{ key = "build", label = "Build list", color = { 0.45, 0.85, 1.00 } },
 	{ key = "character", label = "Character pane", color = { 1.00, 0.50, 0.70 } },
@@ -1135,6 +1136,8 @@ local MODULES = {
 			"A priest's: three fonts of light under your frame, one for each well standing, the newest at the left, its beam of light as high as its time left, fading through its last seconds; a new one comes with a flash. Dim, filling, while the next one waits. Moved with the class gems." },
 		{ "Bloodrage", FeatureOn("bloodrage"), FeatureToggle("bloodrage", true),
 			"A warrior's: five iron chevrons under your frame, a fifth of your rage each, filling as the game counts it; near the top the full ones beat, and they blaze white as Bloodrage is set off. While on, your frame shows no rage bar of its own. Moved with the class gems." },
+		{ "Summons", FeatureOn("summons"), FeatureToggle("summons", true),
+			"Your summons over your frame: a buff-sized icon for each kind out (a hunter's beast, Treants, Spirit Wolves, a Water Elemental, each demon), how many of it are out and the longest time one has left; hover one for each of them. From the game's 0.110. Moved on its own: move mode, Summons." },
 	} },
 	{ "Character", {
 		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
@@ -1850,6 +1853,17 @@ Check(page, "Shouts", OnUnlessOff("shoutCounter"), Flip("shoutCounter"), "Demora
 Subheader(page, "Look")
 Slider(page, "Size", 0.5, 2, 0.05, function() return tonumber(DB().counterSize) or 1 end,
 	function(value) DB().counterSize = math.floor(value * 100 + 0.5) / 100 end)
+
+------------------------------------------------------------------------------
+-- Summons (Summons.lua): your summons over the player frame.
+
+page = pages.summons
+Header(page, "Summons", "Your summons over your frame, from the game's 0.110: a buff-sized icon for each kind out, how many against the game's limit in the corner and the longest time one has left in the middle. The Legion Gate's lesser demons are one icon; hover any icon for each one's time.")
+PanelHead(page, FeatureOn("summons"), FeatureToggle("summons", true), nil, "Summons", nil, nil, { font = false })
+Subheader(page, "What shows")
+Check(page, "Track permanent pets", OnlyIfOn("summonsPermanent"),
+	function() DB().summonsPermanent = DB().summonsPermanent ~= true end,
+	"the ones that stay the whole run too: the Imp, your companion demon, a hunter's beast, Treants, Spirit Wolves, a Water Elemental. Off (the default), only the ones that come and go.")
 
 ------------------------------------------------------------------------------
 -- Build list (BuildList.lua).

@@ -209,6 +209,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.22, 2026-10-22
+
+**Your summons, at a glance.** The game's 0.110 tells addons about every summon out, and Survivor UI now shows them over your frame: how many of each kind against the game's limit, and how long the longest-lived one has left.
+
+**Survivor UI**
+- **Summons** (new, Modules → Combat): your summons over your frame, from the game's 0.110, a buff-sized icon each. One that stays the whole run (the Imp, your companion demon, a hunter's beast, Treants, Spirit Wolves, a Water Elemental) shows its icon alone, and only with "Track permanent pets" on. A kind that comes and goes shows how many are out against the game's limit in the corner (an Infernal or a Doomguard 1/1, a Felguard or a Pit Lord 2/2) and the longest time one of them has left in the middle. The Legion Gate's lesser demons are one icon, the talent's own, "out/12"; hover it for each kind, and any icon for each one's time left. It sits over the buffs by default and goes with the player frame; move mode places it on its own ("Summons"). Its tab (Options → Summons) has "Track permanent pets", off by default: on, the ones that stay the whole run show too.
+- The game's words for its 0.110 (the demons, the moved talents, the new achievements and looks) in every language.
+
 ### v3.0.21, 2026-10-21
 
 **What matters about each spell, at a glance.** The Build list's third column, once Range, is now **Info**: for each spell the one number that matters most besides its cooldown, and a symbol of its own beside it, in a column of its own, so you can tell at a glance what the number is. Tuned by hand, one class at a time: every class played and every spell's tooltip read, to give each spell its row. New art of our own: **restart the game once** after updating.
