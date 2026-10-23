@@ -209,6 +209,12 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.26, 2026-10-23
+
+**Survivor UI**
+- **The options window readable at any UI Scale, and sized with Whole interface**: it had one size of its own, so at a small game UI Scale (0.64, the lowest) it stood a third smaller and hard to read, and the Whole interface slider left it as it was. It now takes the same share of the screen whatever the game's UI Scale, grows and shrinks with Whole interface (resized once the slider is let go), and never runs past the screen; its minimized bar too. The game has two sizes of its own: its UI Scale (in its Options) sizes every addon; its HUD Scale sizes the game's own HUD only.
+- The window's "Buy me a coffee" button covered the last tab of the list (Nameplates) since the Summons tab came; it sits at the foot of the page now, level with Save & Close.
+
 ### v3.0.25, 2026-10-23
 
 The game's 0.112 moved its folder: the launcher follows it and moves your things there. And the combat numbers back in the middle at any UI scale.

@@ -107,8 +107,38 @@ panel:SetWidth(WIDTH)
 panel:SetHeight(HEIGHT)
 panel:SetFrameStrata("FULLSCREEN_DIALOG")
 panel:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
--- A fifth smaller than its layout; the type a point larger to make up for it.
+-- A fifth smaller than its layout (the type a point larger to make up for
+-- it), at a UI Scale of 1; FitWindow sets it as the window opens.
 panel:SetScale(0.8)
+
+-- The window's size: the same share of the screen's height whatever the
+-- game's UI Scale (the screen counts more of UIParent's units as the scale
+-- shrinks: at 0.64 the window stood a third smaller and hard to read,
+-- 2026-10-23), times the Whole interface size (0.9, its default, gives the
+-- size it always had at a UI Scale of 1), never past the screen's height.
+local WINDOW_SHARE = HEIGHT * 0.8 / 768
+
+local function WindowScale()
+	local whole = SurvivorUI_GetScale and SurvivorUI_GetScale() or 0.9
+	local share = math.max(0.55, math.min(0.95, WINDOW_SHARE * whole / 0.9))
+	return GetScreenHeight() * share / HEIGHT
+end
+
+-- A frame of the options to that size, its middle kept where it was.
+local function FitWindow(frame)
+	local scale = WindowScale()
+	if math.abs((frame:GetScale() or 1) - scale) < 0.005 then
+		return
+	end
+	local x, y = frame:GetCenter()
+	local before = frame:GetEffectiveScale()
+	frame:SetScale(scale)
+	if x and y then
+		local after = frame:GetEffectiveScale()
+		frame:ClearAllPoints()
+		frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x * before / after, y * before / after)
+	end
+end
 panel:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
 panel:SetBackdropColor(0.05, 0.05, 0.07, 0.97)
 panel:SetBackdropBorderColor(0, 0, 0, 1)
@@ -767,6 +797,8 @@ local function Slider(page, label, low, high, step, get, set, format)
 	slider:SetMinMaxValues(low, high)
 	slider:SetValueStep(step)
 	slider:EnableMouseWheel(true)
+	slider:SetScript("OnMouseDown", function() panel.sliding = true end)
+	slider:SetScript("OnMouseUp", function() panel.sliding = nil end)
 
 	slider.track = Fill(slider, "BACKGROUND", 0.14, 0.14, 0.18, 1)
 	slider.track:SetHeight(4)
@@ -977,8 +1009,13 @@ Choice(page, {
 Subheader(page, "Size")
 Slider(page, "Whole interface", 0.6, 1.4, 0.05,
 	function() return SurvivorUI_GetScale and SurvivorUI_GetScale() or 1 end,
-	function(value) if SurvivorUI_SetScale then SurvivorUI_SetScale(value, true) end end)
-Note(page, "Each part also has a size of its own, on top of this one, in its own tab.")
+	function(value)
+		if SurvivorUI_SetScale then
+			SurvivorUI_SetScale(value, true)
+		end
+		panel.refitAt = GetTime() + 0.4
+	end)
+Note(page, "Each part also has a size of its own, on top of this one, in its own tab. This window grows and shrinks with it too, and keeps its size on screen whatever the game's UI Scale (the game's own, in its Options; its HUD Scale sizes the game's HUD only).")
 
 ------------------------------------------------------------------------------
 -- Modules: each part of SurvivorUI on or off as a whole. Off, it does not
@@ -2534,6 +2571,7 @@ function Minimize()
 	minimizing = true
 	panel:Hide()
 	minimizing = nil
+	mini:SetScale(panel:GetScale())
 	mini:ClearAllPoints()
 	if right and top then
 		mini:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", right, top)
@@ -2678,12 +2716,25 @@ local SUPPORT_SCALE = 0.7
 local coffee = WarmButton(108, function() ShowLink("Buy me a coffee :)", KOFI) end,
 	"If you want to support this love project, feel free.")
 coffee:SetScale(SUPPORT_SCALE)
-coffee:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12 / SUPPORT_SCALE, 66 / SUPPORT_SCALE)
+-- At the page's foot, level with Save & Close: over the credit it covered
+-- the sidebar's last tab once the list grew (Summons, v3.0.22).
+coffee:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", (SIDEBAR + 18) / SUPPORT_SCALE, 20 / SUPPORT_SCALE)
 coffee.text = Text(coffee, 9, WARM)
 coffee.text:SetPoint("CENTER", coffee, "CENTER", 0, 0)
 coffee.text:SetText("Buy me a coffee :)")
 
 ------------------------------------------------------------------------------
+
+-- The Whole interface slider moved and let go: the window to its new size.
+local refitter = CreateFrame("Frame")
+refitter:SetScript("OnUpdate", function()
+	if panel.refitAt and GetTime() >= panel.refitAt and not panel.sliding then
+		panel.refitAt = nil
+		if panel:IsShown() then
+			FitWindow(panel)
+		end
+	end
+end)
 
 -- The game keeps the place it was dragged to, per character, and a change of
 -- size since can leave it past the screen's edge: then it opens in the
@@ -2704,6 +2755,8 @@ local function OnScreen()
 end
 
 panel:SetScript("OnShow", function()
+	this.sliding = nil
+	FitWindow(this)
 	if not OnScreen() then
 		SurvivorUI_ResetOptionsPlace()
 	end
