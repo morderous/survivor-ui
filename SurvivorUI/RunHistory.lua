@@ -8,7 +8,8 @@
 -- the run's numbers, the build with its ranks and the jewelry worn, the damage
 -- by source, the biggest crits and the loot; with the hero (name, race,
 -- class), the map and its modifiers, and the talent experience the game gives
--- for the run (read off its chat line). The last ten, for the account, newest
+-- for the run (read off its chat line); a co-op run's party too (the game's
+-- 0.113), each hero with their damage. The last ten, for the account, newest
 -- first.
 --
 -- Won, a run can go on in endless mode: the same run, then, with two moments,
@@ -230,6 +231,8 @@ local function Snapshot(phase)
 		end
 	end
 	record.tracker = SurvivorUI_TrackerSnapshot and SurvivorUI_TrackerSnapshot() or nil
+	-- A co-op run: the party, each hero's damage as the game's party meter had it (Party.lua).
+	record.party = SurvivorUI_PartySnapshot and SurvivorUI_PartySnapshot() or nil
 	-- Fallen: what struck last, the last hits, the damage taken by kind (RunPanel.lua).
 	if phase == "dead" and SurvivorUI_DeathRecap then
 		record.death = SurvivorUI_DeathRecap()
@@ -349,6 +352,16 @@ local function Same(a, b)
 	return a and b and a.time == b.time and a.kills == b.kills
 end
 
+-- The run kept last, kept again a moment later: its clock went on as long as
+-- the computer's did between the two (a new run's starts again from 0).
+local function SameRun(last, record)
+	if not (last and not last.endless and last.zone == record.zone and last.hero == record.hero) then
+		return false
+	end
+	local apart = Num(record.at) - Num(last.at)
+	return apart >= 0 and apart < 120 and math.abs((Num(record.time) - Num(last.time)) - apart) <= 3
+end
+
 local function Keep(record)
 	local history = History()
 	local last = history[1]
@@ -357,6 +370,13 @@ local function Keep(record)
 		return
 	end
 	TalentFor(record)
+	-- The same run a moment ago (an end message the game sends again and
+	-- again): this moment in its place, not one run more.
+	if SameRun(last, record) then
+		record.pinned = last.pinned
+		history[1] = record
+		return
+	end
 	table.insert(history, 1, record)
 	Trim()
 end
@@ -388,6 +408,10 @@ local captured
 local endlessWait = 0
 local lastKept                  -- the moment just kept by the watcher, the game's numbers awaited
 local summaryAt                 -- the game's last end settled (its AZS_END_UPDATED)
+-- A co-op hero down (the game's 0.113): the game sends its end message every
+-- 0.2 s while down, the run going on (a run kept each time, 2026-10-23). The
+-- last one held here until the hero is up again (dropped) or the run is over.
+local heldEnd
 local settledAt                 -- when (GetTime) it was
 
 local END_RESULTS = { defeat = "dead", victory = "victory", left = "left" }
@@ -448,12 +472,28 @@ watcher:SetScript("OnUpdate", function()
 	-- The game's end, come since the last look (0.102 on).
 	if AZS_GetRunSummary and AZS_END_UPDATED and AZS_END_UPDATED ~= summaryAt then
 		summaryAt = AZS_END_UPDATED
-		local summary = AZS_GetRunSummary()
-		if summary then
-			Settle(summary)
+		heldEnd = AZS_GetRunSummary()
+	end
+	if heldEnd then
+		local party = SurvivorUI_InParty and SurvivorUI_InParty()
+		local inRun = phase ~= nil and phase ~= "ready"
+		if party and inRun and SurvivorUI_IsDown() then
+			-- Down in a party, the run on: not the end yet.
+		elseif party and (phase == "playing" or phase == "choosing" or phase == "paused") then
+			-- Brought back: the run goes on.
+			heldEnd = nil
+		else
+			Settle(heldEnd)
+			heldEnd = nil
 			captured = true
 			settledAt = GetTime()
 		end
+	end
+	-- In a co-op party (the game's 0.113) a hero down is not the run's end,
+	-- though the phase says dead while down: only the game's end message,
+	-- once the hero is no longer down (heldEnd, above), says the run is over.
+	if phase == "dead" and SurvivorUI_InParty and SurvivorUI_InParty() then
+		return
 	end
 	if phase == "dead" or phase == "victory" then
 		if not captured then
@@ -969,6 +1009,7 @@ function pick.Line(run)
 	end
 	return pick.Hex(ending[2])..ending[1]..",|r "..pick.Hex({ r, g, b })..(run.class or "?").." "..Num(final.level).."|r"
 		.." |cff9a9aa2-|r "..pick.Hex({ 0.40, 1.00, 0.42 })..pick.Short(run.zone).."|r"
+		..(run.party and ("  |cff8fc3ffParty "..table.getn(run.party).."|r") or "")
 end
 
 pick.arrow = CreateFrame("Button", nil, window)
@@ -1358,6 +1399,61 @@ local nameText = Font(window, 17, WHITE)
 nameText:SetPoint("TOPLEFT", classIcon, "TOPRIGHT", 10, 1)
 local heroText = Font(window, 11, WHITE)
 heroText:SetPoint("TOPLEFT", classIcon, "TOPRIGHT", 10, -20)
+
+-- A co-op run's party (the game's 0.113, Party.lua): after the hero's line,
+-- "Party of 3: Bleedin, Faye", each in the class's color; hover for each
+-- hero's damage as the run ended. Nothing for a run alone.
+local party = { text = Font(window, 11, MUTED) }
+party.text:SetPoint("LEFT", heroText, "RIGHT", 0, 0)
+party.tip = CreateFrame("Frame", nil, window)
+party.tip:SetAllPoints(party.text)
+party.tip:EnableMouse(true)
+
+function party.Color(member)
+	if SurvivorUI_ClassColor and member.class and member.class ~= "" then
+		return SurvivorUI_ClassColor(member.class)
+	end
+	return 0.9, 0.9, 0.9
+end
+
+function party.Draw(run)
+	party.run = run
+	local members = run and run.party
+	if not (members and table.getn(members) > 1) then
+		party.text:SetText("")
+		party.tip:Hide()
+		return
+	end
+	local names = {}
+	for _, member in pairs(members) do
+		if not member.me then
+			local r, g, b = party.Color(member)
+			table.insert(names, pick.Hex({ r, g, b })..(member.name or "?").."|r")
+		end
+	end
+	party.text:SetText("   |cff9a9aa2\194\183|r   |cff8fc3ffParty of "..table.getn(members)..":|r "..table.concat(names, ", "))
+	party.tip:Show()
+end
+
+party.tip:SetScript("OnEnter", function()
+	local members = party.run and party.run.party
+	if not members then
+		return
+	end
+	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT")
+	GameTooltip:SetText("A co-op run, a party of "..table.getn(members), 1, 0.82, 0)
+	for _, member in pairs(members) do
+		local r, g, b = party.Color(member)
+		local right = member.dmg and (Short(member.dmg).."   "..math.floor(Num(member.share) * 100 + 0.5).."%") or ""
+		GameTooltip:AddDoubleLine((member.name or "?")..(member.me and "  (you)" or ""), right, r, g, b, 1, 1, 1)
+		if member.top then
+			GameTooltip:AddLine("    Top spell: "..member.top, 0.65, 0.65, 0.7)
+		end
+	end
+	GameTooltip:AddLine("Each hero's damage as the game's party meter had it when the run ended.", 0.6, 0.6, 0.65, 1)
+	GameTooltip:Show()
+end)
+party.tip:SetScript("OnLeave", function() GameTooltip:Hide() end)
 local zoneIcon = window:CreateTexture(nil, "ARTWORK")
 zoneIcon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\MapIcon")
 zoneIcon:SetWidth(16)
@@ -3306,6 +3402,7 @@ local function DrawEmpty()
 	for _, text in pairs({ nameText, zoneText, whenText, heroText }) do
 		text:SetText("")
 	end
+	party.Draw(nil)
 	DrawMods(nil)
 	SetBadge(firstBadge, nil)
 	SetBadge(secondBadge, nil)
@@ -3418,6 +3515,7 @@ local function DrawHeader(run, final, moment)
 	-- line's own color (the class's, lighter).
 	heroText:SetText("Lv. "..Num(moment.level).."  "..(run.race or "").." "..(run.class or ""))
 	heroText:SetTextColor(light[1], light[2], light[3])
+	party.Draw(run)
 	DrawMods(run.mods)
 end
 

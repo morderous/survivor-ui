@@ -578,6 +578,11 @@ local PARTS = {
 		places = { { "lootLeft", "lootTop", "TOPLEFT" } } },
 	{ key = "guardians", section = "Run", label = "Guardians", frames = { "SurvivorUIGuardians" },
 		places = { { "guardiansLeft", "guardiansTop", "TOPLEFT" } } },
+	-- A co-op run's (Party.lua): the friends' frames, and the revive bar.
+	{ key = "party", section = "Combat", label = "Party frames", frames = { "SurvivorUIParty" },
+		places = { { "partyLeft", "partyBottom", "BOTTOMLEFT" } } },
+	{ key = "revive", section = "Combat", label = "Revive bar", frames = { "SurvivorUIRevive" },
+		places = { { "reviveX", "reviveTop", "TOP" } } },
 	-- The whole center at once: the bar, the frames and the buffs, each still
 	-- with its own size on top.
 	{ key = "middle", section = "Center bar", label = "Whole center bar", frames = {}, places = {}, members = "middle", default = 0.9 },

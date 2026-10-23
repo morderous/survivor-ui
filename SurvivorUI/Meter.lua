@@ -6,7 +6,9 @@
 -- color of its own, a talent's or amulet's own damage tagged as a proc. Hover a line for its card: its damage, share and damage per second,
 -- and its critical strikes and normal hits from the combat log. The title's
 -- menu switches to the run's healing (AZS_GetHealing) or the last boss fight's damage
--- to bosses (AZS_GetBossMeter), in the same bars.
+-- to bosses (AZS_GetBossMeter), in the same bars; in a co-op run (the game's
+-- 0.113), to the party's damage (AZS_GetPartyMeter), a bar a hero in the
+-- class's color, its top spell on hover.
 --
 -- Reset starts the meter over from that moment and clears the crits; the run
 -- panel keeps the whole run. Its
@@ -171,6 +173,12 @@ local VIEWS = {
 	{ key = "damage", title = "Damage Done", get = function() return AZS_GetMeter end },
 	{ key = "healing", title = "Healing Done", get = function() return AZS_GetHealing end },
 	{ key = "boss", title = "Boss Damage", get = function() return AZS_GetBossMeter end },
+	-- A co-op run's: each hero's damage. Greyed out of a party.
+	{ key = "party", title = "Party Damage", get = function()
+		if AZS_GetPartyMeter and AZS_PARTY and table.getn(AZS_PARTY) > 0 then
+			return AZS_GetPartyMeter
+		end
+	end },
 }
 local view = 1
 
@@ -246,10 +254,13 @@ local function Lit(on)
 	end
 end
 
-local function SetView(index)
+-- passing: shown for now, the choice kept (a view gone for a while).
+local function SetView(index, passing)
 	view = index
 	meter.scrolled = 0
-	Settings().meterView = VIEWS[index].key
+	if not passing then
+		Settings().meterView = VIEWS[index].key
+	end
 	meter.title:SetText(VIEWS[index].title)
 	FitTitle()
 end
@@ -334,6 +345,18 @@ menu:SetScript("OnUpdate", function()
 		end
 	end
 end)
+
+-- A view by its key ("damage", "healing", "boss", "party"), as its row in
+-- the title's menu: true if the game shares it now.
+function SurvivorUI_SetMeterView(key)
+	for index = 1, table.getn(VIEWS) do
+		if VIEWS[index].key == key and VIEWS[index].get() then
+			SetView(index)
+			return true
+		end
+	end
+	return false
+end
 
 titleButton:SetScript("OnEnter", function() Lit(true) end)
 titleButton:SetScript("OnLeave", function() Lit(false) end)
@@ -422,12 +445,14 @@ strip:SetScript("OnEnter", function()
 	local healing = this.view == "healing"
 	local what = healing and "healing" or "damage"
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
-	GameTooltip:SetText(healing and "Healing Done" or (this.view == "boss" and "Boss Damage" or "Damage Done"), 1, 0.82, 0)
+	local titles = { healing = "Healing Done", boss = "Boss Damage", party = "Party Damage" }
+	GameTooltip:SetText(titles[this.view] or "Damage Done", 1, 0.82, 0)
 	if NowOn() then
 		GameTooltip:AddDoubleLine("NOW", "a second over the last "..NOW_WINDOW.." seconds", NOW_UP[1], NOW_UP[2], NOW_UP[3], 0.8, 0.8, 0.8)
 	end
 	GameTooltip:AddDoubleLine(healing and "HPS" or "DPS", "a second on average", GOLD[1], GOLD[2], GOLD[3], 0.8, 0.8, 0.8)
-	GameTooltip:AddDoubleLine("TOTAL", "the "..(this.view == "boss" and "last boss fight's" or "run's").." "..what..(this.view == "damage" and ", since Reset" or ""), 1, 1, 1, 0.8, 0.8, 0.8)
+	local whose = (this.view == "boss" and "last boss fight's") or (this.view == "party" and "party's") or "run's"
+	GameTooltip:AddDoubleLine("TOTAL", "the "..whose.." "..what..(this.view == "damage" and ", since Reset" or ""), 1, 1, 1, 0.8, 0.8, 0.8)
 	if NowOn() then
 		GameTooltip:AddLine("NOW is green while above the average, orange while below.", 0.6, 0.6, 0.65, 1)
 	end
@@ -1037,9 +1062,16 @@ local function Bar(index)
 			GameTooltip:SetOwner(meter, "ANCHOR_NONE")
 			GameTooltip:SetPoint("TOPRIGHT", meter, "TOPLEFT", -4, 0)
 			GameTooltip:SetText(this.line.name, this.color[1], this.color[2], this.color[3])
-			local word = this.view == "healing" and "Healing" or "Damage to bosses"
+			local word = (this.view == "healing" and "Healing") or (this.view == "party" and "Damage") or "Damage to bosses"
 			GameTooltip:AddDoubleLine(word, Short(this.line.dmg), 0.8, 0.8, 0.8, 1, 1, 1)
 			GameTooltip:AddDoubleLine("Share", math.floor(this.line.share * 100 + 0.5).."%", 0.8, 0.8, 0.8, 1, 1, 1)
+			-- A hero of the party: the damage a second, the spell that dealt the most.
+			if this.view == "party" then
+				GameTooltip:AddDoubleLine("Damage per second", Short(this.line.dps), 0.8, 0.8, 0.8, 1, 1, 1)
+				if this.line.top then
+					GameTooltip:AddDoubleLine("Top spell", this.line.top.."  ("..Short(this.line.topdps).." dps)", 0.8, 0.8, 0.8, 1, 0.82, 0)
+				end
+			end
 			GameTooltip:Show()
 		elseif SurvivorUI_CritCardShow then
 			SurvivorUI_CritCardShow(this)
@@ -1104,14 +1136,42 @@ local function DamageLines()
 	return shown, sum, span > 0 and sum / span or 0
 end
 
--- The healing or the boss fight's lines, as the game gives them (Reset is the
--- damage view's).
+-- A party's line: its hero's class color and icon (the character
+-- creation's, cut inside its round edge), its damage a second and top spell.
+local function PartyLine(shown, line)
+	local class = string.upper(tostring(line.class))
+	local r, g, b = 0.6, 0.6, 0.6
+	if SurvivorUI_ClassColor then
+		r, g, b = SurvivorUI_ClassColor(class)
+	end
+	shown.color = { r, g, b }
+	shown.dps, shown.topdps = Num(line.dps), Num(line.topdps)
+	if line.top and line.top ~= "" and line.top ~= 0 then
+		shown.top = English(tostring(line.top))
+	end
+	local art, coords = nil, nil
+	if SurvivorUI_ClassIcon then
+		art, coords = SurvivorUI_ClassIcon(class)
+	end
+	if coords then
+		local cutX, cutY = (coords[2] - coords[1]) * 0.1, (coords[4] - coords[3]) * 0.1
+		shown.art = art
+		shown.coords = { coords[1] + cutX, coords[2] - cutX, coords[3] + cutY, coords[4] - cutY }
+	end
+end
+
+-- The healing, the boss fight's or the party's lines, as the game gives
+-- them (Reset is the damage view's).
 local function OtherLines(get)
 	local lines, total, rate = get()()
 	local shown = {}
 	for index = 1, table.getn(lines or {}) do
 		local line = lines[index]
-		table.insert(shown, { name = line.name or "?", dmg = Num(line.dmg), share = Num(line.share), proc = Num(line.proc) == 1 })
+		local entry = { name = line.name or "?", dmg = Num(line.dmg), share = Num(line.share), proc = Num(line.proc) == 1 }
+		if line.class and line.class ~= "" then
+			PartyLine(entry, line)
+		end
+		table.insert(shown, entry)
 	end
 	return shown, Num(total), Num(rate)
 end
@@ -1149,7 +1209,8 @@ local function Draw()
 	reset:SetAlpha(key == "damage" and 1 or 0)
 	reset:EnableMouse(key == "damage")
 	if table.getn(lines) == 0 then
-		meter.empty:SetText(key == "boss" and "No boss fight yet." or (key == "healing" and "No healing yet." or ""))
+		meter.empty:SetText((key == "boss" and "No boss fight yet.") or (key == "healing" and "No healing yet.")
+			or (key == "party" and "No party damage yet.") or "")
 		meter.empty:Show()
 	else
 		meter.empty:Hide()
@@ -1169,7 +1230,7 @@ local function Draw()
 		local line = lines[index + skip]
 		local name = line.name
 		local proc = line.proc
-		local color = ColorOf(name)
+		local color = line.color or ColorOf(name)
 		local bar = Bar(index)
 
 		bar:ClearAllPoints()
@@ -1188,11 +1249,15 @@ local function Draw()
 		-- A talent's or amulet's own damage says so, as the game's meter does.
 		-- The spell's rank after its name, when asked for (the options, Damage
 		-- meter): "Holy Wrath  12", or XII.
-		local rank = RankOf(name)
-		-- With no icon of its own found, the addon's (the minimap button's), whole.
-		local icon = IconOf(name)
+		local rank = not line.art and RankOf(name)
+		-- With no icon of its own found, the addon's (the minimap button's),
+		-- whole. A party's hero: the class's.
+		local icon = line.art or IconOf(name)
 		bar.icon:SetVertexColor(1, 1, 1)
-		if icon then
+		if line.coords then
+			bar.icon:SetTexture(icon)
+			bar.icon:SetTexCoord(line.coords[1], line.coords[2], line.coords[3], line.coords[4])
+		elseif icon then
 			bar.icon:SetTexture(icon)
 			bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 		else
@@ -1251,16 +1316,28 @@ watcher:SetScript("OnUpdate", function()
 	end
 	elapsed = 0
 	Fit()
-	-- The view chosen last time, once the saved settings are in.
+	-- The view chosen last time, once the saved settings are in and the game
+	-- shares it (Party Damage: in a party).
 	if not viewRestored and SurvivorUIDB then
-		viewRestored = true
+		local known = false
 		for index = 1, table.getn(VIEWS) do
-			if VIEWS[index].key == SurvivorUIDB.meterView and VIEWS[index].get() then
-				SetView(index)
+			if VIEWS[index].key == SurvivorUIDB.meterView then
+				known = true
+				if VIEWS[index].get() then
+					SetView(index)
+					viewRestored = true
+				end
 			end
 		end
+		viewRestored = viewRestored or not known
 	end
 	if Settings().meter and Running() then
+		-- A view gone (the party left): the damage for now, the choice
+		-- kept for when it comes back.
+		if not VIEWS[view].get() then
+			SetView(1, true)
+			viewRestored = false
+		end
 		Draw()
 		if not meter:IsShown() then
 			meter:Show()

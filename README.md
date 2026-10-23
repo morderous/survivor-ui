@@ -101,7 +101,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - Combat text in place of Default: beside the hero, each hit with its source's icon (a weapon for melee and shots) in its damage meter color, the crits on the right, the heals rising over the hero and the hits taken falling under the action bar; each column moves where you want it, and one source's hits close together add up (`1.2k x3`). Where, how far, the look and what shows are all yours to set; or Default, or none at all.
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the Default clock.
 - A run panel on the left, under the loot list: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
-- A damage meter under the build list, in place of Default, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, or the damage to bosses in the last boss fight.
+- A damage meter under the build list, in place of Default, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, the damage to bosses in the last boss fight, or in a co-op run each hero's damage.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health and its debuffs (icons that drain to grey as they run out), at any distance. Click one to target it.
 - A DoT and fear counter over the action bar: over each damage over time spell's button, how many of it are out on the enemies, counted by their ticks; over a fear's (Psychic Scream, Intimidating Shout...), how many enemies it holds now. In the spell's damage meter color.
 - A guardians' list against the run tracker's left side, small and with no background: a line a lair, with a little arrow toward it, the guardian's name, how far it is, and asleep, awake with its health, or slain at its second and back in so many seconds. The arrows turn with the way you face (or point north up). Over it, the achievement "Slay four guardians before 8:00": how many fell before 8:00.
@@ -114,6 +114,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - A Biggest Crits box, on by default (`/sui crits`): every ability's biggest critical strike, in the build list's look.
 - A thin white outline around whatever the mouse is on: a button, a bar, a buff. The nameplates, the chat, the minimap and the run tracker go without.
 - An options panel (`/sui opt`, or the S button by the minimap), in tabs of their own color: every panel on or off, the combat numbers, the nameplates, every look, a size for the whole interface and one for each part, and Move UI, at the top of every tab, that unlocks every piece over a grid they snap to; while a tab is open its own pieces can be dragged, and the window minimizes to a bar of three buttons to set them with the screen free.
+- In the game's co-op runs: a frame for each friend in your party (health in the class's color, down and being brought back), a Party Damage page in the meter, the party named in Run History, and, if you want it, a bar while you are down or bring a friend back.
 - A Jewelry Collection (its button on the character pane, or `/sui collection`): every amulet, ring and trinket of the game's codex, found or still to find, with the range seen of each bonus and what each gives by rarity; your class's own amulets by spell, in your class's color. One collection for the whole game folder, shared by every character and account on it. Compact, to read at a glance in a fight.
 
 Left click a frame to target it, right click for its menu. Hold Alt to outline every movable piece: the action bar, the player and target frames, the buffs, the kills and gold line, the panels. Drag any of them; each keeps its place. `/sui center` puts the action bar back; the option "Player and target frames move with the action bar" (Frames & bar) joins the two frames to it.
@@ -152,7 +153,7 @@ Commands:
 
 ### Healing and boss damage
 
-Click the meter's title for its menu: **Damage Done** (the run's damage, with each ability's crits on mouseover), **Healing Done** (the run's healing, overhealing left out) or **Boss Damage** (the damage dealt to bosses in the last boss fight). The meter keeps the view you chose.
+Click the meter's title for its menu: **Damage Done** (the run's damage, with each ability's crits on mouseover), **Healing Done** (the run's healing, overhealing left out), **Boss Damage** (the damage dealt to bosses in the last boss fight) or, in a co-op run, **Party Damage** (each hero's damage, in the class's color). The meter keeps the view you chose.
 
 ### Font
 
@@ -208,6 +209,18 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.28, 2026-10-23
+
+Ready for the game's co-op runs (its 0.113): your party in Survivor UI's look.
+
+**Survivor UI**
+- **Party frames**: in a co-op run, a frame for each friend, left of your own, the first at the bottom and each next one over it: their class icon, their health in the class's color with what is left of it, the host's crown. A friend down shows DOWN in red; while you bring them back, a gold fill and "Reviving 45%"; the friend bringing you back says "Reviving you". Hover one for their damage this run, their damage per second and their top spell; click to target. The game's party frames at the top left are put away while these are on. Moved on their own (move mode, Party frames), sized in the new Party tab.
+- **Revive bar**, off by default: while you are down, how far a friend has brought you back and who ("Bleedin is bringing you back 45%"); while you bring a friend back, how far. Under the hero, over the game's own. Moved on its own (move mode, Revive bar). The game shows a slim revive bar of its own, and an addon can neither hide nor move it: the game's addon API has no setting for it yet, as it has for its clock or its meter. Until an update of the API brings one, two bars would show, so ours waits in the Party tab for whoever wants it; once the game's can be put away, ours takes its place.
+- **Party Damage in the damage meter**: the title's menu has a page for the party's damage, a bar a hero in the class's color with the class's icon; hover one for their damage per second and top spell. Greyed out of a party; chosen once, it comes back by itself in the next co-op run.
+- **Run History names the party**: a co-op run keeps its party, "Party of 2: Bleedin" after the hero's line; hover it for each hero's damage and top spell as the run ended. The list of runs marks them "Party 2".
+- **Down is not the end**: while you are down in a party the game says the run is lost every fraction of a second, though a friend can still bring you back. Run History waits for the real end now, and keeps the run once. The run tracker and your frame say Down, not Fallen or Dead.
+- A new **Party** tab in the options (Combat), and Party frames and Revive bar in Modules, each on or off.
 
 ### v3.0.27, 2026-10-23
 

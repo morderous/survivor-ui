@@ -622,6 +622,9 @@ local function Draw(game, phase)
 	local parts = {}
 	if phase == "victory" then
 		table.insert(parts, "|cff4dd94dVictory|r")
+	elseif SurvivorUI_IsDown and SurvivorUI_IsDown() then
+		-- A co-op hero down: the run goes on while a friend brings them back.
+		table.insert(parts, "|cffff4040Down|r")
 	elseif phase == "dead" then
 		table.insert(parts, "|cffff4040Fallen|r")
 	elseif phase == "paused" then

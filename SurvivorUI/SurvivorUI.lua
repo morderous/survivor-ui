@@ -865,7 +865,8 @@ local function UpdateUnitFrame(frame)
 	end
 
 	if UnitIsDead(unit) or UnitIsGhost(unit) then
-		frame.value:SetText("Dead")
+		-- Down in a co-op run (the game's 0.113): a friend can bring you back.
+		frame.value:SetText((unit == "player" and SurvivorUI_IsDown and SurvivorUI_IsDown()) and "Down" or "Dead")
 	else
 		frame.value:SetText(SurvivorUI_HealthText(hp, hpm, style))
 	end

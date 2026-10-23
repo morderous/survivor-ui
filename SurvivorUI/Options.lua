@@ -246,6 +246,7 @@ local TABS = {
 	{ key = "crits", label = "Biggest Crits", color = { 1.00, 0.76, 0.10 } },
 	{ key = "counters", label = "Counters", color = { 0.40, 0.92, 0.70 } },
 	{ key = "summons", label = "Summons", color = { 0.62, 0.42, 0.95 } },
+	{ key = "party", label = "Party", color = { 0.45, 0.78, 1.00 } },
 	{ group = "Character" },
 	{ key = "build", label = "Build list", color = { 0.45, 0.85, 1.00 } },
 	{ key = "character", label = "Character pane", color = { 1.00, 0.50, 0.70 } },
@@ -295,6 +296,7 @@ local TAB_PIECES = {
 	loot = { "Loot list" },
 	combat = { "Damage numbers", "Crit numbers", "Damage taken", "Healing", "New best crit" },
 	meter = { "Damage meter" },
+	party = { "Party frames", "Revive bar" },
 	run = { "This Run" },
 	crits = { "Biggest Crits" },
 	build = { "Build list" },
@@ -1238,6 +1240,10 @@ local MODULES = {
 			"A warrior's: five iron chevrons under your frame, a fifth of your rage each, filling as the game counts it; near the top the full ones beat, and they blaze white as Bloodrage is set off. While on, your frame shows no rage bar of its own. Moved with the class gems." },
 		{ "Summons", FeatureOn("summons"), FeatureToggle("summons", true),
 			"Your summons over your frame: a buff-sized icon for each kind out (a hunter's beast, Treants, Spirit Wolves, a Water Elemental, each demon), how many of it are out and the longest time one has left; hover one for each of them. From the game's 0.110. Moved on its own: move mode, Summons." },
+		{ "Party frames", FeatureOn("partyFrames"), FeatureToggle("partyFrames", true),
+			"In a co-op run, a frame for each friend: the health in the class's color, DOWN while down, a gold fill while you bring them back; hover one for their damage. It puts the game's party frames away. From the game's 0.113. Moved on its own: move mode, Party frames." },
+		{ "Revive bar", OnlyIfOn("reviveBar"), function() DB().reviveBar = DB().reviveBar ~= true end,
+			"In a co-op run, a bar while you are down (how far a friend has brought you back, and who) or while you bring a friend back. Off by default: the game shows a slim one of its own while a friend is brought back. From the game's 0.113. Moved on its own: move mode, Revive bar." },
 	} },
 	{ "Character", {
 		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
@@ -1972,6 +1978,17 @@ Subheader(page, "What shows")
 Check(page, "Track permanent pets", OnlyIfOn("summonsPermanent"),
 	function() DB().summonsPermanent = DB().summonsPermanent ~= true end,
 	"the ones that stay the whole run too: the Imp, your companion demon, a hunter's beast, Treants, Spirit Wolves, a Water Elemental. Off (the default), only the ones that come and go.")
+
+------------------------------------------------------------------------------
+-- Party (Party.lua): a co-op run's party frames and revive bar.
+
+page = pages.party
+Header(page, "Party", "For co-op runs, from the game's 0.113: a frame for each friend in your party, and, if you want it, a bar while you are down or bring a friend back. The damage meter's title opens a Party Damage page too, and Run History names the party of a run played in one. Out of a party nothing shows; while this tab is open, a sample does.")
+PanelHead(page, FeatureOn("partyFrames"), FeatureToggle("partyFrames", true), "party", "Party frames", nil, nil, { font = false })
+Note(page, "Left of your frame, the first friend at the bottom and each next one over it. Each friend's class icon, their health in the class's color and what is left of it; DOWN in red while down, a gold fill while you bring them back, Reviving you on the one bringing you back. Hover one for their damage this run and their top spell; click to target. The game's party frames are put away while these are on.")
+Subheader(page, "Revive bar")
+Check(page, "Revive bar", OnlyIfOn("reviveBar"), function() DB().reviveBar = DB().reviveBar ~= true end,
+	"while you are down: how far a friend has brought you back, and who; while you bring one back: how far. Off by default: the game shows a slim bar of its own while a friend is brought back, and it cannot be put away. Moved on its own: move mode, Revive bar.")
 
 ------------------------------------------------------------------------------
 -- Build list (BuildList.lua).
