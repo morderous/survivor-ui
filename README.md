@@ -209,6 +209,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.27, 2026-10-23
+
+**Survivor UI**
+- **The racial's icon on a spell in the damage meter**: since v3.0.23 a spell learned in the run could take the racial's icon in the meter for the whole run (Eviscerate with Perception's, Searing Pain with a gnome's, Chain Lightning with an orc's). The buttons' reading was kept by place in the game's spell list, and a new spell moves the racial, always last, one place down: for an instant the new spell got the racial's button, and the meter kept the icon it read then. The reading is kept by spell now, and the meter reads a spell's icon off its button every time.
+
 ### Survivor UI Launcher 1.4.4, 2026-10-23
 
 - **Ready for the game's 0.112.5**: from it the game keeps your AddOns, settings and options in a `benilla-config` folder beside its exe (for the usual install, `C:\Git\wenilla\benilla-config\benilla-config`), and the first time it starts it brings everything along from the older folders. The launcher installs there from 0.112.5 on (read in the game itself, as before), keeps the build's folder for 0.112.0 to 0.112.4, and the old one before them.

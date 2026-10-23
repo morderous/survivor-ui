@@ -716,11 +716,16 @@ local function IconOf(name)
 	if pet then
 		return IconOf(spell) or "Interface\\Icons\\"..PETS[pet]
 	end
+	-- A spell of the build: its button's icon, read each time (cheap), never
+	-- kept: a reading in a wrong instant would stay the whole run.
+	local index = SpellIndex(name)
+	local texture = index and GetActionTexture and GetActionTexture(SurvivorUI_SpellSlot(index))
+	if texture then
+		return texture
+	end
 	if icons[name] then
 		return icons[name]
 	end
-	local index = SpellIndex(name)
-	local texture = index and GetActionTexture and GetActionTexture(SurvivorUI_SpellSlot(index))
 	if not texture then
 		if missedAt[name] and GetTime() - missedAt[name] < 10 then
 			return nil
@@ -814,8 +819,11 @@ end
 -- (ACTIONBAR_SLOT_CHANGED) or the list changes size, never in the instant a
 -- card is taken (the game hung once, v3.0.17, with a tooltip read right at
 -- the choice), and every few seconds besides. A spell on no button keeps its
--- place in the list as its button.
-local slotOf = {}               -- [index in AZS_SPELLS] = action button
+-- place in the list as its button. Kept by the spell's key, not its place in
+-- the list: a new spell moves the racial (always last) one place down, and a
+-- map by place gave the new spell the racial's button until the next reading
+-- (Eviscerate with Perception's icon in the meter, 2026-10-23).
+local slotOf = {}               -- [spell's key] = action button
 local slotsRead                 -- GetTime() of the last reading, nil to read again
 local slotsCount                -- the list's size then
 local slotsDue                  -- GetTime() from which to read again, after a change
@@ -857,14 +865,18 @@ local function ReadSlots()
 	-- spell and some other button's names this one.
 	local count = slotsCount
 	for index = 1, count do
+		local entry = AZS_SPELLS[index]
+		local key = entry and (entry.key or entry[1])
 		local own = (index == count) and 12 or index
-		if at[own] == index then
-			slotOf[index] = own
-		elseif at[own] ~= nil then
-			for slot = 1, 120 do
-				if at[slot] == index then
-					slotOf[index] = slot
-					break
+		if key then
+			if at[own] == index then
+				slotOf[key] = own
+			elseif at[own] ~= nil then
+				for slot = 1, 120 do
+					if at[slot] == index then
+						slotOf[key] = slot
+						break
+					end
 				end
 			end
 		end
@@ -888,7 +900,9 @@ function SurvivorUI_SpellSlot(index)
 	if not slotsRead or (slotsDue and now >= slotsDue) or now - slotsRead > 5 then
 		ReadSlots()
 	end
-	return slotOf[index] or (index == count and 12 or index)
+	local entry = AZS_SPELLS and AZS_SPELLS[index]
+	local key = entry and (entry.key or entry[1])
+	return (key and slotOf[key]) or (index == count and 12 or index)
 end
 
 function SurvivorUI_SpellButton(name)
