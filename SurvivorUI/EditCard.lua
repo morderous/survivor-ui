@@ -263,7 +263,7 @@ local function Center(handle)
 	if not x then
 		return nil
 	end
-	return x - UIParent:GetWidth() / 2, y - UIParent:GetHeight() / 2
+	return x - GetScreenWidth() / 2, y - GetScreenHeight() / 2
 end
 
 local function MoveBy(handle, dx, dy)
@@ -766,7 +766,7 @@ end
 local function Place()
 	card:ClearAllPoints()
 	local right = selected:GetRight()
-	if right and right + WIDTH + 12 < UIParent:GetWidth() then
+	if right and right + WIDTH + 12 < GetScreenWidth() then
 		card:SetPoint("TOPLEFT", selected, "TOPRIGHT", 10, 0)
 	else
 		card:SetPoint("TOPRIGHT", selected, "TOPLEFT", -10, 0)

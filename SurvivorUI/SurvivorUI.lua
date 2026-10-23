@@ -2290,8 +2290,11 @@ local COLUMN_PIECES = {
 local COLUMN_ORDER = { "dealt", "crit", "taken", "heal" }
 local columnFrames, columnHandles = {}, {}
 
+-- The screen's middle in UIParent's units: GetScreenWidth, not
+-- UIParent:GetWidth(), which does not take the UI scale in (at the game's
+-- default 0.9 the columns stood off center, 2026-10-23).
 local function ColumnDefault(kind)
-	local x, y = UIParent:GetWidth() / 2, UIParent:GetHeight() / 2
+	local x, y = GetScreenWidth() / 2, GetScreenHeight() / 2
 	if kind == "taken" and CT().ctLayout ~= "sides" then
 		-- Over the enemies: from the hero's feet down, ending short of the
 		-- bar row (150 below).
@@ -2555,8 +2558,8 @@ local function SpawnDamage(target, amount, crit, periodic, source)
 	if not x then
 		local angle = math.random() * 6.2832
 		local reach = 90 + math.random() * 70
-		x = UIParent:GetWidth() / 2 + math.cos(angle) * reach
-		y = UIParent:GetHeight() / 2 + 30 + math.sin(angle) * reach * 0.6
+		x = GetScreenWidth() / 2 + math.cos(angle) * reach
+		y = GetScreenHeight() / 2 + 30 + math.sin(angle) * reach * 0.6
 	end
 
 	if not target then
@@ -2722,7 +2725,7 @@ local function PlaceRecord()
 	-- on its left when there is no room on the right.
 	local crits = getglobal("SurvivorUICrits")
 	local right = crits and crits:GetRight()
-	if right and right + recordShown:GetWidth() < UIParent:GetWidth() then
+	if right and right + recordShown:GetWidth() < GetScreenWidth() then
 		recordShown:SetPoint("TOPLEFT", crits, "TOPRIGHT", 8, -12)
 	elseif right then
 		recordShown:SetPoint("TOPRIGHT", crits, "TOPLEFT", -8, -12)

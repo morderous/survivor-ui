@@ -209,6 +209,21 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.25, 2026-10-23
+
+The game's 0.112 moved its folder: the launcher follows it and moves your things there. And the combat numbers back in the middle at any UI scale.
+
+**Survivor UI**
+- **The combat numbers in the middle at any UI scale**: their columns (Damage numbers, Crit numbers, Healing, Damage taken) took the screen's middle from `UIParent:GetWidth()`, which leaves the UI scale out, so at a scale other than 1 they stood off center, down and to the left (the game's default is 0.9: a fresh game folder, as 0.112's, has it). The screen's size is now read with the scale in, everywhere: the columns, the numbers around the hero, the new best crit's side, Move UI's grid (it reaches the edges now), the piece cards and the options window's check that it is on screen. Columns you moved keep their place.
+
+**Survivor UI Launcher 1.4.3**
+
+- **The game's own folder, wherever it moved**: the game keeps its AddOns, saved settings and options in the folder its exe was built from, a path the exe carries, and the game's 0.112 build was made from another folder on Aethus' PC, so it moved them for every player to `C:\Git\wenilla\.claude\worktrees\release-gaze\benilla-config` (the launcher kept installing in the old one, and the settings looked gone). The launcher now reads that folder in the game's exe, as the game does, and installs the addons there, whatever folder the next build names.
+- **Check folder and move if necessary**: a button of its own under the AddOns folder, steel blue; green while your things are still in an older folder of the game, the status line saying so. Its tooltip tells why: the game keeps your things in a folder its exe names, and if Aethus' build changes it, the launcher makes a backup and moves your data to the new place. A click shows both folders and when each last saved settings, and moves your AddOns, saved settings (the account's and each hero's), key bindings and options into the game's folder: what the game had made there under the same names is kept in `before-move-<time>` there, and the originals in `moved-<time>` where they were. Nothing is deleted; the game itself, its data, logs and pictures stay where they are, and your progress (`%APPDATA%\wenilla-rogue`) is never touched. The game must be closed.
+- **In any order**: an addon the game's folder has already (Survivor UI installed there before the move) is kept as it is, and only the addons it lacks come over. The button turns green while the old folder holds an addon, or an addon's settings, that the game's folder lacks; folders already copied by hand are not flagged again, and a click still checks.
+- "Up to date; so is Survivor UI" no longer said with Survivor UI missing from the game's folder.
+- The game is remembered on its own, apart from the AddOns folder, which no longer sits beside it: Play, the game's version and Update game go by it.
+
 ### v3.0.24, 2026-10-22
 
 **Survivor UI**

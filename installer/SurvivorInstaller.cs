@@ -8,6 +8,13 @@
 //     SurvivorPlates folders and unzips the new ones in their place;
 //   - Play starts the game (the one by the AddOns folder), and the installer
 //     steps into the tray;
+//   - keeps to the game's own folder: the game keeps its AddOns, saved
+//     settings and options where its exe says (Aethus' builds carry the
+//     folder they were built from, and the 0.112 one moved it for everyone),
+//     so the addons go there; "Check folder and move if necessary", under
+//     the folder (green while needed), moves the player's things from an
+//     older folder of the game into it, what was there set aside, nothing
+//     deleted;
 //   - minimized or closed, waits in the tray, asking GitHub again every half
 //     hour (only the tray's Exit quits it): when
 //     a release newer than the one installed is out, a green arrow shows on
@@ -66,7 +73,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Survivor UI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.4.2.0")]
+[assembly: System.Reflection.AssemblyVersion("1.4.3.0")]
 
 namespace SurvivorInstaller
 {
@@ -193,6 +200,14 @@ namespace SurvivorInstaller
         readonly Label upToDate = new Label();
         readonly CheckBox startBox = new CheckBox();
         readonly LinkLabel openLink = new LinkLabel();
+        readonly Button foldersButton = new Button();
+        readonly ToolTip folderTip = new ToolTip();
+        // The folders' button: steel blue, green while a move is needed.
+        static readonly Color FolderFill = Color.FromArgb(22, 48, 66);
+        static readonly Color FolderEdge = Color.FromArgb(72, 140, 182);
+        static readonly Color FolderText = Color.FromArgb(178, 222, 255);
+        static readonly Color MoveFill = Color.FromArgb(28, 112, 50);
+        static readonly Color MoveEdge = Color.FromArgb(96, 222, 120);
         readonly Button betaButton = new Button();
         readonly CheckBox selfBox = new CheckBox();
         readonly Label versionLabel = new Label();
@@ -477,18 +492,32 @@ namespace SurvivorInstaller
             };
             Controls.Add(openLink);
 
+            // Under the game's line, the whole width: which folder the game
+            // keeps its things in, and the player's moved there when they are
+            // in another (NoteFolders paints it, its tooltip says why).
+            foldersButton.Text = "\u21C4  Check folder and move if necessary";
+            foldersButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            foldersButton.FlatStyle = FlatStyle.Flat;
+            foldersButton.Cursor = Cursors.Hand;
+            foldersButton.Location = new Point(20, 186);
+            foldersButton.Size = new Size(520, 26);
+            foldersButton.Click += delegate { CheckFolders(); };
+            folderTip.AutoPopDelay = 30000;
+            folderTip.InitialDelay = 300;
+            Controls.Add(foldersButton);
+
             Label notesLabel = new Label();
             notesLabel.Text = "What's new";
             notesLabel.ForeColor = Muted;
             notesLabel.AutoSize = true;
-            notesLabel.Location = new Point(20, 194);
+            notesLabel.Location = new Point(20, 220);
             Controls.Add(notesLabel);
 
             // The notes in a large window, quietly by "What's new".
             LinkLabel readLink = new LinkLabel();
             readLink.Text = "Read larger";
             readLink.AutoSize = false;
-            readLink.Location = new Point(400, 194);
+            readLink.Location = new Point(400, 220);
             readLink.Size = new Size(140, 18);
             readLink.TextAlign = ContentAlignment.MiddleRight;
             readLink.LinkColor = Gold;
@@ -498,8 +527,8 @@ namespace SurvivorInstaller
             readLink.LinkClicked += delegate { ShowNotesWindow(); };
             Controls.Add(readLink);
 
-            notesBox.Location = new Point(20, 214);
-            notesBox.Size = new Size(520, 168);
+            notesBox.Location = new Point(20, 240);
+            notesBox.Size = new Size(520, 142);
             notesBox.Multiline = true;
             notesBox.ReadOnly = true;
             notesBox.ScrollBars = ScrollBars.Vertical;
@@ -667,6 +696,7 @@ namespace SurvivorInstaller
             else if (GameMissing())
                 Status("The game's data is missing: click \"Get the game\" to fill it in.");
             ShowInstalled();
+            NoteFolders(true);
 
             // Just updated: the old exe, set aside, goes once it has closed.
             if (updated) Status("The launcher is now " + Short(OwnVersion) + ".");
@@ -815,7 +845,7 @@ namespace SurvivorInstaller
 
         void Play()
         {
-            string exe = GameFor(folderBox.Text);
+            string exe = GameExePath();
             if (exe == null)
             {
                 FromTray();
@@ -961,7 +991,7 @@ namespace SurvivorInstaller
             // nor in its usual place.
             bool missing = GameMissing();
             bool behind = !missing && GameBehind();
-            bool playable = !installing && !gettingGame && GameFor(folderBox.Text) != null;
+            bool playable = !installing && !gettingGame && GameExePath() != null;
             playButton.Text = missing ? "\u2193  Get the game" : behind ? "\u2191  Update game" : "\u25B6  Play";
             playButton.Enabled = missing || behind ? !installing && !gettingGame : playable;
             tips.SetToolTip(playButton, missing
@@ -1159,39 +1189,453 @@ namespace SurvivorInstaller
 
         // --- The game's AddOns folder -----------------------------------------
 
-        // The AddOns folder for a game executable: benilla-config\AddOns next to
-        // it, or AddOns next to it when the executable sits in benilla-config.
+        // The AddOns folder for a game executable: the one in the game's own
+        // folder, as its exe has it (BuiltDataFolder); an exe that carries
+        // none, benilla-config\AddOns next to it, or AddOns next to it when the
+        // executable sits in benilla-config.
         static string AddonsFor(string exePath)
         {
+            string built = BuiltDataFolder(exePath);
+            if (built != null) return Path.Combine(built, "AddOns");
             string dir = Path.GetDirectoryName(exePath);
             if (string.Equals(Path.GetFileName(dir), "benilla-config", StringComparison.OrdinalIgnoreCase))
                 return Path.Combine(dir, "AddOns");
             return Path.Combine(dir, "benilla-config", "AddOns");
         }
 
+        // The game wherever it was found before (by its exe, or by the AddOns
+        // folder saved), next to the installer, or in its usual place; its
+        // AddOns folder as the game itself has it. No game: the folder saved.
         static string FindAddonsFolder()
+        {
+            string saved = null;
+            try { if (File.Exists(ConfigPath)) saved = File.ReadAllText(ConfigPath).Trim(); }
+            catch { }
+            string exe = RememberedExe();
+            if (exe == null && !string.IsNullOrEmpty(saved)) exe = GameFor(saved);
+            if (exe == null)
+            {
+                string here = AppDomain.CurrentDomain.BaseDirectory;
+                foreach (string dir in new[] { here, Path.Combine(here, "benilla-config"), Path.GetDirectoryName(here.TrimEnd('\\')) ?? here, CommonGameFolder })
+                {
+                    string candidate = Path.Combine(dir, GameExe);
+                    if (File.Exists(candidate)) { exe = candidate; break; }
+                }
+            }
+            if (exe != null)
+            {
+                RememberExe(exe);
+                return AddonsFor(exe);
+            }
+            return !string.IsNullOrEmpty(saved) && Directory.Exists(saved) ? saved : null;
+        }
+
+        // The game's exe, kept beside the AddOns folder's note: the AddOns
+        // folder no longer says where the game is.
+        static string ExeNotePath
+        {
+            get { return Path.Combine(Path.GetDirectoryName(ConfigPath), "game-exe.txt"); }
+        }
+
+        static string RememberedExe()
         {
             try
             {
-                if (File.Exists(ConfigPath))
+                if (!File.Exists(ExeNotePath)) return null;
+                string exe = File.ReadAllText(ExeNotePath).Trim();
+                return File.Exists(exe) ? exe : null;
+            }
+            catch { return null; }
+        }
+
+        static void RememberExe(string exe)
+        {
+            try { File.WriteAllText(ExeNotePath, exe); } catch { }
+        }
+
+        static bool SameFolder(string a, string b)
+        {
+            try
+            {
+                return string.Equals(Path.GetFullPath(a).TrimEnd('\\'), Path.GetFullPath(b).TrimEnd('\\'),
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        // --- Where the game keeps its things ----------------------------------
+
+        // The game keeps its AddOns, saved settings and options in a folder
+        // named benilla-config. Built as Aethus builds it (the benilla engine's
+        // "dev" build), that folder is in the one the exe was built from, a
+        // path the exe carries ("<folder>\crates\benilla-formats"), wherever
+        // the exe itself sits; a worktree of a checkout found on this PC goes
+        // to the checkout's, as the engine does (local_state.rs, shared_root).
+        // Up to 0.111 that was C:\Git\wenilla\benilla-config, the exe's own
+        // folder; the 0.112 build, made from another folder on his PC, moved it
+        // for every player (2026-10-23). Null when the exe carries no such
+        // path. Read once per exe (its size and time).
+        static readonly Dictionary<string, string> builtFolders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        static string BuiltDataFolder(string exePath)
+        {
+            try
+            {
+                FileInfo info = new FileInfo(exePath);
+                if (!info.Exists) return null;
+                string key = info.FullName + "|" + info.Length + "|" + info.LastWriteTimeUtc.Ticks;
+                lock (builtFolders)
                 {
-                    string saved = File.ReadAllText(ConfigPath).Trim();
-                    if (Directory.Exists(saved)) return saved;
+                    string known;
+                    if (builtFolders.TryGetValue(key, out known)) return known;
+                }
+                string found = ReadBuiltFolder(File.ReadAllBytes(info.FullName));
+                lock (builtFolders) builtFolders[key] = found;
+                return found;
+            }
+            catch { return null; }
+        }
+
+        static string ReadBuiltFolder(byte[] data)
+        {
+            byte[] mark = System.Text.Encoding.ASCII.GetBytes(@"\crates\benilla-formats");
+            for (int at = Find(data, mark, 0); at >= 0; at = Find(data, mark, at + mark.Length))
+            {
+                // Back from the mark over the path's characters, to its drive.
+                int start = at;
+                while (start > 0 && at - start < 400 && data[start - 1] >= 0x20 && data[start - 1] < 0x7F) start--;
+                string text = System.Text.Encoding.ASCII.GetString(data, start, at - start);
+                int drive = text.LastIndexOf(@":\", StringComparison.Ordinal);
+                if (drive < 1 || !char.IsLetter(text[drive - 1])) continue;
+                string root = text.Substring(drive - 1);
+                if (root.IndexOfAny(Path.GetInvalidPathChars()) >= 0) continue;
+                return Path.Combine(SharedRoot(root), "benilla-config");
+            }
+            return null;
+        }
+
+        static int Find(byte[] data, byte[] mark, int from)
+        {
+            if (from >= data.Length) return -1;
+            for (int at = Array.IndexOf(data, mark[0], from); at >= 0 && at <= data.Length - mark.Length;
+                at = at + 1 < data.Length ? Array.IndexOf(data, mark[0], at + 1) : -1)
+            {
+                int k = 1;
+                while (k < mark.Length && data[at + k] == mark[k]) k++;
+                if (k == mark.Length) return at;
+            }
+            return -1;
+        }
+
+        // A linked worktree (its .git a file naming <checkout>\.git\worktrees\
+        // <name>) to its checkout, when that is on this PC; else as it is.
+        static string SharedRoot(string here)
+        {
+            try
+            {
+                string dotGit = Path.Combine(here, ".git");
+                string probe = Path.Combine(here, ".probe-identity");
+                if (File.Exists(dotGit) && !File.Exists(probe) && !Directory.Exists(probe))
+                {
+                    string line = File.ReadAllText(dotGit).Trim();
+                    if (line.StartsWith("gitdir:", StringComparison.Ordinal))
+                    {
+                        string gitdir = line.Substring(7).Trim();
+                        string dotGitDir = Path.GetDirectoryName(Path.GetDirectoryName(gitdir));
+                        string primary = dotGitDir == null ? null : Path.GetDirectoryName(dotGitDir);
+                        if (!string.IsNullOrEmpty(primary) && Directory.Exists(primary)) return primary;
+                    }
                 }
             }
             catch { }
+            return here;
+        }
 
-            // The installer placed next to the game, or in its folders.
-            string here = AppDomain.CurrentDomain.BaseDirectory;
-            foreach (string dir in new[] { here, Path.Combine(here, "benilla-config"), Path.GetDirectoryName(here.TrimEnd('\\')) ?? here })
+        // What a move leaves where it is: the game itself and its data, its
+        // logs and pictures, and the folders a move sets aside.
+        static readonly string[] StayFolders = { "Data", "WoW", "Logs", "Diagnostics", "Screenshots", "cache" };
+        static readonly string[] StayExtensions = { ".exe", ".bak", ".dll", ".pdb", ".dmp", ".mpq", ".zip", ".rar" };
+
+        // The player's things in a folder of the game: its entries but those.
+        static List<string> Movable(string from, string game)
+        {
+            List<string> items = new List<string>();
+            if (!Directory.Exists(from)) return items;
+            string gameFull = Path.GetFullPath(game).TrimEnd('\\') + "\\";
+            foreach (string entry in Directory.GetFileSystemEntries(from))
             {
-                string exe = Path.Combine(dir, GameExe);
-                if (File.Exists(exe)) return AddonsFor(exe);
+                string name = Path.GetFileName(entry);
+                if (name.StartsWith("moved-", StringComparison.OrdinalIgnoreCase)
+                    || name.StartsWith("before-move-", StringComparison.OrdinalIgnoreCase)) continue;
+                if (Directory.Exists(entry))
+                {
+                    if (Array.Exists(StayFolders, delegate (string stay) { return string.Equals(stay, name, StringComparison.OrdinalIgnoreCase); })) continue;
+                    // The game's own folder inside this one stays where it is.
+                    if (gameFull.StartsWith(Path.GetFullPath(entry).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) continue;
+                }
+                else if (Array.IndexOf(StayExtensions, Path.GetExtension(name).ToLowerInvariant()) >= 0) continue;
+                items.Add(name);
             }
-            // The game where it usually is.
-            string usual = Path.Combine(CommonGameFolder, GameExe);
-            if (File.Exists(usual)) return AddonsFor(usual);
-            return null;
+            items.Sort(StringComparer.OrdinalIgnoreCase);
+            return items;
+        }
+
+        // When a folder of the game last saved the player's settings.
+        static DateTime LastSaved(string folder)
+        {
+            DateTime newest = DateTime.MinValue;
+            try
+            {
+                foreach (string file in new[] { Path.Combine(folder, "saved-variables.lua"), Path.Combine(folder, "config.toml") })
+                    if (File.Exists(file) && File.GetLastWriteTime(file) > newest) newest = File.GetLastWriteTime(file);
+                string saved = Path.Combine(folder, "saved");
+                if (Directory.Exists(saved))
+                    foreach (string file in Directory.GetFiles(saved, "*.lua", SearchOption.AllDirectories))
+                        if (File.GetLastWriteTime(file) > newest) newest = File.GetLastWriteTime(file);
+            }
+            catch { }
+            return newest;
+        }
+
+        static string SavedLine(string folder)
+        {
+            DateTime last = LastSaved(folder);
+            return last == DateTime.MinValue ? "(no settings saved there yet)" : "(settings last saved " + last.ToString("yyyy-MM-dd HH:mm") + ")";
+        }
+
+        class FolderPlan
+        {
+            public string Game;                     // the folder the game keeps its things in
+            public string From;                     // another folder of the game still holding the player's, or null
+            public List<string> Items = new List<string>();
+        }
+
+        // Of the candidates, the one holding the player's AddOns or saved
+        // settings that is not the game's folder (the one saved last, of two).
+        static FolderPlan PlanFolders(string game, IEnumerable<string> candidates)
+        {
+            FolderPlan plan = new FolderPlan();
+            plan.Game = game;
+            DateTime best = DateTime.MinValue;
+            foreach (string candidate in candidates)
+            {
+                if (string.IsNullOrEmpty(candidate) || SameFolder(candidate, game) || !Directory.Exists(candidate)) continue;
+                if (!Directory.Exists(Path.Combine(candidate, "AddOns")) && !Directory.Exists(Path.Combine(candidate, "saved"))) continue;
+                List<string> items = Movable(candidate, game);
+                if (items.Count == 0) continue;
+                DateTime stamp = LastSaved(candidate);
+                if (plan.From == null || stamp > best)
+                {
+                    plan.From = candidate;
+                    plan.Items = items;
+                    best = stamp;
+                }
+            }
+            return plan;
+        }
+
+        // The game's folder for the game found, against the folders it used
+        // before: the one beside its exe, the usual one, the AddOns folder
+        // saved and the one in the box.
+        FolderPlan PlanFolders()
+        {
+            string exe = GameExePath();
+            if (exe == null) return null;
+            string game = Path.GetDirectoryName(AddonsFor(exe));
+            string dir = Path.GetDirectoryName(exe);
+            List<string> candidates = new List<string>();
+            candidates.Add(string.Equals(Path.GetFileName(dir), "benilla-config", StringComparison.OrdinalIgnoreCase)
+                ? dir : Path.Combine(dir, "benilla-config"));
+            candidates.Add(CommonGameFolder);
+            try
+            {
+                if (File.Exists(ConfigPath)) candidates.Add(Path.GetDirectoryName(File.ReadAllText(ConfigPath).Trim().TrimEnd('\\')));
+            }
+            catch { }
+            string box = folderBox.Text.Trim().TrimEnd('\\');
+            if (box != "") candidates.Add(Path.GetDirectoryName(box));
+            return PlanFolders(game, candidates);
+        }
+
+        // The player's things from a folder of the game to the one it uses:
+        // each copied over (what the game had made there under the same name
+        // set aside first in before-move-<time> there), then the originals
+        // set aside in moved-<time> where they were. Nothing is deleted. An
+        // addon the game's AddOns folder has already stays as it is: Install
+        // may have put a newer one there before the move.
+        static void MoveState(string from, string game, List<string> items, string stamp)
+        {
+            Directory.CreateDirectory(game);
+            string keep = Path.Combine(game, "before-move-" + stamp);
+            string left = Path.Combine(from, "moved-" + stamp);
+            foreach (string name in items)
+            {
+                string source = Path.Combine(from, name), target = Path.Combine(game, name);
+                if (string.Equals(name, "AddOns", StringComparison.OrdinalIgnoreCase) && Directory.Exists(source) && Directory.Exists(target))
+                {
+                    foreach (string entry in Directory.GetFileSystemEntries(source))
+                    {
+                        string there = Path.Combine(target, Path.GetFileName(entry));
+                        if (Directory.Exists(entry) && Directory.Exists(there)) continue;   // the game's folder has this addon
+                        MergeInto(entry, there, Path.Combine(Path.Combine(keep, name), Path.GetFileName(entry)));
+                    }
+                    continue;
+                }
+                MergeInto(source, target, Path.Combine(keep, name));
+            }
+            Directory.CreateDirectory(left);
+            foreach (string name in items)
+            {
+                string source = Path.Combine(from, name), aside = Path.Combine(left, name);
+                if (Directory.Exists(source)) Directory.Move(source, aside);
+                else if (File.Exists(source)) File.Move(source, aside);
+            }
+        }
+
+        // A file or folder copied onto another: a file already there copied to
+        // keep first; what only the target has stays.
+        static void MergeInto(string source, string target, string keep)
+        {
+            if (File.Exists(source))
+            {
+                if (Directory.Exists(target))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(keep));
+                    Directory.Move(target, keep);
+                }
+                else if (File.Exists(target))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(keep));
+                    File.Copy(target, keep, true);
+                }
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                File.Copy(source, target, true);
+                return;
+            }
+            if (File.Exists(target))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(keep));
+                File.Move(target, keep);
+            }
+            Directory.CreateDirectory(target);
+            foreach (string entry in Directory.GetFileSystemEntries(source))
+            {
+                string name = Path.GetFileName(entry);
+                MergeInto(entry, Path.Combine(target, name), Path.Combine(keep, name));
+            }
+        }
+
+        // Why the button is there, in its tooltip.
+        const string FolderWhy =
+            "The game keeps your AddOns, addon settings, key bindings and options in a folder\n" +
+            "its exe names. If Aethus' build changes that folder (as the game's 0.112 did),\n" +
+            "the game starts from an empty one and your things look gone.\n\n" +
+            "This checks which folder the game uses now. If your data is somewhere else,\n" +
+            "the launcher makes a backup and moves it to the new place. Nothing is deleted.\n" +
+            "Close the game first.";
+
+        // A move worth telling of: the other folder holds an addon, or an
+        // addon's saved settings, that the game's folder lacks. (The game
+        // writes fresh settings in its new folder as it closes, so dates do
+        // not tell: what is missing does.) One copied by hand is not told of
+        // again; a click still checks and offers.
+        static bool MoveNeeded(FolderPlan plan)
+        {
+            if (plan == null || plan.From == null) return false;
+            try
+            {
+                string addons = Path.Combine(plan.From, "AddOns");
+                if (Directory.Exists(addons))
+                    foreach (string addon in Directory.GetDirectories(addons))
+                        if (!Directory.Exists(Path.Combine(Path.Combine(plan.Game, "AddOns"), Path.GetFileName(addon)))) return true;
+                string saved = Path.Combine(plan.From, "saved");
+                if (Directory.Exists(saved))
+                    foreach (string file in Directory.GetFiles(saved, "*.lua"))
+                        if (!File.Exists(Path.Combine(Path.Combine(plan.Game, "saved"), Path.GetFileName(file)))) return true;
+            }
+            catch { }
+            return false;
+        }
+
+        // The folders' button: steel blue, or green while the player's things
+        // wait in another folder of the game; the tooltip says where.
+        void NoteFolders(bool tell)
+        {
+            FolderPlan plan = null;
+            try { plan = PlanFolders(); }
+            catch { }
+            bool waiting = MoveNeeded(plan);
+            foldersButton.BackColor = waiting ? MoveFill : FolderFill;
+            foldersButton.ForeColor = waiting ? Color.White : FolderText;
+            foldersButton.FlatAppearance.BorderColor = waiting ? MoveEdge : FolderEdge;
+            foldersButton.FlatAppearance.MouseOverBackColor = waiting ? Color.FromArgb(40, 140, 66) : Color.FromArgb(32, 66, 90);
+            foldersButton.FlatAppearance.MouseDownBackColor = foldersButton.FlatAppearance.MouseOverBackColor;
+            folderTip.SetToolTip(foldersButton, waiting
+                ? "Your data is in:\n" + plan.From + "\n\nThe game now uses:\n" + plan.Game + "\n\nClick to move it there.\n\n" + FolderWhy
+                : (plan != null ? "The game uses:\n" + plan.Game + "\n\n" : "") + FolderWhy);
+            if (waiting && tell)
+                Status("Your addons and settings are in an older folder of the game: click the green button.");
+        }
+
+        // The link: the game's folder said, the AddOns folder set to it, and
+        // the player's things moved into it from an older one, when asked.
+        void CheckFolders()
+        {
+            if (GameExePath() == null)
+            {
+                Status("Find the game first: \"Find game...\".");
+                return;
+            }
+            FolderPlan plan = PlanFolders();
+            string addons = Path.Combine(plan.Game, "AddOns");
+            if (plan.From == null)
+            {
+                if (!SameFolder(folderBox.Text, addons))
+                {
+                    folderBox.Text = addons;
+                    try { File.WriteAllText(ConfigPath, addons); } catch { }
+                }
+                NoteFolders(false);
+                MessageBox.Show(this, "The game keeps its AddOns, saved settings and options in:\n\n" + plan.Game +
+                    "\n" + SavedLine(plan.Game) + "\n\nNothing of yours is in another folder of the game: nothing to move.",
+                    "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            DialogResult go = MessageBox.Show(this,
+                "The game keeps its AddOns, saved settings and options in:\n\n" + plan.Game + "\n" + SavedLine(plan.Game) +
+                "\n\nYours are in another folder of the game:\n\n" + plan.From + "\n" + SavedLine(plan.From) +
+                "\n\nMove them to the game's folder?\n" + string.Join(", ", plan.Items.ToArray()) +
+                "\n\nNothing is deleted: what the game has in its folder under those names is kept there in before-move-" + stamp +
+                ", and the originals in moved-" + stamp + ", where they are now.",
+                "Survivor UI", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (go != DialogResult.Yes) return;
+            if (GameRunning())
+            {
+                MessageBox.Show(this, "Close the game first: it writes its settings as it closes.",
+                    "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            Cursor = Cursors.WaitCursor;
+            try
+            {
+                MoveState(plan.From, plan.Game, plan.Items, stamp);
+                folderBox.Text = addons;
+                try { File.WriteAllText(ConfigPath, addons); } catch { }
+                Status("Moved to the game's folder: " + string.Join(", ", plan.Items.ToArray()) + ".");
+            }
+            catch (Exception error)
+            {
+                Status("Could not move everything: " + error.Message);
+                MessageBox.Show(this, "Could not move everything: " + error.Message + "\n\nThe originals are still in:\n" + plan.From,
+                    "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+            }
+            NoteFolders(false);
+            ShowInstalled();
         }
 
         void BrowseForGame()
@@ -1213,9 +1657,11 @@ namespace SurvivorInstaller
                         "Survivor UI", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                     if (go != DialogResult.Yes) return;
                 }
+                RememberExe(dialog.FileName);
                 folderBox.Text = AddonsFor(dialog.FileName);
                 try { File.WriteAllText(ConfigPath, folderBox.Text); } catch { }
                 Status("AddOns folder set.");
+                NoteFolders(true);
             }
         }
 
@@ -1340,7 +1786,8 @@ namespace SurvivorInstaller
             // Asked by hand: the answer said, for the launcher and the addons.
             if (byHand && selfRelease == null && !selfUpdating)
                 Status("The launcher " + Short(OwnVersion) + " is up to date; " +
-                    (updateWaiting ? "Survivor UI " + latest.Tag + " is out." : "so is Survivor UI."));
+                    (InstalledVersion(folderBox.Text) == null ? "Survivor UI is not in the game's AddOns folder yet."
+                    : updateWaiting ? "Survivor UI " + latest.Tag + " is out." : "so is Survivor UI."));
         }
 
         // GitHub's markdown, readable as plain text.
@@ -1585,9 +2032,12 @@ namespace SurvivorInstaller
         }
 
         // The game's exe: by the AddOns folder, or where it usually is.
+        // The game: the one found or picked before, else by the AddOns folder,
+        // else in its usual place. Its AddOns folder may be far from it (the
+        // game's own folder: BuiltDataFolder).
         string GameExePath()
         {
-            string exe = GameFor(folderBox.Text);
+            string exe = RememberedExe() ?? GameFor(folderBox.Text);
             if (exe != null) return exe;
             string usual = Path.Combine(CommonGameFolder, GameExe);
             return File.Exists(usual) ? usual : null;
@@ -2112,6 +2562,7 @@ namespace SurvivorInstaller
                     }
                     done = FetchGameFile(patch, target, done, total, "the game's updates");
                 }
+                RememberExe(Path.Combine(folder, GameExe));
                 string addons = AddonsFor(Path.Combine(folder, GameExe));
                 Directory.CreateDirectory(addons);
                 BeginInvoke(new Action(delegate
@@ -2157,8 +2608,16 @@ namespace SurvivorInstaller
             if (addons == "" || release == null) { Status("Pick the game first."); return; }
             if (!Directory.Exists(Path.GetDirectoryName(addons.TrimEnd('\\'))))
             {
-                MessageBox.Show(this, "That folder does not look like the game's: " + addons, "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                // The game's own folder, not made yet (the game makes it as it
+                // first starts): made now. Any other, refused.
+                string exe = GameExePath();
+                if (exe != null && SameFolder(AddonsFor(exe), addons))
+                    Directory.CreateDirectory(Path.GetDirectoryName(addons.TrimEnd('\\')));
+                else
+                {
+                    MessageBox.Show(this, "That folder does not look like the game's: " + addons, "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
             }
             if (installing) return;
             installing = true;

@@ -287,7 +287,7 @@ local function Beside(owner, box)
 	-- The gap from the row's edge out past the box's, in the tooltip's units.
 	local scale = owner:GetEffectiveScale() / GameTooltip:GetEffectiveScale()
 	local center = box:GetCenter()
-	if center and center * box:GetEffectiveScale() > UIParent:GetWidth() * UIParent:GetEffectiveScale() / 2 then
+	if center and center * box:GetEffectiveScale() > GetScreenWidth() * UIParent:GetEffectiveScale() / 2 then
 		local gap = ((owner:GetLeft() or 0) - (box:GetLeft() or 0)) * scale + 6
 		GameTooltip:SetPoint("TOPRIGHT", owner, "TOPLEFT", -gap, 0)
 	else

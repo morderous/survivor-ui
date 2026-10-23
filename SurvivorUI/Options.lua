@@ -2700,7 +2700,7 @@ local function OnScreen()
 	end
 	local scale = panel:GetEffectiveScale() / UIParent:GetEffectiveScale()
 	left, right, top, bottom = left * scale, right * scale, top * scale, bottom * scale
-	return left >= -1 and bottom >= -1 and right <= UIParent:GetWidth() + 1 and top <= UIParent:GetHeight() + 1
+	return left >= -1 and bottom >= -1 and right <= GetScreenWidth() + 1 and top <= GetScreenHeight() + 1
 end
 
 panel:SetScript("OnShow", function()

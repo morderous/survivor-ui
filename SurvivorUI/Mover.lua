@@ -120,7 +120,8 @@ local function BuildGrid()
 		return
 	end
 	grid.built = true
-	local halfWidth, halfHeight = UIParent:GetWidth() / 2, UIParent:GetHeight() / 2
+	-- In UIParent's units, the UI scale taken in, so the lines reach the edges.
+	local halfWidth, halfHeight = GetScreenWidth() / 2, GetScreenHeight() / 2
 	for x = 0, halfWidth, GRID do
 		GridLine(true, x, x == 0)
 		if x > 0 then
