@@ -680,6 +680,69 @@ local function InlineChecks(page, items, label)
 	page.y = page.y - ROW
 end
 
+-- A row of color swatches after a label: {{key, name, {r, g, b} or nil for
+-- the class's color}, ...}; the chosen one in a white edge, the name as a
+-- tooltip.
+local function Swatches(page, label, colors, get, set)
+	local text = Text(page, 10, TEXT)
+	text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 3)
+	text:SetText(label)
+	local x = 140
+	for index = 1, table.getn(colors) do
+		local entry = colors[index]
+		local key, name, color = entry[1], entry[2], entry[3]
+		if not color then
+			local _, class = UnitClass("player")
+			local r, g, b = 1, 0.82, 0
+			if class and SurvivorUI_ClassColor then
+				r, g, b = SurvivorUI_ClassColor(class)
+			end
+			color = { r, g, b }
+		end
+		local swatch = CreateFrame("Button", nil, page)
+		swatch:SetWidth(18)
+		swatch:SetHeight(ROW)
+		swatch:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
+		swatch.edge = Fill(swatch, "BORDER", 0.3, 0.3, 0.35, 1)
+		swatch.edge:SetWidth(16)
+		swatch.edge:SetHeight(16)
+		swatch.edge:SetPoint("TOPLEFT", swatch, "TOPLEFT", 0, -2)
+		swatch.fill = Fill(swatch, "ARTWORK", color[1], color[2], color[3], 1)
+		swatch.fill:SetPoint("TOPLEFT", swatch.edge, "TOPLEFT", 2, -2)
+		swatch.fill:SetPoint("BOTTOMRIGHT", swatch.edge, "BOTTOMRIGHT", -2, 2)
+		x = x + 22
+		swatch:SetScript("OnClick", function()
+			set(key)
+			RefreshAll()
+		end)
+		swatch:SetScript("OnEnter", function()
+			this.hot = true
+			this:Refresh()
+			GameTooltip:SetOwner(this, "ANCHOR_TOP")
+			GameTooltip:SetText(name, 1, 1, 1)
+			GameTooltip:Show()
+		end)
+		swatch:SetScript("OnLeave", function()
+			this.hot = nil
+			this:Refresh()
+			GameTooltip:Hide()
+		end)
+		function swatch:Refresh()
+			local chosen = get() == key
+			if chosen then
+				self.edge:SetVertexColor(1, 1, 1, 1)
+			elseif self.hot then
+				self.edge:SetVertexColor(0.7, 0.7, 0.75, 1)
+			else
+				self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+			end
+			self.fill:SetAlpha((chosen or self.hot) and 1 or 0.7)
+		end
+		table.insert(widgets, swatch)
+	end
+	page.y = page.y - ROW
+end
+
 -- A slider: its label, a flat track filled in the page's color up to the
 -- thumb, and the value on the right. set() runs as it moves.
 local function Slider(page, label, low, high, step, get, set, format)
@@ -1605,6 +1668,13 @@ Check(page, "Level-ups wait until you are ready", function() return AZS_IsStorin
 if not AZS_SetStoringLevels then
 	Note(page, "Needs the game's 0.98 or later.")
 end
+Subheader(page, "Look")
+Check(page, "Sparks and a shine on the button", function() return DB().levelUpSparks ~= false end,
+	function() DB().levelUpSparks = DB().levelUpSparks == false end,
+	"as Run History's Victory box: sparks rising, stars, a shine crossing it now and then")
+Swatches(page, "Color", SurvivorUI_LEVELUP_COLORS or {},
+	function() return DB().levelUpColor or "class" end,
+	function(key) DB().levelUpColor = key end)
 Note(page, "The levels waiting also show by your level, in the run tracker and on the XP bar: Lv. 12 +3. While this tab is open the button shows, to be placed.")
 
 ------------------------------------------------------------------------------
@@ -2276,7 +2346,7 @@ end
 -- Layout.
 
 page = pages.layout
-Header(page, "Layout", "Move UI, the button at the top of this window (or a right click on the minimap button), unlocks every piece over a grid: one let go snaps to the grid, or to a neighbour's edge. Click a piece for its card: its place, size and font, shown or hidden, reset and undo. Each tab's own pieces can be dragged while it is open, so you can play while setting them.")
+Header(page, "Layout", "Move UI, the button at the top of this window (or a right click on the minimap button), unlocks every piece over a grid: one let go snaps to the grid, or to a neighbour's edge. Holding Alt shows the same grid, and a piece dragged with Alt snaps too (let go of Alt first to put it down free). Click a piece for its card: its place, size and font, shown or hidden, reset and undo. Each tab's own pieces can be dragged while it is open, so you can play while setting them.")
 Subheader(page, "Reset")
 Button(page, "Every piece back in place", 220, 0, Asked("Every piece back in place?",
 	"Every piece you moved goes back where it first stood.", "Back in place",

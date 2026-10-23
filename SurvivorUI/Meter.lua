@@ -827,6 +827,8 @@ local function ReadSlots()
 	if not (slotScan.SetAction and GetActionTexture) then
 		return
 	end
+	-- Each button's spell, by its tooltip's title: {button: index in the list}.
+	local at = {}
 	for slot = 1, 120 do
 		local held
 		if HasAction then
@@ -838,14 +840,31 @@ local function ReadSlots()
 			slotScan:SetOwner(WorldFrame, "ANCHOR_NONE")
 			slotScan:ClearLines()
 			slotScan:SetAction(slot)
-			local title = getglobal("SurvivorUISlotScanTextLeft1")
+			-- A tooltip the game left with no lines says nothing: its old
+			-- text is not read (a title read off the wrong button put the
+			-- racial's icon on Curse of Agony once, 2026-10-22).
+			local title = slotScan:NumLines() > 0 and getglobal("SurvivorUISlotScanTextLeft1")
 			title = title and title:GetText()
 			slotScan:Hide()
 			if title and title ~= "" then
 				title = string.gsub(string.gsub(title, "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
-				local index = SpellIndex(English(title))
-				if index and not slotOf[index] then
+				at[slot] = SpellIndex(English(title))
+			end
+		end
+	end
+	-- The list's order is the rule: a spell keeps its own button (the
+	-- twelfth for the racial) unless that button's tooltip names another
+	-- spell and some other button's names this one.
+	local count = slotsCount
+	for index = 1, count do
+		local own = (index == count) and 12 or index
+		if at[own] == index then
+			slotOf[index] = own
+		elseif at[own] ~= nil then
+			for slot = 1, 120 do
+				if at[slot] == index then
 					slotOf[index] = slot
+					break
 				end
 			end
 		end

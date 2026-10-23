@@ -29,6 +29,39 @@ local function On()
 	return Settings().levelUp == true
 end
 
+-- The button's color (the Level Up! tab, Look): the class's unless chosen,
+-- gold or one of these. The fill, the glow, the edge, the key cap and the
+-- sparks take it.
+SurvivorUI_LEVELUP_COLORS = {
+	{ "class", "Class color", nil },
+	{ "gold", "Gold", { 1.00, 0.82, 0.00 } },
+	{ "white", "White", { 1.00, 1.00, 1.00 } },
+	{ "red", "Red", { 1.00, 0.28, 0.22 } },
+	{ "orange", "Orange", { 1.00, 0.55, 0.15 } },
+	{ "green", "Green", { 0.40, 1.00, 0.45 } },
+	{ "teal", "Teal", { 0.30, 0.95, 0.90 } },
+	{ "blue", "Blue", { 0.40, 0.65, 1.00 } },
+	{ "purple", "Purple", { 0.72, 0.48, 1.00 } },
+	{ "pink", "Pink", { 1.00, 0.50, 0.80 } },
+}
+
+function SurvivorUI_LevelUpColor()
+	local key = Settings().levelUpColor or "class"
+	if key == "class" and SurvivorUI_ClassColor then
+		local _, class = UnitClass("player")
+		if class then
+			return SurvivorUI_ClassColor(class)
+		end
+	end
+	for index = 1, table.getn(SurvivorUI_LEVELUP_COLORS) do
+		local entry = SurvivorUI_LEVELUP_COLORS[index]
+		if entry[1] == key and entry[3] then
+			return entry[3][1], entry[3][2], entry[3][3]
+		end
+	end
+	return GOLD[1], GOLD[2], GOLD[3]
+end
+
 -- The levels waiting: 0 with Store Level-Ups off, or on a game without it.
 function SurvivorUI_StoredLevels()
 	return AZS_GetStoredLevels and tonumber(AZS_GetStoredLevels()) or 0
@@ -130,11 +163,56 @@ local function Key()
 	return key and key ~= "" and key or nil
 end
 
+-- The button in a color, as Run History's result box wears its own: filled
+-- with the color darkened (breathing, in OnUpdate), a light edge, white
+-- words, the glow in the color itself; the key cap and the sparks too.
+local function Paint(b, r, g, bl)
+	b.cr, b.cg, b.cb = r, g, bl
+	b.fr, b.fg, b.fb = r * 0.55, g * 0.55, bl * 0.55
+	b.er, b.eg, b.eb = r + (1 - r) * 0.55, g + (1 - g) * 0.55, bl + (1 - bl) * 0.55
+	b.glow:SetVertexColor(r, g, bl)
+	b.capGlow:SetVertexColor(r, g, bl)
+	if not b.hot then
+		b:SetBackdropBorderColor(b.er, b.eg, b.eb, 1)
+	end
+	b.text:SetTextColor(1, 1, 1)
+	if b.sparkle and SurvivorUI_SparkleTint then
+		SurvivorUI_SparkleTint(b.sparkle, r, g, bl)
+	end
+end
+
 button.age = 0
 button:SetScript("OnUpdate", function()
 	this.age = this.age + arg1
 	local breath = 0.5 + 0.5 * math.sin(this.age * 3)
-	this.glow:SetAlpha((this.hot and 0.7 or 0.35) + 0.3 * breath)
+	-- The color chosen (the Level Up! tab), whenever it changes.
+	local r, g, bl = SurvivorUI_LevelUpColor()
+	if r ~= this.cr or g ~= this.cg or bl ~= this.cb then
+		Paint(this, r, g, bl)
+	end
+	-- The glow swells and brightens with the breath, the fill lifts, as the
+	-- result box's do.
+	this.glow:SetAlpha(math.min(1, (this.hot and 0.75 or 0.4) + 0.35 * breath))
+	this.glow:SetWidth(this:GetWidth() + 56 + 16 * breath)
+	this.glow:SetHeight(this:GetHeight() + 38 + 10 * breath)
+	local lift = 0.82 + 0.18 * breath + (this.hot and 0.18 or 0)
+	this:SetBackdropColor(math.min(1, this.fr * lift), math.min(1, this.fg * lift), math.min(1, this.fb * lift), 1)
+	-- Alive as Run History's Victory box: sparks rising, stars and a shine
+	-- (RunHistory.lua, loaded after this file: taken when it is there).
+	local sparks = Settings().levelUpSparks ~= false
+	if sparks and not this.sparkle and SurvivorUI_Sparkle then
+		this.sparkle = SurvivorUI_Sparkle(this, "levelup")
+		if SurvivorUI_SparkleTint then
+			SurvivorUI_SparkleTint(this.sparkle, r, g, bl)
+		end
+	end
+	if this.sparkle then
+		if sparks then
+			this.sparkle:Show()
+		else
+			this.sparkle:Hide()
+		end
+	end
 	-- The key cap: its glow breathing too, and every 3 seconds a tap, as if
 	-- pressed: a pixel down, its edge and key lit white.
 	if this.cap:IsShown() then
@@ -147,8 +225,9 @@ button:SetScript("OnUpdate", function()
 				this.cap:SetBackdropBorderColor(1, 1, 1, 1)
 				this.key:SetTextColor(1, 1, 1)
 			else
-				this.cap:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 0.75)
-				this.key:SetTextColor(1, 0.95, 0.80)
+				local r, g, bl = this.cr or GOLD[1], this.cg or GOLD[2], this.cb or GOLD[3]
+				this.cap:SetBackdropBorderColor(r, g, bl, 0.75)
+				this.key:SetTextColor(r + (1 - r) * 0.8, g + (1 - g) * 0.8, bl + (1 - bl) * 0.8)
 			end
 		end
 	end
@@ -165,7 +244,8 @@ button:SetScript("OnEnter", function()
 	this:SetBackdropBorderColor(1, 1, 1, 1)
 	local stored = SurvivorUI_StoredLevels()
 	GameTooltip:SetOwner(this, "ANCHOR_TOP")
-	GameTooltip:SetText(stored == 1 and "1 level waiting" or stored.." levels waiting", GOLD[1], GOLD[2], GOLD[3])
+	GameTooltip:SetText(stored == 1 and "1 level waiting" or stored.." levels waiting",
+		this.cr or GOLD[1], this.cg or GOLD[2], this.cb or GOLD[3])
 	GameTooltip:AddLine("Click to choose them, one after another"..(Key() and ", or press "..Key().."." or "."), 1, 1, 1, 1)
 	GameTooltip:AddLine("Store Level-Ups: the game's Options, Controls, or /sui opt, Level Up!", 0.6, 0.6, 0.65, 1)
 	GameTooltip:Show()
@@ -173,7 +253,7 @@ end)
 
 button:SetScript("OnLeave", function()
 	this.hot = nil
-	this:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 0.9)
+	this:SetBackdropBorderColor(this.er or GOLD[1], this.eg or GOLD[2], this.eb or GOLD[3], 1)
 	GameTooltip:Hide()
 end)
 

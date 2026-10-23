@@ -209,6 +209,13 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.24, 2026-10-22
+
+**Survivor UI**
+- **The Level Up! button alive, and in a color**: the sparks rising, the stars and the shine of Run History's Victory box, over the button, with its breathing glow; a tick in the Level Up! tab (Look) turns them off. The button wears the class's color, or one chosen there: gold, white, red, orange, green, teal, blue, purple or pink; the fill, the glow, the edge, the key cap and the sparks take it.
+- **The grid with Alt**: holding Alt lays the Move UI grid over the screen along with the outlines, so pieces can be lined up without opening the options; a piece dragged with Alt held snaps to the grid or to a neighbour's edge as in Move UI (let go of Alt before the mouse to put it down free).
+- **A spell's icon read off the wrong button, once in a while**: the build list's new reading of the buttons (v3.0.23) could take a tooltip the game had left empty for an earlier button's, and give a spell the racial's icon until the next reading (Curse of Agony with Escape Artist's, seen 2026-10-22). Now an empty tooltip says nothing, and a spell leaves its own button only when that button's tooltip names another spell and some other button names it.
+
 ### v3.0.23, 2026-10-22
 
 **Survivor UI**

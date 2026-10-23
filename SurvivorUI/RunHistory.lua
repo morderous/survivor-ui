@@ -1411,6 +1411,10 @@ local RESULTS = {
 		sparks = { { 0.62, 0.84, 1.00 }, { 0.86, 0.94, 1.00 } }, breath = 2.8, motion = "drift", every = 0.28 },
 	going   = { word = "ENDLESS", fill = { 0.48, 0.18, 0.80 }, edge = { 0.86, 0.66, 1.00 }, glow = { 0.68, 0.38, 1.00 },
 		sparks = { { 0.80, 0.58, 1.00 } }, breath = 2, motion = "circle", every = 0.3, stars = 0.9 },
+	-- The Level Up! button's (LevelUp.lua, SurvivorUI_Sparkle): Victory's
+	-- motion in gold.
+	levelup = { word = "LEVEL UP!", fill = { 0.16, 0.12, 0.02 }, edge = { 1.00, 0.82, 0.00 }, glow = { 1.00, 0.85, 0.30 },
+		sparks = { { 1.00, 0.85, 0.30 }, { 1.00, 0.95, 0.60 } }, breath = 1.6, motion = "rise", every = 0.16, stars = 0.45, shine = 2.6 },
 }
 
 local function Glowing(badge, art, layer)
@@ -1469,33 +1473,10 @@ local function Star(badge)
 	end
 end
 
-local function Animate()
-	local badge, elapsed = this, arg1
-	local look = badge.look
-	if not look then
-		return
-	end
-	badge.clock = badge.clock + elapsed
-	badge:SetAlpha(badge.dim and (badge.hot and 0.85 or 0.45) or 1)
-	local wave = (math.sin(badge.clock * 6.283 / look.breath) + 1) / 2
-	-- The burst as the run is shown: the glow swells, then settles.
-	local burst = 0
-	if badge.burst then
-		badge.burst = badge.burst + elapsed
-		burst = math.max(0, 1 - badge.burst / 0.8)
-		if burst == 0 then
-			badge.burst = nil
-		end
-	end
-	local width = badge:GetWidth()
-	local glow, fill = look.glow, look.fill
-	badge.glow:SetVertexColor(glow[1], glow[2], glow[3])
-	badge.glow:SetAlpha(math.min(1, (badge.hot and 0.75 or 0.4) + 0.35 * wave + burst))
-	badge.glow:SetWidth(width + 46 + 14 * wave + 60 * burst)
-	badge.glow:SetHeight(50 + 10 * wave + 24 * burst)
-	local lift = 0.82 + 0.18 * wave + (badge.hot and 0.18 or 0)
-	badge:SetBackdropColor(math.min(1, fill[1] * lift), math.min(1, fill[2] * lift), math.min(1, fill[3] * lift), 1)
-
+-- The shine, the sparks and the stars of a box, a frame's width wide: the
+-- badge's, or an overlay's over another frame (SurvivorUI_Sparkle).
+local function Twinkle(badge, look, elapsed, width)
+	local glow = look.glow
 	-- Victory's shine: a band of light across it now and then.
 	if look.shine then
 		badge.shineWait = badge.shineWait - elapsed
@@ -1581,6 +1562,35 @@ local function Animate()
 			end
 		end
 	end
+end
+
+local function Animate()
+	local badge, elapsed = this, arg1
+	local look = badge.look
+	if not look then
+		return
+	end
+	badge.clock = badge.clock + elapsed
+	badge:SetAlpha(badge.dim and (badge.hot and 0.85 or 0.45) or 1)
+	local wave = (math.sin(badge.clock * 6.283 / look.breath) + 1) / 2
+	-- The burst as the run is shown: the glow swells, then settles.
+	local burst = 0
+	if badge.burst then
+		badge.burst = badge.burst + elapsed
+		burst = math.max(0, 1 - badge.burst / 0.8)
+		if burst == 0 then
+			badge.burst = nil
+		end
+	end
+	local width = badge:GetWidth()
+	local glow, fill = look.glow, look.fill
+	badge.glow:SetVertexColor(glow[1], glow[2], glow[3])
+	badge.glow:SetAlpha(math.min(1, (badge.hot and 0.75 or 0.4) + 0.35 * wave + burst))
+	badge.glow:SetWidth(width + 46 + 14 * wave + 60 * burst)
+	badge.glow:SetHeight(50 + 10 * wave + 24 * burst)
+	local lift = 0.82 + 0.18 * wave + (badge.hot and 0.18 or 0)
+	badge:SetBackdropColor(math.min(1, fill[1] * lift), math.min(1, fill[2] * lift), math.min(1, fill[3] * lift), 1)
+	Twinkle(badge, look, elapsed, width)
 end
 
 local function Badge(parent)
@@ -1716,6 +1726,62 @@ end
 
 function SurvivorUI_SetResultBadge(badge, key, time)
 	SetBadge(badge, key, nil, nil, time, nil)
+end
+
+-- A result's sparks, stars and shine over any frame (the Level Up! button,
+-- LevelUp.lua): an overlay of the frame's size, blind to the mouse, alive on
+-- its own; shown and hidden with its frame. nil for a look not known.
+function SurvivorUI_Sparkle(frame, key)
+	local look = RESULTS[key]
+	if not look then
+		return nil
+	end
+	local over = CreateFrame("Frame", nil, frame)
+	over:SetAllPoints(frame)
+	over:SetFrameLevel(frame:GetFrameLevel() + 2)
+	over:EnableMouse(false)
+	local band = math.max(8, (frame:GetHeight() or 24) - 10)
+	over.shineLeft = over:CreateTexture(nil, "ARTWORK")
+	over.shineLeft:SetTexture(FLAT)
+	over.shineLeft:SetBlendMode("ADD")
+	over.shineLeft:SetWidth(7)
+	over.shineLeft:SetHeight(band)
+	over.shineLeft:SetGradientAlpha("HORIZONTAL", 1, 1, 1, 0, 1, 1, 1, 0.55)
+	over.shineLeft:Hide()
+	over.shineRight = over:CreateTexture(nil, "ARTWORK")
+	over.shineRight:SetTexture(FLAT)
+	over.shineRight:SetBlendMode("ADD")
+	over.shineRight:SetWidth(7)
+	over.shineRight:SetHeight(band)
+	over.shineRight:SetGradientAlpha("HORIZONTAL", 1, 1, 1, 0.55, 1, 1, 1, 0)
+	over.shineRight:Hide()
+	over.sparks, over.stars = {}, {}
+	for index = 1, SPARKS do
+		over.sparks[index] = Glowing(over, "PaceDot", "OVERLAY")
+	end
+	for index = 1, STARS do
+		over.stars[index] = Glowing(over, "PaceSpark", "OVERLAY")
+	end
+	over.look, over.base = look, look
+	over.sparkWait, over.starWait, over.shineWait = 0, 0.3, 0.8
+	over:SetScript("OnUpdate", function()
+		Twinkle(this, this.look, arg1, this:GetWidth() or 0)
+	end)
+	for _ = 1, 4 do
+		Spark(over, look)
+	end
+	return over
+end
+
+-- An overlay's sparks and stars in a color of its own (the Level Up!
+-- button's choice): the look copied with that color and a lighter one; the
+-- sparks in the air keep the color they were born with.
+function SurvivorUI_SparkleTint(over, r, g, b)
+	local base = over.base or over.look
+	local light = { r + (1 - r) * 0.5, g + (1 - g) * 0.5, b + (1 - b) * 0.5 }
+	over.look = { word = base.word, fill = base.fill, edge = base.edge, glow = { r, g, b },
+		sparks = { { r, g, b }, light }, breath = base.breath, motion = base.motion, every = base.every,
+		stars = base.stars, shine = base.shine }
 end
 
 -- A line of the class's color between the header and the panels.

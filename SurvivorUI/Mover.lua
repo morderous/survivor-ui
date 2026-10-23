@@ -156,7 +156,9 @@ end
 -- left corner counted from the screen's corner, in the screen's own units; then
 -- a neighbour's edge (or middle) near one of its own pulls it into line.
 local function Snap(frame, own)
-	if not (editing or focus) then
+	-- In Move UI, on a tab's pieces, or with Alt held (the grid is up): let
+	-- go of Alt before the mouse to put a piece down free.
+	if not (editing or focus or IsAltKeyDown()) then
 		return
 	end
 	local left, top = frame:GetLeft(), frame:GetTop()
@@ -424,6 +426,8 @@ end)
 
 -- Every one shown with Alt held, in configuration mode, or while a drag (of
 -- one held with Alt) is still going; the open tab's pieces while it is open.
+-- The grid under them whenever they all show (asked for 2026-10-22: with
+-- Alt too, not only in Move UI).
 local shown
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
@@ -433,6 +437,12 @@ watcher:SetScript("OnUpdate", function()
 		return
 	end
 	shown = state
+	if all then
+		BuildGrid()
+		grid:Show()
+	else
+		grid:Hide()
+	end
 	for index = 1, table.getn(handles) do
 		local handle = handles[index]
 		if (all or InFocus(handle)) and not handle.disabled then
