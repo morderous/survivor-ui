@@ -9,9 +9,10 @@
 //   - Play starts the game (the one by the AddOns folder), and the installer
 //     steps into the tray;
 //   - keeps to the game's own folder: the game keeps its AddOns, saved
-//     settings and options where its exe says (Aethus' builds carry the
-//     folder they were built from, and the 0.112 one moved it for everyone),
-//     so the addons go there; "Check folder and move if necessary", under
+//     settings and options where its exe says (0.112.0 to 0.112.4 in the
+//     folder they were built from, a worktree on Aethus' PC; from 0.112.5 a
+//     benilla-config folder beside the exe, which the game fills from the
+//     older ones the first time it starts), so the addons go there; "Check folder and move if necessary", under
 //     the folder (green while needed), moves the player's things from an
 //     older folder of the game into it, what was there set aside, nothing
 //     deleted;
@@ -73,7 +74,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Survivor UI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.4.3.0")]
+[assembly: System.Reflection.AssemblyVersion("1.4.4.0")]
 
 namespace SurvivorInstaller
 {
@@ -921,6 +922,7 @@ namespace SurvivorInstaller
         {
             new Thread(FetchLatest) { IsBackground = true }.Start();
             CheckGame();
+            if (IsHandleCreated) NoteFolders(false);
         }
 
         protected override void SetVisibleCore(bool value)
@@ -1189,19 +1191,85 @@ namespace SurvivorInstaller
 
         // --- The game's AddOns folder -----------------------------------------
 
-        // The AddOns folder for a game executable: the one in the game's own
-        // folder, as its exe has it (BuiltDataFolder); an exe that carries
-        // none, benilla-config\AddOns next to it, or AddOns next to it when the
-        // executable sits in benilla-config.
+        // The AddOns folder for a game executable: in the game's own folder.
         static string AddonsFor(string exePath)
         {
-            string built = BuiltDataFolder(exePath);
-            if (built != null) return Path.Combine(built, "AddOns");
-            string dir = Path.GetDirectoryName(exePath);
-            if (string.Equals(Path.GetFileName(dir), "benilla-config", StringComparison.OrdinalIgnoreCase))
-                return Path.Combine(dir, "AddOns");
-            return Path.Combine(dir, "benilla-config", "AddOns");
+            return Path.Combine(GameDataFolder(exePath), "AddOns");
         }
+
+        // The folder the game keeps its things in, by its version (read in the
+        // game's code, 2026-10-23):
+        //   0.112.5 and newer: a benilla-config folder beside the exe, always
+        //     (C:\Git\wenilla\benilla-config\benilla-config for the usual
+        //     install); an exe whose version is not read and carries no build
+        //     path counts as these;
+        //   0.112.0 to 0.112.4: the folder they were built from, a worktree on
+        //     Aethus' PC, which the exe carries (BuiltDataFolder);
+        //   older: C:\Git\wenilla\benilla-config, the folder they were built
+        //     from too, which is the exe's own for the usual install.
+        static readonly Version BesideFrom = new Version(0, 112, 5);
+
+        static string GameDataFolder(string exePath)
+        {
+            string dir = Path.GetDirectoryName(exePath);
+            Version version = GameVersionOf(exePath);
+            string built = BuiltDataFolder(exePath);
+            if ((version != null && version >= BesideFrom) || (version == null && built == null))
+                return Path.Combine(dir, "benilla-config");
+            if (built != null) return built;
+            if (string.Equals(Path.GetFileName(dir), "benilla-config", StringComparison.OrdinalIgnoreCase))
+                return dir;
+            return Path.Combine(dir, "benilla-config");
+        }
+
+        // The older folders the game (0.112.5 and newer) copies into its new
+        // one the first time it starts: C:\Git\wenilla\benilla-config and each
+        // worktree's under C:\Git\wenilla\.claude\worktrees.
+        static List<string> LegacyFolders()
+        {
+            List<string> list = new List<string>();
+            list.Add(@"C:\Git\wenilla\benilla-config");
+            try
+            {
+                string worktrees = @"C:\Git\wenilla\.claude\worktrees";
+                if (Directory.Exists(worktrees))
+                    foreach (string tree in Directory.GetDirectories(worktrees))
+                        list.Add(Path.Combine(tree, "benilla-config"));
+            }
+            catch { }
+            return list;
+        }
+
+        // The game (0.112.5 and newer) has not started once since: its new
+        // folder is not there yet, and an older one holds the player's things.
+        // It brings them along itself as it starts, but only while its folder
+        // is missing: the launcher makes nothing there until then.
+        static bool GameWillBringAlong(string exePath)
+        {
+            return GameWillBringAlong(exePath, LegacyFolders());
+        }
+
+        static bool GameWillBringAlong(string exePath, IEnumerable<string> legacy)
+        {
+            try
+            {
+                Version version = GameVersionOf(exePath);
+                if (version == null || version < BesideFrom) return false;
+                string data = GameDataFolder(exePath);
+                if (Directory.Exists(data)) return false;
+                foreach (string folder in legacy)
+                    if (!SameFolder(folder, data) && (Directory.Exists(Path.Combine(folder, "AddOns")) || Directory.Exists(Path.Combine(folder, "saved"))))
+                        return true;
+            }
+            catch { }
+            return false;
+        }
+
+        const string FirstStartNote =
+            "Azeroth Survivors 0.112.5 and newer keep your addons and settings in a new folder,\n" +
+            "and the game moves them there by itself the first time it starts.\n\n" +
+            "Click Play once (you can close the game at the menu), then come back:\n" +
+            "the launcher will use the new folder from then on.";
 
         // The game wherever it was found before (by its exe, or by the AddOns
         // folder saved), next to the installer, or in its usual place; its
@@ -1277,7 +1345,26 @@ namespace SurvivorInstaller
         // path. Read once per exe (its size and time).
         static readonly Dictionary<string, string> builtFolders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+        static readonly Dictionary<string, Version> gameVersions = new Dictionary<string, Version>(StringComparer.OrdinalIgnoreCase);
+
         static string BuiltDataFolder(string exePath)
+        {
+            string key = ReadFacts(exePath);
+            if (key == null) return null;
+            lock (builtFolders) { string known; return builtFolders.TryGetValue(key, out known) ? known : null; }
+        }
+
+        // The game's version as its exe writes it, null when not found.
+        static Version GameVersionOf(string exePath)
+        {
+            string key = ReadFacts(exePath);
+            if (key == null) return null;
+            lock (builtFolders) { Version known; return gameVersions.TryGetValue(key, out known) ? known : null; }
+        }
+
+        // An exe's build path and version read once (by its size and time);
+        // the key they are kept by, null when the exe cannot be read.
+        static string ReadFacts(string exePath)
         {
             try
             {
@@ -1285,13 +1372,22 @@ namespace SurvivorInstaller
                 if (!info.Exists) return null;
                 string key = info.FullName + "|" + info.Length + "|" + info.LastWriteTimeUtc.Ticks;
                 lock (builtFolders)
+                    if (builtFolders.ContainsKey(key)) return key;
+                byte[] data = File.ReadAllBytes(info.FullName);
+                string built = ReadBuiltFolder(data);
+                Version version = null;
+                try
                 {
-                    string known;
-                    if (builtFolders.TryGetValue(key, out known)) return known;
+                    string text = VersionIn(data);
+                    if (text != null) version = new Version(text);
                 }
-                string found = ReadBuiltFolder(File.ReadAllBytes(info.FullName));
-                lock (builtFolders) builtFolders[key] = found;
-                return found;
+                catch { }
+                lock (builtFolders)
+                {
+                    builtFolders[key] = built;
+                    gameVersions[key] = version;
+                }
+                return key;
             }
             catch { return null; }
         }
@@ -1447,6 +1543,7 @@ namespace SurvivorInstaller
             candidates.Add(string.Equals(Path.GetFileName(dir), "benilla-config", StringComparison.OrdinalIgnoreCase)
                 ? dir : Path.Combine(dir, "benilla-config"));
             candidates.Add(CommonGameFolder);
+            candidates.AddRange(LegacyFolders());
             try
             {
                 if (File.Exists(ConfigPath)) candidates.Add(Path.GetDirectoryName(File.ReadAllText(ConfigPath).Trim().TrimEnd('\\')));
@@ -1561,6 +1658,29 @@ namespace SurvivorInstaller
         // wait in another folder of the game; the tooltip says where.
         void NoteFolders(bool tell)
         {
+            // The AddOns folder as the game has it now (the game may have
+            // updated itself since the launcher opened).
+            string exe = GameExePath();
+            if (exe != null && !installing)
+            {
+                string addons = AddonsFor(exe);
+                if (!SameFolder(folderBox.Text, addons))
+                {
+                    folderBox.Text = addons;
+                    try { File.WriteAllText(ConfigPath, addons); } catch { }
+                }
+            }
+            // The game will bring the player's things along as it first starts:
+            // nothing to move by hand, Play first.
+            if (exe != null && GameWillBringAlong(exe))
+            {
+                foldersButton.BackColor = FolderFill;
+                foldersButton.ForeColor = FolderText;
+                foldersButton.FlatAppearance.BorderColor = FolderEdge;
+                folderTip.SetToolTip(foldersButton, FirstStartNote);
+                if (tell) Status("Click Play once: the game moves your addons and settings to its new folder by itself.");
+                return;
+            }
             FolderPlan plan = null;
             try { plan = PlanFolders(); }
             catch { }
@@ -1584,6 +1704,12 @@ namespace SurvivorInstaller
             if (GameExePath() == null)
             {
                 Status("Find the game first: \"Find game...\".");
+                return;
+            }
+            if (GameWillBringAlong(GameExePath()))
+            {
+                NoteFolders(false);
+                MessageBox.Show(this, FirstStartNote, "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             FolderPlan plan = PlanFolders();
@@ -2564,17 +2690,21 @@ namespace SurvivorInstaller
                 }
                 RememberExe(Path.Combine(folder, GameExe));
                 string addons = AddonsFor(Path.Combine(folder, GameExe));
-                Directory.CreateDirectory(addons);
+                // An update to 0.112.5 or newer over a player's older folders:
+                // the game brings them along as it first starts, only while its
+                // new folder is missing, so nothing is made there now.
+                bool bringing = GameWillBringAlong(Path.Combine(folder, GameExe));
+                if (!bringing) Directory.CreateDirectory(addons);
                 BeginInvoke(new Action(delegate
                 {
                     GameProgress(-1, 0, null);
                     folderBox.Text = addons;
                     try { File.WriteAllText(ConfigPath, addons); } catch { }
-                    Status("Azeroth Survivors " + plan.Version + " is ready.");
+                    Status("Azeroth Survivors " + plan.Version + " is ready." + (bringing ? " Click Play once." : ""));
                     // Survivor UI next, unless it is there already.
-                    if (stable != null && stable.ZipUrl != null && InstalledVersion(addons) == null) Install(stable);
+                    if (!bringing && stable != null && stable.ZipUrl != null && InstalledVersion(addons) == null) Install(stable);
                     else MessageBox.Show(this,
-                        "Azeroth Survivors " + plan.Version + " is ready.\n\nClick Play.",
+                        "Azeroth Survivors " + plan.Version + " is ready.\n\n" + (bringing ? FirstStartNote : "Click Play."),
                         "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }));
             }
@@ -2604,6 +2734,19 @@ namespace SurvivorInstaller
 
         void Install(Release release)
         {
+            string gameExe = GameExePath();
+            if (gameExe != null && GameWillBringAlong(gameExe))
+            {
+                // A folder made now would stop the game's own copy of the old ones.
+                Status("Click Play once first: the game moves your addons and settings to its new folder.");
+                MessageBox.Show(this, FirstStartNote, "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (gameExe != null && !SameFolder(folderBox.Text, AddonsFor(gameExe)))
+            {
+                folderBox.Text = AddonsFor(gameExe);
+                try { File.WriteAllText(ConfigPath, folderBox.Text); } catch { }
+            }
             string addons = folderBox.Text.Trim();
             if (addons == "" || release == null) { Status("Pick the game first."); return; }
             if (!Directory.Exists(Path.GetDirectoryName(addons.TrimEnd('\\'))))

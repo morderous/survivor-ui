@@ -209,6 +209,12 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### Survivor UI Launcher 1.4.4, 2026-10-23
+
+- **Ready for the game's 0.112.5**: from it the game keeps your AddOns, settings and options in a `benilla-config` folder beside its exe (for the usual install, `C:\Git\wenilla\benilla-config\benilla-config`), and the first time it starts it brings everything along from the older folders. The launcher installs there from 0.112.5 on (read in the game itself, as before), keeps the build's folder for 0.112.0 to 0.112.4, and the old one before them.
+- **The game's own move left to it**: the game copies the older folders only while its new folder is not there yet, so until the game has started once, the launcher makes nothing there: Install, Update game and "Check folder and move if necessary" say to click Play once first, and nothing is lost.
+- The AddOns folder follows the game when it updates itself while the launcher is open, and the folders' button also looks in the older folders the game knows.
+
 ### v3.0.26, 2026-10-23
 
 **Survivor UI**
