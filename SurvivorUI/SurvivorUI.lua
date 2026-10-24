@@ -2759,17 +2759,24 @@ recordShown.icon:SetPoint("RIGHT", recordShown.number, "LEFT", -4, 0)
 recordShown.label = recordShown:CreateFontString(nil, "OVERLAY")
 recordShown.label:SetPoint("BOTTOM", recordShown.number, "TOP", 0, 2)
 
-local function ShowRecord(amount, source)
+local ShowRecord
+
+-- For the Records tab and /sui record: a new best crit at once.
+function SurvivorUI_ShowCritRecord()
+	ShowRecord(12345)
+end
+
+function ShowRecord(amount, source)
 	local ct = CT()
 	PlaceRecord()
 	local scale = ct.ctRecordSize or 1
 	recordShown.scale = scale
 	recordShown.life = (ct.ctRecordHold or 1.7) + RECORD_FADE
-	recordShown.glowing = ct.ctRecordGlow ~= false
-	if recordShown.glowing then
-		recordShown.glow:Show()
-	else
-		recordShown.glow:Hide()
+	-- Over the effect chosen for it (Effects.lua, the Records tab); the glow
+	-- it had before is the Radiant one's now.
+	recordShown.glow:Hide()
+	if SurvivorUI_RecordFxStart then
+		SurvivorUI_RecordFxStart(recordShown, SurvivorUI_RecordFxKind("crit"), scale, 0, recordShown.life)
 	end
 	Face(recordShown.number, RECORD_POP_SIZE * scale, "THICKOUTLINE")
 	recordShown.number:SetTextColor(RECORD_GOLD[1], RECORD_GOLD[2], RECORD_GOLD[3])
@@ -2806,6 +2813,9 @@ recordShown:SetScript("OnUpdate", function()
 	local life = this.life or 2.2
 	if age >= life then
 		this:Hide()
+		if SurvivorUI_RecordFxStop then
+			SurvivorUI_RecordFxStop(this)
+		end
 		return
 	end
 	local scale = this.scale or 1
@@ -2813,15 +2823,10 @@ recordShown:SetScript("OnUpdate", function()
 		this.popped = true
 		Face(this.number, RECORD_SIZE * scale, "THICKOUTLINE")
 	end
-	-- The glow bursts, then breathes; all of it fades at the end.
-	if this.glowing then
-		local burst = math.max(0, 1 - age / 0.5)
-		local size = (90 + 70 * burst + 10 * math.sin(age * 6)) * scale
-		this.glow:SetWidth(size)
-		this.glow:SetHeight(size * 0.7)
-		this.glow:SetAlpha(0.55 + 0.45 * burst)
-	end
 	local fade = life - RECORD_FADE
+	if SurvivorUI_RecordFxUpdate then
+		SurvivorUI_RecordFxUpdate(this, age, arg1, age < fade)
+	end
 	this:SetAlpha(age > fade and (1 - (age - fade) / RECORD_FADE) or math.min(1, age / 0.06))
 end)
 
@@ -3291,8 +3296,11 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 			SurvivorUI_ResetCollection()
 		end
 	elseif msg == "record" then
-		-- The look of a new best crit, at once.
-		ShowRecord(12345)
+		-- The look of a new best crit, at once, and of a new jump record under it.
+		SurvivorUI_ShowCritRecord()
+		if SurvivorUI_ShowJumpRecord then
+			SurvivorUI_ShowJumpRecord()
+		end
 	elseif msg == "sample" then
 		SurvivorUI_CTSample()
 	elseif msg == "dots" then

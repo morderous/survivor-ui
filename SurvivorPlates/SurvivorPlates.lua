@@ -21,16 +21,21 @@
 -- Each kind is chosen on its own (/splates, or Survivor UI's options): the
 -- enemies' four, normal, elites, guardians and bosses (all of them by
 -- default; a kind left out still shows as your target), and the friends'
--- two, your pets and summons and your totems (none by default; asked for
--- on Discord by Sedz and Amarolk, with a warlock's many demons about). Only elites, guardians and bosses carry a name, unless names
+-- three, your pets and summons and your totems (asked for on Discord by
+-- Sedz and Amarolk, with a warlock's many demons about) and the members of a
+-- co-op run's party (the game's 0.113; asked for by Klopp and ChaoticBon),
+-- none by default. Only elites, guardians and bosses carry a name, unless names
 -- are on every plate. The friends' plates are the client's friendly ones,
 -- told from an enemy's by the color it gives them, drawn small with the
--- name and icon.
+-- name and icon; a party member's, told by its name among party1 to party4,
+-- in the class's color with the class's icon and the health left. A friend
+-- down has no plate: the client gives a fallen hero none (seen 2026-10-23),
+-- and Survivor UI's party frames say DOWN.
 --
 -- Slash commands:
 --   /splates none       no nameplates at all (the default), or back
 --   /splates normal | elites | guardians | bosses     each enemy kind, on or off
---   /splates pets | totems                            each friend's, on or off
+--   /splates pets | totems | party                    each friend's, on or off
 --   /splates names      names only on elites, guardians and bosses (default), or on every plate
 --   /splates keys       V and Shift+V ignored (default), or let them work as the game has them
 --   /splates count      the plates on screen now, by kind (a check)
@@ -71,8 +76,48 @@ local KINDS = {
 	-- your totems blue.
 	pet       = { width = 80,  height = 6,  nameSize = 9,  color = { 0.25, 0.85, 0.35 } },
 	totem     = { width = 80,  height = 6,  nameSize = 9,  color = { 0.30, 0.65, 1.00 } },
+	-- A co-op friend's: a little larger, in the class's color (this one only
+	-- with the class unknown).
+	party     = { width = 110, height = 8,  nameSize = 10, color = { 0.45, 0.78, 1.00 } },
 }
-local FRIEND_KINDS = { pet = true, totem = true }
+local FRIEND_KINDS = { pet = true, totem = true, party = true }
+
+-- The classes' icons (the character creation's) and colors, for a co-op
+-- friend's plate; the shaman in its modern blue, as Survivor UI has it.
+local CLASS_ICONS = "Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes"
+local CLASS_ICON_COORDS = {
+	WARRIOR = { 0, 0.25, 0, 0.25 }, MAGE = { 0.25, 0.49609375, 0, 0.25 },
+	ROGUE = { 0.49609375, 0.7421875, 0, 0.25 }, DRUID = { 0.7421875, 0.98828125, 0, 0.25 },
+	HUNTER = { 0, 0.25, 0.25, 0.5 }, SHAMAN = { 0.25, 0.49609375, 0.25, 0.5 },
+	PRIEST = { 0.49609375, 0.7421875, 0.25, 0.5 }, WARLOCK = { 0.7421875, 0.98828125, 0.25, 0.5 },
+	PALADIN = { 0, 0.25, 0.5, 0.75 },
+}
+
+local function ClassColor(class)
+	if SurvivorUI_ClassColor then
+		local r, g, b = SurvivorUI_ClassColor(class)
+		return { r, g, b }
+	end
+	if class == "SHAMAN" then
+		return { 0.00, 0.44, 0.87 }
+	end
+	local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+	return color and { color.r, color.g, color.b } or nil
+end
+
+-- A party member's class by its name (party1 to party4), nil for anyone else.
+local function PartyClass(name)
+	if not name then
+		return nil
+	end
+	for index = 1, 4 do
+		local unit = "party"..index
+		if UnitExists(unit) and UnitName(unit) == name then
+			local _, class = UnitClass(unit)
+			return class or "?"
+		end
+	end
+end
 local EXECUTE_COLOR = { 1.00, 0.86, 0.25 }
 
 -- The five bosses of each zone.
@@ -340,10 +385,13 @@ local function English(name)
 	return SurvivorUI_English and SurvivorUI_English(name) or name
 end
 
--- A friend's kind: a totem (the game names every one plainly "Totem", seen
--- 2026-10-20; "Searing Totem" too, should it name them), or (all the rest) a
--- pet or summon.
+-- A friend's kind: a member of the party (a co-op run's), a totem (the game
+-- names every one plainly "Totem", seen 2026-10-20; "Searing Totem" too,
+-- should it name them), or (all the rest) a pet or summon.
 local function FriendKind(name)
+	if PartyClass(name) then
+		return "party"
+	end
 	local english = English(name or "")
 	if english == "Totem" or string.find(english, " Totem$") then
 		return "totem"
@@ -375,6 +423,20 @@ end
 -- A friend's icon beside its name, Survivor UI's (its meter's), when it is there.
 local function FriendIcon(overlay, name)
 	local icon
+	-- A party member: the class's icon, cut inside its round edge.
+	if overlay.kind == "party" then
+		local coords = CLASS_ICON_COORDS[PartyClass(name) or ""]
+		if coords then
+			local cutX, cutY = (coords[2] - coords[1]) * 0.1, (coords[4] - coords[3]) * 0.1
+			overlay.icon:SetTexture(CLASS_ICONS)
+			overlay.icon:SetTexCoord(coords[1] + cutX, coords[2] - cutX, coords[3] + cutY, coords[4] - cutY)
+			overlay.icon:Show()
+		else
+			overlay.icon:Hide()
+		end
+		return
+	end
+	overlay.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	if overlay.kind == "totem" and English(name or "") == "Totem" then
 		icon = TotemIcon()
 	elseif FRIEND_KINDS[overlay.kind] then
@@ -411,6 +473,7 @@ local function UpdatePlate()
 		local known = high - low ~= 100 and high > 1
 		overlay.baseKind = friend and FriendKind(name) or Classify(name, known and high or nil)
 		overlay.iconFor = nil
+		overlay.classColor = overlay.baseKind == "party" and ClassColor(PartyClass(name)) or nil
 	end
 	-- The target's kind as the game tells it, an enemy's: a guardian and an
 	-- elite of the same name told apart for sure.
@@ -456,8 +519,10 @@ local function UpdatePlate()
 	overlay.bar:SetValue(share)
 
 	-- A 0 to 100 bar means the client only knows the percentage; anything else
-	-- is the unit's real health.
-	if FRIEND_KINDS[overlay.kind] then
+	-- is the unit's real health. A party member: what is left of it.
+	if overlay.kind == "party" then
+		overlay.health:SetText(percent.."%")
+	elseif FRIEND_KINDS[overlay.kind] then
 		overlay.health:SetText("")
 	elseif high - low == 100 or high <= 1 then
 		overlay.health:SetText(percent.."%")
@@ -467,7 +532,7 @@ local function UpdatePlate()
 		overlay.health:SetText(Short(value).." / "..Short(high).."  "..percent.."%")
 	end
 
-	local color = overlay.style.color
+	local color = overlay.classColor or overlay.style.color
 	if FRIEND_KINDS[overlay.kind] then
 		-- No execute mark on a friend.
 	elseif share <= EXECUTE_RANGE then
@@ -579,6 +644,7 @@ end
 
 -- New plates only ever get appended to WorldFrame's children.
 local scanned = 0
+local partyCount = 0
 local scanner = CreateFrame("Frame")
 scanner:SetScript("OnUpdate", function()
 	RefreshLiveKinds()
@@ -586,6 +652,14 @@ scanner:SetScript("OnUpdate", function()
 	local targetKind = TargetKind()
 	for index = 1, table.getn(overlays) do
 		overlays[index].targetKind = targetKind
+	end
+
+	-- The party changed (a friend joined or left): every plate looks again, a
+	-- friend's plate read before the party knew them was a pet's.
+	local members = GetNumPartyMembers and GetNumPartyMembers() or 0
+	if members ~= partyCount then
+		partyCount = members
+		kindsVersion = kindsVersion + 1
 	end
 
 	local count = WorldFrame:GetNumChildren()
@@ -633,7 +707,14 @@ local function ApplyShown()
 end
 
 scanner:RegisterEvent("PLAYER_ENTERING_WORLD")
-scanner:SetScript("OnEvent", ApplyShown)
+scanner:RegisterEvent("PARTY_MEMBERS_CHANGED")
+scanner:SetScript("OnEvent", function()
+	if event == "PARTY_MEMBERS_CHANGED" then
+		kindsVersion = kindsVersion + 1
+		return
+	end
+	ApplyShown()
+end)
 
 -- V and Shift+V are the client's own keys, out of any addon's reach. With
 -- them ignored (the default; /splates keys, or Options, Nameplates), what they
@@ -681,9 +762,9 @@ end
 
 -- Each kind's command (all, friends: the earlier ones) and its name.
 local COMMAND_KINDS = { normal = "normal", all = "normal", elites = "elite", guardians = "guardian", bosses = "boss",
-	pets = "pet", friends = "pet", totems = "totem" }
+	pets = "pet", friends = "pet", totems = "totem", party = "party", coop = "party" }
 local KIND_NAMES = { normal = "The rank and file", elite = "Elites", guardian = "Guardians", boss = "Bosses",
-	pet = "Your pets and summons", totem = "Your totems" }
+	pet = "Your pets and summons", totem = "Your totems", party = "Co-op members" }
 
 SLASH_SURVIVORPLATES1 = "/splates"
 SlashCmdList["SURVIVORPLATES"] = function(msg)
@@ -737,14 +818,14 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		settings.scale = math.max(0.5, math.min(2, number))
 		Say("scale "..settings.scale..".")
 	else
-		Say("/splates none | normal | elites | guardians | bosses | pets | totems | names | keys | count | scale 0.5-2")
+		Say("/splates none | normal | elites | guardians | bosses | pets | totems | party | names | keys | count | scale 0.5-2")
 		return
 	end
 	Restyle()
 end
 
 -- For Survivor UI's options: whether a kind's plates show (normal, elite,
--- guardian, boss, pet, totem), the plates' size, quietly.
+-- guardian, boss, pet, totem, party), the plates' size, quietly.
 function SurvivorPlates_Shown(kind)
 	return Settings().show[kind] == true
 end

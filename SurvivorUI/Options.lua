@@ -244,6 +244,7 @@ local TABS = {
 	{ key = "meter", label = "Damage meter", color = { 1.00, 0.58, 0.25 } },
 	{ key = "run", label = "This Run", color = { 0.45, 0.60, 1.00 } },
 	{ key = "crits", label = "Biggest Crits", color = { 1.00, 0.76, 0.10 } },
+	{ key = "records", label = "Records", color = { 1.00, 0.55, 0.22 } },
 	{ key = "counters", label = "Counters", color = { 0.40, 0.92, 0.70 } },
 	{ key = "summons", label = "Summons", color = { 0.62, 0.42, 0.95 } },
 	{ key = "party", label = "Party", color = { 0.45, 0.78, 1.00 } },
@@ -298,6 +299,7 @@ local TAB_PIECES = {
 	meter = { "Damage meter" },
 	party = { "Party frames", "Revive bar" },
 	run = { "This Run" },
+	records = { "New best crit", "New jump record" },
 	crits = { "Biggest Crits" },
 	build = { "Build list" },
 	character = { "Character pane" },
@@ -350,7 +352,8 @@ local function ShowPage(key)
 end
 
 -- The sidebar from its top down: a group's name over its tabs.
-local TAB_TOP, TAB_HEIGHT, TAB_STEP, GROUP_STEP = -54, 19, 20, 18
+-- A pixel tighter since the Records tab (v3.0.29): the list clears the credit.
+local TAB_TOP, TAB_HEIGHT, TAB_STEP, GROUP_STEP = -54, 18, 19, 18
 local tabY = TAB_TOP
 for index = 1, table.getn(TABS) do
 	local tab = TABS[index]
@@ -598,14 +601,15 @@ end
 
 -- A choice in one row: an optional label on the left, then each option's ring
 -- and words side by side.
-local function Inline(page, label, options, get, set)
+-- labelWidth: the label's column, 140 unless given (a long row of choices).
+local function Inline(page, label, options, get, set, labelWidth)
 	local color = page.color
 	local x = 0
 	if label then
 		local text = Text(page, 10, TEXT)
 		text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 3)
 		text:SetText(label)
-		x = 140
+		x = labelWidth or 140
 	end
 	for index = 1, table.getn(options) do
 		local option = options[index]
@@ -1798,14 +1802,7 @@ Slider(page, "Add up within", 50, 500, 25, CTGet("ctAddWindow"), CTSet("ctAddWin
 Note(page, "One source's hits that close: one number, their sum and count (1.2k x3).")
 
 Subheader(page, "New best crit")
-Check(page, "Held still when a best is beaten", CTGet("ctRecord"), CTToggle("ctRecord"), "bigger and gold, beside the Biggest Crits")
-Inline(page, "A best is", {
-	{ "ability", "per ability" },
-	{ "run", "the run's biggest" },
-}, CTGet("ctRecordKind"), CTSet("ctRecordKind"))
-Slider(page, "Stays", 1, 4, 0.1, CTGet("ctRecordHold"), CTSet("ctRecordHold"), "%.1f s")
-Slider(page, "Size", 0.6, 1.6, 0.05, CTGet("ctRecordSize"), CTSet("ctRecordSize"))
-Check(page, "A glow behind it", CTGet("ctRecordGlow"), CTToggle("ctRecordGlow"))
+Note(page, "On or off, which crits, its effect, how long it stays and its size: the Records tab.")
 page.y = page.y - 4
 Button(page, "Show a sample", 150, 0, function()
 	if SurvivorUI_CTSample then
@@ -1835,6 +1832,76 @@ page = pages.run
 Header(page, "This Run", "The run's numbers, as the game's victory screen gives them: time, level, kills, elites, guardians and bosses slain, damage, gold and caches. Hover a row for more.")
 PanelHead(page, OnUnlessOff("runPanel"), Call("SurvivorUI_ToggleRun"), "run", "This Run")
 Note(page, "Run History, each run as it ended, opens from the hourglass by the minimap: the Run History tab sets what it keeps.")
+
+Subheader(page, "Jumps")
+Check(page, "Jumps row", OnUnlessOff("runJumps"), Flip("runJumps"),
+	"your jumps this run, a fun stat; hover it for your record in one run and all your jumps. Beating your record: the Records tab")
+
+------------------------------------------------------------------------------
+-- Records (Effects.lua): the new best crit (SurvivorUI.lua) and the new jump
+-- record (Jumps.lua), each on or off and with an effect of its own.
+
+page = pages.records
+Header(page, "Records", "A moment of glory as a record falls: its number stands still a moment over an effect, each record with its own. Picking an effect shows it.")
+local FX_CHOICES = {}
+for index = 1, table.getn(SurvivorUI_RECORD_FX or {}) do
+	table.insert(FX_CHOICES, { SurvivorUI_RECORD_FX[index][1], SurvivorUI_RECORD_FX[index][2] })
+end
+local function ShowCrit()
+	if SurvivorUI_ShowCritRecord then
+		SurvivorUI_ShowCritRecord()
+	end
+end
+local function ShowJump()
+	if SurvivorUI_ShowJumpRecord then
+		SurvivorUI_ShowJumpRecord()
+	end
+end
+-- A record's effect: its choice, and picking one shows it. Seven: in two
+-- rows, four and three.
+local function FxRow(which, show)
+	local get = function() return SurvivorUI_RecordFxKind and SurvivorUI_RecordFxKind(which) end
+	local set = function(kind)
+		if SurvivorUI_SetRecordFx then
+			SurvivorUI_SetRecordFx(which, kind)
+		end
+		show()
+	end
+	local first, second = {}, {}
+	for index = 1, table.getn(FX_CHOICES) do
+		table.insert(index <= 4 and first or second, FX_CHOICES[index])
+	end
+	Inline(page, "Effect", first, get, set, 60)
+	if table.getn(second) > 0 then
+		Inline(page, "", second, get, set, 60)
+	end
+end
+
+Subheader(page, "Crit record")
+Check(page, "New best crit", CTGet("ctRecord"), CTToggle("ctRecord"),
+	"a crit that beats the best stands still a moment, bigger, beside the Biggest Crits; off, it climbs with the rest")
+Inline(page, "A best is", {
+	{ "ability", "per ability" },
+	{ "run", "the run's biggest" },
+}, CTGet("ctRecordKind"), CTSet("ctRecordKind"))
+FxRow("crit", ShowCrit)
+Slider(page, "Stays", 1, 4, 0.1, CTGet("ctRecordHold"), CTSet("ctRecordHold"), "%.1f s")
+Slider(page, "Size", 0.6, 1.6, 0.05, CTGet("ctRecordSize"), CTSet("ctRecordSize"))
+Button(page, "Show it", 150, 0, ShowCrit)
+page.y = page.y - 34
+
+Subheader(page, "Jump record")
+Check(page, "New jump record", OnUnlessOff("jumpRecord"), Flip("jumpRecord"),
+	"once a run, as you pass your record (10 jumps or more), under the new best crit; your jumps are counted in This Run")
+FxRow("jump", ShowJump)
+Slider(page, "Stays", 1, 4, 0.1, function() return tonumber(DB().jumpRecordHold) or 3.2 end,
+	function(value) DB().jumpRecordHold = math.floor(value * 10 + 0.5) / 10 end, "%.1f s")
+Slider(page, "Size", 0.6, 1.6, 0.05, function() return tonumber(DB().jumpRecordSize) or 1 end,
+	function(value) DB().jumpRecordSize = math.floor(value * 100 + 0.5) / 100 end)
+Check(page, "Winged boot", OnUnlessOff("jumpRecordIcon"), Flip("jumpRecordIcon"),
+	"left of the number, as the crit record wears its spell's icon")
+Button(page, "Show it", 150, 0, ShowJump)
+page.y = page.y - 34
 
 ------------------------------------------------------------------------------
 -- Run History (RunHistory.lua).
@@ -2368,7 +2435,7 @@ Check(page, "Roman spell ranks (also applied to the meter)", OnlyIfOn("romanRank
 -- Nameplates.
 
 page = pages.plates
-Header(page, "Nameplates", "Survivor Plates: a plate over the enemies within 20 yards of the hero, and over your own pets and totems, each kind as you choose (off by default: the run tracker shows the bosses, guardians and elites).")
+Header(page, "Nameplates", "Survivor Plates: a plate over the enemies within 20 yards of the hero, and over your own totems and pets and your co-op friends, each kind as you choose (off by default: the run tracker shows the bosses, guardians and elites).")
 if PlatesThere() then
 	PanelHead(page, PlatesOn, function() Plates("none") end)
 	-- Each kind on its own (Survivor Plates' show), a box each.
@@ -2377,8 +2444,9 @@ if PlatesThere() then
 			function() Plates(command) end, note)
 	end
 	Subheader(page, "Friendly")
-	Kind("Pets and summons", "pet", "pets", "a warlock's demons, the Water Elemental, spirit wolves, treants, a hunter's pets: small and green, with the name and icon")
 	Kind("Totems", "totem", "totems", "a shaman's: small and blue")
+	Kind("Pets and summons", "pet", "pets", "a warlock's demons, the Water Elemental, spirit wolves, treants, a hunter's pets: small and green, with the name and icon")
+	Kind("Co-op members", "party", "party", "your friends in a co-op run: the class's color and icon, the health left; a friend down has none (the game gives a fallen hero no plate), the party frames show them")
 	Subheader(page, "Enemy")
 	Kind("Normal", "normal", "normal", "the rank and file of the horde")
 	Kind("Elites", "elite", "elites", nil)

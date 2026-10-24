@@ -242,6 +242,8 @@ local RUN_ROWS = {
 	{ key = "taken",     label = "Damage taken",    color = { 0.90, 0.25, 0.25 } },
 	{ key = "gold",      label = "Gold earned",     color = { 1.00, 0.86, 0.35 }, api = true },
 	{ key = "caches",    label = "Caches opened",   color = { 0.55, 0.85, 0.55 }, api = true },
+	-- A fun stat (Jumps.lua), unless switched off (This Run tab).
+	{ key = "jumps",     label = "Jumps",           color = { 1.00, 0.55, 0.20 }, api = true, optional = "runJumps" },
 }
 
 local panel = CreateFrame("Frame", "SurvivorUIRun", UIParent)
@@ -513,6 +515,18 @@ local function GoldTip(game)
 end
 RowTip("gold", GoldTip)
 RowTip("caches", GoldTip)
+
+RowTip("jumps", function()
+	GameTooltip:SetText("Jumps", 1, 0.55, 0.2)
+	local run, best, total = 0, 0, 0
+	if SurvivorUI_RunJumps then
+		run, best, total = SurvivorUI_RunJumps()
+	end
+	Pair("This run", run)
+	Pair("Your record, in one run", best)
+	Pair("All your jumps", total)
+	GameTooltip:AddLine("Just for fun. Beat your record and it says so, in fire.", 0.7, 0.7, 0.7, 1)
+end)
 
 -- For the last runs (RunHistory.lua): each row's tooltip as it would show
 -- now, by the row's key.
@@ -905,6 +919,9 @@ local function Draw()
 			runRows.taken.value:SetText(Short(Num(game.taken)))
 			runRows.gold.value:SetText(Short(Num(game.ge)))
 			runRows.caches.value:SetText(Num(game.ck))
+			if SurvivorUI_RunJumps then
+				runRows.jumps.value:SetText(SurvivorUI_RunJumps())
+			end
 
 		else
 			dealt = run.dealt
@@ -922,7 +939,8 @@ local function Draw()
 	for index = 1, table.getn(RUN_ROWS) do
 		local row = runRows[index]
 		local info = RUN_ROWS[index]
-		if running and (game or not info.api) then
+		local optionalOff = info.optional and SurvivorUIDB and SurvivorUIDB[info.optional] == false
+		if running and (game or not info.api) and not optionalOff and (info.key ~= "jumps" or SurvivorUI_RunJumps) then
 			row:ClearAllPoints()
 			row:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, y)
 			row:Show()

@@ -231,6 +231,8 @@ local function Snapshot(phase)
 		end
 	end
 	record.tracker = SurvivorUI_TrackerSnapshot and SurvivorUI_TrackerSnapshot() or nil
+	-- The run's jumps, a fun stat (Jumps.lua).
+	record.jumps = SurvivorUI_RunJumps and (SurvivorUI_RunJumps()) or nil
 	-- A co-op run: the party, each hero's damage as the game's party meter had it (Party.lua).
 	record.party = SurvivorUI_PartySnapshot and SurvivorUI_PartySnapshot() or nil
 	-- Fallen: what struck last, the last hits, the damage taken by kind (RunPanel.lua).
@@ -2477,6 +2479,10 @@ local function DrawRun(run, base)
 	-- The magnets taken, from the game's own end (0.102 on).
 	if run.magnets then
 		table.insert(lines, { "Magnets taken", Num(run.magnets), { 0.55, 0.70, 1.00 }, More("magnets", Plain) })
+	end
+	-- The jumps, kept from v3.0.29.
+	if run.jumps then
+		table.insert(lines, { "Jumps", Num(run.jumps), { 1.00, 0.55, 0.20 }, More("jumps", Plain), "jumps" })
 	end
 	-- Personal bests: each number against every earlier run of the same class
 	-- on the same map (an endless one by its end), "NEW BEST" where it beat

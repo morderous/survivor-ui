@@ -56,6 +56,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/splates all` | Plates on every enemy, or only on elites, guardians and bosses |
 | `/splates names` | Names only on elites, guardians and bosses, or on every plate |
 | `/splates none` | No nameplates (the default), or back |
+| `/splates party` | Plates on your co-op friends, in their class color (also `pets`, `totems`) |
 | `/splates scale 1.3` | Plate size, 0.6 to 2 |
 
 ## Survivor Plates
@@ -70,6 +71,7 @@ Nameplates.
 - A marker at 30% health, where execute effects start. Below it the bar turns yellow.
 - Elites and bosses get larger plates in their own colors. A lair guardian wears its elite's plate, except as your target: then it turns blue.
 - The target's plate shows its debuffs and their stacks.
+- Friendly plates, each kind on its own and off by default: your totems (small, blue), your pets and summons (small, green, with their icon), and in a co-op run your friends, in their class's color with the class's icon and the health left.
 
 Commands:
 
@@ -78,6 +80,7 @@ Commands:
 | `/splates none` | Switches between no nameplates (the default) and nameplates |
 | `/splates all` | Switches between plates on every enemy and plates only on elites, guardians and bosses |
 | `/splates names` | Switches between names only on elites, guardians and bosses (the default) and names on every plate |
+| `/splates totems`, `/splates pets`, `/splates party` | Each friendly kind on or off: your totems, your pets and summons, your co-op friends |
 | `/splates scale 1.3` | Plate size, 0.6 to 2 |
 
 ## Survivor UI
@@ -209,6 +212,19 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.29, 2026-10-24
+
+Records with effects of your own, a jump counter, and your co-op friends' plates in their class colors.
+
+**Survivor UI**
+- **Jumps**, a fun stat (asked for on Discord): This Run counts your jumps in a row of its own; hover it for your record in one run and all your jumps ever. Run History keeps each run's. A press while still in the air does not count.
+- **New jump record**: once a run, as you pass your record (from 10 jumps), the number stands still right under the new best crit, over an effect. It moves on its own in move mode (New jump record); `/sui record` shows both notices.
+- **Records tab** (Combat): the new best crit and the new jump record, each on or off (both on by default) and each with an effect of its own, chosen apart: **Fire** (a bed of flames, embers rising and swaying, sparks crackling, the number glowing like a coal), **Lightning** (bolts lashing out and striking down, flashing blue-white), **Radiant** (a golden halo, pillars of light, motes and stars), **Frost** (ice shards flung out, a crown of frost crystals, snow drifting down), **Void** (orbs circling in two rings, motes spiralling in), **Physical** (a blow: three red claw slashes torn across the number, a shockwave, sparks and drops flung out, the number shaken, another blow every so often) and **Nature** (sprouts growing up behind the number and swaying, leaves spiralling out and drifting, pollen rising). Picking one shows it. The jump record has its own Stays and Size too, and a winged boot left of its number (the game's Sprint icon), as the crit record wears its spell's icon. The crit record wears Radiant and the jump record Fire unless chosen. The crit record's settings (which crits, how long, its size) moved here from Combat text; its old glow is the Radiant effect's now.
+- The game guards its jump as it guards every move: an addon that calls it is blocked, and the hero does not jump. Survivor UI only notices the key's own call, so your jump is never touched. A gamepad's jump may not be counted.
+
+**Survivor Plates**
+- **Co-op members' plates** (asked for on Discord): a friendly kind of its own for your friends in a co-op run, a little larger than a pet's, in the friend's class color with the class's icon beside the name and the health left on it. A friend who is down has no plate (the game gives a fallen hero none); the party frames show DOWN. Until now a friend's plate showed in the pets' style, small and green, and only with Pets and summons on. Off by default: `/sui opt`, Nameplates, Friendly (Totems, Pets and summons, Co-op members), or `/splates party`. Like every plate in 1.12, a friend has one only within 20 yards of you; farther away, the party frames still show them.
 
 ### v3.0.28, 2026-10-23
 
