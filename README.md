@@ -213,6 +213,15 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.30, 2026-10-24
+
+Areas read right in the build list, and the game's own item tooltips back by default.
+
+**Survivor UI**
+- **Item tooltips: the game's own by default again**, in Survivor UI's flat look: the bind line, the green "Equip:" lines, as the game writes them. The layout Survivor UI gives them since v3.0.14 (no bind line, the health in green, each effect a line of its own, its numbers in colors) is now a choice: the Tooltips tab, **Item tooltips laid out again**, or Modules, Item tooltips. It takes hold at once. Whoever had switched it on themselves keeps it.
+- **The area of a spell that lands on a spot, in the build list** (reported on Discord for Flamestrike): Flamestrike, Rain of Fire, Volley, Blizzard and Hurricane showed in Info the range they are cast from (30 yd), which never changes. They now show their area's radius ("every enemy within 21 yd of that spot"), what their Area upgrades widen, under a ring with a dot in place of the measuring arrow. Every class's spells were read over for the like: no other showed a wrong number.
+- **Every area under the ring**: the build list's Info now tells an area from a range at a glance. A ring for an area's radius: around you (Frost Nova, Thunder Clap, Blast Wave, Swipe), where you stand (Consecration, Frost Trap), where a spell lands, a totem's (Magma Totem), a burst's (Call of Flame, Polymorph, Bloodrage). The measuring arrow for a range, and a cone's length. Run History's Range column keeps the range.
+
 ### v3.0.29, 2026-10-24
 
 Records with effects of your own, a jump counter, and your co-op friends' plates in their class colors.

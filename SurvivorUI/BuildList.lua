@@ -423,7 +423,10 @@ end
 
 -- A spell's range, read off its button's tooltip: the short lines over its
 -- cast line ("28 yd"; a spell with none, its radius: "11 yd radius"). Kept
--- by its name and rank a few seconds, an upgrade can widen it.
+-- by its name and rank a few seconds, an upgrade can widen it. And, the
+-- second answer, an area's radius: a spell's that lands on a spot ("every
+-- enemy within 21 yd of that spot"), what its upgrades widen, or the radius
+-- of one with no range at all (around you, a totem's, a burst's).
 local scan = CreateFrame("GameTooltip", "SurvivorUIBuildScan", nil, "GameTooltipTemplate")
 local reaches = {}              -- [name:rank] = { text or false, when read }
 
@@ -431,12 +434,12 @@ local function Reach(actionSlot, name, rank)
 	local key = tostring(name)..":"..tostring(rank)
 	local known = reaches[key]
 	if known and GetTime() - known[2] < 5 then
-		return known[1] or nil
+		return known[1] or nil, known[3]
 	end
 	scan:SetOwner(WorldFrame, "ANCHOR_NONE")
 	scan:ClearLines()
 	scan:SetAction(actionSlot)
-	local range, radius
+	local range, radius, area, ranged
 	for line = 2, scan:NumLines() do
 		local text = getglobal("SurvivorUIBuildScanTextLeft"..line)
 		text = text and text:GetText() or ""
@@ -444,6 +447,12 @@ local function Reach(actionSlot, name, rank)
 		-- within 25 yd", Blizzard's "once enemies come within 30 yd": where it
 		-- is cast from, not how far it reaches.
 		text = string.gsub(string.gsub(text, "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
+		local _, _, spot = string.find(text, "within (%d+%.?%d*) yd of that spot")
+		area = area or spot
+		-- Its header line: "30 yd range", "10 yd radius", "13 yd cone".
+		if string.find(text, "^%d+%.?%d* yd range") or string.find(text, "^%d+%.?%d* yd cone") then
+			ranged = true
+		end
 		text = string.gsub(text, "once enemies [ac][ro][em]e? within [%d%.]+ yd", "")
 		local _, _, yards = string.find(text, "(%d+%.?%d*) yd")
 		if yards then
@@ -456,8 +465,11 @@ local function Reach(actionSlot, name, rank)
 	end
 	scan:Hide()
 	local reach = (range or radius) and ((range or radius).." yd") or false
-	reaches[key] = { reach, GetTime() }
-	return reach or nil
+	if not area and radius and not ranged then
+		area = radius
+	end
+	reaches[key] = { reach, GetTime(), area }
+	return reach or nil, area
 end
 
 -- Beside each spell (the options, Build list): its range, its cooldown, or
@@ -615,7 +627,7 @@ end
 
 -- The Info cell's number, centered as every column's, and its symbol in its
 -- tint, centered in the symbols' column at its left: the hourglass, the cross,
--- the shield, the measuring arrow.
+-- the shield, the measuring arrow, the ring of an area.
 local function PlaceReach(row, symbol, tint)
 	local column = columns and columns.range
 	local place = columns and columns.symbol
@@ -719,9 +731,19 @@ local function Fill(row, entry, actionSlot, isRacial)
 		row.range:SetText(absorbing)
 	else
 		-- The measuring arrow stands for the yards: "22" beside it, not "22 yd".
-		local reach = showRange and Reach(actionSlot, name, Field(entry, "rank", 3))
-		PlaceReach(row, reach and "Range", RANGE)
-		row.range:SetText(reach and (string.gsub(reach, " yd$", "")) or "")
+		-- An area (landing on a spot, around you, a totem's, a burst's): its
+		-- radius, under a ring.
+		local reach, area = nil, nil
+		if showRange then
+			reach, area = Reach(actionSlot, name, Field(entry, "rank", 3))
+		end
+		if area then
+			PlaceReach(row, "Area", RANGE)
+			row.range:SetText(area)
+		else
+			PlaceReach(row, reach and "Range", RANGE)
+			row.range:SetText(reach and (string.gsub(reach, " yd$", "")) or "")
+		end
 	end
 	row.cd:SetText(showCooldown and CooldownText(entry) or "")
 	Paint(row, color, isRacial and 0.5 or 1, not isRacial)

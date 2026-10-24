@@ -480,6 +480,19 @@ end
 
 local written                   -- the signature of the last layout written
 
+-- An item's tooltip laid out again only when chosen (Modules, or the Tooltips
+-- tab): from v3.0.30 the game's own layout is the default, in the flat look.
+function SurvivorUI_ItemTooltipOn()
+	local features = SurvivorUIDB and SurvivorUIDB.features
+	return features ~= nil and features.itemTooltip == true
+end
+
+function SurvivorUI_ToggleItemTooltip()
+	if SurvivorUI_SetFeature then
+		SurvivorUI_SetFeature("itemTooltip", not SurvivorUI_ItemTooltipOn())
+	end
+end
+
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
 	if not GameTooltip:IsVisible() then
@@ -487,7 +500,7 @@ watcher:SetScript("OnUpdate", function()
 	end
 	-- Each switched off as a module: the game's own layout stays.
 	local abilities = not SurvivorUI_Feature or SurvivorUI_Feature("abilityTooltip")
-	local items = not SurvivorUI_Feature or SurvivorUI_Feature("itemTooltip")
+	local items = SurvivorUI_ItemTooltipOn()
 	if not (abilities or items) then
 		return
 	end
@@ -517,7 +530,7 @@ end)
 -- pane fills its slot's again every frame, so a layout a frame later would
 -- never show. The game's answers (hasItem, hasCooldown...) are passed on.
 local function ItemNow()
-	if SurvivorUI_Feature and not SurvivorUI_Feature("itemTooltip") then
+	if not SurvivorUI_ItemTooltipOn() then
 		return
 	end
 	local fine, item = pcall(ReadItem)

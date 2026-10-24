@@ -1198,6 +1198,11 @@ end
 page = pages.modules
 Header(page, "Modules", "Each part of SurvivorUI on or off as a whole: off, it does not run at all. Where the game has its own, The game's beside it is that one: SurvivorUI's puts it away, and with both unticked neither shows. Hover one for what it does; * after a reload.")
 
+-- The item tooltip laid out again: on only when chosen (AbilityTooltip.lua).
+local function ItemTipOn()
+	return SurvivorUI_ItemTooltipOn ~= nil and SurvivorUI_ItemTooltipOn()
+end
+
 local MODULES = {
 	{ "Run", {
 		{ "Run tracker", OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"),
@@ -1260,8 +1265,8 @@ local MODULES = {
 			"Every amulet, ring and trinket found, and what is left to find." },
 		{ "Ability tooltips", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"),
 			"A spell's tooltip laid out again: what it does, its numbers in colors, its upgrades, bonuses and talents.", true },
-		{ "Item tooltips", FeatureOn("itemTooltip"), FeatureToggle("itemTooltip", true),
-			"An item's tooltip laid out again: no bind line, its health green, each effect a line of its own, its numbers in colors." },
+		{ "Item tooltips", ItemTipOn, Call("SurvivorUI_ToggleItemTooltip"),
+			"An item's tooltip laid out again: no bind line, its health green, each effect a line of its own, its numbers in colors. Off (the default): the game's own, in the flat look." },
 	} },
 	{ "Interface", {
 		{ "Unit frames", FeatureOn("unitFrames"), FeatureToggle("unitFrames"),
@@ -2074,7 +2079,8 @@ InlineChecks(page, {
 		DB().buildCooldown = not DB().buildCooldown
 	end },
 })
-Note(page, "Either or both. Info: the range read off the spell's own tooltip, or its radius for one with no range (a measuring arrow); for the buffs on you (Divine Shield, Holy Shield, Battle Shout, Slice and Dice, Adrenaline Rush, Lightning Shield, Thorns, and your demons' Demonic Empowerment) how long they last (an hourglass), the row a timer while one is up; for Holy Light, Renew, Healing Wave, Rejuvenation and Regrowth how much they heal (a cross); for Power Word: Shield and Ice Barrier how much they hold back (a shield). A totem's reach is its own, not where it is dropped from. The cooldown as the game has it now, haste in.")Check(page, "Keep the game's row of spells too", OnlyIfOn("gameBuildToo"), function()
+Note(page, "Either or both. Info: the range read off the spell's own tooltip, or a cone's length (a measuring arrow); for an area the radius of it, what its Area upgrades widen (a ring): around you (Frost Nova, Thunder Clap), where a spell lands (Flamestrike, Blizzard), a totem's, a burst's; for the buffs on you (Divine Shield, Holy Shield, Battle Shout, Slice and Dice, Adrenaline Rush, Lightning Shield, Thorns, and your demons' Demonic Empowerment) how long they last (an hourglass), the row a timer while one is up; for Holy Light, Renew, Healing Wave, Rejuvenation and Regrowth how much they heal (a cross); for Power Word: Shield and Ice Barrier how much they hold back (a shield). A totem's reach is its own, not where it is dropped from. The cooldown as the game has it now, haste in.")
+Check(page, "Keep the game's row of spells too", OnlyIfOn("gameBuildToo"), function()
 	DB().gameBuildToo = DB().gameBuildToo ~= true
 	if SurvivorUI_GameHud and SurvivorUI_GameHud.build then
 		SurvivorUI_GameHud.build()
@@ -2426,7 +2432,10 @@ Check(page, "The Combat Log window", OnUnlessOff("chatFilterCombat"), Flip("chat
 -- the ranks' option also the meter's.
 
 page = pages.tooltips
-Header(page, "Tooltips", "Your spells' tooltips, on the action bar and the build list, and the Biggest Crits' cards.")
+Header(page, "Tooltips", "Your spells' tooltips, on the action bar and the build list, the Biggest Crits' cards, and the items'.")
+Subheader(page, "Items")
+Check(page, "Item tooltips laid out again", ItemTipOn, Call("SurvivorUI_ToggleItemTooltip"),
+	"no bind line, the health a piece gives in green, each effect a line of its own, its numbers in colors. Off (the default): the game's own layout, in the flat look")
 Subheader(page, "Spell ranks")
 Check(page, "Roman spell ranks (also applied to the meter)", OnlyIfOn("romanRanks"), function() DB().romanRanks = not DB().romanRanks or nil end,
 	"LXIII instead of Rank 63 in the spells' tooltips and the Biggest Crits' cards, and instead of 63 after the spells' names in the damage meter, the run's and the Run History's")
