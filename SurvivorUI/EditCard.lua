@@ -54,6 +54,21 @@ local PIECES = {
 	["Class gems"] = { places = { "shardsX", "shardsTop" }, noFont = true },
 }
 
+-- A piece that wears another's font and size step, by its name's pattern: the
+-- damage meter's extra windows (MeterWindows.lua, "Damage meter 2" to 4) the
+-- main meter's, exact copies of it, so a face or a step chosen on any of them
+-- is every one's.
+local FOLLOWS = { { "^Damage meter %d+$", "Damage meter" } }
+
+local function FontName(name)
+	for _, each in pairs(FOLLOWS) do
+		if name and string.find(name, each[1]) then
+			return each[2]
+		end
+	end
+	return name
+end
+
 local selected          -- the handle (Mover.lua) whose card is open
 local undo = {}         -- { handle, x, y } before each change, the last on top
 
@@ -160,7 +175,7 @@ end
 
 -- A piece's font; one that cannot write the game's language is left aside.
 local function PieceFont(name)
-	local chosen = PieceFonts()[name]
+	local chosen = PieceFonts()[FontName(name)]
 	if chosen and chosen.path and not WritesPath(chosen.path) then
 		return nil
 	end
@@ -169,12 +184,16 @@ end
 
 -- Every font string in a piece takes its face and its size step. Its own size
 -- is kept the first time it is seen, and again whenever its file sets one of
--- its own, so the step never piles up.
+-- its own, so the step never piles up. The size is read rounded: from the
+-- game's 0.116 GetFont answers a hair off whole (11.000001), and read as it
+-- came it never matched the size kept, so the stepped size was taken for the
+-- file's own and the step piled up every pass (text growing, seen 2026-10-25).
 local function Dress(region, face, step)
 	local path, size, flags = region:GetFont()
 	if not size then
 		return
 	end
+	size = math.floor(size + 0.5)
 	if region.suiSize ~= size or region.suiPath ~= path then
 		region.suiBase = size
 	end
@@ -183,7 +202,7 @@ local function Dress(region, face, step)
 	if wanted ~= path or want ~= size then
 		region:SetFont(wanted, want, flags)
 	end
-	region.suiPath, region.suiSize = region:GetFont()
+	region.suiPath = region:GetFont()
 	region.suiSize = want
 end
 
@@ -202,7 +221,7 @@ local function Walk(frame, face, step)
 end
 
 local function ApplyFont(handle)
-	local piece = PIECES[handle.name]
+	local piece = PIECES[FontName(handle.name)]
 	local chosen = PieceFont(handle.name)
 	if not (handle.mover and piece and not piece.gameFont and not piece.noFont) then
 		return
@@ -248,12 +267,17 @@ fonts:SetScript("OnUpdate", function()
 	end
 	local set = PieceFonts()
 	for _, handle in pairs(SurvivorUI_MoverHandles()) do
-		if set[handle.name] then
+		if set[FontName(handle.name)] then
 			ApplyFont(handle)
 		end
 	end
 	WearWindows()
 end)
+
+-- A piece's font put on now (a window just made, before the next pass).
+function SurvivorUI_WearPieceFont(handle)
+	ApplyFont(handle)
+end
 
 ------------------------------------------------------------------------------
 -- Places: a piece's middle from the screen's, in the screen's units.
@@ -556,12 +580,18 @@ local function SetPieceFont(face, step)
 		return
 	end
 	local set = PieceFonts()
+	local name = FontName(selected.name)
 	if not face and (step or 0) == 0 then
-		set[selected.name] = nil
+		set[name] = nil
 	else
-		set[selected.name] = { path = face, step = step or 0 }
+		set[name] = { path = face, step = step or 0 }
 	end
-	ApplyFont(selected)
+	-- The piece, and every one that wears its font.
+	for _, handle in pairs(SurvivorUI_MoverHandles and SurvivorUI_MoverHandles() or {}) do
+		if FontName(handle.name) == name then
+			ApplyFont(handle)
+		end
+	end
 	Fill()
 end
 
@@ -726,8 +756,10 @@ function Fill()
 	end
 	local chosen = PieceFont(selected.name)
 	local fontRow = { picker, stepDown, stepUp }
-	if piece.gameFont or piece.noFont then
-		gameFont:SetText(piece.noFont and "set in Combat text" or "Default")
+	-- A follower's font row is the piece it follows'.
+	local fontPiece = PIECES[FontName(selected.name)] or piece
+	if fontPiece.gameFont or fontPiece.noFont then
+		gameFont:SetText(fontPiece.noFont and "set in Combat text" or "Default")
 		for _, button in pairs(fontRow) do
 			button:Hide()
 		end
@@ -875,7 +907,7 @@ function SurvivorUI_ResetFonts()
 	end
 	local handles = SurvivorUI_MoverHandles()
 	for _, handle in pairs(handles) do
-		if SurvivorUIDB.pieceFonts[handle.name] then
+		if SurvivorUIDB.pieceFonts[FontName(handle.name)] then
 			handle.fontWorn = true
 		end
 	end
@@ -892,7 +924,7 @@ end
 -- The options' Text size, in each tab: the card's step (A- and A+, -4 to +8)
 -- by the piece's name, its face kept; for the windows with no card, theirs.
 function SurvivorUI_PieceHasFont(name)
-	local piece = PIECES[name]
+	local piece = PIECES[FontName(name)]
 	if piece then
 		return not piece.gameFont and not piece.noFont
 	end
@@ -905,11 +937,12 @@ function SurvivorUI_PieceHasFont(name)
 end
 
 function SurvivorUI_PieceTextStep(name)
-	local chosen = PieceFonts()[name]
+	local chosen = PieceFonts()[FontName(name)]
 	return chosen and chosen.step or 0
 end
 
 function SurvivorUI_SetPieceTextStep(name, step)
+	name = FontName(name)
 	local set = PieceFonts()
 	local face = set[name] and set[name].path
 	step = math.max(-4, math.min(8, math.floor((tonumber(step) or 0) + 0.5)))
@@ -919,7 +952,7 @@ function SurvivorUI_SetPieceTextStep(name, step)
 		set[name] = { path = face, step = step }
 	end
 	for _, handle in pairs(SurvivorUI_MoverHandles and SurvivorUI_MoverHandles() or {}) do
-		if handle.name == name then
+		if FontName(handle.name) == name then
 			ApplyFont(handle)
 		end
 	end

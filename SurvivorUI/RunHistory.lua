@@ -1020,12 +1020,18 @@ pick.arrow:SetHeight(16)
 pick.arrow:SetPoint("RIGHT", after, "LEFT", -4, 0)
 -- Our own arrow (Art\\DropArrow, light, tinted gold): pushed a shade darker,
 -- lit under the mouse.
+-- Each tinted only once the client has it: with the art file gone from an
+-- install (seen 2026-10-25), there is none, and an error here at load would
+-- leave the rest of this file unmade.
 pick.arrow:SetNormalTexture("Interface\\AddOns\\SurvivorUI\\Art\\DropArrow")
-pick.arrow:GetNormalTexture():SetVertexColor(1, 0.82, 0)
 pick.arrow:SetPushedTexture("Interface\\AddOns\\SurvivorUI\\Art\\DropArrow")
-pick.arrow:GetPushedTexture():SetVertexColor(0.72, 0.58, 0)
 pick.arrow:SetHighlightTexture("Interface\\AddOns\\SurvivorUI\\Art\\DropArrow")
-pick.arrow:GetHighlightTexture():SetVertexColor(0.5, 0.42, 0.1)
+for _, tint in pairs({ { pick.arrow:GetNormalTexture(), 1, 0.82, 0 }, { pick.arrow:GetPushedTexture(), 0.72, 0.58, 0 },
+		{ pick.arrow:GetHighlightTexture(), 0.5, 0.42, 0.1 } }) do
+	if tint[1] then
+		tint[1]:SetVertexColor(tint[2], tint[3], tint[4])
+	end
+end
 -- The run's number box moves over for it.
 pageButton:ClearAllPoints()
 pageButton:SetPoint("RIGHT", pick.arrow, "LEFT", -3, 0)

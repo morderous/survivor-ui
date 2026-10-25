@@ -259,6 +259,7 @@ local TABS = {
 	{ key = "chat", label = "Chat", color = { 0.60, 0.80, 0.95 } },
 	{ key = "tooltips", label = "Tooltips", color = { 0.90, 0.86, 0.62 } },
 	{ key = "plates", label = "Nameplates", color = { 0.70, 0.55, 1.00 } },
+	{ key = "marks", label = "Raid marks", color = { 0.95, 0.60, 0.50 } },
 }
 
 local pages, tabButtons, widgets = {}, {}, {}
@@ -353,7 +354,7 @@ end
 
 -- The sidebar from its top down: a group's name over its tabs.
 -- A pixel tighter since the Records tab (v3.0.29): the list clears the credit.
-local TAB_TOP, TAB_HEIGHT, TAB_STEP, GROUP_STEP = -54, 18, 19, 18
+local TAB_TOP, TAB_HEIGHT, TAB_STEP, GROUP_STEP = -54, 18, 19, 16
 local tabY = TAB_TOP
 for index = 1, table.getn(TABS) do
 	local tab = TABS[index]
@@ -2232,6 +2233,9 @@ InlineChecks(page, {
 	{ "Action bar", FeatureOn("actionBar"), FeatureToggle("actionBar") },
 	{ "Buffs", FeatureOn("buffs"), FeatureToggle("buffs") },
 }, "On")
+Check(page, "Spells locked on the bar", function() return SurvivorUI_BarLocked and SurvivorUI_BarLocked() end,
+	function() if SurvivorUI_ToggleBarLock then SurvivorUI_ToggleBarLock() end end,
+	"no spell dragged or shift-clicked off its button: the addon reads the bar in the game's order, and a moved spell wore another's icon and tooltip")
 Note(page, "Each a module, as in Modules: off, the game's own comes back. After a reload.")
 Subheader(page, "Health numbers")
 Note(page, "The percent, the health left, the health left of the whole, or the health left and the percent. Always short: 1.2M for 1,200,000.")
@@ -2592,11 +2596,22 @@ else
 	Note(page, "Survivor Plates is not installed. It comes in the same download as Survivor UI.")
 end
 
--- Raid marks (Marks.lua): each kind marked on its own or not, and with which.
--- The eight marks in a row from x, the one chosen edged in white.
-local function MarkPicker(page, x, get, set)
+------------------------------------------------------------------------------
+-- Raid marks (Marks.lua): each kind marked on its own or not, and with which;
+-- the party's heroes too. The eight marks in a row from x, the one chosen
+-- edged in white.
+
+page = pages.marks
+Header(page, "Raid marks", "From the game's 0.115: a mark put on its own on each kind ticked here, once the enemy is in the fight (a guardian once awake), one enemy per mark at a time, the next waiting for the one marked to fall; and one on each hero of your co-op party. The marks are the party's, seen by everyone, on the plates, the boss bars and the target's frame. To mark an enemy the game has not put in your target, the hero targets it by name for a moment. An enemy or a hero already marked is left as it is.")
+local function MarkPicker(page, x, get, set, taken)
+	local choices = {}
 	for index = 1, table.getn(SurvivorUI_RAID_MARKS or {}) do
-		local value, name = SurvivorUI_RAID_MARKS[index][1], SurvivorUI_RAID_MARKS[index][2]
+		table.insert(choices, SurvivorUI_RAID_MARKS[index])
+	end
+	-- The last box: no mark for this row.
+	table.insert(choices, { 0, "No mark" })
+	for index = 1, table.getn(choices) do
+		local value, name = choices[index][1], choices[index][2]
 		local mark = CreateFrame("Button", nil, page)
 		mark:SetWidth(20)
 		mark:SetHeight(ROW)
@@ -2611,7 +2626,15 @@ local function MarkPicker(page, x, get, set)
 		mark.icon = mark:CreateTexture(nil, "OVERLAY")
 		mark.icon:SetPoint("TOPLEFT", mark.edge, "TOPLEFT", 2, -2)
 		mark.icon:SetPoint("BOTTOMRIGHT", mark.edge, "BOTTOMRIGHT", -2, 2)
-		if SurvivorUI_SetRaidMarkTexture then
+		if value == 0 then
+			-- A bare dash: none.
+			mark.icon:SetTexture(FLAT)
+			mark.icon:SetVertexColor(0.55, 0.55, 0.6, 1)
+			mark.icon:ClearAllPoints()
+			mark.icon:SetPoint("CENTER", mark.edge, "CENTER", 0, 0)
+			mark.icon:SetWidth(8)
+			mark.icon:SetHeight(2)
+		elseif SurvivorUI_SetRaidMarkTexture then
 			SurvivorUI_SetRaidMarkTexture(mark.icon, value)
 		end
 		x = x + 24
@@ -2632,7 +2655,13 @@ local function MarkPicker(page, x, get, set)
 			GameTooltip:Hide()
 		end)
 		function mark:Refresh()
-			local chosen = get() == value
+			-- A mark another row wears is not offered.
+			if value > 0 and taken and taken(value) then
+				self:Hide()
+				return
+			end
+			self:Show()
+			local chosen = (get() or 0) == value
 			if chosen then
 				self.edge:SetVertexColor(1, 1, 1, 1)
 			elseif self.hot then
@@ -2654,15 +2683,45 @@ local function MarkRow(kind, label)
 	check:SetWidth(140)
 	page.y = y
 	MarkPicker(page, 150, function() return SurvivorUI_AutoMarkIcon and SurvivorUI_AutoMarkIcon(kind) end,
-		function(value) if SurvivorUI_SetAutoMarkIcon then SurvivorUI_SetAutoMarkIcon(kind, value) end end)
+		function(value) if SurvivorUI_SetAutoMarkIcon then SurvivorUI_SetAutoMarkIcon(kind, value) end end,
+		function(value) return SurvivorUI_MarkTakenElsewhere and SurvivorUI_MarkTakenElsewhere(value, kind, nil) end)
 	page.y = y - ROW - 3
 end
 
-Subheader(page, "Raid marks")
-Note(page, "From the game's 0.115: each kind ticked gets its mark once in the fight (a guardian once awake), one enemy per mark at a time, shared with your co-op party; seen on the plates, boss bars and target. To mark one, the hero targets it by name a moment.")
+-- A hero's row (Hero 1 to 5, the party by name in order): its mark, the
+-- other heroes' not offered.
+local function HeroRow(slot)
+	local y = page.y
+	local text = Text(page, 11, TEXT)
+	text:SetPoint("TOPLEFT", page, "TOPLEFT", 24, y - 3)
+	text:SetText("Hero "..slot)
+	MarkPicker(page, 150, function() return SurvivorUI_PartyMarkIcon and SurvivorUI_PartyMarkIcon(slot) end,
+		function(value) if SurvivorUI_SetPartyMarkIcon then SurvivorUI_SetPartyMarkIcon(slot, value) end end,
+		function(value) return SurvivorUI_MarkTakenElsewhere and SurvivorUI_MarkTakenElsewhere(value, nil, slot) end)
+	page.y = y - ROW - 3
+end
+
+Subheader(page, "Co-op party")
+Check(page, "Each hero a mark", function() return SurvivorUI_AutoMarkOn and SurvivorUI_AutoMarkOn("party") end,
+	function() if SurvivorUI_ToggleAutoMark then SurvivorUI_ToggleAutoMark("party") end end,
+	"every hero of the party, you too: easier to find a friend in the horde")
+for slot = 1, 5 do
+	HeroRow(slot)
+end
+Note(page, "The heroes take the marks by their names in alphabetical order, Hero 1 the first, so every Survivor UI in the party gives the same; a hero already marked keeps that mark. Every mark belongs to one row: picked here, it leaves the other rows; the last box, a dash, leaves a row with no mark.")
+Subheader(page, "Enemies")
 MarkRow("boss", "Bosses")
 MarkRow("guardian", "Lair guardians")
 MarkRow("elite", "Elites")
+page.y = page.y - 6
+Button(page, "Uncheck all", 150, 0, function()
+	if SurvivorUI_ResetAutoMarks then
+		SurvivorUI_ResetAutoMarks()
+	end
+	RefreshAll()
+end)
+page.y = page.y - 30
+Note(page, "Every row off and with no mark; the marks on the heroes and on your target come off. A mark on an enemy out of reach stays until it falls.")
 
 ------------------------------------------------------------------------------
 -- Layout.
@@ -2910,7 +2969,7 @@ minimize:SetScript("OnClick", Minimize)
 
 local credit = panel:CreateFontString(nil, "OVERLAY")
 credit:SetFont(SurvivorUI_FONT, 9, "")
-credit:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12, 12)
+credit:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12, 6)
 credit:SetWidth(SIDEBAR - 18)
 credit:SetJustifyH("LEFT")
 credit:SetTextColor(0.42, 0.42, 0.47)

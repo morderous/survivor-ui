@@ -654,10 +654,9 @@ local SPELL_KEYS = {
 }
 
 -- A source's icon. A spell of the build: its action button's (the game puts
--- them on buttons 1 to 6, the racial on the last, until one is dragged
--- elsewhere: SurvivorUI_SpellSlot). Anything else, a talent's or
--- an item's own damage: the spellbook, the talents, then the worn items, by
--- name. Found icons are kept; a miss is asked again now and then, as talents
+-- them on buttons 1 to 6, the racial on the last: SurvivorUI_SpellSlot).
+-- Anything else, a talent's or an item's own damage: the spellbook, the
+-- talents, then the worn items, by name. Found icons are kept; a miss is asked again now and then, as talents
 -- and items come during a run.
 local OWN_ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIcon"
 local icons = {}                -- [name] = texture
@@ -863,100 +862,16 @@ function SurvivorUI_MeterColor(name)
 end
 
 -- The action button a spell sits on (the build list, the DoT counters, the
--- totems, the soul shards). The game lays its spells on the bar in its list's
--- order, AZS_SPELLS: the first on button 1, the racial on the = key, button 12;
--- but a spell can be dragged to any button, as in 1.12, and stays there until
--- the next new spell lays the whole bar out again (2026-10-22: a dragged
--- spell took the icon, the range and the tooltip of the one on its old
--- button). So each button is read: its tooltip names its spell, looked up in
--- the list. Read again half a second after the bar changes
--- (ACTIONBAR_SLOT_CHANGED) or the list changes size, never in the instant a
--- card is taken (the game hung once, v3.0.17, with a tooltip read right at
--- the choice), and every few seconds besides. A spell on no button keeps its
--- place in the list as its button. Kept by the spell's key, not its place in
--- the list: a new spell moves the racial (always last) one place down, and a
--- map by place gave the new spell the racial's button until the next reading
--- (Eviscerate with Perception's icon in the meter, 2026-10-23).
-local slotOf = {}               -- [spell's key] = action button
-local slotsRead                 -- GetTime() of the last reading, nil to read again
-local slotsCount                -- the list's size then
-local slotsDue                  -- GetTime() from which to read again, after a change
-local slotScan = CreateFrame("GameTooltip", "SurvivorUISlotScan", nil, "GameTooltipTemplate")
-
-local function ReadSlots()
-	slotOf = {}
-	slotsRead, slotsCount, slotsDue = GetTime(), table.getn(AZS_SPELLS or {}), nil
-	if not (slotScan.SetAction and GetActionTexture) then
-		return
-	end
-	-- Each button's spell, by its tooltip's title: {button: index in the list}.
-	local at = {}
-	for slot = 1, 120 do
-		local held
-		if HasAction then
-			held = HasAction(slot)
-		else
-			held = GetActionTexture(slot)
-		end
-		if held then
-			slotScan:SetOwner(WorldFrame, "ANCHOR_NONE")
-			slotScan:ClearLines()
-			slotScan:SetAction(slot)
-			-- A tooltip the game left with no lines says nothing: its old
-			-- text is not read (a title read off the wrong button put the
-			-- racial's icon on Curse of Agony once, 2026-10-22).
-			local title = slotScan:NumLines() > 0 and getglobal("SurvivorUISlotScanTextLeft1")
-			title = title and title:GetText()
-			slotScan:Hide()
-			if title and title ~= "" then
-				title = string.gsub(string.gsub(title, "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
-				at[slot] = SpellIndex(English(title))
-			end
-		end
-	end
-	-- The list's order is the rule: a spell keeps its own button (the
-	-- twelfth for the racial) unless that button's tooltip names another
-	-- spell and some other button's names this one.
-	local count = slotsCount
-	for index = 1, count do
-		local entry = AZS_SPELLS[index]
-		local key = entry and (entry.key or entry[1])
-		local own = (index == count) and 12 or index
-		if key then
-			if at[own] == index then
-				slotOf[key] = own
-			elseif at[own] ~= nil then
-				for slot = 1, 120 do
-					if at[slot] == index then
-						slotOf[key] = slot
-						break
-					end
-				end
-			end
-		end
-	end
-end
-
-local slotWatch = CreateFrame("Frame")
-slotWatch:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
-slotWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
-slotWatch:SetScript("OnEvent", function()
-	slotsDue = GetTime() + 0.5
-end)
-
--- The action button of the spell at this index of AZS_SPELLS.
+-- totems, the soul shards): the game lays its spells on the bar in its list's
+-- order, AZS_SPELLS, the first on button 1 and the racial on the = key, button
+-- 12, and that order is the rule. A spell dragged to another button (as in
+-- 1.12) is not followed: from v3.0.23 to v3.0.31 every button's tooltip was
+-- read every few seconds to follow one, and the reading confused the icons
+-- now and then (Amarolk's, 2026-10-25), more trouble than a drag is worth;
+-- the bar is locked against a drag instead (SurvivorUI.lua, from v3.0.32).
 function SurvivorUI_SpellSlot(index)
 	local count = table.getn(AZS_SPELLS or {})
-	local now = GetTime()
-	if count ~= slotsCount and not slotsDue then
-		slotsDue = now + 0.5
-	end
-	if not slotsRead or (slotsDue and now >= slotsDue) or now - slotsRead > 5 then
-		ReadSlots()
-	end
-	local entry = AZS_SPELLS and AZS_SPELLS[index]
-	local key = entry and (entry.key or entry[1])
-	return (key and slotOf[key]) or (index == count and 12 or index)
+	return (index == count and count > 0) and 12 or index
 end
 
 function SurvivorUI_SpellButton(name)

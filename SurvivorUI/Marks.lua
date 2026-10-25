@@ -18,6 +18,13 @@
 -- of its kind waits. An enemy already marked (by a friend in a co-op run too)
 -- is never marked again.
 --
+-- A co-op party's heroes too (asked for on Discord by Towneh, who marked his
+-- friends to find them in the horde): a mark picked for each, Hero 1 to 5;
+-- the heroes take them by their names in order, so every Survivor UI in the
+-- party gives the same, and a hero already marked (by hand, or by a friend)
+-- keeps that mark. Every mark is one row's: picked on a row it goes from the
+-- others, and a row may have none (its "No mark"), marking nothing then.
+--
 -- The marks known, each enemy's (marked here, or read off the target and the
 -- mouseover), show on Survivor UI's boss bars (SurvivorUI_RaidMarkOf), and the
 -- target's over its frame; Survivor Plates shows the client's own on a plate.
@@ -28,9 +35,15 @@ SurvivorUI_RAID_MARKS = {
 	{ 4, "Triangle" }, { 3, "Diamond" }, { 2, "Circle" }, { 1, "Star" },
 }
 local KINDS = { "boss", "guardian", "elite" }
-local ON_KEYS = { boss = "markBosses", guardian = "markGuardians", elite = "markElites" }
+local ON_KEYS = { boss = "markBosses", guardian = "markGuardians", elite = "markElites", party = "markParty" }
 local ICON_KEYS = { boss = "markBossIcon", guardian = "markGuardianIcon", elite = "markEliteIcon" }
+-- The marks on a fresh install (nothing picked yet): the enemies' and the
+-- heroes' (Square, Moon, Triangle, Diamond, Circle). Once anything is picked
+-- or emptied, only what is saved counts: 0 saved is no mark.
 local DEFAULT_ICONS = { boss = 8, guardian = 7, elite = 1 }
+local DEFAULT_PARTY = { 6, 5, 4, 3, 2 }
+local PARTY_UNITS = { "player", "party1", "party2", "party3", "party4" }
+local PARTY_RETRY = 3           -- a hero asked to wear a mark again after this long
 local TICK = 0.2
 local RETRY = 4                 -- an enemy tried by name again after this long
 local SETTLE = 1.5              -- a mark put here, read back as gone only after this long
@@ -69,12 +82,104 @@ function SurvivorUI_ToggleAutoMark(kind)
 	DB()[ON_KEYS[kind]] = not SurvivorUI_AutoMarkOn(kind)
 end
 
+-- Whether anything was ever picked or emptied: before that, the defaults.
+local function Fresh()
+	local db = DB()
+	if db.markPartyIcons then
+		return false
+	end
+	for _, key in pairs(ICON_KEYS) do
+		if db[key] ~= nil then
+			return false
+		end
+	end
+	return true
+end
+
+-- The mark the party's hero at this place (by name, in order) wears; nil
+-- for none.
+function SurvivorUI_PartyMarkIcon(slot)
+	local set = DB().markPartyIcons
+	local saved = tonumber(set and set[slot])
+	if saved == nil and Fresh() then
+		return DEFAULT_PARTY[slot]
+	end
+	return saved and saved > 0 and saved or nil
+end
+
+-- A kind's mark; nil for none.
 function SurvivorUI_AutoMarkIcon(kind)
-	return tonumber(DB()[ICON_KEYS[kind]]) or DEFAULT_ICONS[kind]
+	local saved = tonumber(DB()[ICON_KEYS[kind]])
+	if saved == nil and Fresh() then
+		return DEFAULT_ICONS[kind]
+	end
+	return saved and saved > 0 and saved or nil
+end
+
+-- What is saved the first time anything is picked: the defaults in use, so
+-- the rows keep what they showed.
+local function Settle()
+	if not Fresh() then
+		return
+	end
+	local db = DB()
+	db.markPartyIcons = {}
+	for slot = 1, 5 do
+		db.markPartyIcons[slot] = DEFAULT_PARTY[slot]
+	end
+	for kind, key in pairs(ICON_KEYS) do
+		db[key] = DEFAULT_ICONS[kind]
+	end
+end
+
+-- A mark picked on a row goes from every other: 0 (none) there.
+local function Release(index)
+	local db = DB()
+	for slot = 1, 5 do
+		if db.markPartyIcons[slot] == index then
+			db.markPartyIcons[slot] = 0
+		end
+	end
+	for _, key in pairs(ICON_KEYS) do
+		if db[key] == index then
+			db[key] = 0
+		end
+	end
+end
+
+-- index nil or 0: no mark for that row.
+function SurvivorUI_SetPartyMarkIcon(slot, index)
+	Settle()
+	index = tonumber(index) or 0
+	if index > 0 then
+		Release(index)
+	end
+	DB().markPartyIcons[slot] = index
 end
 
 function SurvivorUI_SetAutoMarkIcon(kind, index)
+	Settle()
+	index = tonumber(index) or 0
+	if index > 0 then
+		Release(index)
+	end
 	DB()[ICON_KEYS[kind]] = index
+end
+
+-- Whether a mark is another row's than the one asked for (its kind, or its
+-- hero's slot): the options offer a row only the marks no other row has.
+function SurvivorUI_MarkTakenElsewhere(index, kind, slot)
+	for other = 1, 5 do
+		if other ~= slot and SurvivorUI_PartyMarkIcon(other) == index then
+			return true
+		end
+	end
+	for _, otherKind in ipairs(KINDS) do
+		if otherKind ~= kind and SurvivorUI_AutoMarkIcon(otherKind) == index then
+			return true
+		end
+	end
+	return false
 end
 
 -- The kind an enemy the game lists is marked as, once it is in the fight; nil
@@ -179,7 +284,7 @@ local function MarkTarget()
 		return
 	end
 	local index = SurvivorUI_AutoMarkIcon(kind)
-	if not Taken(index, id) then
+	if index and not Taken(index, id) then
 		SetRaidTarget("target", index)
 		markedAt[id] = GetTime()
 		Know(id, index)
@@ -191,7 +296,7 @@ local function Aim()
 	local now = GetTime()
 	for _, kind in ipairs(KINDS) do
 		local index = SurvivorUI_AutoMarkIcon(kind)
-		if SurvivorUI_AutoMarkOn(kind) and not Taken(index) then
+		if index and SurvivorUI_AutoMarkOn(kind) and not Taken(index) then
 			for id, entry in pairs(alive) do
 				if FightKind(entry) == kind and not known[id] and now - (tried[id] or -RETRY) >= RETRY then
 					tried[id] = now
@@ -243,13 +348,66 @@ local function Steps()
 	aim = nil
 end
 
+-- The party's heroes, each its mark, one a tick.
+local partyTried = {}           -- [hero's name] = when it was last asked to wear one
+local function MarkParty()
+	if not SurvivorUI_AutoMarkOn("party") or (GetNumPartyMembers and GetNumPartyMembers() or 0) == 0 then
+		return
+	end
+	local units, names = {}, {}
+	for _, unit in ipairs(PARTY_UNITS) do
+		local name = UnitExists(unit) and UnitName(unit)
+		if name and not units[name] then
+			units[name] = unit
+			table.insert(names, name)
+		end
+	end
+	table.sort(names)
+	local now = GetTime()
+	for index = 1, table.getn(names) do
+		local name = names[index]
+		local unit, mark = units[name], SurvivorUI_PartyMarkIcon(index)
+		if mark and mark > 0 and not GetRaidTargetIndex(unit) and now - (partyTried[name] or -PARTY_RETRY) >= PARTY_RETRY then
+			partyTried[name] = now
+			SetRaidTarget(unit, mark)
+			return
+		end
+	end
+end
+
+-- Everything off and every row without a mark (the options' Uncheck all);
+-- the marks on the heroes and on the target taken off, those the game lets
+-- this hero reach. One on an enemy out of reach stays until it falls.
+function SurvivorUI_ResetAutoMarks()
+	local db = DB()
+	for _, key in pairs(ON_KEYS) do
+		db[key] = nil
+	end
+	for _, key in pairs(ICON_KEYS) do
+		db[key] = 0
+	end
+	db.markPartyIcons = { 0, 0, 0, 0, 0 }
+	if SetRaidTarget and GetRaidTargetIndex then
+		for _, unit in ipairs(PARTY_UNITS) do
+			if UnitExists(unit) and GetRaidTargetIndex(unit) then
+				SetRaidTarget(unit, 0)
+			end
+		end
+		if UnitExists("target") and GetRaidTargetIndex("target") then
+			SetRaidTarget("target", 0)
+		end
+	end
+	known, markedAt, tried, partyTried = {}, {}, {}, {}
+	aim = nil
+end
+
 local function AnyOn()
 	for _, kind in ipairs(KINDS) do
 		if SurvivorUI_AutoMarkOn(kind) then
 			return true
 		end
 	end
-	return false
+	return SurvivorUI_AutoMarkOn("party")
 end
 
 -- The target's mark over its frame (Survivor UI's), at the portrait's top.
@@ -308,6 +466,7 @@ watch:SetScript("OnUpdate", function()
 	if AZS_GetPhase() ~= "playing" or not AnyOn() or not SetRaidTarget then
 		return
 	end
+	MarkParty()
 	MarkTarget()
 	if TargetByName then
 		Aim()

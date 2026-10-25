@@ -305,6 +305,10 @@ local function Window(index)
 		end)
 	end
 	windows[index] = window
+	-- The main meter's font and text size (its card's), on this one too.
+	if window.handle and SurvivorUI_WearPieceFont then
+		SurvivorUI_WearPieceFont(window.handle)
+	end
 	Place(window)
 	return window
 end
@@ -378,6 +382,9 @@ Draw = function(window)
 		local bar = window.bars[index]
 		if not bar and SurvivorUI_MeterNewBar then
 			bar = SurvivorUI_MeterNewBar(window)
+			if window.handle and SurvivorUI_WearPieceFont then
+				SurvivorUI_WearPieceFont(window.handle)
+			end
 			window.bars[index] = bar
 		end
 		if bar then

@@ -213,6 +213,18 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.32, 2026-10-25
+
+Text sizes steady again on the game's 0.116, the spell-to-button map reverted and the bar locked, raid marks in a tab of their own with a mark for each hero.
+
+**Survivor UI**
+- **The spell-to-button map is gone**: since v3.0.23 the addon read every action button's tooltip every few seconds to follow a spell dragged to another button, and the reading confused a spell's icon now and then (reported on Discord by Amarolk). The spells are taken where the game lays them again, button 1 to 6 and the racial on =, and **the bar is locked** against moving them (Frames & bar, **Spells locked on the bar**, on): a drag or a shift-click off a button does nothing, and the chat says why once. Unlocked, a spell dragged elsewhere wears the icon of the one that was there until the game lays the bar out again.
+- **Raid marks in a tab of their own** (Interface, Raid marks), out of the Nameplates tab, with an **Uncheck all** button: every row off and without a mark, and the marks taken off the heroes and your target.
+- **A mark for each hero of a co-op party** (asked for on Discord by Towneh, who marked his friends to find them in the horde): Raid marks, **Each hero a mark**, off by default, and a mark picked for each of Hero 1 to 5. The heroes take them by their names in alphabetical order, so every Survivor UI in the party gives the same, and a hero already marked keeps that mark. Every mark belongs to one row: picked for a hero or a kind of enemy, it leaves the other rows, and the last box of a row, a dash, leaves it with no mark (a row on with no mark marks nothing).
+- **Run History survives a missing art file**: with Art\DropArrow.tga gone from an install, Run History failed at load ("RunHistory.lua:1024: attempt to index a nil value", reported on Discord by Fedda) and nothing of it was made; the arrow goes untinted instead. The pins on the minimap are art files too (Art\PinCache and PinLair): with the folder short of them the minimap shows none, so an install missing them wants the launcher's update again.
+- **Text no longer grows or shrinks on its own** (reported on Discord by Zitten, Squezy, Setoz, Klopp and 문핼이 after the game's 0.116): a piece with a text size step of its own (its card's A- or A+) had its step added again every second and a half, bigger and bigger with a + step, smaller with a -, since the game's new engine answers a font's size a hair off whole and the addon no longer recognised the size it had set. Sizes are read rounded now. A step of 0 was never affected.
+- **The extra damage meter windows in the main one's font and text size**: a face or a text size chosen on the main meter's card (move mode) is theirs too, at once, and a change on any of them changes all. They were drawn in the default font and size (reported by Lucas).
+
 ### v3.0.31, 2026-10-25
 
 Raid marks put on their own, more damage meter windows, your talents' clocks and a move key of your own.

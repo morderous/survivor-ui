@@ -1049,6 +1049,52 @@ local function PlaceButton(prefix, id, position)
 	end
 end
 
+-- The spells locked on the bar (from v3.0.32; the Frames & bar tab, Spells
+-- locked on the bar, on): the addon reads the bar in the game's order, so a
+-- spell dragged to another button, or picked up with a shift-click, wore the
+-- icon, range and tooltip of the one that was there in the build list and the
+-- meter (the reading of each button that followed a drag, v3.0.23 to v3.0.31,
+-- confused the icons now and then and went). The game's PickupAction and
+-- PlaceAction, which every drag, drop and shift-click on the bar goes
+-- through, do nothing while locked; the first one blocked a session says
+-- why in the chat.
+local stockPickup, stockPlace = PickupAction, PlaceAction
+local lockSaid
+
+function SurvivorUI_BarLocked()
+	return not (SurvivorUIDB and SurvivorUIDB.barLock == false)
+end
+
+function SurvivorUI_ToggleBarLock()
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.barLock = not SurvivorUI_BarLocked()
+end
+
+local function LockSays()
+	if not lockSaid then
+		lockSaid = true
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the spells are locked on the bar, where the game lays them (Frames & bar, Spells locked on the bar, unlocks them).")
+	end
+end
+
+if stockPickup then
+	PickupAction = function(id)
+		if SurvivorUI_BarLocked() then
+			LockSays()
+			return
+		end
+		return stockPickup(id)
+	end
+end
+if stockPlace then
+	PlaceAction = function(id)
+		if SurvivorUI_BarLocked() then
+			return
+		end
+		return stockPlace(id)
+	end
+end
+
 local function LayoutBar()
 	-- The bags: a run has nothing to keep in them, so B and Shift+B open none;
 	-- with the action bar (Modules), as its bag buttons go.
