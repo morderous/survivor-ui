@@ -157,9 +157,9 @@ end
 -- left corner counted from the screen's corner, in the screen's own units; then
 -- a neighbour's edge (or middle) near one of its own pulls it into line.
 local function Snap(frame, own)
-	-- In Move UI, on a tab's pieces, or with Alt held (the grid is up): let
-	-- go of Alt before the mouse to put a piece down free.
-	if not (editing or focus or IsAltKeyDown()) then
+	-- In Move UI, on a tab's pieces, or with the move key (Alt) held (the grid
+	-- is up): let go of it before the mouse to put a piece down free.
+	if not (editing or focus or SurvivorUI_MoveKeyDown()) then
 		return
 	end
 	local left, top = frame:GetLeft(), frame:GetTop()
@@ -432,7 +432,7 @@ end)
 local shown
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
-	local all = IsAltKeyDown() or editing or (dragging ~= nil and not InFocus(dragging))
+	local all = SurvivorUI_MoveKeyDown() or editing or (dragging ~= nil and not InFocus(dragging))
 	local state = (all and "all" or "some")..focusVersion
 	if state == shown then
 		return
@@ -473,10 +473,11 @@ function SurvivorUI_SetMoveFocus(names)
 	end
 end
 
--- Whether a piece is being placed (move mode, Alt held, or its tab open): one
--- that only shows now and then (the Level Up! button) shows a sample then.
+-- Whether a piece is being placed (move mode, the move key held, or its tab
+-- open): one that only shows now and then (the Level Up! button) shows a
+-- sample then.
 function SurvivorUI_Placing(name)
-	return editing or IsAltKeyDown() or focus == "all" or (focus ~= nil and focus[name] == true)
+	return editing or SurvivorUI_MoveKeyDown() or focus == "all" or (focus ~= nil and focus[name] == true)
 end
 
 ------------------------------------------------------------------------------

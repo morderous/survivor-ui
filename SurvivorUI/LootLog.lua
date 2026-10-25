@@ -90,7 +90,7 @@ local function DefaultPlace(again)
 	end
 end
 
-log:SetScript("OnDragStart", function() if IsAltKeyDown() then log:StartMoving() end end)
+log:SetScript("OnDragStart", function() if SurvivorUI_MoveKeyDown() then log:StartMoving() end end)
 log:SetScript("OnDragStop", function() log:StopMovingOrSizing() SavePlace() end)
 
 log.title = log:CreateFontString(nil, "OVERLAY")
@@ -207,7 +207,7 @@ local function Bar(index)
 	end)
 	bar:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	bar:RegisterForDrag("LeftButton")
-	bar:SetScript("OnDragStart", function() if IsAltKeyDown() then log:StartMoving() end end)
+	bar:SetScript("OnDragStart", function() if SurvivorUI_MoveKeyDown() then log:StartMoving() end end)
 	bar:SetScript("OnDragStop", function() log:StopMovingOrSizing() SavePlace() end)
 	bars[index] = bar
 	return bar

@@ -104,7 +104,7 @@ local function RestorePlace()
 	end
 end
 
-head:SetScript("OnDragStart", function() if IsAltKeyDown() then head:StartMoving() end end)
+head:SetScript("OnDragStart", function() if SurvivorUI_MoveKeyDown() then head:StartMoving() end end)
 head:SetScript("OnDragStop", function() head:StopMovingOrSizing() SavePlace() end)
 
 local function HeadText(size, flags, justify)
@@ -1011,7 +1011,7 @@ head:SetScript("OnEnter", function()
 			end
 		end
 	end
-	GameTooltip:AddLine("Hold Alt and drag to move. /sui tracker hides it.", 0.7, 0.7, 0.7, 1)
+	GameTooltip:AddLine(SurvivorUI_MoveHint().." /sui tracker hides it.", 0.7, 0.7, 0.7, 1)
 	GameTooltip:Show()
 end)
 head:SetScript("OnLeave", function() GameTooltip:Hide() end)

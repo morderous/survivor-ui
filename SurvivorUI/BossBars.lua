@@ -5,9 +5,9 @@
 -- the final boss on top, then every lair guardian that is awake (and, on
 -- request, every elite). Each shows the whole name on the left and the health
 -- left on the right, in the color of its kind; an enraged boss's name turns red;
--- its debuffs as small icons inside it, draining as they run out. The game sends these to
--- addons for the whole map, so a bar stays live at any distance, unlike a
--- nameplate.
+-- its debuffs as small icons inside it, draining as they run out; its raid
+-- mark before its name. The game sends these to addons for the whole map, so a
+-- bar stays live at any distance, unlike a nameplate.
 --
 -- Click a bar to target that enemy. Hold Alt and drag a bar to move the column.
 -- The game's own boss bars are put away while these are on, and come back with
@@ -145,6 +145,11 @@ local function Bar(index)
 	bar.mark:SetPoint("LEFT", bar, "LEFT", 2, 0)
 	bar.mark:Hide()
 	bar.markRoom = 0
+	-- Its raid mark (Marks.lua), after the lair's.
+	bar.raid = bar.health:CreateTexture(nil, "OVERLAY")
+	bar.raid:SetWidth(BAR_HEIGHT - 2)
+	bar.raid:SetHeight(BAR_HEIGHT - 2)
+	bar.raid:Hide()
 
 	bar.value = bar.health:CreateFontString(nil, "OVERLAY")
 	bar.value:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
@@ -159,7 +164,7 @@ local function Bar(index)
 	end)
 	bar:RegisterForDrag("LeftButton")
 	bar:SetScript("OnDragStart", function()
-		if IsAltKeyDown() then
+		if SurvivorUI_MoveKeyDown() then
 			holder:StartMoving()
 		end
 	end)
@@ -174,7 +179,7 @@ local function Bar(index)
 			GameTooltip:AddLine(this.kindLabel, this.color[1], this.color[2], this.color[3])
 		end
 		GameTooltip:AddDoubleLine("Health", (this.hp or 0).." / "..(this.hpm or 0), 0.7, 0.7, 0.7, 1, 1, 1)
-		GameTooltip:AddLine("Click to target. Hold Alt and drag to move.", 0.7, 0.7, 0.7, 1)
+		GameTooltip:AddLine("Click to target. "..SurvivorUI_MoveHint(), 0.7, 0.7, 0.7, 1)
 		GameTooltip:Show()
 	end)
 	bar:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -352,6 +357,15 @@ local function Fill(bar, unit)
 		SurvivorUI_SetLairMark(bar.mark, mark)
 	end
 	local markRoom = mark and BAR_HEIGHT - 2 or 0
+	-- Its raid mark after it, when it wears one.
+	local raid = SurvivorUI_RaidMarkOf and SurvivorUI_RaidMarkOf(Field(unit, "id", 2))
+	if SurvivorUI_SetRaidMarkTexture then
+		SurvivorUI_SetRaidMarkTexture(bar.raid, raid)
+	end
+	if raid then
+		bar.raid:SetPoint("LEFT", bar, "LEFT", 2 + markRoom, 0)
+		markRoom = markRoom + BAR_HEIGHT - 1
+	end
 	if bar.markRoom ~= markRoom then
 		bar.markRoom = markRoom
 		bar.name:SetPoint("LEFT", bar, "LEFT", 5 + markRoom, 0)

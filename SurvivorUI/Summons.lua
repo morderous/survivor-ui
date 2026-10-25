@@ -13,7 +13,15 @@
 --   each kind.
 --
 -- The game tells them from its 0.110 (AZS_GetSummons: key, kind, name, icon,
--- permanent, remaining); before it there is nothing to show. The limits are
+-- permanent, remaining); before it there is nothing to show.
+--
+-- And the talents' clocks, from its 0.115 (AZS_GetTimers: name, icon, kind,
+-- duration, remaining, ready): a summon's (Butcher's next Felguard, Pact of
+-- the Annihilan's next Pit Lord, Legion Gate's next wave) on its demons'
+-- icon, a bar under it filling to the next one; none out yet, the icon
+-- dimmed, counting down. A cooldown's (a proc's, a heal's, a second life's
+-- wait), from MIN_COOLDOWN seconds long, an icon of its own, dimmed and
+-- counting while it waits, bright when ready ("Talent cooldowns", on). The limits are
 -- the game's rules (LIMITS, GATE_MOST), to set again when it changes them.
 -- Over the buffs by default, going with the player frame, until moved on
 -- its own (move mode: "Summons"). Module "Summons" (Modules, Combat).
@@ -33,6 +41,10 @@ local LESSER = { imp = true, succubus = true, felhunter = true, voidwalker = tru
 local GATE_MOST = 12
 local GATE_NAME = "Legion Gate"
 local GATE_ICON = "Interface\\Icons\\INV_Weapon_ShortBlade_05"   -- the talent's icon (Sinister Strike's too)
+-- A summoning talent's clock, by its name: the group its demons are in.
+local TIMER_GROUP = { ["Butcher"] = "felguard", ["Pact of the Annihilan"] = "pit_lord", ["Legion Gate"] = "gate" }
+local MIN_COOLDOWN = 5          -- a shorter wait, a proc's limit (Nightfall's half second, Daybreak's 3, Hallowed Ground's 4), is not shown
+local NEXT_COLOR = { 0.78, 0.55, 1 }
 
 local holder = CreateFrame("Frame", "SurvivorUISummons", UIParent)
 holder:SetWidth(SIZE)
@@ -72,6 +84,22 @@ local function Tooltip(icon)
 	end
 	GameTooltip:SetOwner(icon, "ANCHOR_TOPLEFT")
 	GameTooltip:AddLine(group.name or group.key or "?", 1, 0.82, 0)
+	-- A talent's clock: its next one, or its cooldown.
+	if group.cooldown then
+		GameTooltip:AddLine(group.next > 0 and ("Ready in "..TimeText(group.next).." sec") or "Ready", 1, 1, 1)
+		GameTooltip:AddLine("Every "..TimeText(group.wait).." sec at most", 0.7, 0.7, 0.7)
+		GameTooltip:Show()
+		return
+	end
+	if group.next then
+		GameTooltip:AddLine("Next one in "..TimeText(group.next).." sec, every "..TimeText(group.wait).." sec ("..group.timer..")",
+			NEXT_COLOR[1], NEXT_COLOR[2], NEXT_COLOR[3])
+	end
+	if group.waiting then
+		GameTooltip:AddLine("None out yet", 0.7, 0.7, 0.7)
+		GameTooltip:Show()
+		return
+	end
 	if group.stays then
 		GameTooltip:AddLine(group.count == 1 and "Stays the whole run" or group.count.." out, the whole run", 1, 1, 1)
 	else
@@ -117,6 +145,19 @@ local function Icon(index)
 	icon.time = Text(icon, 9, "TOP", 0, -1)
 	icon.time:SetTextColor(1, 0.95, 0.6)
 	icon.count = Text(icon, 9, "BOTTOM", 0, 0)
+	-- Under it, a talent's clock: a slim bar filling to the next one.
+	icon.next = CreateFrame("StatusBar", nil, icon)
+	icon.next:SetStatusBarTexture(FLAT)
+	icon.next:SetMinMaxValues(0, 1)
+	icon.next:SetHeight(2)
+	icon.next:SetPoint("TOPLEFT", icon, "BOTTOMLEFT", 0, -2)
+	icon.next:SetPoint("TOPRIGHT", icon, "BOTTOMRIGHT", 0, -2)
+	icon.next.back = icon.next:CreateTexture(nil, "BACKGROUND")
+	icon.next.back:SetTexture(FLAT)
+	icon.next.back:SetVertexColor(0, 0, 0, 0.8)
+	icon.next.back:SetPoint("TOPLEFT", icon.next, "TOPLEFT", -1, 1)
+	icon.next.back:SetPoint("BOTTOMRIGHT", icon.next, "BOTTOMRIGHT", 1, -1)
+	icon.next:Hide()
 	icon:SetScript("OnEnter", function() hovered = this; Tooltip(this) end)
 	icon:SetScript("OnLeave", function() hovered = nil; GameTooltip:Hide() end)
 	icon:Hide()
@@ -187,10 +228,13 @@ end
 
 local function Groups()
 	local groups, byKey = {}, {}
+	local out = {}              -- [group key] = how many are out, the ones that stay too
 	local list = AZS_GetSummons()
 	for index = 1, table.getn(list) do
 		local p = list[index]
 		local key = p.key or p.kind or "?"
+		local outKey = LESSER[key] and "gate" or key
+		out[outKey] = (out[outKey] or 0) + 1
 		local stays = p.permanent or not p.remaining
 		if stays then
 			-- The ones that stay, only when the options ask for them (Summons tab).
@@ -224,6 +268,34 @@ local function Groups()
 	for index = 1, table.getn(groups) do
 		table.sort(groups[index].left, function(a, b) return a > b end)
 	end
+	-- The talents' clocks (the game's 0.115).
+	local timers = AZS_GetTimers and AZS_GetTimers() or {}
+	for index = 1, table.getn(timers) do
+		local t = timers[index]
+		local icon = t.icon and t.icon ~= "" and ("Interface\\Icons\\"..t.icon) or FALLBACK_ICON
+		if t.kind == "summon" then
+			local key = TIMER_GROUP[t.name] or ("next:"..tostring(t.name))
+			local group = byKey[key]
+			if not group then
+				-- Its demons not shown (none out, or ones that stay with
+				-- "Track permanent pets" off): the talent's icon, with how
+				-- many are out; dimmed while none is.
+				group = Group(groups, byKey, key, t.name, icon, false)
+				group.count = out[key] or 0
+				group.waiting = group.count == 0
+				group.limit = LIMITS[key] or (key == "gate" and GATE_MOST) or nil
+			end
+			if key == "gate" then
+				group.icon = icon
+			end
+			group.next, group.wait, group.timer = t.remaining or 0, t.duration or 0, t.name
+		elseif t.kind == "cooldown" and (t.duration or 0) >= MIN_COOLDOWN
+				and not (SurvivorUIDB and SurvivorUIDB.summonsTimers == false) then
+			local group = Group(groups, byKey, "cd:"..tostring(t.name), t.name, icon, false)
+			group.cooldown = true
+			group.next, group.wait = t.remaining or 0, t.duration or 0
+		end
+	end
 	return groups
 end
 
@@ -244,8 +316,38 @@ local function Draw(groups)
 			count = tostring(group.count)
 		end
 		icon.count:SetFont(SurvivorUI_FONT, (string.len(count) >= 4 and 8 or 9) + (SurvivorUI_FONT_BUMP or 0), "OUTLINE")
+		icon.time:SetTextColor(1, 0.95, 0.6)
+		icon.texture:SetVertexColor(1, 1, 1)
+		if group.cooldown then
+			-- Its wait: dimmed and counting, bright when ready.
+			count = ""
+			local waiting = group.next > 0
+			icon.texture:SetVertexColor(waiting and 0.4 or 1, waiting and 0.4 or 1, waiting and 0.4 or 1)
+			icon.time:SetText(waiting and TimeText(group.next) or "")
+		elseif group.waiting then
+			-- None out yet: dimmed, counting down to the first.
+			icon.texture:SetVertexColor(0.5, 0.5, 0.5)
+			icon.time:SetTextColor(NEXT_COLOR[1], NEXT_COLOR[2], NEXT_COLOR[3])
+			icon.time:SetText(group.next and TimeText(group.next) or "")
+		elseif group.longest then
+			icon.time:SetText(TimeText(group.longest))
+		else
+			-- Out for good, a talent's clock on it: the next one's seconds.
+			icon.time:SetTextColor(NEXT_COLOR[1], NEXT_COLOR[2], NEXT_COLOR[3])
+			icon.time:SetText(group.next and TimeText(group.next) or "")
+		end
 		icon.count:SetText(count)
-		icon.time:SetText(group.longest and TimeText(group.longest) or "")
+		if group.next and group.wait and group.wait > 0 then
+			icon.next:SetValue(1 - math.min(1, group.next / group.wait))
+			if group.cooldown then
+				icon.next:SetStatusBarColor(1, 0.82, 0.3, 1)
+			else
+				icon.next:SetStatusBarColor(NEXT_COLOR[1], NEXT_COLOR[2], NEXT_COLOR[3], 1)
+			end
+			icon.next:Show()
+		else
+			icon.next:Hide()
+		end
 		icon:Show()
 	end
 	for index = shown + 1, table.getn(icons) do

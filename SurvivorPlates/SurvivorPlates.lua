@@ -18,9 +18,15 @@
 -- The bars sit exactly where the client seats its plates: position and
 -- stacking are the client's own.
 --
+-- A raid mark (the game's 0.115; Survivor UI's Raid marks put them on their
+-- own) is the client's own icon, the plate's last region, left of the bar: the
+-- client hangs it off its wider stock plate's edge, far from the bar.
+--
 -- Each kind is chosen on its own (/splates, or Survivor UI's options): the
 -- enemies' four, normal, elites, guardians and bosses (all of them by
--- default; a kind left out still shows as your target), and the friends'
+-- default; a kind left out still shows as your target, unless /splates
+-- target: the game moves the target on its own, and with the rank and file
+-- left out its plate jumps from one to the next, asked for by Klopp), and the friends'
 -- three, your pets and summons and your totems (asked for on Discord by
 -- Sedz and Amarolk, with a warlock's many demons about) and the members of a
 -- co-op run's party (the game's 0.113; asked for by Klopp and ChaoticBon),
@@ -36,10 +42,14 @@
 --   /splates none       no nameplates at all (the default), or back
 --   /splates normal | elites | guardians | bosses     each enemy kind, on or off
 --   /splates pets | totems | party                    each friend's, on or off
+--   /splates target     the target's plate though its kind is left out (default), or not
 --   /splates names      names only on elites, guardians and bosses (default), or on every plate
 --   /splates keys       V and Shift+V ignored (default), or let them work as the game has them
 --   /splates count      the plates on screen now, by kind (a check)
 --   /splates scale N    plate size, 0.5 to 2 (default 1)
+--
+-- A key of one's own turns all the plates on and off as /splates none does
+-- (Key Bindings, Survivor Plates; or Survivor UI's options, Nameplates).
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 -- Survivor UI's face when it is installed: a player's own Expressway, else its
@@ -288,6 +298,21 @@ local overlays = {}
 -- blanked once it is skinned. Each entry has .plate and .stock.name.
 SurvivorPlatesRegistry = overlays
 
+-- The client's raid icon, left of the bar, as tall as the bar and a little
+-- more. The client sets its anchor again when the window changes size, so it
+-- is put back each time a mark shows.
+local function PlaceRaidIcon(overlay)
+	local raid = overlay.stock.raid
+	if not raid or not overlay.style then
+		return
+	end
+	local size = math.max(14, (overlay.style.height + 8) * Settings().scale)
+	raid:ClearAllPoints()
+	raid:SetPoint("RIGHT", overlay.bar, "LEFT", -3, 0)
+	raid:SetWidth(size)
+	raid:SetHeight(size)
+end
+
 local function ApplyKind(overlay, kind)
 	local style = KINDS[kind]
 	local settings = Settings()
@@ -302,6 +327,7 @@ local function ApplyKind(overlay, kind)
 	overlay.health:SetFont(SurvivorUI_FONT or FONT, math.max(8, (style.height - 1) * scale) + FONT_BUMP, "OUTLINE")
 
 	overlay.named = settings.names or kind ~= "normal"
+	PlaceRaidIcon(overlay)
 	if FRIEND_KINDS[kind] then
 		overlay.marker:Hide()
 	end
@@ -494,9 +520,17 @@ local function UpdatePlate()
 		overlay.iconFor = name
 		FriendIcon(overlay, name)
 	end
+	local marked = stock.raid and stock.raid:IsShown() and true or false
+	if marked and not overlay.marked then
+		PlaceRaidIcon(overlay)
+	end
+	overlay.marked = marked
 
-	-- A kind left out goes without a plate; an enemy's still shows as the target.
-	if not Settings().show[overlay.kind] and not (isTarget and not FRIEND_KINDS[overlay.kind]) then
+	-- A kind left out goes without a plate; an enemy's still shows as the
+	-- target, unless that is off too.
+	local settings = Settings()
+	if not settings.show[overlay.kind]
+		and not (isTarget and settings.targetPlate ~= false and not FRIEND_KINDS[overlay.kind]) then
 		overlay.icon:Hide()
 		if not overlay.put then
 			overlay.put = true
@@ -575,9 +609,12 @@ local function SkinPlate(plate)
 	end
 
 	-- Stock regions: border, glow, name, level, level icon, raid icon. The two
-	-- font strings come in that order; the raid icon is the last texture.
+	-- font strings come in that order; the raid icon is the last texture, kept.
 	local regions = { plate:GetRegions() }
 	local count = table.getn(regions)
+	if count > 0 and regions[count]:GetObjectType() == "Texture" then
+		stock.raid = regions[count]
+	end
 	for index = 1, count do
 		local region = regions[index]
 		if region:GetObjectType() == "FontString" then
@@ -766,6 +803,9 @@ local COMMAND_KINDS = { normal = "normal", all = "normal", elites = "elite", gua
 local KIND_NAMES = { normal = "The rank and file", elite = "Elites", guardian = "Guardians", boss = "Bosses",
 	pet = "Your pets and summons", totem = "Your totems", party = "Co-op members" }
 
+BINDING_HEADER_SURVIVORPLATES = "Survivor Plates"
+BINDING_NAME_SURVIVORPLATES_TOGGLE = "Nameplates on or off"
+
 SLASH_SURVIVORPLATES1 = "/splates"
 SlashCmdList["SURVIVORPLATES"] = function(msg)
 	local settings = Settings()
@@ -807,6 +847,10 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		end
 		Say(total.." plates on screen, "..drawn.." drawn: "..(table.getn(parts) > 0 and table.concat(parts, ", ") or "none")..".")
 		return
+	elseif command == "target" then
+		settings.targetPlate = settings.targetPlate == false
+		Say(settings.targetPlate and "your target's plate shows, whatever its kind."
+			or "your target's plate only when its kind is on.")
 	elseif command == "names" then
 		settings.names = not settings.names
 		Say("names on "..(settings.names and "every plate" or "elites, guardians and bosses only")..".")
@@ -818,7 +862,7 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		settings.scale = math.max(0.5, math.min(2, number))
 		Say("scale "..settings.scale..".")
 	else
-		Say("/splates none | normal | elites | guardians | bosses | pets | totems | party | names | keys | count | scale 0.5-2")
+		Say("/splates none | normal | elites | guardians | bosses | pets | totems | party | target | names | keys | count | scale 0.5-2")
 		return
 	end
 	Restyle()
@@ -828,6 +872,15 @@ end
 -- guardian, boss, pet, totem, party), the plates' size, quietly.
 function SurvivorPlates_Shown(kind)
 	return Settings().show[kind] == true
+end
+
+-- The key (Bindings.xml): all the plates off, or back, as /splates none.
+function SurvivorPlates_Toggle()
+	SlashCmdList["SURVIVORPLATES"]("none")
+end
+
+function SurvivorPlates_TargetPlate()
+	return Settings().targetPlate ~= false
 end
 
 function SurvivorPlates_KeysAllowed()

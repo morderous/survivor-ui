@@ -16,7 +16,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 
 ## Commands at a glance
 
-**Click the S button** by the minimap (or type `/sui opt`) for the options: every piece and every look on or off, the panels' size, and **Move UI**, a grid to line every piece up (right click the S button to go straight to it). While a tab is open its own pieces can be dragged, so you can play while setting them. **Hold Alt** any time to see everything that can be moved, outlined with its name, and drag it. Every piece keeps its place.
+**Click the S button** by the minimap (or type `/sui opt`) for the options: every piece and every look on or off, the panels' size, and **Move UI**, a grid to line every piece up (right click the S button to go straight to it). While a tab is open its own pieces can be dragged, so you can play while setting them. **Hold Alt** any time to see everything that can be moved, outlined with its name, and drag it (another key, or none, in the Layout tab). Every piece keeps its place.
 
 | Command | What it does |
 |---|---|
@@ -104,7 +104,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - Combat text in place of Default: beside the hero, each hit with its source's icon (a weapon for melee and shots) in its damage meter color, the crits on the right, the heals rising over the hero and the hits taken falling under the action bar; each column moves where you want it, and one source's hits close together add up (`1.2k x3`). Where, how far, the look and what shows are all yours to set; or Default, or none at all.
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the Default clock.
 - A run panel on the left, under the loot list: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
-- A damage meter under the build list, in place of Default, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, the damage to bosses in the last boss fight, or in a co-op run each hero's damage.
+- A damage meter under the build list, in place of Default, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, the damage to bosses in the last boss fight, or in a co-op run each hero's damage. The + at its corner opens more windows, each on a page of its own.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health and its debuffs (icons that drain to grey as they run out), at any distance. Click one to target it.
 - A DoT and fear counter over the action bar: over each damage over time spell's button, how many of it are out on the enemies, counted by their ticks; over a fear's (Psychic Scream, Intimidating Shout...), how many enemies it holds now. In the spell's damage meter color.
 - A guardians' list against the run tracker's left side, small and with no background: a line a lair, with a little arrow toward it, the guardian's name, how far it is, and asleep, awake with its health, or slain at its second and back in so many seconds. The arrows turn with the way you face (or point north up). Over it, the achievement "Slay four guardians before 8:00": how many fell before 8:00.
@@ -120,7 +120,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - In the game's co-op runs: a frame for each friend in your party (health in the class's color, down and being brought back), a Party Damage page in the meter, the party named in Run History, and, if you want it, a bar while you are down or bring a friend back.
 - A Jewelry Collection (its button on the character pane, or `/sui collection`): every amulet, ring and trinket of the game's codex, found or still to find, with the range seen of each bonus and what each gives by rarity; your class's own amulets by spell, in your class's color. One collection for the whole game folder, shared by every character and account on it. Compact, to read at a glance in a fight.
 
-Left click a frame to target it, right click for its menu. Hold Alt to outline every movable piece: the action bar, the player and target frames, the buffs, the kills and gold line, the panels. Drag any of them; each keeps its place. `/sui center` puts the action bar back; the option "Player and target frames move with the action bar" (Frames & bar) joins the two frames to it.
+Left click a frame to target it, right click for its menu. Hold Alt (or the move key chosen in Layout) to outline every movable piece: the action bar, the player and target frames, the buffs, the kills and gold line, the panels. Drag any of them; each keeps its place. `/sui center` puts the action bar back; the option "Player and target frames move with the action bar" (Frames & bar) joins the two frames to it.
 
 Commands:
 
@@ -212,6 +212,23 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.31, 2026-10-25
+
+Raid marks put on their own, more damage meter windows, your talents' clocks and a move key of your own.
+
+**Survivor UI**
+- **More damage meter windows**: a **+** at the main meter's corner opens another window on a page the main one does not show (Party Damage in a co-op run, else Healing Done, Boss Damage or Damage Done), up to three more. Each wears the main meter's bars, colors, icons and cards; its title switches its page, its **-** closes it. Hold Alt (the move key) and drag to move one, or move mode (Damage meter 2 to 4); the wheel rolls its list. Which are open, their pages and places are kept, and they show while the main meter does. Each is as big as the main one, with as many lines.
+- **The revive bar on by default** (the game's 0.115 lets an addon put its own away): while you are down, or bring a friend back, Survivor UI's bar shows and the game's slim one and its "you are down" line go, put back as the game closes or when ours is switched off (the Party tab, or Modules with **The game's** beside it). With a game before 0.115, ours stays off unless chosen, as before: the game's could not be put away.
+- **Your talents' clocks in the Summons** (the game's 0.115, `AZS_GetTimers`): the next Felguard (Butcher), Pit Lord (Pact of the Annihilan) or Legion Gate wave as a slim bar under the demons' icon, filling to the next one, its seconds in the tooltip; with none out yet, the talent's icon dimmed and counting down, "0/2". A talent's or a piece of jewelry's cooldown from 5 sec long gets an icon of its own (a second life: Cheat Death, Reincarnation, Last Stand, Divine Intervention; Rapture's shield, Swiftmend's Regrowth; a proc's limit of a few seconds is left out), dimmed and counting while it waits, bright when ready (the Summons tab, **Talent cooldowns**, on). The Legion Gate's icon is now the talent's own. "Keep the game's row of spells too" is no longer needed for the Butcher and Pact countdown.
+- **Raid marks put on their own** (asked for on Discord by Farsigt; the game's 0.115 lets everyone mark): the Nameplates tab, **Raid marks**: bosses, lair guardians and elites, each on or off (all off by default) and with the mark you pick (a skull, a cross and a star unless picked). A mark goes on once the enemy is in the fight, a guardian once awake (one asleep in its lair takes no mark). When the game has it in your target, it is marked there; else the hero targets it by name for a moment. One enemy per mark at a time: the next waits for the one marked to fall. An enemy already marked, by a friend in a co-op run too, is left as it is. The marks go to your whole party.
+- **Raid marks seen**: on the boss bars, before the name, and over the target's portrait.
+- **A move key of your own** (asked for on Discord by Szanyi, whose push to talk is Alt): the Layout tab, **Move key**: Alt as before, Ctrl, Shift, or None (Move UI only). It is the key held to see the grid and drag the pieces while you play; the tooltips name it.
+
+**Survivor Plates**
+- **A raid mark by the bar**: the game hangs a plate's mark off its own wider plate, far left of the bar; it now sits right by it, as tall as the bar.
+- **Your target's plate, or not** (asked for on Discord by Klopp): the Nameplates tab, **Your target always**, on as before. Off, a kind left out shows no plate on your target either: with the rank and file left out, no plate jumps from one enemy to the next as the game moves your target. /splates target.
+- **A key for the plates**: Key Bindings in the game's menu, Survivor Plates, **Nameplates on or off**, or the Nameplates tab, **Plates on or off key** (click, then press the key; a right click clears it). It turns all the plates off and back, as /splates none. None by default.
 
 ### v3.0.30, 2026-10-24
 

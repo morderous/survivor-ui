@@ -92,6 +92,39 @@ end
 
 local Feature = SurvivorUI_Feature
 
+-- The key held to see the grid and drag the pieces in play (the Layout tab):
+-- Alt by default; Ctrl, Shift, or none (Move UI only) for whoever holds Alt
+-- for something else, a push to talk (asked for on Discord by Szanyi).
+function SurvivorUI_MoveKey()
+	local key = SurvivorUIDB and SurvivorUIDB.moveKey
+	if key == "ctrl" or key == "shift" or key == "none" then
+		return key
+	end
+	return "alt"
+end
+
+function SurvivorUI_MoveKeyDown()
+	local key = SurvivorUI_MoveKey()
+	if key == "alt" then
+		return IsAltKeyDown() and true or false
+	elseif key == "ctrl" then
+		return IsControlKeyDown() and true or false
+	elseif key == "shift" then
+		return IsShiftKeyDown() and true or false
+	end
+	return false
+end
+
+-- "Hold Alt and drag to move." (what: " it"), or Move UI's when there is no key.
+function SurvivorUI_MoveHint(what)
+	local names = { alt = "Alt", ctrl = "Ctrl", shift = "Shift" }
+	local name = names[SurvivorUI_MoveKey()]
+	if name then
+		return "Hold "..name.." and drag to move"..(what or "").."."
+	end
+	return "Move UI moves"..(what or " it")..", at the top of /sui opt."
+end
+
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
 	if SurvivorUIDB.damageText == nil then
@@ -167,6 +200,7 @@ do
 	local MARKS = {
 		bosses = "hidGameBosses", build = "hidGameBuild", levels = "hidGameLevels", loot = "hidGameLoot",
 		flag = "hidGameFlag", meter = "hidGameMeter", tally = "hidGameTally", clock = "hidGameClock",
+		revive = "hidGameRevive",
 	}
 	if gameSetHud then
 		AZS_SetHudShown = function(part, shown)
@@ -748,7 +782,7 @@ local function UnitFrame(unit, name, side, dropdown)
 		end
 	end)
 	frame:RegisterForDrag("LeftButton")
-	frame:SetScript("OnDragStart", function() if IsAltKeyDown() then row:StartMoving() end end)
+	frame:SetScript("OnDragStart", function() if SurvivorUI_MoveKeyDown() then row:StartMoving() end end)
 	frame:SetScript("OnDragStop", function() row:StopMovingOrSizing() end)
 	return frame
 end
@@ -3344,7 +3378,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui collection  the Jewelry Collection: every amulet, ring and trinket found, and what is left to find; /sui collection reset  forgets it all")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 10  sets the chat text size, 8 to 18 (default 10)")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
+		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt (or the move key chosen in Layout) to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui bosses  switches the boss bars on or off; /sui bosses elites  lists elites too")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the minimap and the Default box")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pace  shows or hides the kill pace, the orb by the run tracker's clock; /sui pace class  against this class's runs only, or every class's; /sui pace reset  forgets the runs it holds against")

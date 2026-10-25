@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="SURVIVORPLATES_TOGGLE" header="SURVIVORPLATES">
+		SurvivorPlates_Toggle()
+	</Binding>
+</Bindings>

@@ -448,9 +448,9 @@ local function Hidden(label)
 	return HiddenSet()[label]
 end
 
--- Arranging: in move mode, or with Alt held.
+-- Arranging: in move mode, or with the move key (Alt) held.
 local function Arranging()
-	return (SurvivorUI_EditMode and SurvivorUI_EditMode()) or IsAltKeyDown()
+	return (SurvivorUI_EditMode and SurvivorUI_EditMode()) or SurvivorUI_MoveKeyDown()
 end
 
 local function SaveOrder(ordered)

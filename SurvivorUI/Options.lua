@@ -1047,6 +1047,7 @@ local GAME = {
 	meter = { key = "noGameMeter", hud = "meter", name = "damage meter" },
 	levels = { key = "noGameLevels", hud = "levels", name = "Level Up! button" },
 	flag = { key = "noGameFlag", hud = "flag", name = "red flag on the minimap" },
+	revive = { key = "noGameRevive", hud = "revive", name = "revive bar" },
 }
 
 -- The Default shows while SurvivorUI's is off, and it is wanted.
@@ -1198,6 +1199,12 @@ end
 page = pages.modules
 Header(page, "Modules", "Each part of SurvivorUI on or off as a whole: off, it does not run at all. Where the game has its own, The game's beside it is that one: SurvivorUI's puts it away, and with both unticked neither shows. Hover one for what it does; * after a reload.")
 
+-- The revive bar: on as Party.lua reads it (by default where the game lets
+-- its own be put away).
+local function ReviveIsOn()
+	return SurvivorUI_ReviveOn ~= nil and SurvivorUI_ReviveOn()
+end
+
 -- The item tooltip laid out again: on only when chosen (AbilityTooltip.lua).
 local function ItemTipOn()
 	return SurvivorUI_ItemTooltipOn ~= nil and SurvivorUI_ItemTooltipOn()
@@ -1251,8 +1258,8 @@ local MODULES = {
 			"Your summons over your frame: a buff-sized icon for each kind out (a hunter's beast, Treants, Spirit Wolves, a Water Elemental, each demon), how many of it are out and the longest time one has left; hover one for each of them. From the game's 0.110. Moved on its own: move mode, Summons." },
 		{ "Party frames", FeatureOn("partyFrames"), FeatureToggle("partyFrames", true),
 			"In a co-op run, a frame for each friend: the health in the class's color, DOWN while down, a gold fill while you bring them back; hover one for their damage. It puts the game's party frames away. From the game's 0.113. Moved on its own: move mode, Party frames." },
-		{ "Revive bar", OnlyIfOn("reviveBar"), function() DB().reviveBar = DB().reviveBar ~= true end,
-			"In a co-op run, a bar while you are down (how far a friend has brought you back, and who) or while you bring a friend back. Off by default: the game shows a slim one of its own while a friend is brought back. From the game's 0.113. Moved on its own: move mode, Revive bar." },
+		{ "Revive bar", ReviveIsOn, Call("SurvivorUI_ToggleRevive"),
+			"In a co-op run, a bar while you are down (how far a friend has brought you back, and who) or while you bring a friend back. It puts the game's revive bar away (the game's 0.115 on; before it, off unless chosen). Moved on its own: move mode, Revive bar.", nil, nil, GAME.revive },
 	} },
 	{ "Character", {
 		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
@@ -2044,23 +2051,25 @@ Slider(page, "Size", 0.5, 2, 0.05, function() return tonumber(DB().counterSize) 
 -- Summons (Summons.lua): your summons over the player frame.
 
 page = pages.summons
-Header(page, "Summons", "Your summons over your frame, from the game's 0.110: a buff-sized icon for each kind out, how many against the game's limit in the corner and the longest time one has left in the middle. The Legion Gate's lesser demons are one icon; hover any icon for each one's time.")
+Header(page, "Summons", "Your summons over your frame, from the game's 0.110: a buff-sized icon for each kind out, how many against the game's limit in the corner and the longest time one has left in the middle. The Legion Gate's lesser demons are one icon; hover any icon for each one's time. From the game's 0.115 your talents' clocks too: a bar under a demon's icon filling to the next one (Butcher, Pact of the Annihilan, Legion Gate), a dimmed icon counting down while none is out.")
 PanelHead(page, FeatureOn("summons"), FeatureToggle("summons", true), nil, "Summons", nil, nil, { font = false })
 Subheader(page, "What shows")
 Check(page, "Track permanent pets", OnlyIfOn("summonsPermanent"),
 	function() DB().summonsPermanent = DB().summonsPermanent ~= true end,
 	"the ones that stay the whole run too: the Imp, your companion demon, a hunter's beast, Treants, Spirit Wolves, a Water Elemental. Off (the default), only the ones that come and go.")
+Check(page, "Talent cooldowns", OnUnlessOff("summonsTimers"), Flip("summonsTimers"),
+	"a talent's or a piece of jewelry's wait between two goes, from 5 sec long: a second life (Cheat Death, Reincarnation, Last Stand, Divine Intervention), a shield or a heal (Rapture, Swiftmend). An icon of its own, dimmed and counting while it waits, bright when ready. From the game's 0.115.")
 
 ------------------------------------------------------------------------------
 -- Party (Party.lua): a co-op run's party frames and revive bar.
 
 page = pages.party
-Header(page, "Party", "For co-op runs, from the game's 0.113: a frame for each friend in your party, and, if you want it, a bar while you are down or bring a friend back. The damage meter's title opens a Party Damage page too, and Run History names the party of a run played in one. Out of a party nothing shows; while this tab is open, a sample does.")
+Header(page, "Party", "For co-op runs, from the game's 0.113: a frame for each friend in your party, and a bar while you are down or bring a friend back. The damage meter's title opens a Party Damage page too, and Run History names the party of a run played in one. Out of a party nothing shows; while this tab is open, a sample does.")
 PanelHead(page, FeatureOn("partyFrames"), FeatureToggle("partyFrames", true), "party", "Party frames", nil, nil, { font = false })
 Note(page, "Left of your frame, the first friend at the bottom and each next one over it. Each friend's class icon, their health in the class's color and what is left of it; DOWN in red while down, a gold fill while you bring them back, Reviving you on the one bringing you back. Hover one for their damage this run and their top spell; click to target. The game's party frames are put away while these are on.")
 Subheader(page, "Revive bar")
-Check(page, "Revive bar", OnlyIfOn("reviveBar"), function() DB().reviveBar = DB().reviveBar ~= true end,
-	"while you are down: how far a friend has brought you back, and who; while you bring one back: how far. Off by default: the game shows a slim bar of its own while a friend is brought back, and it cannot be put away. Moved on its own: move mode, Revive bar.")
+Check(page, "Revive bar", ReviveIsOn, Call("SurvivorUI_ToggleRevive"),
+	"while you are down: how far a friend has brought you back, and who; while you bring one back: how far. It puts the game's slim revive bar away (the game's 0.115 on; before it, the game's could not be put away, so ours was off unless chosen). Moved on its own: move mode, Revive bar.")
 
 ------------------------------------------------------------------------------
 -- Build list (BuildList.lua).
@@ -2085,7 +2094,7 @@ Check(page, "Keep the game's row of spells too", OnlyIfOn("gameBuildToo"), funct
 	if SurvivorUI_GameHud and SurvivorUI_GameHud.build then
 		SurvivorUI_GameHud.build()
 	end
-end, "The game's own row stays under the list. Since the game's 0.111 it is the only place that counts down to the next Felguard or Pit Lord (Butcher, Pact of the Annihilan), on the talent's icon.")
+end, "The game's own row stays under the list. From the game's 0.115 the Summons count down to the next Felguard or Pit Lord (Butcher, Pact of the Annihilan) as well, so this is no longer needed for that.")
 
 -- Character pane (CharacterPane.lua): it opens with this tab.
 
@@ -2119,7 +2128,7 @@ function classWidget:Refresh()
 	classTitle:SetText(string.upper("Stats for "..(name or "this class")))
 end
 table.insert(widgets, classWidget)
-Note(page, "In the character pane and on the panel alike. Each class keeps its own; a number switched off never shows. For their order, drag a number or a group's title in either, in move mode or holding Alt.")
+Note(page, "In the character pane and on the panel alike. Each class keeps its own; a number switched off never shows. For their order, drag a number or a group's title in either, in move mode or holding the move key (Alt unless chosen in Layout).")
 
 -- Every number, by group, in two columns: on shows, off never does.
 local function StatCheck(x, y, width, label, color)
@@ -2445,6 +2454,112 @@ Check(page, "Roman spell ranks (also applied to the meter)", OnlyIfOn("romanRank
 
 page = pages.plates
 Header(page, "Nameplates", "Survivor Plates: a plate over the enemies within 20 yards of the hero, and over your own totems and pets and your co-op friends, each kind as you choose (off by default: the run tracker shows the bosses, guardians and elites).")
+
+-- A key of the game's bindings (Key Bindings in the game's menu lists it too):
+-- click, then press the key, Alt, Ctrl or Shift with it if wanted (Escape
+-- leaves it as it was); a right click clears it.
+local keyCapture = CreateFrame("Frame", nil, UIParent)
+keyCapture:SetFrameStrata("TOOLTIP")
+keyCapture:EnableKeyboard(true)
+keyCapture:Hide()
+keyCapture:SetScript("OnKeyDown", function()
+	local key = arg1
+	if key == "LSHIFT" or key == "RSHIFT" or key == "LCTRL" or key == "RCTRL" or key == "LALT" or key == "RALT"
+		or key == "UNKNOWN" then
+		return
+	end
+	this:Hide()
+	local command = this.command
+	if key ~= "ESCAPE" and SetBinding then
+		if IsShiftKeyDown() then
+			key = "SHIFT-"..key
+		end
+		if IsControlKeyDown() then
+			key = "CTRL-"..key
+		end
+		if IsAltKeyDown() then
+			key = "ALT-"..key
+		end
+		local old = GetBindingKey(command)
+		if old then
+			SetBinding(old)
+		end
+		SetBinding(key, command)
+		SaveBindings(GetCurrentBindingSet())
+	end
+	RefreshAll()
+end)
+
+local function KeyButton(page, label, command, note)
+	local text = Text(page, 10, TEXT)
+	text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 5)
+	text:SetText(label)
+	local button = CreateFrame("Button", nil, page)
+	button:SetWidth(150)
+	button:SetHeight(ROW)
+	button:SetPoint("TOPLEFT", page, "TOPLEFT", 140, page.y)
+	button.edge = Fill(button, "BORDER", 0.3, 0.3, 0.35, 1)
+	button.edge:SetAllPoints(button)
+	button.fill = Fill(button, "ARTWORK", 0.06, 0.06, 0.08, 1)
+	button.fill:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+	button.fill:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+	button.label = Text(button, 10, TEXT)
+	button.label:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	button:SetScript("OnClick", function()
+		if arg1 == "RightButton" then
+			local old = GetBindingKey and GetBindingKey(command)
+			if old then
+				SetBinding(old)
+				SaveBindings(GetCurrentBindingSet())
+			end
+			keyCapture:Hide()
+		else
+			keyCapture.command = command
+			keyCapture:Show()
+		end
+		RefreshAll()
+	end)
+	button:SetScript("OnEnter", function()
+		this.hot = true
+		this:Refresh()
+		GameTooltip:SetOwner(this, "ANCHOR_TOP")
+		GameTooltip:SetText(label, 1, 1, 1)
+		if note then
+			GameTooltip:AddLine(note, 0.8, 0.8, 0.8, 1)
+		end
+		GameTooltip:AddLine("Click, then press the key (Alt, Ctrl or Shift with it if you like). Escape leaves it as it was; a right click clears it.", 0.8, 0.8, 0.8, 1)
+		GameTooltip:Show()
+	end)
+	button:SetScript("OnLeave", function()
+		this.hot = nil
+		this:Refresh()
+		GameTooltip:Hide()
+	end)
+	function button:Refresh()
+		local color = page.color
+		local waiting = keyCapture:IsShown() and keyCapture.command == command
+		local key = GetBindingKey and GetBindingKey(command)
+		if waiting then
+			self.label:SetText("Press a key...")
+			self.label:SetTextColor(color[1], color[2], color[3])
+		elseif key then
+			self.label:SetText(key)
+			self.label:SetTextColor(1, 1, 1)
+		else
+			self.label:SetText("Not set")
+			self.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+		end
+		if waiting or self.hot then
+			self.edge:SetVertexColor(color[1], color[2], color[3], 1)
+		else
+			self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+		end
+	end
+	table.insert(widgets, button)
+	page.y = page.y - ROW - 2
+end
+
 if PlatesThere() then
 	PanelHead(page, PlatesOn, function() Plates("none") end)
 	-- Each kind on its own (Survivor Plates' show), a box each.
@@ -2460,12 +2575,16 @@ if PlatesThere() then
 	Kind("Normal", "normal", "normal", "the rank and file of the horde")
 	Kind("Elites", "elite", "elites", nil)
 	Kind("Guardians", "guardian", "guardians", "told from an elite of the same name by its health")
-	Kind("Bosses", "boss", "bosses", "a kind left out still shows as your target")
+	Kind("Bosses", "boss", "bosses", nil)
+	Check(page, "Your target always", function() return SurvivorPlates_TargetPlate and SurvivorPlates_TargetPlate() end,
+		function() Plates("target") end, "its plate even when its kind is off")
 	Subheader(page, "Look")
 	Check(page, "Names on every plate", function() return SurvivorPlatesDB and SurvivorPlatesDB.names == true end,
 		function() Plates("names") end, "off: only on elites, guardians, bosses and friends")
 	Check(page, "Ignore V and Shift+V", function() return not (SurvivorPlates_KeysAllowed and SurvivorPlates_KeysAllowed()) end,
 		function() Plates("keys") end, "the game's keys for its plates: what they turn on or off goes back to the choices here")
+	KeyButton(page, "Plates on or off key", "SURVIVORPLATES_TOGGLE",
+		"A key of your own for all the plates at once, as /splates none. None by default; Key Bindings in the game's menu lists it as well.")
 	Slider(page, "Size", 0.5, 2, 0.05,
 		function() return SurvivorPlates_GetScale and SurvivorPlates_GetScale() or 1 end,
 		function(value) if SurvivorPlates_SetScale then SurvivorPlates_SetScale(value) end end)
@@ -2473,11 +2592,92 @@ else
 	Note(page, "Survivor Plates is not installed. It comes in the same download as Survivor UI.")
 end
 
+-- Raid marks (Marks.lua): each kind marked on its own or not, and with which.
+-- The eight marks in a row from x, the one chosen edged in white.
+local function MarkPicker(page, x, get, set)
+	for index = 1, table.getn(SurvivorUI_RAID_MARKS or {}) do
+		local value, name = SurvivorUI_RAID_MARKS[index][1], SurvivorUI_RAID_MARKS[index][2]
+		local mark = CreateFrame("Button", nil, page)
+		mark:SetWidth(20)
+		mark:SetHeight(ROW)
+		mark:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
+		mark.edge = Fill(mark, "BORDER", 0.3, 0.3, 0.35, 1)
+		mark.edge:SetWidth(20)
+		mark.edge:SetHeight(20)
+		mark.edge:SetPoint("TOPLEFT", mark, "TOPLEFT", 0, 0)
+		mark.back = Fill(mark, "ARTWORK", 0.06, 0.06, 0.08, 1)
+		mark.back:SetPoint("TOPLEFT", mark.edge, "TOPLEFT", 1, -1)
+		mark.back:SetPoint("BOTTOMRIGHT", mark.edge, "BOTTOMRIGHT", -1, 1)
+		mark.icon = mark:CreateTexture(nil, "OVERLAY")
+		mark.icon:SetPoint("TOPLEFT", mark.edge, "TOPLEFT", 2, -2)
+		mark.icon:SetPoint("BOTTOMRIGHT", mark.edge, "BOTTOMRIGHT", -2, 2)
+		if SurvivorUI_SetRaidMarkTexture then
+			SurvivorUI_SetRaidMarkTexture(mark.icon, value)
+		end
+		x = x + 24
+		mark:SetScript("OnClick", function()
+			set(value)
+			RefreshAll()
+		end)
+		mark:SetScript("OnEnter", function()
+			this.hot = true
+			this:Refresh()
+			GameTooltip:SetOwner(this, "ANCHOR_TOP")
+			GameTooltip:SetText(name, 1, 1, 1)
+			GameTooltip:Show()
+		end)
+		mark:SetScript("OnLeave", function()
+			this.hot = nil
+			this:Refresh()
+			GameTooltip:Hide()
+		end)
+		function mark:Refresh()
+			local chosen = get() == value
+			if chosen then
+				self.edge:SetVertexColor(1, 1, 1, 1)
+			elseif self.hot then
+				self.edge:SetVertexColor(0.7, 0.7, 0.75, 1)
+			else
+				self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+			end
+			self.icon:SetAlpha((chosen or self.hot) and 1 or 0.55)
+		end
+		table.insert(widgets, mark)
+	end
+end
+
+-- A kind's row: its box and name, its marks beside them.
+local function MarkRow(kind, label)
+	local y = page.y
+	local check = Check(page, label, function() return SurvivorUI_AutoMarkOn and SurvivorUI_AutoMarkOn(kind) end,
+		function() if SurvivorUI_ToggleAutoMark then SurvivorUI_ToggleAutoMark(kind) end end)
+	check:SetWidth(140)
+	page.y = y
+	MarkPicker(page, 150, function() return SurvivorUI_AutoMarkIcon and SurvivorUI_AutoMarkIcon(kind) end,
+		function(value) if SurvivorUI_SetAutoMarkIcon then SurvivorUI_SetAutoMarkIcon(kind, value) end end)
+	page.y = y - ROW - 3
+end
+
+Subheader(page, "Raid marks")
+Note(page, "From the game's 0.115: each kind ticked gets its mark once in the fight (a guardian once awake), one enemy per mark at a time, shared with your co-op party; seen on the plates, boss bars and target. To mark one, the hero targets it by name a moment.")
+MarkRow("boss", "Bosses")
+MarkRow("guardian", "Lair guardians")
+MarkRow("elite", "Elites")
+
 ------------------------------------------------------------------------------
 -- Layout.
 
 page = pages.layout
-Header(page, "Layout", "Move UI, the button at the top of this window (or a right click on the minimap button), unlocks every piece over a grid: one let go snaps to the grid, or to a neighbour's edge. Holding Alt shows the same grid, and a piece dragged with Alt snaps too (let go of Alt first to put it down free). Click a piece for its card: its place, size and font, shown or hidden, reset and undo. Each tab's own pieces can be dragged while it is open, so you can play while setting them.")
+Header(page, "Layout", "Move UI, the button at the top of this window (or a right click on the minimap button), unlocks every piece over a grid: one let go snaps to the grid, or to a neighbour's edge. Holding Alt (the move key, below) shows the same grid, and a piece dragged with it snaps too (let go of it first to put it down free). Click a piece for its card: its place, size and font, shown or hidden, reset and undo. Each tab's own pieces can be dragged while it is open, so you can play while setting them.")
+Subheader(page, "Move key")
+Inline(page, "Held to move", {
+	{ "alt", "Alt" },
+	{ "ctrl", "Ctrl" },
+	{ "shift", "Shift" },
+	{ "none", "None" },
+}, function() return SurvivorUI_MoveKey and SurvivorUI_MoveKey() or "alt" end,
+	function(value) DB().moveKey = value end)
+Note(page, "The key held to see the grid and drag the pieces while you play. Another one, or none (Move UI only), when Alt is your push to talk.")
 Subheader(page, "Reset")
 Button(page, "Every piece back in place", 220, 0, Asked("Every piece back in place?",
 	"Every piece you moved goes back where it first stood.", "Back in place",

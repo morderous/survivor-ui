@@ -13,10 +13,11 @@
 --   "Party frames".
 -- - Revive bar: while you are down, how far a friend has brought you back
 --   and who; while you bring one back, how far. Under the hero until moved
---   (move mode: "Revive bar"), over the game's own slim one, which stays.
---   Off by default (SurvivorUIDB.reviveBar): the game's own shows the same
---   while a friend is brought back, and cannot be put away (its 0.113); two
---   bars were too many. Module "Revive bar".
+--   (move mode: "Revive bar"). From the game's 0.115 on by default, the
+--   game's own (a slim bar and its "you are down" line) put away while it
+--   shows (AZS_SetHudShown("revive")), back as the game closes. Before
+--   0.115 the game's could not be put away: off then unless chosen
+--   (SurvivorUIDB.reviveBar), two bars being too many. Module "Revive bar".
 -- - SurvivorUI_PartySnapshot: the party as the run ended, for Run History.
 --
 -- Out of a party, or with a game before 0.113, nothing shows. Being placed
@@ -384,9 +385,50 @@ local function Placing(name)
 	return SurvivorUI_Placing and SurvivorUI_Placing(name)
 end
 
--- The revive bar: off unless switched on (the Party tab, Modules).
+-- The revive bar: as chosen (the Party tab, Modules), else on where the game
+-- lets its own be put away (0.115 on), off before.
+local function GameCanHide()
+	return AZS_HUD_CVARS ~= nil and AZS_HUD_CVARS.revive ~= nil and AZS_SetHudShown ~= nil
+end
+
 local function ReviveOn()
-	return SurvivorUIDB ~= nil and SurvivorUIDB.reviveBar == true
+	if not SurvivorUIDB then
+		return false
+	end
+	if SurvivorUIDB.reviveBar ~= nil then
+		return SurvivorUIDB.reviveBar == true
+	end
+	return GameCanHide()
+end
+
+function SurvivorUI_ReviveOn()
+	return ReviveOn()
+end
+
+-- The game's own revive bar: away while ours shows (or the options' "The
+-- game's" is unticked), back otherwise; the mark says the addon put it away.
+local function ApplyGameHud()
+	if not (GameCanHide() and AZS_IsHudShown and SurvivorUIDB) then
+		return
+	end
+	local settings = SurvivorUIDB
+	if ReviveOn() or settings.noGameRevive then
+		if AZS_IsHudShown("revive") then
+			AZS_SetHudShown("revive", false)
+			settings.hidGameRevive = true
+		end
+	elseif settings.hidGameRevive then
+		AZS_SetHudShown("revive", true)
+		settings.hidGameRevive = nil
+	end
+end
+SurvivorUI_GameHud = SurvivorUI_GameHud or {}
+SurvivorUI_GameHud.revive = ApplyGameHud
+
+function SurvivorUI_ToggleRevive()
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.reviveBar = not ReviveOn()
+	ApplyGameHud()
 end
 
 local function DrawFrames(revive)
@@ -654,6 +696,7 @@ loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", function()
 	PlaceFrames()
 	PlaceBar()
+	ApplyGameHud()
 end)
 
 if SurvivorUI_RegisterMover then

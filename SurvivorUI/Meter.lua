@@ -8,7 +8,8 @@
 -- menu switches to the run's healing (AZS_GetHealing) or the last boss fight's damage
 -- to bosses (AZS_GetBossMeter), in the same bars; in a co-op run (the game's
 -- 0.113), to the party's damage (AZS_GetPartyMeter), a bar a hero in the
--- class's color, its top spell on hover.
+-- class's color, its top spell on hover. The + at its corner opens another
+-- window on another page (MeterWindows.lua), in the same bars.
 --
 -- Reset starts the meter over from that moment and clears the crits; the run
 -- panel keeps the whole run. Its
@@ -153,7 +154,7 @@ local function Fit()
 end
 
 local function StartMove()
-	if IsAltKeyDown() then
+	if SurvivorUI_MoveKeyDown() then
 		meter:StartMoving()
 	end
 end
@@ -467,10 +468,38 @@ meter.empty:SetPoint("TOPLEFT", meter, "TOPLEFT", 8, -BARS_TOP - 2)
 meter.empty:SetTextColor(0.55, 0.55, 0.6)
 meter.empty:Hide()
 
+-- At the corner, a + opening another window on another page
+-- (MeterWindows.lua); Reset left of it.
+local more = CreateFrame("Button", nil, meter)
+more:SetWidth(14)
+more:SetHeight(14)
+more:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -3, -3)
+more.text = more:CreateFontString(nil, "OVERLAY")
+more.text:SetFont(SurvivorUI_FONT, 13 + FONT_BUMP, "OUTLINE")
+more.text:SetPoint("CENTER", more, "CENTER", 0, 1)
+more.text:SetText("+")
+more.text:SetTextColor(0.6, 0.6, 0.6)
+more:SetScript("OnEnter", function()
+	this.text:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
+	GameTooltip:SetText("Another meter window", 1, 1, 1)
+	GameTooltip:AddLine("Opens a window of its own on a page this one does not show: the party's damage in a co-op run, else the healing or the boss fight. Its title switches its page, its - closes it. "..SurvivorUI_MoveHint(" it"), 0.7, 0.7, 0.7, 1)
+	GameTooltip:Show()
+end)
+more:SetScript("OnLeave", function()
+	this.text:SetTextColor(0.6, 0.6, 0.6)
+	GameTooltip:Hide()
+end)
+more:SetScript("OnClick", function()
+	if SurvivorUI_MeterAddWindow then
+		SurvivorUI_MeterAddWindow()
+	end
+end)
+
 local reset = CreateFrame("Button", nil, meter)
 reset:SetWidth(32)
 reset:SetHeight(12)
-reset:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -5, -5)
+reset:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -20, -5)
 reset.text = reset:CreateFontString(nil, "OVERLAY")
 reset.text:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 reset.text:SetPoint("RIGHT", reset, "RIGHT", 0, 0)
@@ -976,12 +1005,11 @@ local function PlaceEdges(bar, share)
 	right:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", width - 1, 0)
 end
 
-local function Bar(index)
-	local bar = bars[index]
-	if bar then
-		return bar
-	end
-	bar = CreateFrame("StatusBar", nil, meter)
+-- A bar in the meter's look, for any window (MeterWindows.lua too): its
+-- tooltip and the crit card beside its window, dragged with it (the
+-- window's StartMove and StopMove), the wheel rolling its list (its Wheel).
+local function MakeBar(parent)
+	local bar = CreateFrame("StatusBar", nil, parent)
 	bar:SetWidth(WIDTH)
 	bar:SetHeight(BAR_HEIGHT)
 	bar:SetStatusBarTexture(FLAT)
@@ -1053,14 +1081,15 @@ local function Bar(index)
 	bar.share:SetPoint("RIGHT", bar, "RIGHT", -3, 0)
 	bar.share:SetTextColor(0.85, 0.85, 0.85)
 
-	-- The crit card sits beside the whole meter, on its left, tops together.
-	bar.cardFrame = meter
+	-- The crit card sits beside the whole window, on its left, tops together.
+	bar.cardFrame = parent
 	bar:EnableMouse(true)
 	-- The damage view's lines have the crit card; the others, their numbers.
 	bar:SetScript("OnEnter", function()
 		if this.view ~= "damage" and this.line then
-			GameTooltip:SetOwner(meter, "ANCHOR_NONE")
-			GameTooltip:SetPoint("TOPRIGHT", meter, "TOPLEFT", -4, 0)
+			local window = this:GetParent()
+			GameTooltip:SetOwner(window, "ANCHOR_NONE")
+			GameTooltip:SetPoint("TOPRIGHT", window, "TOPLEFT", -4, 0)
 			GameTooltip:SetText(this.line.name, this.color[1], this.color[2], this.color[3])
 			local word = (this.view == "healing" and "Healing") or (this.view == "party" and "Damage") or "Damage to bosses"
 			GameTooltip:AddDoubleLine(word, Short(this.line.dmg), 0.8, 0.8, 0.8, 1, 1, 1)
@@ -1084,18 +1113,36 @@ local function Bar(index)
 		end
 	end)
 	bar:RegisterForDrag("LeftButton")
-	bar:SetScript("OnDragStart", StartMove)
-	bar:SetScript("OnDragStop", StopMove)
-	-- The wheel over a line slides the list, as over the meter (meter.Wheel).
-	bar:EnableMouseWheel(true)
-	bar:SetScript("OnMouseWheel", function()
-		if meter.Wheel then
-			meter.Wheel()
+	bar:SetScript("OnDragStart", function()
+		local window = this:GetParent()
+		if window.StartMove then
+			window.StartMove()
 		end
 	end)
-
-	bars[index] = bar
+	bar:SetScript("OnDragStop", function()
+		local window = this:GetParent()
+		if window.StopMove then
+			window.StopMove()
+		end
+	end)
+	-- The wheel over a line slides the list, as over its window (its Wheel).
+	bar:EnableMouseWheel(true)
+	bar:SetScript("OnMouseWheel", function()
+		local window = this:GetParent()
+		if window.Wheel then
+			window.Wheel()
+		end
+	end)
 	return bar
+end
+
+meter.StartMove, meter.StopMove = StartMove, StopMove
+
+local function Bar(index)
+	if not bars[index] then
+		bars[index] = MakeBar(meter)
+	end
+	return bars[index]
 end
 
 -- The game's lines, or what came after Reset: each source's damage less what
@@ -1176,6 +1223,63 @@ local function OtherLines(get)
 	return shown, Num(total), Num(rate)
 end
 
+-- A bar painted from a line of the page key: filled to its share of the top
+-- line's (top), in its color (a hero's class's), its icon, its name and rank,
+-- "(proc)", its amount and share.
+local function PaintBar(bar, line, top, key)
+	local name = line.name
+	local proc = line.proc
+	local color = line.color or ColorOf(name)
+	local share = top > 0 and line.dmg / top or 0
+	bar:SetValue(Filled(share))
+	bar:SetStatusBarColor(color[1], color[2], color[3], 0.45)
+	for _, edge in pairs(bar.edges) do
+		edge:SetVertexColor(color[1], color[2], color[3], 0.6)
+	end
+	PlaceEdges(bar, share)
+	bar.ability = key == "damage" and name or nil
+	bar.view, bar.line = key, line
+	bar.color = color
+
+	-- A talent's or amulet's own damage says so, as the game's meter does.
+	-- The spell's rank after its name, when asked for (the options, Damage
+	-- meter): "Holy Wrath  12", or XII.
+	local rank = not line.art and RankOf(name)
+	-- With no icon of its own found, the addon's (the minimap button's),
+	-- whole. A party's hero: the class's.
+	local icon = line.art or IconOf(name)
+	bar.icon:SetVertexColor(1, 1, 1)
+	if line.coords then
+		bar.icon:SetTexture(icon)
+		bar.icon:SetTexCoord(line.coords[1], line.coords[2], line.coords[3], line.coords[4])
+	elseif icon then
+		bar.icon:SetTexture(icon)
+		bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	else
+		bar.icon:SetTexture(OWN_ICON)
+		bar.icon:SetTexCoord(0, 1, 0, 1)
+	end
+	-- With "(proc)" after it, the name gives it room: neither runs into
+	-- the numbers, a long name ends in "..." first.
+	local room = NAME_ROOM - (proc and 30 or 0)
+	if bar.room ~= room then
+		bar.room = room
+		bar.name:SetWidth(room)
+	end
+	local ranked = rank and rank > 0 and SurvivorUIDB and SurvivorUIDB.meterRanks
+	bar.name:SetText(name..(ranked and "  |cffbdbdbd"..SurvivorUI_RankText(rank, true).."|r" or ""))
+	if proc then
+		bar.tag:ClearAllPoints()
+		bar.tag:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 2 + math.min(bar.name:GetStringWidth(), room) + 3, 0)
+		bar.tag:Show()
+	else
+		bar.tag:Hide()
+	end
+	bar.value:SetText(Short(line.dmg))
+	bar.share:SetText(math.floor(line.share * 100 + 0.5).."%")
+	bar:Show()
+end
+
 local function Draw()
 	-- The build list's shares are always the damage's.
 	local damage, damageTotal, damageRate = DamageLines()
@@ -1227,67 +1331,77 @@ local function Draw()
 	local top = count > 0 and lines[1].dmg or 0
 	local firstBar = BARS_TOP
 	for index = 1, count do
-		local line = lines[index + skip]
-		local name = line.name
-		local proc = line.proc
-		local color = line.color or ColorOf(name)
 		local bar = Bar(index)
-
 		bar:ClearAllPoints()
 		bar:SetPoint("TOPLEFT", meter, "TOPLEFT", 4, -firstBar - (index - 1) * (BAR_HEIGHT + BAR_GAP))
-		local share = top > 0 and line.dmg / top or 0
-		bar:SetValue(Filled(share))
-		bar:SetStatusBarColor(color[1], color[2], color[3], 0.45)
-		for _, edge in pairs(bar.edges) do
-			edge:SetVertexColor(color[1], color[2], color[3], 0.6)
-		end
-		PlaceEdges(bar, share)
-		bar.ability = key == "damage" and name or nil
-		bar.view, bar.line = key, line
-		bar.color = color
-
-		-- A talent's or amulet's own damage says so, as the game's meter does.
-		-- The spell's rank after its name, when asked for (the options, Damage
-		-- meter): "Holy Wrath  12", or XII.
-		local rank = not line.art and RankOf(name)
-		-- With no icon of its own found, the addon's (the minimap button's),
-		-- whole. A party's hero: the class's.
-		local icon = line.art or IconOf(name)
-		bar.icon:SetVertexColor(1, 1, 1)
-		if line.coords then
-			bar.icon:SetTexture(icon)
-			bar.icon:SetTexCoord(line.coords[1], line.coords[2], line.coords[3], line.coords[4])
-		elseif icon then
-			bar.icon:SetTexture(icon)
-			bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-		else
-			bar.icon:SetTexture(OWN_ICON)
-			bar.icon:SetTexCoord(0, 1, 0, 1)
-		end
-		-- With "(proc)" after it, the name gives it room: neither runs into
-		-- the numbers, a long name ends in "..." first.
-		local room = NAME_ROOM - (proc and 30 or 0)
-		if bar.room ~= room then
-			bar.room = room
-			bar.name:SetWidth(room)
-		end
-		local ranked = rank and rank > 0 and SurvivorUIDB and SurvivorUIDB.meterRanks
-		bar.name:SetText(name..(ranked and "  |cffbdbdbd"..SurvivorUI_RankText(rank, true).."|r" or ""))
-		if proc then
-			bar.tag:ClearAllPoints()
-			bar.tag:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 2 + math.min(bar.name:GetStringWidth(), room) + 3, 0)
-			bar.tag:Show()
-		else
-			bar.tag:Hide()
-		end
-		bar.value:SetText(Short(line.dmg))
-		bar.share:SetText(math.floor(line.share * 100 + 0.5).."%")
-		bar:Show()
+		PaintBar(bar, lines[index + skip], top, key)
 	end
 	for index = count + 1, table.getn(bars) do
 		bars[index]:Hide()
 		bars[index].ability = nil
 	end
+end
+
+------------------------------------------------------------------------------
+-- Lent to the other windows (MeterWindows.lua): the bars, the pages, the
+-- numbers.
+
+SurvivorUI_METER = { WIDTH = WIDTH, BAR_HEIGHT = BAR_HEIGHT, BAR_GAP = BAR_GAP,
+	STRIP_TOP = STRIP_TOP, STRIP_HEIGHT = STRIP_HEIGHT, BARS_TOP = BARS_TOP }
+
+function SurvivorUI_MeterNewBar(parent)
+	return MakeBar(parent)
+end
+
+function SurvivorUI_MeterPaintBar(bar, line, top, key)
+	PaintBar(bar, line, top, key)
+end
+
+-- The pages: { key, title, shared (the game shares it now) } each.
+function SurvivorUI_MeterPages()
+	local list = {}
+	for index = 1, table.getn(VIEWS) do
+		table.insert(list, { key = VIEWS[index].key, title = VIEWS[index].title, shared = VIEWS[index].get() ~= nil })
+	end
+	return list
+end
+
+-- A page's lines, its total and its rate; nil while the game does not share it.
+function SurvivorUI_MeterLines(key)
+	if key == "damage" then
+		return DamageLines()
+	end
+	for index = 1, table.getn(VIEWS) do
+		if VIEWS[index].key == key then
+			if not VIEWS[index].get() then
+				return nil
+			end
+			return OtherLines(VIEWS[index].get)
+		end
+	end
+end
+
+-- The page the main window shows, whether it shows (a run on, the meter on),
+-- and the NOW rate (a page's total climbing over the last seconds).
+function SurvivorUI_MeterMainPage()
+	return VIEWS[view].key
+end
+
+-- How many lines the main window shows (its size follows the screen): the
+-- other windows take the same.
+function SurvivorUI_MeterLineCount()
+	return shownLines
+end
+
+function SurvivorUI_MeterShowing()
+	return Settings().meter and Running() and true or false
+end
+
+function SurvivorUI_MeterNow(key, total)
+	if not NowOn() then
+		return nil, false
+	end
+	return NowRate(key, total), true
 end
 
 -- The wheel over the meter: down, the first line goes up out of sight and the
