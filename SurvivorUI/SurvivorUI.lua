@@ -1731,18 +1731,22 @@ local function HideMicroButtons()
 end
 
 ------------------------------------------------------------------------------
--- Chat: no scroll buttons, no tab art, the text on the world itself; a flat
--- dark panel behind it only if asked for (the options, Chat: Background, with
--- the addon's color down its left edge). The mouse wheel scrolls; with Shift
--- held it jumps to the top or the bottom.
+-- Chat: no scroll buttons, no tab art. Two looks (the options, Chat: Look):
+-- the panel (Chat.lua: one dark panel with the tabs along its top, the
+-- default), or the text on the world itself, a flat dark backing behind it
+-- only if asked for (Background, with the addon's color down its left edge).
+-- The mouse wheel scrolls; with Shift held it jumps to the top or the bottom.
 
--- The panel's strength, 0 (none, the default) to 1.
+-- The text look's backing, 0 (none, the default) to 1.
 local function ChatBackground()
 	return tonumber(Settings().chatBackground) or 0
 end
 
 local function ApplyChatBackground()
 	local strength = ChatBackground()
+	if SurvivorUI_ChatLook and SurvivorUI_ChatLook() == "panel" then
+		strength = 0
+	end
 	for index = 1, 7 do
 		local chat = getglobal("ChatFrame"..index)
 		local panel = chat and chat.survivorPanel
@@ -1757,13 +1761,29 @@ local function ApplyChatBackground()
 	end
 end
 
+-- For the options (Background): the look's own, the panel's or the backing's.
 function SurvivorUI_ChatBackground()
+	if SurvivorUI_ChatLook and SurvivorUI_ChatLook() == "panel" then
+		return SurvivorUI_ChatPanelAlpha()
+	end
 	return ChatBackground()
 end
 
 function SurvivorUI_SetChatBackground(strength)
+	if SurvivorUI_ChatLook and SurvivorUI_ChatLook() == "panel" then
+		SurvivorUI_SetChatPanelAlpha(strength)
+		return
+	end
 	Settings().chatBackground = strength
 	ApplyChatBackground()
+end
+
+function SurvivorUI_SetChatLook(look)
+	Settings().chatLook = look == "text" and "text" or nil
+	ApplyChatBackground()
+	if SurvivorUI_StyleChatPanel then
+		SurvivorUI_StyleChatPanel()
+	end
 end
 
 local function ChatWheel()
@@ -1856,6 +1876,11 @@ local function StyleChat()
 			edit.survivorBack:SetPoint("TOPLEFT", edit, "TOPLEFT", 4, -5)
 			edit.survivorBack:SetPoint("BOTTOMRIGHT", edit, "BOTTOMRIGHT", -4, 5)
 		end
+	end
+
+	-- The panel around it all, or not (Chat.lua).
+	if SurvivorUI_StyleChatPanel then
+		SurvivorUI_StyleChatPanel()
 	end
 end
 

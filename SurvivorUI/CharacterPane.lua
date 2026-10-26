@@ -310,6 +310,42 @@ function SurvivorUI_StatGear(label, stats)
 	return Share(value), rest and rest > 0.0001 and Share(rest) or nil
 end
 
+-- How Damage, Crit and Crit Dmg meet (read in the game's 0.120): a hit is a
+-- spell's damage times your Damage (and its own bonuses, a talent's "deals 10%
+-- more"), and a critical one times your Crit Dmg as well. Each number's own
+-- sources add up; the numbers multiply. Their rows' tooltips add it, with the
+-- stats of now: a spell of 100's hit, its critical hit, and the hit on
+-- average with your Crit.
+local TOGETHER = { Damage = true, Crit = true, ["Crit Dmg"] = true }
+
+function SurvivorUI_StatTogether(label, stats)
+	stats = stats or AZS_STATS
+	if not (TOGETHER[label] and stats) then
+		return
+	end
+	local damage = tonumber(stats.dmg) or 1
+	local critical = tonumber(stats.cm) or 1
+	local chance = math.max(0, math.min(1, tonumber(stats.crit) or 0))
+	local hit = 100 * damage
+	-- Short and plain, with your own numbers worked out step by step.
+	GameTooltip:AddLine(" ")
+	GameTooltip:AddLine("How Damage and Crit Dmg work together", 0.60, 0.80, 1.00)
+	GameTooltip:AddLine("Damage makes every hit bigger.", 0.85, 0.85, 0.85, 1)
+	GameTooltip:AddLine("Crit Dmg makes critical hits bigger.", 0.85, 0.85, 0.85, 1)
+	GameTooltip:AddLine("A critical hit gets both, one after the other.", 0.85, 0.85, 0.85, 1)
+	GameTooltip:AddLine(" ")
+	GameTooltip:AddLine("If a spell hits for 100:", 1, 1, 1)
+	GameTooltip:AddDoubleLine("Normal hit", string.format("100 x %.2f = %.0f", damage, hit),
+		0.85, 0.85, 0.85, 0.35, 0.90, 0.55)
+	GameTooltip:AddDoubleLine("Critical hit", string.format("%.0f x %.2f = %.0f", hit, critical, hit * critical),
+		0.85, 0.85, 0.85, 0.35, 0.90, 0.55)
+	GameTooltip:AddDoubleLine(string.format("Average, with %.0f%% Crit", chance * 100),
+		string.format("%.0f", hit * (1 + chance * (critical - 1))), 0.85, 0.85, 0.85, 0.35, 0.90, 0.55)
+	GameTooltip:AddLine(" ")
+	GameTooltip:AddLine("Bonuses of the same kind add up: +25% and +25% Damage make +50%. "
+		.."So raising both Damage and Crit Dmg pays more than raising just one.", 0.62, 0.62, 0.65, 1)
+end
+
 -- A missing number reads as 0, so a row the game has not learned yet shows a
 -- plain zero instead of breaking the panel.
 local function Stats()
@@ -595,6 +631,7 @@ local function MakeView(alone)
 				GameTooltip:AddDoubleLine("Everything else", rest, 0.62, 0.62, 0.65, 0.85, 0.85, 0.85)
 			end
 		end
+		SurvivorUI_StatTogether(this.key)
 		if Arranging() then
 			GameTooltip:AddLine("Drag to move it within its group. Which numbers show: /sui opt, Stats panel.", 0.6, 0.6, 0.65, 1)
 		end

@@ -1042,7 +1042,7 @@ end
 -- Global: the whole addon's font, color and size.
 
 local page = pages.global
-Header(page, "Global", "Settings for the whole addon: its font, its color and its size.")
+Header(page, "Global", "Settings for the whole addon: its font, its color and its size, and the mouse cursor.")
 Subheader(page, "Font")
 FontPicker(page, "Global font",
 	function() return SurvivorUI_GlobalFont and SurvivorUI_GlobalFont() end,
@@ -1072,6 +1072,57 @@ Slider(page, "Whole interface", 0.6, 1.4, 0.05,
 		panel.refitAt = GetTime() + 0.4
 	end)
 Note(page, "Each part also has a size of its own, on top of this one, in its own tab. This window grows and shrinks with it too, and keeps its size on screen whatever the game's UI Scale (the game's own, in its Options; its HUD Scale sizes the game's HUD only).")
+
+-- The mouse cursor (Cursor.lua): the game's gauntlet or our arrow, in a
+-- color and a size, with its touches; it changes as they are picked, so the
+-- cursor over the window is the preview.
+Subheader(page, "Mouse cursor")
+Check(page, "Cursor in a color of yours", function() return SurvivorUI_CursorOn and SurvivorUI_CursorOn() end,
+	function() if SurvivorUI_SetCursorOn then SurvivorUI_SetCursorOn(not SurvivorUI_CursorOn()) end end,
+	"the game's shows while you hold something")
+Dropdown(page, "Shape", function()
+	local list, shapes = {}, SurvivorUI_CURSOR_SHAPES or {}
+	for index = 1, table.getn(shapes) do
+		table.insert(list, { value = shapes[index].key, name = shapes[index].name, note = shapes[index].note })
+	end
+	return list
+end, function() return SurvivorUI_CursorShape and SurvivorUI_CursorShape() or "gauntlet" end, function(key)
+	if SurvivorUI_SetCursorShape then
+		SurvivorUI_SetCursorShape(key)
+	end
+end, 220)
+Dropdown(page, "Color", function()
+	local list, colors = {}, SurvivorUI_CURSOR_COLORS or {}
+	for index = 1, table.getn(colors) do
+		local entry = colors[index]
+		local color = entry.color
+		if entry.key == "class" then
+			local _, class = UnitClass("player")
+			color = { SurvivorUI_ClassColor(class) }
+		end
+		table.insert(list, { value = entry.key, name = entry.name, color = color })
+	end
+	return list
+end, function() return SurvivorUI_CursorColor and SurvivorUI_CursorColor() or "White" end, function(key)
+	if SurvivorUI_SetCursorColor then
+		SurvivorUI_SetCursorColor(key)
+	end
+end, 220)
+Dropdown(page, "Size", function()
+	local list, sizes = {}, SurvivorUI_CURSOR_SIZES or {}
+	for index = 1, table.getn(sizes) do
+		table.insert(list, { value = sizes[index].key, name = sizes[index].name })
+	end
+	return list
+end, function() return SurvivorUI_CursorSize and SurvivorUI_CursorSize() or "Medium" end, function(key)
+	if SurvivorUI_SetCursorSize then
+		SurvivorUI_SetCursorSize(key)
+	end
+end, 220)
+Check(page, "Its touches", function() return SurvivorUI_CursorFx and SurvivorUI_CursorFx() end,
+	function() if SurvivorUI_SetCursorFx then SurvivorUI_SetCursorFx(not SurvivorUI_CursorFx()) end end,
+	"in its color: a glow round it, motes as it moves, sparks where it clicks the world")
+Note(page, "Gauntlet: the game's own cursors (its sword over an enemy, its glow while a spell waits for its target), tinted, any size. Arrow: ours, 32 pixels at most (Large fills them). The cursor over this window shows each pick.")
 
 ------------------------------------------------------------------------------
 -- Modules: each part of SurvivorUI on or off as a whole. Off, it does not
@@ -1749,7 +1800,7 @@ Check(page, "Gold and cache apart", OnlyIfOn("tallySplit"), function()
 	DB().tallySplit = not DB().tallySplit
 end, "the coin with your gold, the chest with the next cache's price")
 Check(page, "Coin shines when you can pay", OnUnlessOff("trackerCoinShine"), Flip("trackerCoinShine"), "this coin and the tracker's")
-Check(page, "A coin drops when you can pay", OnUnlessOff("coinDrop"), Flip("coinDrop"), "its sound, once a cache, the line on or off")
+Check(page, "A coin drops when you can pay", OnUnlessOff("coinDrop"), Flip("coinDrop"), "each time your gold pays for one cache more, bought or not; the line on or off")
 -- Its sound from a list (Tally.lua's): ours, and the game's own coin and
 -- auction house sounds; picking one plays it.
 Dropdown(page, "Sound", function()
@@ -1758,8 +1809,8 @@ Dropdown(page, "Sound", function()
 		table.insert(list, { value = sounds[index].key, name = sounds[index].name, note = sounds[index].note })
 	end
 	return list
-end, function() return DB().coinSound or "ours" end, function(key)
-	DB().coinSound = key ~= "ours" and key or nil
+end, function() return DB().coinSound or "hoard" end, function(key)
+	DB().coinSound = key ~= "hoard" and key or nil
 	if SurvivorUI_CoinDrop then
 		SurvivorUI_CoinDrop()
 	end
@@ -1783,6 +1834,11 @@ Header(page, "XP bar", "Your level and experience as a bar of its own, at the to
 PanelHead(page, OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"), "xpbar", "XP bar")
 Subheader(page, "What shows")
 Check(page, "Time to the next level", OnUnlessOff("xpBarEta"), Flip("xpBarEta"), "and the experience a minute, from the recent pace")
+Check(page, "Luck and the cards' odds", OnUnlessOff("xpBarLuck"), Flip("xpBarLuck"),
+	"your luck over the bar, and under it a ribbon of the next card's odds, each rarity's color as wide as its chance; hover the bar for every kind of pick")
+Check(page, "The odds beside the bar", function() return DB().xpBarOddsSide == true end,
+	function() DB().xpBarOddsSide = (not DB().xpBarOddsSide) or nil end,
+	"to read without the mouse: a legendary's, an epic's and a rare's chance, the spells' and jewelry's on its left, the amulets' on its right")
 
 ------------------------------------------------------------------------------
 -- Level Up! (LevelUp.lua): the button for the levels waiting, and the game's
@@ -2535,15 +2591,33 @@ page.y = page.y - 46
 -- Chat.
 
 page = pages.chat
-Header(page, "Chat", "The chat window: flat, its buttons on hover (Flat chat, in the Modules tab), its text's size, and what reaches it.")
+Header(page, "Chat", "The chat window: its look (Flat chat, in the Modules tab), its text's size, and what reaches it.")
 PanelHead(page, FeatureOn("chat"), FeatureToggle("chat"), nil, "Chat", true, nil, { font = false })
+local backgroundSlider
+Dropdown(page, "Look", function()
+	return {
+		{ value = "panel", name = "Panel", note = "tabs on top, a copy button" },
+		{ value = "text", name = "Text on the world", note = "as before" },
+	}
+end, function() return SurvivorUI_ChatLook and SurvivorUI_ChatLook() or "panel" end, function(look)
+	if SurvivorUI_SetChatLook then
+		SurvivorUI_SetChatLook(look)
+	end
+	-- The slider below is the look's own: it shows the new one's strength.
+	if backgroundSlider then
+		backgroundSlider:Refresh()
+	end
+end, 220)
+Check(page, "Lock the chat", function() return SurvivorUI_ChatLocked and SurvivorUI_ChatLocked() end,
+	function() if SurvivorUI_SetChatLocked then SurvivorUI_SetChatLocked(not SurvivorUI_ChatLocked()) end end,
+	"the Panel look's panel alone: no tabs, no copy button, no grip, no edges")
 Slider(page, "Text size", 8, 18, 1,
 	function() return SurvivorUI_ChatSize and SurvivorUI_ChatSize() or 8 end,
 	function(value) if SurvivorUI_SetChatSize then SurvivorUI_SetChatSize(value) end end, "%d pt")
-Slider(page, "Background", 0, 100, 5,
+backgroundSlider = Slider(page, "Background", 0, 100, 5,
 	function() return math.floor((SurvivorUI_ChatBackground and SurvivorUI_ChatBackground() or 0) * 100 + 0.5) end,
 	function(value) if SurvivorUI_SetChatBackground then SurvivorUI_SetChatBackground(value / 100) end end, "%d%%")
-Note(page, "0%: the text on the world itself. Up from there, a dark panel behind it, the addon's color down its left edge. With Flat chat on.")
+Note(page, "Panel: one dark panel holds the chat, the windows as tabs along its top (right-click a tab for its menu), the copy button at its top right, the typing box under it; Background sets how dark. Text on the world: 0% is the text alone, up from there a dark backing behind it, the addon's color down its left edge. With Flat chat on.")
 
 Subheader(page, "Chat filter")
 Note(page, "What a run fills the chat with, kept away, in every language; the alerts stay: a new spell, an upgrade's news, the run's end. New lines only.")

@@ -223,15 +223,19 @@ local function Running()
 	return phase and phase ~= "ready"
 end
 
--- A coin dropping (Sounds\CoinDrop.wav, our own), once, as the gold comes to
--- pay for the next cache; with the line off too (A coin drops when you can
--- pay: /sui opt, Kills & gold). On the change only: a reload with the gold
--- already there, or a price not told yet, says nothing.
--- The sound as chosen there (its Sound list): ours first, then the game's
+-- Coins falling (Sounds\CoinShower.wav, our own, unless another is chosen)
+-- each time the gold comes to pay for one cache more, bought or not: the next
+-- at its price, the one after
+-- at the price that follows, and so on; with the line off too (A coin drops
+-- when you can pay: /sui opt, Kills & gold). On the change only: a reload with
+-- the gold already there, or a price not told yet, says nothing.
+-- The sound as chosen there (its Sound list): ours first (a shower of coins,
+-- the default; one coin dropped, Sounds\CoinDrop.wav), then the game's
 -- own coin and auction house sounds (in its patch.MPQ: played from there,
 -- never shipped with the addon), each named for the list.
 SurvivorUI_COIN_SOUNDS = {
-	{ key = "ours", name = "Survivor's Coin", note = "ours", path = "Interface\\AddOns\\SurvivorUI\\Sounds\\CoinDrop.wav" },
+	{ key = "hoard", name = "Survivor's Hoard", note = "ours, a pile of coins", path = "Interface\\AddOns\\SurvivorUI\\Sounds\\CoinShower.wav" },
+	{ key = "ours", name = "Survivor's Coin", note = "ours, one coin", path = "Interface\\AddOns\\SurvivorUI\\Sounds\\CoinDrop.wav" },
 	{ key = "auction", name = "Auctioneer's Farewell", note = "auction house, closing", path = "Sound\\interface\\AuctionWindowClose.wav" },
 	{ key = "auctionOpen", name = "Auctioneer's Welcome", note = "auction house, opening", path = "Sound\\interface\\AuctionWindowOpen.wav" },
 	{ key = "lootLarge", name = "Pile of Coins", note = "loot, many coins", path = "Sound\\interface\\LootCoinLarge.wav" },
@@ -319,11 +323,50 @@ function SurvivorUI_CoinRain(onTop)
 	rain:Show()
 end
 
-local couldPay
+-- A value as the game's 32-bit floats hold it (rounded to 24 bits, a tie to
+-- the even one).
+local function Float32(value)
+	if value == 0 then
+		return 0
+	end
+	local mantissa, exponent = math.frexp(value)
+	local scaled = mantissa * 16777216
+	local whole = math.floor(scaled)
+	local rest = scaled - whole
+	if rest > 0.5 or (rest == 0.5 and math.mod(whole, 2) == 1) then
+		whole = whole + 1
+	end
+	return math.ldexp(whole, exponent - 24)
+end
+
+-- A cache bought, the next one's price: the price times 1.3 plus 5, its
+-- fraction dropped, in the game's 32-bit floats (read in its 0.119), so a
+-- price of 90 makes 121 as in the game (the plain sum makes 122).
+local RISE = 1.2999999523162842     -- 1.3 as a 32-bit float
+local function NextPrice(price)
+	return math.floor(Float32(Float32(price * RISE) + 5))
+end
+
+-- The caches the gold pays for, one after another at the rising price.
+local function Payable(gold, price)
+	local count = 0
+	while price > 0 and gold >= price and count < 99 do
+		gold = gold - price
+		price = NextPrice(price)
+		count = count + 1
+	end
+	return count
+end
+
+local payable                       -- at the last look; nil: not known yet
 local function WatchCoin(running)
 	local cost = running and tonumber(AZS_RUN.chest) or 0
-	local pays = cost > 0 and (tonumber(AZS_RUN.gold) or 0) >= cost
-	if pays and couldPay == false then
+	if cost <= 0 then
+		payable = nil
+		return
+	end
+	local count = Payable(tonumber(AZS_RUN.gold) or 0, cost)
+	if payable and count > payable then
 		if Settings().coinDrop ~= false then
 			SurvivorUI_CoinDrop()
 		end
@@ -331,11 +374,7 @@ local function WatchCoin(running)
 			SurvivorUI_CoinRain()
 		end
 	end
-	if cost > 0 then
-		couldPay = pays
-	else
-		couldPay = nil
-	end
+	payable = count
 end
 
 local elapsed = 0
