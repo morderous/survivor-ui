@@ -90,7 +90,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.5.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.5.2.0")]
 
 namespace SurvivorInstaller
 {
@@ -275,6 +275,11 @@ namespace SurvivorInstaller
         readonly Button saveButton = new Button();
         readonly Button restoreButton = new Button();
         readonly Label gameLabel = new Label();
+        // The game's graphics (Play tab): its own choice, or DirectX 12 or
+        // Vulkan asked of it (WGPU_BACKEND, which its renderer reads).
+        readonly ComboBox graphicsBox = new ComboBox();
+        static readonly string[] GraphicsKeys = { "auto", "dx12", "vulkan" };
+        static readonly string[] GraphicsNames = { "Auto", "DirectX 12", "Vulkan" };
         readonly Button gameCheckButton = new Button();
         GameState game;             // the game as last looked at, against the newest on its server
         bool checkingGame;
@@ -597,7 +602,7 @@ namespace SurvivorInstaller
             Controls.Add(selfButton);
             Forge(selfButton);
             Wear(selfButton, "stone");
-            BuildCoffee();
+            BuildDonate();
             BuildWindowButtons();
             System.Windows.Forms.Timer breathe = new System.Windows.Forms.Timer();
             breathe.Interval = 50;
@@ -734,8 +739,8 @@ namespace SurvivorInstaller
         // this folder, credited in art\CREDITS.txt), inside the exe. Frames,
         // buttons, tabs, switches and the title's plaque are its pieces, drawn
         // by slices (corners kept, edges and middles stretched) at the
-        // window's scale; the stone of the header, the coffee cup and the
-        // charts are drawn here in its colours. The title in Cinzel Decorative
+        // window's scale; the stone of the header, the Donate plate's glint
+        // and the charts are drawn here in its colours. The title in Cinzel Decorative
         // (SIL Open Font License, OFL-CinzelDecorative.txt beside this source).
         static readonly Color RedFill = Color.FromArgb(112, 16, 10);
         static readonly Color RedEdge = Color.FromArgb(200, 152, 58);
@@ -840,6 +845,14 @@ namespace SurvivorInstaller
                 matrix = new float[][] {
                     new float[] { 0.75f * dim, 0.15f * dim, 0.95f * dim, 0, 0 }, new float[] { 0.1f * dim, 0.35f * dim, 0.05f * dim, 0, 0 },
                     new float[] { 0, 0, 0.3f * dim, 0, 0 }, new float[] { 0, 0, 0, 1, 0 }, new float[] { 0, 0, 0, 0, 1 } };
+            else if (how.StartsWith("blue"))
+            {
+                // The red plate in a light blue (Donate), brighter when hot.
+                float lift = how.EndsWith("-hot") ? 1.15f : 1f;
+                matrix = new float[][] {
+                    new float[] { 0.42f * lift, 0.80f * lift, 1.05f * lift, 0, 0 }, new float[] { 0.25f * lift, 0.36f * lift, 0.42f * lift, 0, 0 },
+                    new float[] { 0, 0, 0.3f * lift, 0, 0 }, new float[] { 0, 0, 0, 1, 0 }, new float[] { 0.05f * lift, 0.13f * lift, 0.22f * lift, 0, 1 } };
+            }
             else if (how == "grey")
                 matrix = new float[][] {
                     new float[] { 0.2f, 0.2f, 0.2f, 0, 0 }, new float[] { 0.39f, 0.39f, 0.39f, 0, 0 },
@@ -1328,51 +1341,58 @@ namespace SurvivorInstaller
             minimize.Click += delegate { WindowState = FormWindowState.Minimized; };
         }
 
-        // --- A coffee ---------------------------------------------------------------
+        // --- Donate ---------------------------------------------------------------
 
-        // In the header, a cup always gently steaming (faster under the mouse)
-        // on the pack's stone plate: the Ko-fi, for whoever likes what
-        // Survivor UI does. Its tooltip says what the launcher has seen them
-        // play with it so far.
+        // In the header, Donate on a light blue plate (the pack's red one
+        // turned blue, as the Run History's Victory and Endless plates are
+        // turned), "if you like my work" under it, a glint crossing it every
+        // few seconds, brighter under the mouse (asked for 2026-10-26, in place
+        // of the coffee cup): the Ko-fi, for whoever likes what Survivor UI
+        // does. Its tooltip says what the launcher has seen them play with it
+        // so far.
         const string KoFi = "https://ko-fi.com/morderous";
-        static readonly Font CoffeeBig = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-        static readonly Font CoffeeSmall = new Font("Segoe UI", 7.5f);
-        readonly Canvas coffee = new Canvas();
-        readonly System.Windows.Forms.Timer steam = new System.Windows.Forms.Timer();
-        float steamPhase;
-        bool coffeeHot;
+        static readonly Font DonateBig = new Font("Segoe UI", 11f, FontStyle.Bold);
+        static readonly Font DonateSmall = new Font("Segoe UI", 7.5f);
+        readonly Canvas donate = new Canvas();
+        readonly System.Windows.Forms.Timer glint = new System.Windows.Forms.Timer();
+        float glintPhase;
+        bool donateHot;
 
-        void BuildCoffee()
+        void BuildDonate()
         {
-            coffee.Location = new Point(398, 14);
-            coffee.Size = new Size(180, 50);
-            coffee.BackColor = Color.Transparent;
-            coffee.Cursor = Cursors.Hand;
-            coffee.Paint += PaintCoffee;
-            coffee.MouseEnter += delegate
+            donate.Location = new Point(398, 14);
+            donate.Size = new Size(180, 50);
+            donate.BackColor = Color.Transparent;
+            donate.Cursor = Cursors.Hand;
+            donate.Paint += PaintDonate;
+            donate.MouseEnter += delegate
             {
-                coffeeHot = true;
-                tips.SetToolTip(coffee, CoffeeWords());
-                coffee.Invalidate();
+                donateHot = true;
+                tips.SetToolTip(donate, DonateWords());
+                donate.Invalidate();
             };
-            coffee.MouseLeave += delegate { coffeeHot = false; coffee.Invalidate(); };
-            coffee.Click += delegate
+            donate.MouseLeave += delegate { donateHot = false; donate.Invalidate(); };
+            donate.Click += delegate
             {
                 Open(KoFi);
                 Status("Thank you! Ko-fi is open in your browser.");
             };
-            Controls.Add(coffee);
-            steam.Interval = 70;
-            steam.Tick += delegate
+            Controls.Add(donate);
+            glint.Interval = 50;
+            glint.Tick += delegate
             {
                 if (!Visible || WindowState == FormWindowState.Minimized) return;
-                steamPhase += coffeeHot ? 0.22f : 0.07f;
-                coffee.Invalidate();
+                glintPhase += 0.05f;
+                // While it crosses, and once after, to wipe it.
+                if (glintPhase % GlintEvery < 1.1f) donate.Invalidate();
             };
-            steam.Start();
+            glint.Start();
         }
 
-        string CoffeeWords()
+        // Seconds from one glint to the next; each takes one to cross.
+        const float GlintEvery = 4f;
+
+        string DonateWords()
         {
             int seconds = 0;
             foreach (KeyValuePair<DateTime, int> session in Sessions()) seconds += session.Value;
@@ -1382,48 +1402,41 @@ namespace SurvivorInstaller
             string so = seconds >= 60 && played > 0 ? Hours(seconds) + " of play and " + Count(played) + " runs so far.\n"
                 : played > 0 ? Count(played) + " runs so far.\n" : "";
             return so + "Survivor UI, Survivor Plates and this launcher are free, made in my spare time.\n" +
-                "If they made your runs better, a coffee on Ko-fi says thanks and keeps them coming.\n" +
+                "If they made your runs better, a donation on Ko-fi says thanks and keeps them coming.\n" +
                 "Thank you!  morderous";
         }
 
-        void PaintCoffee(object sender, PaintEventArgs e)
+        void PaintDonate(object sender, PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            int w = W(coffee), h = H(coffee);
-            // The plate: the pack's stone, lit under the mouse.
-            Bitmap plate = ArtAs("button-stone", coffeeHot ? "hot" : null);
-            if (plate != null) Slice3(g, plate, coffee.ClientRectangle, 22, 20);
+            Rectangle r = donate.ClientRectangle;
+            int w = W(donate);
+            // The plate: the pack's red one in a light blue, lit under the mouse.
+            Bitmap plate = ArtAs("button-red", donateHot ? "blue-hot" : "blue");
+            if (plate != null) Slice3(g, plate, r, 31, 31);
+            // The glint: a band of light crossing it, inside its rim.
+            float part = glintPhase % GlintEvery;
+            if (part < 1f)
+            {
+                Rectangle inner = Rectangle.Inflate(r, -S(10), -S(9));
+                int band = S(34);
+                int x = inner.X - band + (int)((inner.Width + band) * part);
+                using (LinearGradientBrush shine = new LinearGradientBrush(new Rectangle(x, inner.Y, band, inner.Height),
+                    Color.Transparent, Color.Transparent, LinearGradientMode.Horizontal))
+                {
+                    ColorBlend blend = new ColorBlend(3);
+                    blend.Colors = new Color[] { Color.FromArgb(0, 255, 255, 255), Color.FromArgb(110, 255, 255, 255), Color.FromArgb(0, 255, 255, 255) };
+                    blend.Positions = new float[] { 0f, 0.5f, 1f };
+                    shine.InterpolationColors = blend;
+                    g.SetClip(inner);
+                    g.FillRectangle(shine, x, inner.Y, band, inner.Height);
+                    g.ResetClip();
+                }
+            }
             g.ScaleTransform(ui, ui);
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            // The cup, a little smaller, clear of the plate's ends.
-            System.Drawing.Drawing2D.GraphicsState plain = g.Save();
-            g.TranslateTransform(17f, 7f);
-            g.ScaleTransform(0.74f, 0.74f);
-            // The saucer, the handle, the cup, the coffee in it.
-            using (Brush saucer = new SolidBrush(Color.FromArgb(206, 196, 178))) g.FillEllipse(saucer, 10, 37, 34, 7);
-            using (Pen handle = new Pen(Color.FromArgb(232, 224, 208), 3f)) g.DrawArc(handle, 33, 22, 11, 11, -80, 200);
-            using (GraphicsPath cup = new GraphicsPath())
-            {
-                cup.AddLine(14, 19, 38, 19);
-                cup.AddBezier(38, 19, 38, 31, 35, 39, 26, 39);
-                cup.AddBezier(26, 39, 17, 39, 14, 31, 14, 19);
-                using (LinearGradientBrush china = new LinearGradientBrush(new Rectangle(13, 19, 27, 21),
-                    Color.FromArgb(252, 246, 234), Color.FromArgb(190, 178, 158), LinearGradientMode.Horizontal))
-                    g.FillPath(china, cup);
-            }
-            using (Brush brew = new SolidBrush(Color.FromArgb(96, 54, 24))) g.FillEllipse(brew, 15, 17, 22, 5);
-            // Three wisps of steam rising and swaying.
-            for (int i = 0; i < 3; i++)
-            {
-                PointF[] wisp = new PointF[6];
-                for (int k = 0; k < wisp.Length; k++)
-                    wisp[k] = new PointF(20 + i * 6 + (float)Math.Sin(k * 0.9f - steamPhase - i * 2.1f) * 2.2f, 15 - k * 2.4f);
-                using (Pen air = new Pen(Color.FromArgb(coffeeHot ? 170 : 115, 255, 255, 255), 1.4f)) g.DrawCurve(air, wisp);
-            }
-            g.Restore(plain);
-            g.SmoothingMode = SmoothingMode.None;
-            Txt(g, "Buy me a coffee", CoffeeBig, new Rectangle(53, 9, w - 74, 20), coffeeHot ? Color.FromArgb(255, 232, 140) : Gold, TextOnly);
-            Txt(g, "if you like my work", CoffeeSmall, new Rectangle(54, 28, w - 74, 14), StoneText, TextOnly);
+            TextFormatFlags centred = TextOnly | TextFormatFlags.HorizontalCenter;
+            Shadowed(g, "Donate", DonateBig, new Rectangle(0, 7, w, 22), donateHot ? Color.White : Color.FromArgb(236, 247, 255), centred);
+            Shadowed(g, "if you like my work", DonateSmall, new Rectangle(0, 28, w, 14), Color.FromArgb(206, 232, 255), centred);
         }
 
         // The pages dressed: the secondary buttons in stone (the actions stay
@@ -1436,7 +1449,7 @@ namespace SurvivorInstaller
             foreach (Control control in new Control[] { gameNews, notesBox, backupList, runList, runDetail, playChart, achList, classGrid })
                 Frame(control, "inset");
             Frame(folderBox, "card");
-            foreach (ComboBox box in new ComboBox[] { destBox, keepBox, runClass, runResult })
+            foreach (ComboBox box in new ComboBox[] { destBox, keepBox, runClass, runResult, graphicsBox })
                 Picker(box);
         }
 
@@ -2105,6 +2118,33 @@ namespace SurvivorInstaller
             browseButton.Size = new Size(92, 26);
             browseButton.Click += delegate { BrowseForGame(); };
             page.Controls.Add(browseButton);
+
+            // Its graphics, before Find game...: the game's own choice, or
+            // DirectX 12 or Vulkan, for a PC whose driver fails the one the
+            // game picks (the launcher also turns to DirectX 12 by itself when
+            // the game closes as it starts: WatchStart).
+            Label graphicsLabel = new Label();
+            graphicsLabel.Text = "Graphics";
+            graphicsLabel.Font = new Font("Segoe UI", 8.5f);
+            graphicsLabel.ForeColor = Muted;
+            graphicsLabel.AutoSize = true;
+            graphicsLabel.Location = new Point(460, 14);
+            tips.SetToolTip(graphicsLabel, "How the game draws: Auto (the game's own choice), DirectX 12 or Vulkan.\n" +
+                "If the game closes as it starts, the launcher tries DirectX 12 by itself; or pick one here.");
+            page.Controls.Add(graphicsLabel);
+            DarkCombo(graphicsBox);
+            graphicsBox.Items.AddRange(GraphicsNames);
+            graphicsBox.Location = new Point(518, 11);
+            graphicsBox.Size = new Size(120, 24);
+            graphicsBox.SelectedIndex = Math.Max(0, Array.IndexOf(GraphicsKeys, Setting("graphics", "auto")));
+            graphicsBox.SelectedIndexChanged += delegate
+            {
+                string key = GraphicsKeys[Math.Max(0, graphicsBox.SelectedIndex)];
+                if (key == Setting("graphics", "auto")) return;
+                SetSetting("graphics", key);
+                Status(key == "auto" ? "The game picks its graphics itself." : "The game starts with " + GraphicsNames[graphicsBox.SelectedIndex] + " from now on.");
+            };
+            page.Controls.Add(graphicsBox);
 
             // Play: the game by the AddOns folder, started; the installer steps
             // into the tray. Get the game while there is none, Update game while
@@ -4641,6 +4681,13 @@ namespace SurvivorInstaller
 
         void Play()
         {
+            Play(null);
+        }
+
+        // With retry (the launcher's own second try: "dx12"), the graphics
+        // asked for that start only; else the ones picked (Graphics).
+        void Play(string retry)
+        {
             string exe = GameExePath();
             if (exe == null)
             {
@@ -4661,14 +4708,18 @@ namespace SurvivorInstaller
             }
             try
             {
+                string graphics = retry ?? Setting("graphics", "auto");
                 ProcessStartInfo info = new ProcessStartInfo(exe);
                 info.WorkingDirectory = Path.GetDirectoryName(exe);
-                info.UseShellExecute = true;
+                // The graphics asked through the game's environment, which only
+                // a start without the shell carries.
+                info.UseShellExecute = graphics == "auto";
+                if (graphics != "auto") info.EnvironmentVariables["WGPU_BACKEND"] = graphics;
                 DateTime at = DateTime.Now;
                 Process started = Process.Start(info);
-                Status("Starting the game...");
+                Status(retry != null ? "The game closed as it started: trying again with DirectX 12..." : "Starting the game...");
                 if (Visible) ToTray();
-                WatchStart(started, exe, at);
+                WatchStart(started, exe, at, graphics, retry != null);
             }
             catch (Exception error)
             {
@@ -4683,11 +4734,14 @@ namespace SurvivorInstaller
         // runtime, VCRUNTIME140.dll: the loader's own codes), else the crash
         // report the game left (its Diagnostics folder, crash-<time>.txt),
         // else its exit code. Closed with 0, or handed on to another of its
-        // own, it says nothing.
+        // own, it says nothing. Started with the game's own graphics, it is
+        // started once more with DirectX 12 first (a driver failing the one
+        // the game picks: the game's own FAQ's fix), and DirectX 12 is kept
+        // when the game then stays up.
         const int StartWatch = 60000;
         const string VcRuntime = "https://aka.ms/vs/17/release/vc_redist.x64.exe";
 
-        void WatchStart(Process started, string exe, DateTime at)
+        void WatchStart(Process started, string exe, DateTime at, string graphics, bool retried)
         {
             if (started == null) return;
             new Thread(delegate ()
@@ -4695,7 +4749,11 @@ namespace SurvivorInstaller
                 int code = 0;
                 try
                 {
-                    if (!started.WaitForExit(StartWatch)) return;
+                    if (!started.WaitForExit(StartWatch))
+                    {
+                        if (retried) BeginInvoke(new Action(delegate { KeepGraphics(graphics); }));
+                        return;
+                    }
                     code = started.ExitCode;
                 }
                 catch { return; }
@@ -4703,8 +4761,23 @@ namespace SurvivorInstaller
                 Thread.Sleep(2000);
                 if (code == 0 || GameRunning()) return;
                 string report = NewestCrash(exe, at);
-                BeginInvoke(new Action(delegate { StartFailed(code, report); }));
+                BeginInvoke(new Action(delegate { StartFailed(code, report, graphics, retried); }));
             }) { IsBackground = true }.Start();
+        }
+
+        // The graphics the second try started with, kept: the game stayed up.
+        void KeepGraphics(string graphics)
+        {
+            SetSetting("graphics", graphics);
+            int index = Array.IndexOf(GraphicsKeys, graphics);
+            if (index >= 0) graphicsBox.SelectedIndex = index;
+            Status("The game runs with " + GraphicsName(graphics) + " on this PC: the launcher keeps it (Play tab, Graphics).");
+        }
+
+        static string GraphicsName(string key)
+        {
+            int index = Array.IndexOf(GraphicsKeys, key);
+            return index >= 0 ? GraphicsNames[index] : key;
         }
 
         // The game's newest crash report written since it was started; null
@@ -4747,13 +4820,24 @@ namespace SurvivorInstaller
             return "(the report says no more)";
         }
 
-        void StartFailed(int code, string report)
+        void StartFailed(int code, string report, string graphics, bool retried)
         {
-            FromTray();
             uint status = unchecked((uint)code);
+            bool missingDll = status == 0xC0000135 || status == 0xC000007B || status == 0xC0000139;
+            // The game's own graphics failed: once more with DirectX 12, from
+            // the tray, before a word is said.
+            if (!missingDll && graphics == "auto" && !retried)
+            {
+                Play("dx12");
+                return;
+            }
+            FromTray();
+            string tried = retried ? ", with the game's own graphics and with DirectX 12 too" :
+                graphics != "auto" ? ", with " + GraphicsName(graphics) : "";
+            string advice = "Update your graphics driver, or pick other graphics in the Play tab (Graphics), then click Play again.";
             // Not found, not the right kind, an entry point missing: a DLL the
             // exe needs as it loads.
-            if (status == 0xC0000135 || status == 0xC000007B || status == 0xC0000139)
+            if (missingDll)
             {
                 Status("The game could not start: Windows lacks Microsoft's Visual C++ runtime.");
                 if (Ask(this, "Azeroth Survivors closed as it started: Windows could not load a part the game needs, " +
@@ -4766,15 +4850,15 @@ namespace SurvivorInstaller
             if (report != null)
             {
                 Status("The game closed as it started, and left a crash report.");
-                if (Ask(this, "Azeroth Survivors closed as it started, and left a crash report:\n\n" + CrashWhy(report) +
-                    "\n\nShare the report in the game's Discord (#help), so it can be fixed.\n\nShow it in its folder now?",
+                if (Ask(this, "Azeroth Survivors closed as it started" + tried + ", and left a crash report:\n\n" + CrashWhy(report) +
+                    "\n\n" + advice + " If it still closes, share the report in the game's Discord (#help), so it can be fixed.\n\nShow the report in its folder now?",
                     "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.Yes)
                     try { Process.Start("explorer.exe", "/select,\"" + report + "\""); } catch { }
                 return;
             }
             Status("The game closed as it started (code 0x" + status.ToString("X8") + ").");
-            Ask(this, "Azeroth Survivors closed as it started (code 0x" + status.ToString("X8") + "), without a crash report.\n\n" +
-                "Update your graphics driver and try again. If it still closes, ask in the game's Discord (#help) with this code.",
+            Ask(this, "Azeroth Survivors closed as it started" + tried + " (code 0x" + status.ToString("X8") + "), without a crash report.\n\n" +
+                advice + " If it still closes, ask in the game's Discord (#help) with this code.",
                 "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 

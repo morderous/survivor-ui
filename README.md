@@ -213,6 +213,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### Azeroth SurvivorUI Launcher 1.5.2 (beta), 2026-10-26
+
+- **The game's graphics, and a second try by itself**: the Play tab has a **Graphics** choice: **Auto** (the game's own choice), **DirectX 12** or **Vulkan**. On some PCs the game closes as it starts, the graphics driver failing the renderer the game picks (an access violation, 0xC0000005); the game's own FAQ answers with a .bat that starts it with DirectX 12. The launcher does it by itself now: on Auto, when the game closes as it starts, it starts it again at once with DirectX 12, and when the game then stays up, it keeps DirectX 12 for that PC (and says so). If it closes with both, or with the graphics picked by hand, the launcher says so and what to try.
+- **Donate**: the coffee cup in the header is now a light blue **Donate** button, "if you like my work" under it, a glint crossing it now and then; it still opens the [Ko-fi](https://ko-fi.com/morderous).
+
 ### Azeroth SurvivorUI Launcher 1.5.1 (beta), 2026-10-26
 
 - **When the game closes as it starts, the launcher says why**: after Play it watches the game for a minute. If the game closes in that time, the launcher comes back from the tray and says what it can tell: Windows lacks Microsoft's Visual C++ runtime, a part the game needs to load (with a button to Microsoft's download, vc_redist.x64.exe); or the game left a crash report (its reason, and a button to the report, to share in the game's Discord); or else the game's exit code. Before, it said "Starting the game..." while nothing opened.
