@@ -90,7 +90,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.5.2.0")]
+[assembly: System.Reflection.AssemblyVersion("1.5.3.0")]
 
 namespace SurvivorInstaller
 {
@@ -156,6 +156,38 @@ namespace SurvivorInstaller
 
         [DllImport("user32.dll")]
         public static extern bool GetScrollInfo(IntPtr hwnd, int bar, ref ScrollInfo info);
+
+        // The game started with its output into a file (StartWithLog).
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        public struct StartupInfo
+        {
+            public int cb;
+            public string lpReserved, lpDesktop, lpTitle;
+            public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+            public short wShowWindow, cbReserved2;
+            public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct ProcessInformation
+        {
+            public IntPtr hProcess, hThread;
+            public int dwProcessId, dwThreadId;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern bool CreateProcess(string application, System.Text.StringBuilder commandLine, IntPtr processAttributes,
+            IntPtr threadAttributes, bool inheritHandles, uint flags, IntPtr environment, string directory,
+            ref StartupInfo startup, out ProcessInformation process);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool SetHandleInformation(IntPtr handle, uint mask, uint flags);
+
+        [DllImport("kernel32.dll")]
+        public static extern uint ResumeThread(IntPtr thread);
+
+        [DllImport("kernel32.dll")]
+        public static extern bool CloseHandle(IntPtr handle);
     }
 
     [ComImport, Guid("ea1afb91-9e28-4b86-90e9-9e9f8a5eefaf"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -4709,14 +4741,26 @@ namespace SurvivorInstaller
             try
             {
                 string graphics = retry ?? Setting("graphics", "auto");
-                ProcessStartInfo info = new ProcessStartInfo(exe);
-                info.WorkingDirectory = Path.GetDirectoryName(exe);
-                // The graphics asked through the game's environment, which only
-                // a start without the shell carries.
-                info.UseShellExecute = graphics == "auto";
-                if (graphics != "auto") info.EnvironmentVariables["WGPU_BACKEND"] = graphics;
+                // The graphics asked through the launcher's own environment,
+                // which the game inherits; Auto gives back what Windows gave.
+                Environment.SetEnvironmentVariable("WGPU_BACKEND", graphics == "auto" ? InheritedBackend : graphics);
                 DateTime at = DateTime.Now;
-                Process started = Process.Start(info);
+                int error;
+                Process started = StartWithLog(exe, GameLog, out error);
+                if (started == null && error == ElevationRequired)
+                {
+                    // The exe set to run as an administrator (its Properties,
+                    // Compatibility): started through the shell, which asks
+                    // Windows' leave, without the log, nor the graphics (an
+                    // elevated game starts from Windows' environment).
+                    ProcessStartInfo info = new ProcessStartInfo(exe);
+                    info.WorkingDirectory = Path.GetDirectoryName(exe);
+                    info.UseShellExecute = true;
+                    started = Process.Start(info);
+                    graphics = "admin";
+                }
+                else if (started == null && error != 0)
+                    throw new System.ComponentModel.Win32Exception(error);
                 Status(retry != null ? "The game closed as it started: trying again with DirectX 12..." : "Starting the game...");
                 if (Visible) ToTray();
                 WatchStart(started, exe, at, graphics, retry != null);
@@ -4740,6 +4784,87 @@ namespace SurvivorInstaller
         // when the game then stays up.
         const int StartWatch = 60000;
         const string VcRuntime = "https://aka.ms/vs/17/release/vc_redist.x64.exe";
+        const int ElevationRequired = 740;
+        // WGPU_BACKEND as Windows gave it to the launcher (a player's own).
+        static readonly string InheritedBackend = Environment.GetEnvironmentVariable("WGPU_BACKEND");
+
+        // The game's output (its log, which it writes to its standard output)
+        // of the last start, beside the launcher's settings; the one before
+        // it kept as game-log-before.txt (the first of a second try).
+        static string GameLog
+        {
+            get { return Path.Combine(Path.GetDirectoryName(ConfigPath), "game-log.txt"); }
+        }
+
+        // The game started through Windows' own CreateProcess with its output
+        // into the log: the file is the game's own handle, so the log goes on
+        // whether or not the launcher stays. Suspended until its Process is
+        // held, so a game that dies at once still tells its exit code. Null
+        // with error set when Windows refused (740: the exe set to run as an
+        // administrator, which such a start cannot); null without one when it
+        // runs but cannot be watched.
+        static Process StartWithLog(string exe, string log, out int error)
+        {
+            error = 0;
+            try
+            {
+                if (File.Exists(log)) File.Copy(log, Path.Combine(Path.GetDirectoryName(log), "game-log-before.txt"), true);
+            }
+            catch { }
+            using (FileStream output = new FileStream(log, FileMode.Create, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+            {
+                IntPtr handle = output.SafeFileHandle.DangerousGetHandle();
+                Native.SetHandleInformation(handle, 1, 1);                    // HANDLE_FLAG_INHERIT
+                Native.StartupInfo startup = new Native.StartupInfo();
+                startup.cb = Marshal.SizeOf(typeof(Native.StartupInfo));
+                startup.dwFlags = 0x100;                                       // STARTF_USESTDHANDLES
+                startup.hStdOutput = handle;
+                startup.hStdError = handle;
+                Native.ProcessInformation process;
+                if (!Native.CreateProcess(exe, new System.Text.StringBuilder("\"" + exe + "\""), IntPtr.Zero, IntPtr.Zero, true,
+                    0x4, IntPtr.Zero, Path.GetDirectoryName(exe), ref startup, out process))    // CREATE_SUSPENDED
+                {
+                    error = Marshal.GetLastWin32Error();
+                    return null;
+                }
+                Process started = null;
+                try
+                {
+                    started = Process.GetProcessById(process.dwProcessId);
+                    IntPtr held = started.Handle;
+                }
+                catch { started = null; }
+                Native.ResumeThread(process.hThread);
+                Native.CloseHandle(process.hThread);
+                Native.CloseHandle(process.hProcess);
+                return started;
+            }
+        }
+
+        // The log's last lines, its colours taken out, for a box.
+        static string LogTail(int lines)
+        {
+            try
+            {
+                List<string> kept = new List<string>();
+                using (FileStream input = new FileStream(GameLog, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (StreamReader reader = new StreamReader(input))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        line = Regex.Replace(line, "\x1b\\[[0-9;]*m", "").Trim();
+                        if (line == "") continue;
+                        // The time and the module off the front: what it says.
+                        line = Regex.Replace(line, @"^\d{4}-\d\d-\d\dT[\d:.]+Z\s+", "");
+                        kept.Add(line.Length > 140 ? line.Substring(0, 140) + "..." : line);
+                        if (kept.Count > lines) kept.RemoveAt(0);
+                    }
+                }
+                return kept.Count > 0 ? string.Join("\n", kept.ToArray()) : null;
+            }
+            catch { return null; }
+        }
 
         void WatchStart(Process started, string exe, DateTime at, string graphics, bool retried)
         {
@@ -4768,6 +4893,9 @@ namespace SurvivorInstaller
         // The graphics the second try started with, kept: the game stayed up.
         void KeepGraphics(string graphics)
         {
+            // A second try that went to the shell (run as an administrator)
+            // asked for nothing: nothing to keep.
+            if (Array.IndexOf(GraphicsKeys, graphics) <= 0) return;
             SetSetting("graphics", graphics);
             int index = Array.IndexOf(GraphicsKeys, graphics);
             if (index >= 0) graphicsBox.SelectedIndex = index;
@@ -4832,9 +4960,15 @@ namespace SurvivorInstaller
                 return;
             }
             FromTray();
-            string tried = retried ? ", with the game's own graphics and with DirectX 12 too" :
+            bool admin = graphics == "admin";
+            string tried = admin ? ", run as an administrator" :
+                retried ? ", with the game's own graphics and with DirectX 12 too" :
                 graphics != "auto" ? ", with " + GraphicsName(graphics) : "";
-            string advice = "Update your graphics driver, or pick other graphics in the Play tab (Graphics), then click Play again.";
+            string advice = admin
+                ? "Untick \"Run this program as an administrator\" in AzerothSurvivors.exe's Properties (Compatibility), then click Play again: " +
+                    "the launcher then tries other graphics by itself and keeps the game's log."
+                : "Update your graphics driver, or pick other graphics in the Play tab (Graphics), then click Play again.";
+            string tail = admin ? null : LogTail(6);
             // Not found, not the right kind, an entry point missing: a DLL the
             // exe needs as it loads.
             if (missingDll)
@@ -4857,9 +4991,19 @@ namespace SurvivorInstaller
                 return;
             }
             Status("The game closed as it started (code 0x" + status.ToString("X8") + ").");
-            Ask(this, "Azeroth Survivors closed as it started" + tried + " (code 0x" + status.ToString("X8") + "), without a crash report.\n\n" +
-                advice + " If it still closes, ask in the game's Discord (#help) with this code.",
-                "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (tail == null)
+            {
+                Ask(this, "Azeroth Survivors closed as it started" + tried + " (code 0x" + status.ToString("X8") + "), without a crash report.\n\n" +
+                    advice + " If it still closes, ask in the game's Discord (#help) with this code.",
+                    "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            // Its log's last lines: how far it got.
+            if (Ask(this, "Azeroth Survivors closed as it started" + tried + " (code 0x" + status.ToString("X8") + "), without a crash report. " +
+                "Its log's last lines:\n\n" + tail + "\n\n" + advice + " If it still closes, share the game's log (game-log.txt) in the game's Discord (#help).\n\n" +
+                "Show the log in its folder now?",
+                "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.Yes)
+                try { Process.Start("explorer.exe", "/select,\"" + GameLog + "\""); } catch { }
         }
 
         void FromTray()

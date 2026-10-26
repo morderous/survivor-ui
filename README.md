@@ -213,6 +213,11 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### Azeroth SurvivorUI Launcher 1.5.3 (beta), 2026-10-26
+
+- **The game's log, kept**: Play starts the game with its output, its log, going to `game-log.txt` in the launcher's folder (`%APPDATA%\SurvivorUIInstaller`; the one before is kept as `game-log-before.txt`). When the game closes as it starts without a crash report, the launcher shows the log's last lines, how far the game got, with a button to the file to share in the game's Discord.
+- **Set to run as an administrator**: a game whose exe is set to run as an administrator (its Properties, Compatibility) could not be started with graphics picked ("The requested operation requires elevation"). It now starts through Windows, which asks its leave as before; the graphics and the log need that tick off, and the launcher says so if the game then closes.
+
 ### Azeroth SurvivorUI Launcher 1.5.2 (beta), 2026-10-26
 
 - **The game's graphics, and a second try by itself**: the Play tab has a **Graphics** choice: **Auto** (the game's own choice), **DirectX 12** or **Vulkan**. On some PCs the game closes as it starts, the graphics driver failing the renderer the game picks (an access violation, 0xC0000005); the game's own FAQ answers with a .bat that starts it with DirectX 12. The launcher does it by itself now: on Auto, when the game closes as it starts, it starts it again at once with DirectX 12, and when the game then stays up, it keeps DirectX 12 for that PC (and says so). If it closes with both, or with the graphics picked by hand, the launcher says so and what to try.
