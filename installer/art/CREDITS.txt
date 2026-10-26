@@ -1,0 +1,16 @@
+The launcher's art
+
+Frames, buttons, switches, the title plaque, the progress and scroll bars and
+the window's buttons are from "Assets: UI RPG Game Interface [Lite Version]"
+by Wenrexa, https://wenrexa.itch.io/werdanta03, under Creative Commons Zero
+v1.0 Universal (CC0, public domain dedication): free to use, change and
+share, no credit required. Bought by morderous on 2026-10-25; credited here
+with thanks.
+
+make_art.py copies the pieces used from the pack's PNG folder under plain
+names, and makes two from them: inset.png (Menu02 without its title band)
+and arrow-down.png (BtnIcon07 turned down).
+
+The title's font, Cinzel Decorative, is under the SIL Open Font License
+(OFL-CinzelDecorative.txt, beside the launcher's source). The stone of the
+header, the coffee cup and the rest are drawn by the launcher itself.
