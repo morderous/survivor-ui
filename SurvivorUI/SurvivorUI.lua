@@ -2841,12 +2841,13 @@ recordShown.label:SetPoint("BOTTOM", recordShown.number, "TOP", 0, 2)
 
 local ShowRecord
 
--- For the Records tab and /sui record: a new best crit at once.
-function SurvivorUI_ShowCritRecord()
-	ShowRecord(12345)
+-- For the Records tab and /sui record: a new best crit at once, over the
+-- effect given (a class's picked there), else the hero's.
+function SurvivorUI_ShowCritRecord(fx)
+	ShowRecord(12345, nil, fx)
 end
 
-function ShowRecord(amount, source)
+function ShowRecord(amount, source, fx)
 	local ct = CT()
 	PlaceRecord()
 	local scale = ct.ctRecordSize or 1
@@ -2856,7 +2857,7 @@ function ShowRecord(amount, source)
 	-- it had before is the Radiant one's now.
 	recordShown.glow:Hide()
 	if SurvivorUI_RecordFxStart then
-		SurvivorUI_RecordFxStart(recordShown, SurvivorUI_RecordFxKind("crit"), scale, 0, recordShown.life)
+		SurvivorUI_RecordFxStart(recordShown, fx or SurvivorUI_RecordFxKind("crit"), scale, 0, recordShown.life)
 	end
 	Face(recordShown.number, RECORD_POP_SIZE * scale, "THICKOUTLINE")
 	recordShown.number:SetTextColor(RECORD_GOLD[1], RECORD_GOLD[2], RECORD_GOLD[3])

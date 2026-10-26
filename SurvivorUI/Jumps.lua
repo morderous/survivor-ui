@@ -11,17 +11,19 @@
 -- (the record) and all of them. This Run shows the run's in a row of its own
 -- (RunPanel.lua), Run History keeps each run's.
 --
--- Beating the record (one of RECORD_FROM jumps or more), once a run: NEW JUMP
--- RECORD over an effect of its own (Effects.lua, the Records tab; fire unless
--- chosen), under the new best crit (SurvivorUIRecord) or where it was moved
--- to (move mode: "New jump record"). The number climbs on while it shows.
+-- Checkpoints, every CHECKPOINT jumps in a run (50, 100, 150...), each the
+-- first time ever it is reached, so past the record (asked for 2026-10-26:
+-- the record beaten by one jump, once a run, came seldom and meant little):
+-- NEW JUMP RECORD and the checkpoint over an effect of its own (Effects.lua,
+-- the Records tab, this class's; fire unless chosen), under the new best crit
+-- (SurvivorUIRecord) or where it was moved to (move mode: "New jump record").
 --
 -- A gamepad's jump may go another way than Jump(): not counted then.
 
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local GAP = 0.7                 -- seconds between two counted jumps
-local RECORD_FROM = 10          -- a record under this is beaten quietly
+local CHECKPOINT = 50           -- jumps from one checkpoint to the next
 local HOLD, FADE = 3.2, 0.7     -- the notice: seconds it holds (unless set), seconds it fades
 local POP, POP_SIZE, SIZE = 0.14, 44, 32
 -- A winged foot: the game's Sprint icon, for a jump.
@@ -111,11 +113,7 @@ notice.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 notice.icon:SetPoint("RIGHT", notice.number, "LEFT", -4, 0)
 notice.icon:Hide()
 
-local function SetNumber(count)
-	notice.number:SetText(count)
-end
-
-local function Show(count)
+local function Show(count, fx)
 	Place()
 	local scale = Scale()
 	notice.scale, notice.hold = scale, Hold()
@@ -127,7 +125,7 @@ local function Show(count)
 	notice.number:SetTextColor(1, 0.75, 0.2)
 	notice.label:SetFont(SurvivorUI_FONT, 10 * math.max(0.8, scale) + FONT_BUMP, "OUTLINE")
 	notice.label:SetText("NEW JUMP RECORD")
-	SetNumber(count)
+	notice.number:SetText(count)
 	if IconOn() then
 		notice.icon:SetWidth(26 * scale)
 		notice.icon:SetHeight(26 * scale)
@@ -136,16 +134,18 @@ local function Show(count)
 		notice.icon:Hide()
 	end
 	if SurvivorUI_RecordFxStart then
-		SurvivorUI_RecordFxStart(notice, SurvivorUI_RecordFxKind("jump"), scale, NUMBER_Y, notice.hold + FADE)
+		SurvivorUI_RecordFxStart(notice, fx or SurvivorUI_RecordFxKind("jump"), scale, NUMBER_Y, notice.hold + FADE)
 	end
 	notice:SetAlpha(1)
 	notice:Show()
 end
 
--- For the options and /sui record: the notice at once, with the record.
-function SurvivorUI_ShowJumpRecord()
+-- For the options and /sui record: the notice at once, with the next
+-- checkpoint past the record, over the effect given (a class's picked
+-- there), else the hero's.
+function SurvivorUI_ShowJumpRecord(fx)
 	local _, best = SurvivorUI_RunJumps()
-	Show(math.max(best, RECORD_FROM) + 1)
+	Show((math.floor(best / CHECKPOINT) + 1) * CHECKPOINT, fx)
 end
 
 notice:SetScript("OnUpdate", function()
@@ -194,13 +194,10 @@ local function Count()
 	jumps.run = (jumps.run or 0) + 1
 	jumps.total = (jumps.total or 0) + 1
 	if jumps.run > (jumps.best or 0) then
-		if not jumps.announced and (jumps.best or 0) >= RECORD_FROM and NoticeOn() then
-			jumps.announced = true
-			Show(jumps.run)
-		elseif notice:IsShown() then
-			SetNumber(jumps.run)
-		end
 		jumps.best = jumps.run
+		if math.mod(jumps.run, CHECKPOINT) == 0 and NoticeOn() then
+			Show(jumps.run)
+		end
 	end
 end
 
@@ -248,6 +245,7 @@ watch:SetScript("OnUpdate", function()
 	local time = AZS_GetRunTime and AZS_GetRunTime()
 	if phase == "ready" or (time and lastTime and time + 3 < lastTime) then
 		local jumps = DB()
+		-- (announced: the record told once a run, before v3.0.33.)
 		if (jumps.run or 0) > 0 or jumps.announced then
 			jumps.run, jumps.announced = 0, nil
 		end

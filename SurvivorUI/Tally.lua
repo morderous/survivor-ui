@@ -223,6 +223,121 @@ local function Running()
 	return phase and phase ~= "ready"
 end
 
+-- A coin dropping (Sounds\CoinDrop.wav, our own), once, as the gold comes to
+-- pay for the next cache; with the line off too (A coin drops when you can
+-- pay: /sui opt, Kills & gold). On the change only: a reload with the gold
+-- already there, or a price not told yet, says nothing.
+-- The sound as chosen there (its Sound list): ours first, then the game's
+-- own coin and auction house sounds (in its patch.MPQ: played from there,
+-- never shipped with the addon), each named for the list.
+SurvivorUI_COIN_SOUNDS = {
+	{ key = "ours", name = "Survivor's Coin", note = "ours", path = "Interface\\AddOns\\SurvivorUI\\Sounds\\CoinDrop.wav" },
+	{ key = "auction", name = "Auctioneer's Farewell", note = "auction house, closing", path = "Sound\\interface\\AuctionWindowClose.wav" },
+	{ key = "auctionOpen", name = "Auctioneer's Welcome", note = "auction house, opening", path = "Sound\\interface\\AuctionWindowOpen.wav" },
+	{ key = "lootLarge", name = "Pile of Coins", note = "loot, many coins", path = "Sound\\interface\\LootCoinLarge.wav" },
+	{ key = "lootSmall", name = "Handful of Coins", note = "loot, a few coins", path = "Sound\\interface\\LootCoinSmall.wav" },
+	{ key = "purseOpen", name = "Purse Opens", note = "money window, opening", path = "Sound\\interface\\iMoneyDialogOpen.wav" },
+	{ key = "purseClose", name = "Purse Snaps Shut", note = "money window, closing", path = "Sound\\interface\\iMoneyDialogClose.wav" },
+}
+
+-- The sound given (a key of the list), else the one chosen.
+function SurvivorUI_CoinDrop(key)
+	if not PlaySoundFile then
+		return
+	end
+	key = key or Settings().coinSound
+	local path = SurvivorUI_COIN_SOUNDS[1].path
+	for index = 1, table.getn(SurvivorUI_COIN_SOUNDS) do
+		if SurvivorUI_COIN_SOUNDS[index].key == key then
+			path = SurvivorUI_COIN_SOUNDS[index].path
+		end
+	end
+	PlaySoundFile(path)
+end
+
+-- And a rain of coins over the gold (Effects.lua's coins: the crit record's
+-- Radiant, in gold coins), with the sound or on its own (Coins rain on the
+-- gold: Kills & gold): over this line's coin and number (where the line
+-- stands, out of a run), else the run tracker's coin, else over the hero.
+local RAIN_HOLD = 1.3               -- seconds new coins keep falling
+local RAIN_FADE = 0.5
+local rain = CreateFrame("Frame", "SurvivorUICoinRain", UIParent)
+rain:SetWidth(200)
+rain:SetHeight(64)
+rain:Hide()
+rain:SetScript("OnUpdate", function()
+	this.age = this.age + arg1
+	local age = this.age
+	if age >= RAIN_HOLD + RAIN_FADE then
+		this:Hide()
+		if SurvivorUI_RecordFxStop then
+			SurvivorUI_RecordFxStop(this)
+		end
+		return
+	end
+	if SurvivorUI_RecordFxUpdate then
+		SurvivorUI_RecordFxUpdate(this, age, arg1, age < RAIN_HOLD)
+	end
+	this:SetAlpha(age > RAIN_HOLD and 1 - (age - RAIN_HOLD) / RAIN_FADE or 1)
+end)
+
+-- onTop (the options' Try it): over every window, the options' too.
+function SurvivorUI_CoinRain(onTop)
+	if not SurvivorUI_RecordFxStart then
+		return
+	end
+	local anchor, x, size = nil, 0, 1
+	if slot:IsVisible() then
+		anchor, x = slot, (ICON_GAP + (gold:GetStringWidth() or 0)) / 2
+	elseif Settings().tally and holder:IsVisible() then
+		anchor = holder
+	else
+		local tracker = getglobal("SurvivorUITracker")
+		if tracker and tracker.coin and tracker.coin:IsVisible() then
+			anchor, size = tracker.coin, 1.25
+		end
+	end
+	rain:ClearAllPoints()
+	if anchor then
+		-- At the gold's size, under its numbers (the coins come over them).
+		rain:SetScale(anchor:GetEffectiveScale() / UIParent:GetEffectiveScale())
+		rain:SetFrameStrata(anchor:GetFrameStrata())
+		rain:SetFrameLevel(math.max(0, anchor:GetFrameLevel() - 2))
+		rain:SetPoint("CENTER", anchor, "CENTER", x, 0)
+	else
+		rain:SetScale(1)
+		rain:SetFrameStrata("MEDIUM")
+		rain:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+		size = 1.5
+	end
+	if onTop then
+		rain:SetFrameStrata("TOOLTIP")
+	end
+	rain.age = 0
+	rain:SetAlpha(1)
+	SurvivorUI_RecordFxStart(rain, "coins", size, 0, RAIN_HOLD + RAIN_FADE)
+	rain:Show()
+end
+
+local couldPay
+local function WatchCoin(running)
+	local cost = running and tonumber(AZS_RUN.chest) or 0
+	local pays = cost > 0 and (tonumber(AZS_RUN.gold) or 0) >= cost
+	if pays and couldPay == false then
+		if Settings().coinDrop ~= false then
+			SurvivorUI_CoinDrop()
+		end
+		if Settings().coinRain ~= false then
+			SurvivorUI_CoinRain()
+		end
+	end
+	if cost > 0 then
+		couldPay = pays
+	else
+		couldPay = nil
+	end
+end
+
 local elapsed = 0
 local ticker = CreateFrame("Frame")
 ticker:SetScript("OnUpdate", function()
@@ -233,7 +348,9 @@ ticker:SetScript("OnUpdate", function()
 	elapsed = 0
 
 	local settings = Settings()
-	if not (settings.tally and Running()) then
+	local running = Running()
+	WatchCoin(running)
+	if not (settings.tally and running) then
 		Shown(nil)
 		return
 	end

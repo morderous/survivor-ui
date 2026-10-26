@@ -44,9 +44,37 @@ SurvivorUI_RECORD_FX = {
 }
 local DEFAULT_FX = { crit = "radiant", jump = "fire" }
 
--- The effect a record wears (the Records tab): "crit" or "jump".
-function SurvivorUI_RecordFxKind(which)
-	local key = SurvivorUIDB and SurvivorUIDB[which.."RecordFx"]
+-- The effects chosen for a class (asked for 2026-10-26), in
+-- SurvivorUIDB.recordFxByClass[class]: { crit, jump }; made with make. The
+-- class's token (WARRIOR...), the hero's unless given (the Records tab picks
+-- any class).
+local function ClassFx(make, class)
+	if not class then
+		local _, mine = UnitClass("player")
+		class = mine or "UNKNOWN"
+	end
+	local byClass = SurvivorUIDB.recordFxByClass
+	if make and not byClass then
+		byClass = {}
+		SurvivorUIDB.recordFxByClass = byClass
+	end
+	local mine = byClass and byClass[class]
+	if make and not mine then
+		mine = {}
+		byClass[class] = mine
+	end
+	return mine
+end
+
+-- The effect a record wears (the Records tab): "crit" or "jump". A class's
+-- (the hero's unless given); a class not chosen for yet wears what was chosen
+-- for every class before (critRecordFx, jumpRecordFx), else the default.
+function SurvivorUI_RecordFxKind(which, class)
+	local key
+	if SurvivorUIDB then
+		local mine = ClassFx(false, class)
+		key = mine and mine[which] or SurvivorUIDB[which.."RecordFx"]
+	end
 	for index = 1, table.getn(SurvivorUI_RECORD_FX) do
 		if SurvivorUI_RECORD_FX[index][1] == key then
 			return key
@@ -55,9 +83,9 @@ function SurvivorUI_RecordFxKind(which)
 	return DEFAULT_FX[which] or "fire"
 end
 
-function SurvivorUI_SetRecordFx(which, kind)
+function SurvivorUI_SetRecordFx(which, kind, class)
 	SurvivorUIDB = SurvivorUIDB or {}
-	SurvivorUIDB[which.."RecordFx"] = kind
+	ClassFx(true, class)[which] = kind
 end
 
 ------------------------------------------------------------------------------
@@ -129,7 +157,10 @@ end
 
 -- A particle: p = { x, y, vx, vy, ax, ay, drag, sway, swayRate, length, size,
 -- size2, c1 = {r, g, b}, c2, curve ("fade", "twinkle", "in") } or an orbit
--- { orbit, angle, radius, w (turns a second, in radians), dr, ry }.
+-- { orbit, angle, radius, w (turns a second, in radians), dr, ry }. A coin
+-- (the coins' rain): solid (drawn as it is, not in light), spin (turns a
+-- second, in radians: as wide as it faces, darker edge-on), floor (it
+-- bounces there; land(fx, p) at its first, gone a moment after its second).
 local function Spawn(fx, art, p)
 	for index = 1, PARTS do
 		local texture = fx.parts[index]
@@ -138,6 +169,7 @@ local function Spawn(fx, art, p)
 			p.phase = p.phase or math.random() * 6.283
 			texture.p = p
 			texture:SetTexture(ART..art)
+			texture:SetBlendMode(p.solid and "BLEND" or "ADD")
 			-- A leaf mirrored, at random, so they do not all lean one way.
 			if p.flip then
 				texture:SetTexCoord(1, 0, 0, 1)
@@ -178,17 +210,34 @@ local function Particles(fx, elapsed)
 					p.vy = (p.vy + (p.ay or 0) * elapsed) * drag
 					p.x = p.x + p.vx * elapsed
 					p.y = p.y + p.vy * elapsed
+					if p.floor and p.y < p.floor and p.vy < 0 then
+						p.y = p.floor
+						p.vy = -p.vy * 0.42
+						p.vx = p.vx * 0.5
+						p.spin = (p.spin or 0) * 0.6
+						p.bounces = (p.bounces or 0) + 1
+						if p.bounces == 1 and p.land then
+							p.land(fx, p)
+						elseif p.bounces == 2 then
+							p.ends = p.life
+							p.length = p.life + 0.2
+						end
+					end
 					x, y = p.x, p.y
 				end
 				if p.sway then
 					x = x + p.sway * math.sin(p.life * p.swayRate + p.phase)
 				end
 				local size = Lerp(p.size, p.size2 or p.size, part)
-				Put(fx, texture, x, y, size)
+				local face = p.spin and math.abs(math.cos(p.life * p.spin + p.phase)) or 1
+				Put(fx, texture, x, y, size * math.max(0.18, face), size)
 				local c1, c2 = p.c1, p.c2 or p.c1
-				texture:SetVertexColor(Lerp(c1[1], c2[1], part), Lerp(c1[2], c2[2], part), Lerp(c1[3], c2[3], part))
+				local shade = 0.6 + 0.4 * face
+				texture:SetVertexColor(Lerp(c1[1], c2[1], part) * shade, Lerp(c1[2], c2[2], part) * shade, Lerp(c1[3], c2[3], part) * shade)
 				local alpha
-				if p.curve == "twinkle" then
+				if p.curve == "coin" then
+					alpha = p.ends and math.max(0, 1 - (p.life - p.ends) / 0.2) or math.min(1, p.life * 12)
+				elseif p.curve == "twinkle" then
 					alpha = math.sin(part * 3.1416)
 				elseif p.curve == "in" then
 					alpha = math.min(1, part * 2.5) * (1 - part * part)
@@ -432,6 +481,94 @@ EFFECTS.radiant = {
 			end
 		end
 		return 1, 0.8 + 0.08 * wave, 0.2 + 0.15 * wave
+	end,
+}
+
+-- The coins' rain (Tally.lua, as the gold comes to pay for the next cache):
+-- the Radiant's halo and pillars of light, smaller and taller, and gold coins
+-- (Art\Coin) falling into it, turning, each bouncing twice on the gold with
+-- a twinkle and a flare at its first, gone at its second. Not one of the
+-- records' choices.
+local COIN_WHITE, GOLD_LIGHT, GOLD_DEEP = { 1, 1, 1 }, { 1, 0.95, 0.65 }, { 1, 0.7, 0.2 }
+
+local function CoinLands(fx, p)
+	fx.flash = math.min(1, fx.flash + 0.25)
+	Spawn(fx, "LightStar", { x = p.x, y = p.y + 2, vx = 0, vy = 0, length = Rand(0.25, 0.4), size = Rand(10, 15),
+		c1 = GOLD_LIGHT, curve = "twinkle" })
+	for _ = 1, 2 do
+		Spawn(fx, "PaceDot", { x = p.x, y = p.y, vx = Rand(-45, 45), vy = Rand(35, 75), ay = -220,
+			length = Rand(0.3, 0.45), size = Rand(3, 5), size2 = 1.5, c1 = GOLD_LIGHT, c2 = GOLD_DEEP })
+	end
+end
+
+-- A coin let fall from x, y (above the gold) at vy, down to the floor.
+local function Coin(fx, x, y, vy)
+	Spawn(fx, "Coin", { x = x, y = y, vx = Rand(-8, 8), vy = vy, ay = -520, floor = Rand(-3, 1), length = 3,
+		size = Rand(15, 20), c1 = COIN_WHITE, solid = true, spin = Rand(7, 13), curve = "coin", land = CoinLands })
+end
+
+EFFECTS.coins = {
+	smoke = 0.4,
+	smokeSize = { 140, 92, 12 },
+	Start = function(fx)
+		fx.flash, fx.wait3 = 0.7, 0
+		for index = 1, SHAPES do
+			local shape = fx.shapes[index]
+			if index <= 5 then
+				shape:SetTexture(ART.."PaceGlow")
+				shape.x = (index - 3) * 17 + Rand(-3, 3)
+				shape.phase = Rand(0, 6.283)
+				shape.speed = Rand(1.5, 3)
+			else
+				shape:Hide()
+			end
+		end
+		-- The first close above, down with the sound's first clink; then a
+		-- handful higher, to land one after another.
+		Coin(fx, Rand(-6, 6), 12, -170)
+		for _ = 1, 5 do
+			Coin(fx, Rand(-40, 40), Rand(35, 90), Rand(-100, -40))
+		end
+		for _ = 1, 10 do
+			local angle, speed = Rand(0, 6.283), Rand(20, 55)
+			Spawn(fx, "PaceDot", { x = 0, y = 0, vx = math.cos(angle) * speed, vy = math.sin(angle) * speed * 0.6, drag = 2.5,
+				length = Rand(0.7, 1.2), size = Rand(3, 5), size2 = 1.5, c1 = GOLD_LIGHT, c2 = GOLD_DEEP })
+		end
+	end,
+	Update = function(fx, age, elapsed, holding, burst)
+		fx.flash = math.max(0, fx.flash - elapsed * 2.5)
+		local wave = 0.5 + 0.5 * math.sin(age * 4)
+		Glow(fx, fx.glow, 0, 14, 124 + 46 * burst + 12 * wave, 86 + 30 * burst + 8 * wave, 1, 0.7, 0.15,
+			0.7 + 0.2 * burst + 0.12 * wave)
+		Glow(fx, fx.core, 0, 0, 56 + 30 * fx.flash, 34 + 16 * fx.flash, 1, 0.92, 0.6, 0.4 + 0.5 * fx.flash)
+		for index = 1, 5 do
+			local shape = fx.shapes[index]
+			local rise = 0.5 + 0.5 * math.sin(age * shape.speed + shape.phase)
+			Stand(fx, shape, shape.x, -12, 10 + 4 * rise, 34 + 40 * rise)
+			shape:SetVertexColor(1, 0.82, 0.38)
+			shape:SetAlpha(0.25 + 0.5 * rise)
+			shape:Show()
+		end
+		if holding then
+			fx.wait = fx.wait - elapsed
+			if fx.wait <= 0 then
+				fx.wait = Rand(0.035, 0.07)
+				Coin(fx, Rand(-46, 46), Rand(70, 105), Rand(-60, -20))
+			end
+			fx.wait2 = fx.wait2 - elapsed
+			if fx.wait2 <= 0 then
+				fx.wait2 = Rand(0.15, 0.35)
+				local angle = Rand(0, 6.283)
+				Spawn(fx, "LightStar", { x = math.cos(angle) * Rand(48, 66), y = 14 + math.sin(angle) * Rand(24, 36), vx = 0, vy = 0,
+					length = Rand(0.4, 0.7), size = Rand(9, 16), c1 = GOLD_LIGHT, curve = "twinkle" })
+			end
+			fx.wait3 = fx.wait3 - elapsed
+			if fx.wait3 <= 0 then
+				fx.wait3 = Rand(0.08, 0.14)
+				Spawn(fx, "PaceDot", { x = Rand(-40, 40), y = Rand(-8, 4), vx = 0, vy = Rand(15, 35), sway = Rand(2, 5),
+					swayRate = Rand(1.5, 3), length = Rand(1, 1.6), size = Rand(3, 5), size2 = 1.5, c1 = GOLD_LIGHT, c2 = GOLD_DEEP })
+			end
+		end
 	end,
 }
 
@@ -726,6 +863,9 @@ EFFECTS.nature = {
 
 ------------------------------------------------------------------------------
 
+-- The smoke behind: width, height, its middle's height (an effect's own, smokeSize).
+local SMOKE_SIZE = { 240, 124, -2 }
+
 function SurvivorUI_RecordFxStart(host, kind, scale, numberY, life)
 	local fx = Rig(host)
 	local effect = EFFECTS[kind] or EFFECTS.fire
@@ -758,7 +898,8 @@ function SurvivorUI_RecordFxUpdate(host, age, elapsed, holding)
 		return
 	end
 	local effect = fx.effect
-	Put(fx, fx.smoke, 0, -2, 240, 124)
+	local smoke = effect.smokeSize or SMOKE_SIZE
+	Put(fx, fx.smoke, 0, smoke[3], smoke[1], smoke[2])
 	fx.smoke:SetAlpha(effect.smoke or 0.5)
 	fx.smoke:Show()
 	local burst = math.max(0, 1 - age / 0.6)

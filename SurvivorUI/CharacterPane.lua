@@ -319,6 +319,14 @@ local function Stats()
 	return setmetatable({}, { __index = function(_, key) return AZS_STATS[key] or 0 end })
 end
 
+-- A row's number as it reads, at 0 or below ("+0%", "-5%", "0.0%"): away
+-- with Hide the numbers at 0 or below (the options, Stats panel), in both
+-- places, until it grows past 0.
+local function ReadsAtMostZero(entry, s)
+	local _, _, minus, digits = string.find(entry[2](s), "(%-?)(%d+%.?%d*)")
+	return minus == "-" or (tonumber(digits) or 0) == 0
+end
+
 ------------------------------------------------------------------------------
 -- The numbers, in two places that stand on their own: the character pane's
 -- right side (on unless switched off: the options, Character pane), and the
@@ -805,16 +813,20 @@ local function MakeView(alone)
 		end
 
 		-- What shows: a group appears once one of its rows does. While arranging,
-		-- the hidden rows show too, faint, to bring them back.
+		-- the hidden rows show too, faint, to bring them back, and the ones at 0.
 		local ordered = Ordered()
 		local shown = {}
 		local totalRows, totalHeaders = 0, 0
+		local hideZero = s and SurvivorUIDB and SurvivorUIDB.statsHideZero == true
 		for index = 1, table.getn(ordered) do
 			local visible = {}
 			local section = ordered[index]
 			for each = 1, table.getn(section.rows) do
 				local entry = section.rows[each]
 				local relevant = not entry[4] or (s and s[entry[4]] ~= 0)
+				if relevant and hideZero and ReadsAtMostZero(entry, s) then
+					relevant = false
+				end
 				if (relevant or arranging) and not Hidden(entry[1]) then
 					table.insert(visible, entry)
 				end

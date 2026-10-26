@@ -885,11 +885,13 @@ local function Button(page, text, width, x, onClick, color)
 	return button
 end
 
--- A font, picked from a list where each face is written in itself (EditCard's
--- SurvivorUI_FontList, the addon's default first). get() and set(path), nil
--- for the default.
-local function FontPicker(page, label, get, set)
+-- A choice from a list that drops down: Items() gives the list, each
+-- { value, name, and as wanted font (the item written in it), color, note (a
+-- muted word on its right) }; get() the value chosen, set(value) on a pick.
+-- Values match without regard to case; the first item when none does.
+local function Dropdown(page, label, Items, get, set, width)
 	local color = page.color
+	width = width or 220
 	local holder = CreateFrame("Frame", nil, page)
 	holder:SetWidth(PAGE_WIDTH)
 	holder:SetHeight(22)
@@ -899,7 +901,7 @@ local function FontPicker(page, label, get, set)
 	holder.label:SetText(label)
 
 	local button = CreateFrame("Button", nil, holder)
-	button:SetWidth(220)
+	button:SetWidth(width)
 	button:SetHeight(22)
 	button:SetPoint("LEFT", holder, "LEFT", 140, 0)
 	button:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
@@ -913,7 +915,7 @@ local function FontPicker(page, label, get, set)
 
 	local menu = CreateFrame("Frame", nil, button)
 	menu:SetFrameLevel(button:GetFrameLevel() + 20)
-	menu:SetWidth(220)
+	menu:SetWidth(width)
 	menu:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, -2)
 	menu:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
 	menu:SetBackdropColor(0.03, 0.03, 0.05, 0.98)
@@ -922,10 +924,10 @@ local function FontPicker(page, label, get, set)
 	menu.items = {}
 
 	local function Same(a, b)
-		return (a and string.lower(a)) == (b and string.lower(b))
-	end
-	local function Faces()
-		return SurvivorUI_FontList and SurvivorUI_FontList(true) or {}
+		if type(a) == "string" and type(b) == "string" then
+			return string.lower(a) == string.lower(b)
+		end
+		return a == b
 	end
 
 	button:SetScript("OnEnter", function() this:SetBackdropBorderColor(color[1], color[2], color[3], 1) end)
@@ -935,35 +937,39 @@ local function FontPicker(page, label, get, set)
 			menu:Hide()
 			return
 		end
-		local list = Faces()
+		local list = Items()
 		local chosen = get()
 		for index = 1, table.getn(list) do
-			local face = list[index]
+			local entry = list[index]
 			local item = menu.items[index]
 			if not item then
 				item = CreateFrame("Button", nil, menu)
-				item:SetWidth(216)
+				item:SetWidth(width - 4)
 				item:SetHeight(20)
 				item:SetPoint("TOPLEFT", menu, "TOPLEFT", 2, -2 - (index - 1) * 20)
 				item.wash = Fill(item, "BACKGROUND", 1, 1, 1, 0)
 				item.wash:SetAllPoints(item)
 				item.text = item:CreateFontString(nil, "OVERLAY")
 				item.text:SetPoint("LEFT", item, "LEFT", 8, 0)
+				item.note = Text(item, 9, MUTED)
+				item.note:SetPoint("RIGHT", item, "RIGHT", -8, 0)
 				item:SetScript("OnEnter", function() this.wash:SetVertexColor(color[1], color[2], color[3], 0.2) end)
 				item:SetScript("OnLeave", function() this.wash:SetVertexColor(color[1], color[2], color[3], this.on and 0.12 or 0) end)
 				item:SetScript("OnClick", function()
-					set(this.path)
+					set(this.value)
 					menu:Hide()
 					RefreshAll()
 				end)
 				menu.items[index] = item
 			end
-			item.path = face.path
-			item.on = Same(chosen, face.path)
-			-- Each face written in itself; the one chosen lit.
-			item.text:SetFont(face.path or SurvivorUI_DEFAULT_FONT or SurvivorUI_FONT, 12 + FONT_BUMP, "OUTLINE")
-			item.text:SetText(face.name)
-			item.text:SetTextColor(item.on and color[1] or 1, item.on and color[2] or 1, item.on and color[3] or 1)
+			item.value = entry.value
+			item.on = Same(chosen, entry.value)
+			-- Each in its own font and color, if it has one; the one chosen lit.
+			item.text:SetFont(entry.font or SurvivorUI_FONT, (entry.font and 12 or 11) + FONT_BUMP, "OUTLINE")
+			item.text:SetText(entry.name)
+			local tint = item.on and color or entry.color or TEXT
+			item.text:SetTextColor(tint[1], tint[2], tint[3])
+			item.note:SetText(entry.note or "")
 			item.wash:SetVertexColor(color[1], color[2], color[3], item.on and 0.12 or 0)
 			item:Show()
 		end
@@ -975,18 +981,35 @@ local function FontPicker(page, label, get, set)
 	end)
 
 	function holder:Refresh()
-		local list = Faces()
+		local list = Items()
 		local chosen = get()
-		local name = list[1] and list[1].name or "Default"
-		for _, face in pairs(list) do
-			if face.path and Same(chosen, face.path) then
-				name = face.name
+		local shown = list[1]
+		for index = 1, table.getn(list) do
+			if Same(chosen, list[index].value) then
+				shown = list[index]
 			end
 		end
-		button.text:SetText(name)
+		button.text:SetText(shown and shown.name or "")
+		local tint = shown and shown.color or TEXT
+		button.text:SetTextColor(tint[1], tint[2], tint[3])
 	end
 	table.insert(widgets, holder)
 	page.y = page.y - 28
+end
+
+-- A font, picked from a list where each face is written in itself (EditCard's
+-- SurvivorUI_FontList, the addon's default first). get() and set(path), nil
+-- for the default.
+local function FontPicker(page, label, get, set)
+	Dropdown(page, label, function()
+		local list, faces = {}, SurvivorUI_FontList and SurvivorUI_FontList(true) or {}
+		for index = 1, table.getn(faces) do
+			local face = faces[index]
+			table.insert(list, { value = face.path, name = face.name,
+				font = face.path or SurvivorUI_DEFAULT_FONT or SurvivorUI_FONT })
+		end
+		return list
+	end, get, set)
 end
 
 ------------------------------------------------------------------------------
@@ -1700,6 +1723,31 @@ Check(page, "Gold and cache apart", OnlyIfOn("tallySplit"), function()
 	DB().tallySplit = not DB().tallySplit
 end, "the coin with your gold, the chest with the next cache's price")
 Check(page, "Coin shines when you can pay", OnUnlessOff("trackerCoinShine"), Flip("trackerCoinShine"), "this coin and the tracker's")
+Check(page, "A coin drops when you can pay", OnUnlessOff("coinDrop"), Flip("coinDrop"), "its sound, once a cache, the line on or off")
+-- Its sound from a list (Tally.lua's): ours, and the game's own coin and
+-- auction house sounds; picking one plays it.
+Dropdown(page, "Sound", function()
+	local list, sounds = {}, SurvivorUI_COIN_SOUNDS or {}
+	for index = 1, table.getn(sounds) do
+		table.insert(list, { value = sounds[index].key, name = sounds[index].name, note = sounds[index].note })
+	end
+	return list
+end, function() return DB().coinSound or "ours" end, function(key)
+	DB().coinSound = key ~= "ours" and key or nil
+	if SurvivorUI_CoinDrop then
+		SurvivorUI_CoinDrop()
+	end
+end, 300)
+Check(page, "Coins rain on the gold", OnUnlessOff("coinRain"), Flip("coinRain"), "with it: on this line, else the tracker's coin, else over you")
+Button(page, "Try it", 120, 0, function()
+	if SurvivorUI_CoinDrop then
+		SurvivorUI_CoinDrop()
+	end
+	if SurvivorUI_CoinRain then
+		SurvivorUI_CoinRain(true)
+	end
+end)
+page.y = page.y - 28
 
 ------------------------------------------------------------------------------
 -- XP bar (XpBar.lua).
@@ -1855,28 +1903,63 @@ Check(page, "Jumps row", OnUnlessOff("runJumps"), Flip("runJumps"),
 -- record (Jumps.lua), each on or off and with an effect of its own.
 
 page = pages.records
-Header(page, "Records", "A moment of glory as a record falls: its number stands still a moment over an effect, each record with its own. Picking an effect shows it.")
+Header(page, "Records", "A moment of glory as a record falls: its number stands still a moment over an effect, each record with its own, and each class its own pick. Picking an effect shows it.")
 local FX_CHOICES = {}
 for index = 1, table.getn(SurvivorUI_RECORD_FX or {}) do
 	table.insert(FX_CHOICES, { SurvivorUI_RECORD_FX[index][1], SurvivorUI_RECORD_FX[index][2] })
 end
+-- Each record's effect is picked for a class (Effects.lua): the class from a
+-- list, each in its color, the hero's marked; the hero's until another is
+-- picked.
+local CLASSES = {
+	{ "WARRIOR", "Warrior" }, { "PALADIN", "Paladin" }, { "HUNTER", "Hunter" },
+	{ "ROGUE", "Rogue" }, { "PRIEST", "Priest" }, { "SHAMAN", "Shaman" },
+	{ "MAGE", "Mage" }, { "WARLOCK", "Warlock" }, { "DRUID", "Druid" },
+}
+local function HeroClass()
+	local _, class = UnitClass("player")
+	return class
+end
+local function ClassItems()
+	local list, hero = {}, HeroClass()
+	for index = 1, table.getn(CLASSES) do
+		local class = CLASSES[index]
+		local r, g, b = 1, 0.82, 0
+		if SurvivorUI_ClassColor then
+			r, g, b = SurvivorUI_ClassColor(class[1])
+		end
+		table.insert(list, { value = class[1], name = class[2], color = { r, g, b },
+			note = class[1] == hero and "your hero" or nil })
+	end
+	return list
+end
+local pickedClass = {}
+local function PickedClass(which)
+	return pickedClass[which] or HeroClass()
+end
+local function PickedFx(which)
+	return SurvivorUI_RecordFxKind and SurvivorUI_RecordFxKind(which, PickedClass(which))
+end
+
 local function ShowCrit()
 	if SurvivorUI_ShowCritRecord then
-		SurvivorUI_ShowCritRecord()
+		SurvivorUI_ShowCritRecord(PickedFx("crit"))
 	end
 end
 local function ShowJump()
 	if SurvivorUI_ShowJumpRecord then
-		SurvivorUI_ShowJumpRecord()
+		SurvivorUI_ShowJumpRecord(PickedFx("jump"))
 	end
 end
--- A record's effect: its choice, and picking one shows it. Seven: in two
--- rows, four and three.
+-- A record's class, then its effect for that class; picking one shows it.
+-- Seven: in two rows, four and three.
 local function FxRow(which, show)
-	local get = function() return SurvivorUI_RecordFxKind and SurvivorUI_RecordFxKind(which) end
+	Dropdown(page, "Class", ClassItems, function() return PickedClass(which) end,
+		function(class) pickedClass[which] = class end, 160)
+	local get = function() return PickedFx(which) end
 	local set = function(kind)
 		if SurvivorUI_SetRecordFx then
-			SurvivorUI_SetRecordFx(which, kind)
+			SurvivorUI_SetRecordFx(which, kind, PickedClass(which))
 		end
 		show()
 	end
@@ -1905,7 +1988,7 @@ page.y = page.y - 34
 
 Subheader(page, "Jump record")
 Check(page, "New jump record", OnUnlessOff("jumpRecord"), Flip("jumpRecord"),
-	"once a run, as you pass your record (10 jumps or more), under the new best crit; your jumps are counted in This Run")
+	"at every 50 jumps in a run (50, 100, 150...) the first time ever, under the new best crit; your jumps are counted in This Run")
 FxRow("jump", ShowJump)
 Slider(page, "Stays", 1, 4, 0.1, function() return tonumber(DB().jumpRecordHold) or 3.2 end,
 	function(value) DB().jumpRecordHold = math.floor(value * 10 + 0.5) / 10 end, "%.1f s")
@@ -2120,6 +2203,10 @@ Note(page, "The same numbers on the screen all the time are a panel of their own
 page = pages.stats
 Header(page, "Stats panel", "The run's numbers as a panel of their own, on the screen all the time, apart from the character pane. Drag it by its title while this tab is open; its corner resizes it (a right click there: the first size again).")
 PanelHead(page, OnlyIfOn("statsPanel"), Call("SurvivorUI_ToggleStatsPanel"), "stats", "Stats")
+Subheader(page, "What shows")
+Check(page, "Hide the numbers at 0 or below", OnlyIfOn("statsHideZero"), function()
+	DB().statsHideZero = not DB().statsHideZero
+end, "in the pane and on the panel, back once past 0; every class")
 
 -- The class whose choices these are, named in the section's title.
 local classTitle = Subheader(page, "Stats for this class")
@@ -2592,6 +2679,10 @@ if PlatesThere() then
 	Slider(page, "Size", 0.5, 2, 0.05,
 		function() return SurvivorPlates_GetScale and SurvivorPlates_GetScale() or 1 end,
 		function(value) if SurvivorPlates_SetScale then SurvivorPlates_SetScale(value) end end)
+	Subheader(page, "Test")
+	Check(page, "Vaniron fix (test)", function() return SurvivorPlates_VanironFix and SurvivorPlates_VanironFix() end,
+		function() Plates("vaniron") end,
+		"vaniron's pull request #4: a plate's bar, number and color drawn again only when they change, the target's border and debuffs only as the game says they changed, a plate handed to another enemy hidden two frames. Off by default, under test.")
 else
 	Note(page, "Survivor Plates is not installed. It comes in the same download as Survivor UI.")
 end
@@ -2975,10 +3066,10 @@ credit:SetJustifyH("LEFT")
 credit:SetTextColor(0.42, 0.42, 0.47)
 credit:SetText("by morderous\ngithub.com/morderous/\nsurvivor-ui\nGPL-3.0")
 
--- Over the credit: a coffee on Ko-fi, in a warm gold. The game opens no link:
--- it shows in a box, selected, for Ctrl+C.
+-- Donate, for the Ko-fi, in a light blue. The game opens no link: it shows in
+-- a box, selected, for Ctrl+C.
 local KOFI = "https://ko-fi.com/morderous"
-local WARM = { 1.00, 0.80, 0.42 }
+local DONATE_BLUE = { 0.62, 0.84, 1.00 }
 
 local linkBox
 local function ShowLink(title, url)
@@ -2990,9 +3081,9 @@ local function ShowLink(title, url)
 		linkBox:SetFrameLevel(panel:GetFrameLevel() + 30)
 		linkBox:EnableMouse(true)
 		linkBox:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
-		linkBox:SetBackdropColor(0.08, 0.04, 0.03, 0.98)
-		linkBox:SetBackdropBorderColor(WARM[1] * 0.75, WARM[2] * 0.75, WARM[3] * 0.75, 1)
-		linkBox.title = Text(linkBox, 12, WARM)
+		linkBox:SetBackdropColor(0.03, 0.05, 0.08, 0.98)
+		linkBox:SetBackdropBorderColor(DONATE_BLUE[1] * 0.75, DONATE_BLUE[2] * 0.75, DONATE_BLUE[3] * 0.75, 1)
+		linkBox.title = Text(linkBox, 12, DONATE_BLUE)
 		linkBox.title:SetPoint("TOP", linkBox, "TOP", 0, -14)
 		linkBox.edit = CreateFrame("EditBox", nil, linkBox)
 		local edit = linkBox.edit
@@ -3005,7 +3096,7 @@ local function ShowLink(title, url)
 		edit:SetTextInsets(8, 8, 0, 0)
 		edit:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
 		edit:SetBackdropColor(0, 0, 0, 0.85)
-		edit:SetBackdropBorderColor(0.35, 0.3, 0.28, 1)
+		edit:SetBackdropBorderColor(0.28, 0.32, 0.38, 1)
 		-- The link stays as it is, whatever is typed; Enter or Escape closes.
 		edit:SetScript("OnTextChanged", function()
 			if this.url and this:GetText() ~= this.url then
@@ -3036,45 +3127,52 @@ local function ShowLink(title, url)
 	linkBox.edit:HighlightText()
 end
 
-local function WarmButton(width, onClick, tip)
-	local button = CreateFrame("Button", nil, panel)
-	button:SetWidth(width)
-	button:SetHeight(22)
-	button:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
-	button:SetBackdropColor(0.20, 0.07, 0.04, 1)
-	button:SetBackdropBorderColor(WARM[1] * 0.7, WARM[2] * 0.7, WARM[3] * 0.7, 1)
-	button:SetScript("OnEnter", function()
-		this:SetBackdropBorderColor(WARM[1], WARM[2], WARM[3], 1)
-		if this.text then
-			this.text:SetTextColor(1, 1, 1)
-		end
-		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-		GameTooltip:SetText(tip, WARM[1], WARM[2], WARM[3])
-		GameTooltip:Show()
-	end)
-	button:SetScript("OnLeave", function()
-		this:SetBackdropBorderColor(WARM[1] * 0.7, WARM[2] * 0.7, WARM[3] * 0.7, 1)
-		if this.text then
-			this.text:SetTextColor(WARM[1], WARM[2], WARM[3])
-		end
-		GameTooltip:Hide()
-	end)
-	button:SetScript("OnClick", onClick)
-	return button
-end
-
--- A little smaller than the window's other buttons (a scale, so its words
--- shrink with it); its place in the window's own units.
-local SUPPORT_SCALE = 0.7
-local coffee = WarmButton(108, function() ShowLink("Buy me a coffee :)", KOFI) end,
-	"If you want to support this love project, feel free.")
-coffee:SetScale(SUPPORT_SCALE)
+-- The button: a box in the Run History's Left look, in a lighter blue, alive
+-- as it is (RunHistory.lua's "donate": its glow breathing, its sparks
+-- drifting out to the right), brighter under the mouse. A little smaller than
+-- the window's other buttons (a scale, so its word shrinks with it); its place
+-- in the window's own units.
+local SUPPORT_SCALE = 0.8
+local donate = CreateFrame("Button", nil, panel)
+donate:SetScale(SUPPORT_SCALE)
+donate:SetWidth(100)
+donate:SetHeight(24)
 -- At the page's foot, level with Save & Close: over the credit it covered
 -- the sidebar's last tab once the list grew (Summons, v3.0.22).
-coffee:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", (SIDEBAR + 18) / SUPPORT_SCALE, 20 / SUPPORT_SCALE)
-coffee.text = Text(coffee, 9, WARM)
-coffee.text:SetPoint("CENTER", coffee, "CENTER", 0, 0)
-coffee.text:SetText("Buy me a coffee :)")
+donate:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", (SIDEBAR + 18) / SUPPORT_SCALE, 20 / SUPPORT_SCALE)
+-- Set again each time the window opens: its width by the word in the font
+-- worn by then (the global font comes after this file), the word in its
+-- middle, and a burst of sparks.
+local function DressDonate()
+	if not donate.badge then
+		return
+	end
+	SurvivorUI_SetResultBadge(donate.badge, "donate", nil)
+	donate.badge.text:ClearAllPoints()
+	donate.badge.text:SetPoint("CENTER", donate.badge, "CENTER", 0, 0)
+	donate:SetWidth(donate.badge:GetWidth())
+end
+if SurvivorUI_ResultBadge then
+	donate.badge = SurvivorUI_ResultBadge(donate)
+	donate.badge:SetPoint("CENTER", donate, "CENTER", 0, 0)
+	DressDonate()
+end
+donate:SetScript("OnShow", DressDonate)
+donate:SetScript("OnEnter", function()
+	if this.badge then
+		this.badge.hot = true
+	end
+	GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+	GameTooltip:SetText("If you want to support this love project, feel free.", DONATE_BLUE[1], DONATE_BLUE[2], DONATE_BLUE[3])
+	GameTooltip:Show()
+end)
+donate:SetScript("OnLeave", function()
+	if this.badge then
+		this.badge.hot = nil
+	end
+	GameTooltip:Hide()
+end)
+donate:SetScript("OnClick", function() ShowLink("Donate", KOFI) end)
 
 ------------------------------------------------------------------------------
 

@@ -90,7 +90,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.5.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.5.1.0")]
 
 namespace SurvivorInstaller
 {
@@ -4664,15 +4664,118 @@ namespace SurvivorInstaller
                 ProcessStartInfo info = new ProcessStartInfo(exe);
                 info.WorkingDirectory = Path.GetDirectoryName(exe);
                 info.UseShellExecute = true;
-                Process.Start(info);
+                DateTime at = DateTime.Now;
+                Process started = Process.Start(info);
                 Status("Starting the game...");
                 if (Visible) ToTray();
+                WatchStart(started, exe, at);
             }
             catch (Exception error)
             {
                 FromTray();
                 Status("Could not start the game: " + error.Message);
             }
+        }
+
+        // A game that closes in its first minute: the launcher says why, as
+        // well as it can tell (a player's Play opened nothing, 2026-10-26): a
+        // part of Windows missing as the exe loads (Microsoft's Visual C++
+        // runtime, VCRUNTIME140.dll: the loader's own codes), else the crash
+        // report the game left (its Diagnostics folder, crash-<time>.txt),
+        // else its exit code. Closed with 0, or handed on to another of its
+        // own, it says nothing.
+        const int StartWatch = 60000;
+        const string VcRuntime = "https://aka.ms/vs/17/release/vc_redist.x64.exe";
+
+        void WatchStart(Process started, string exe, DateTime at)
+        {
+            if (started == null) return;
+            new Thread(delegate ()
+            {
+                int code = 0;
+                try
+                {
+                    if (!started.WaitForExit(StartWatch)) return;
+                    code = started.ExitCode;
+                }
+                catch { return; }
+                finally { started.Dispose(); }
+                Thread.Sleep(2000);
+                if (code == 0 || GameRunning()) return;
+                string report = NewestCrash(exe, at);
+                BeginInvoke(new Action(delegate { StartFailed(code, report); }));
+            }) { IsBackground = true }.Start();
+        }
+
+        // The game's newest crash report written since it was started; null
+        // when none.
+        static string NewestCrash(string exe, DateTime since)
+        {
+            try
+            {
+                string folder = Path.Combine(GameDataFolder(exe), "Diagnostics");
+                if (!Directory.Exists(folder)) return null;
+                string newest = null;
+                DateTime when = since.AddSeconds(-2);
+                foreach (string file in Directory.GetFiles(folder, "crash-*.txt"))
+                {
+                    DateTime written = File.GetLastWriteTime(file);
+                    if (written >= when)
+                    {
+                        when = written;
+                        newest = file;
+                    }
+                }
+                return newest;
+            }
+            catch { return null; }
+        }
+
+        // A crash report's own words for it: its "panic:" line.
+        static string CrashWhy(string report)
+        {
+            try
+            {
+                foreach (string line in File.ReadAllLines(report))
+                    if (line.StartsWith("panic:"))
+                    {
+                        string why = line.Substring(6).Trim();
+                        return why.Length > 300 ? why.Substring(0, 300) + "..." : why;
+                    }
+            }
+            catch { }
+            return "(the report says no more)";
+        }
+
+        void StartFailed(int code, string report)
+        {
+            FromTray();
+            uint status = unchecked((uint)code);
+            // Not found, not the right kind, an entry point missing: a DLL the
+            // exe needs as it loads.
+            if (status == 0xC0000135 || status == 0xC000007B || status == 0xC0000139)
+            {
+                Status("The game could not start: Windows lacks Microsoft's Visual C++ runtime.");
+                if (Ask(this, "Azeroth Survivors closed as it started: Windows could not load a part the game needs, " +
+                    "Microsoft's Visual C++ runtime (VCRUNTIME140.dll).\n\nInstall it from Microsoft (vc_redist.x64.exe, a minute), " +
+                    "then click Play again.\n\nOpen Microsoft's download now?",
+                    "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                    try { Process.Start(VcRuntime); } catch { }
+                return;
+            }
+            if (report != null)
+            {
+                Status("The game closed as it started, and left a crash report.");
+                if (Ask(this, "Azeroth Survivors closed as it started, and left a crash report:\n\n" + CrashWhy(report) +
+                    "\n\nShare the report in the game's Discord (#help), so it can be fixed.\n\nShow it in its folder now?",
+                    "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.Yes)
+                    try { Process.Start("explorer.exe", "/select,\"" + report + "\""); } catch { }
+                return;
+            }
+            Status("The game closed as it started (code 0x" + status.ToString("X8") + ").");
+            Ask(this, "Azeroth Survivors closed as it started (code 0x" + status.ToString("X8") + "), without a crash report.\n\n" +
+                "Update your graphics driver and try again. If it still closes, ask in the game's Discord (#help) with this code.",
+                "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         void FromTray()

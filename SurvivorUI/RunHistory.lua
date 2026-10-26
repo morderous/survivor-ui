@@ -1515,6 +1515,9 @@ local RESULTS = {
 		sparks = { { 0.62, 0.84, 1.00 }, { 0.86, 0.94, 1.00 } }, breath = 2.8, motion = "drift", every = 0.28 },
 	going   = { word = "ENDLESS", fill = { 0.48, 0.18, 0.80 }, edge = { 0.86, 0.66, 1.00 }, glow = { 0.68, 0.38, 1.00 },
 		sparks = { { 0.80, 0.58, 1.00 } }, breath = 2, motion = "circle", every = 0.3, stars = 0.9 },
+	-- The options' Donate button (Options.lua): Left's drift, in a lighter blue.
+	donate  = { word = "DONATE", fill = { 0.26, 0.58, 0.88 }, edge = { 0.80, 0.93, 1.00 }, glow = { 0.48, 0.80, 1.00 },
+		sparks = { { 0.70, 0.88, 1.00 }, { 0.90, 0.97, 1.00 } }, breath = 2.8, motion = "drift", every = 0.28 },
 	-- The Level Up! button's (LevelUp.lua, SurvivorUI_Sparkle): Victory's
 	-- motion in gold.
 	levelup = { word = "LEVEL UP!", fill = { 0.16, 0.12, 0.02 }, edge = { 1.00, 0.82, 0.00 }, glow = { 1.00, 0.85, 0.30 },
