@@ -47,7 +47,6 @@
 --   /splates keys       V and Shift+V ignored (default), or let them work as the game has them
 --   /splates count      the plates on screen now, by kind (a check)
 --   /splates scale N    plate size, 0.5 to 2 (default 1)
---   /splates vaniron    vaniron's optimizations (his pull request #4) on or off (default off), under test
 --
 -- A key of one's own turns all the plates on and off as /splates none does
 -- (Key Bindings, Survivor Plates; or Survivor UI's options, Nameplates).
@@ -254,13 +253,7 @@ local function TargetKind()
 	end
 end
 
--- Every plate asks for the settings many times a second: checked once, then
--- the same table handed back while SurvivorPlatesDB is still it (vaniron's).
-local settingsChecked
 local function Settings()
-	if settingsChecked and settingsChecked == SurvivorPlatesDB then
-		return settingsChecked
-	end
 	SurvivorPlatesDB = SurvivorPlatesDB or {}
 	local db = SurvivorPlatesDB
 	-- The defaults: a plate on every enemy, a name only on elites, guardians and
@@ -286,7 +279,6 @@ local function Settings()
 	-- The companions had plates of their own for a day: the game gives them none.
 	db.show.companion = nil
 	db.scale = db.scale or 1
-	settingsChecked = db
 	return db
 end
 
@@ -301,22 +293,6 @@ local function Short(value)
 end
 
 local overlays = {}
-
--- vaniron's fix (his pull request #4, 2026-10-25; SurvivorPlatesDB.vanironFix,
--- off, under test): the target's kind asked once a frame for every plate
--- (targetKind); the target's debuffs read again only as the game says they
--- changed (auraVersion, up at PLAYER_TARGET_CHANGED and the target's
--- UNIT_AURA); a plate handed to another enemy, or leaping across the screen,
--- invisible SETTLE_FRAMES refreshes while the client fills it in; a plate's
--- bar, number and color drawn again only when they changed.
-local targetKind
-local auraVersion = 0
-local SETTLE_FRAMES = 2
-local JUMP = 40
-
-local function Fix()
-	return Settings().vanironFix == true
-end
 
 -- Other addons find the plates here: the art a plate is recognized by is
 -- blanked once it is skinned. Each entry has .plate and .stock.name.
@@ -360,8 +336,7 @@ local function ApplyKind(overlay, kind)
 	else
 		overlay.name:Hide()
 	end
-	-- The plate may have changed size: the debuff icons over it are drawn again.
-	overlay.auraVersion = nil
+
 end
 
 -- Debuffs on the target's plate, with their stacks. The 1.12 client only tells
@@ -504,49 +479,16 @@ end
 local function UpdatePlate()
 	local overlay = this
 	local stock = overlay.stock
-	local settings = Settings()
-	local fix = settings.vanironFix == true
-	local name = stock.name:GetText()
 
-	-- The client dims every plate but the target's. With the fix: a plate at
-	-- full brightness carrying the target's name, since for a moment after a
-	-- target is picked or lost every plate is still bright.
-	local isTarget
-	if fix then
-		isTarget = overlay.plate:GetAlpha() == 1 and name ~= nil and name == UnitName("target")
-	else
-		isTarget = UnitExists("target") and overlay.plate:GetAlpha() == 1
-	end
-
-	-- With the fix: a plate handed to another enemy, or leaping across the
-	-- screen, stays invisible SETTLE_FRAMES refreshes while the client fills
-	-- it in (an elite's plate seemed to jump about the screen's middle).
-	if fix then
-		local x, y = overlay.plate:GetCenter()
-		if name ~= overlay.lastName or (x and overlay.lastX
-				and math.abs(x - overlay.lastX) + math.abs(y - overlay.lastY) > JUMP) then
-			if not overlay.settle then
-				overlay:SetAlpha(0)
-			end
-			overlay.settle = SETTLE_FRAMES
-		elseif overlay.settle then
-			overlay.settle = overlay.settle - 1
-			if overlay.settle == 0 then
-				overlay.settle = nil
-				overlay:SetAlpha(1)
-			end
-		end
-		overlay.lastX, overlay.lastY = x, y
-	elseif overlay.settle then
-		overlay.settle = nil
-		overlay:SetAlpha(1)
-	end
+	-- The client dims every plate but the target's.
+	local isTarget = UnitExists("target") and overlay.plate:GetAlpha() == 1
 
 	-- The client fills a plate in over a frame or two as it hands it to
 	-- another unit: its name, then its bar's color and health. So the kind is
 	-- read again whenever any of them changes, not the name alone: a totem
 	-- read while its bar was still the last enemy's red stayed an enemy (and
 	-- hidden with the rank and file), until the game's list of units changed.
+	local name = stock.name:GetText()
 	local low, high = stock.health:GetMinMaxValues()
 	local friend = IsFriend(stock) and true or false
 	if name ~= overlay.lastName or friend ~= overlay.lastFriend or high ~= overlay.lastHigh
@@ -563,7 +505,7 @@ local function UpdatePlate()
 	-- elite of the same name told apart for sure.
 	local kind = overlay.baseKind
 	if isTarget and not FRIEND_KINDS[kind] then
-		local told = fix and targetKind or overlay.targetKind
+		local told = overlay.targetKind
 		if told == "final" or told == "boss" then
 			kind = "boss"
 		elseif told == "guardian" or told == "elite" or told == "normal" then
@@ -585,12 +527,13 @@ local function UpdatePlate()
 	overlay.marked = marked
 
 	-- A kind left out goes without a plate; an enemy's still shows as the
-	-- target, unless that is off too. Hidden once, as it goes.
+	-- target, unless that is off too.
+	local settings = Settings()
 	if not settings.show[overlay.kind]
 		and not (isTarget and settings.targetPlate ~= false and not FRIEND_KINDS[overlay.kind]) then
+		overlay.icon:Hide()
 		if not overlay.put then
 			overlay.put = true
-			overlay.icon:Hide()
 			overlay.bar:Hide()
 			overlay.name:Hide()
 		end
@@ -604,71 +547,42 @@ local function UpdatePlate()
 		overlay.iconFor = nil
 	end
 
-	-- With the fix: the bar, its number and its color drawn again only when
-	-- the health, the kind or the color changed (each frame's new text is
-	-- garbage, and the collector's work freezes the game a moment).
 	local value = stock.health:GetValue()
-	if not fix or value ~= overlay.shownValue or high ~= overlay.shownHigh or low ~= overlay.shownLow
-			or overlay.kind ~= overlay.shownKind or overlay.classColor ~= overlay.shownColor then
-		overlay.shownValue, overlay.shownHigh, overlay.shownLow = value, high, low
-		overlay.shownKind, overlay.shownColor = overlay.kind, overlay.classColor
-		local share = high > low and (value - low) / (high - low) or 0
-		local percent = math.floor(share * 100 + 0.5)
-		overlay.bar:SetValue(share)
+	local share = high > low and (value - low) / (high - low) or 0
+	local percent = math.floor(share * 100 + 0.5)
+	overlay.bar:SetValue(share)
 
-		-- A 0 to 100 bar means the client only knows the percentage; anything else
-		-- is the unit's real health. A party member: what is left of it.
-		if overlay.kind == "party" then
-			overlay.health:SetText(percent.."%")
-		elseif FRIEND_KINDS[overlay.kind] then
-			overlay.health:SetText("")
-		elseif high - low == 100 or high <= 1 then
-			overlay.health:SetText(percent.."%")
-		elseif overlay.kind == "normal" then
-			overlay.health:SetText(Short(value))
-		else
-			overlay.health:SetText(Short(value).." / "..Short(high).."  "..percent.."%")
-		end
-
-		local color = overlay.classColor or overlay.style.color
-		if FRIEND_KINDS[overlay.kind] then
-			-- No execute mark on a friend.
-		elseif share <= EXECUTE_RANGE then
-			color = EXECUTE_COLOR
-			overlay.marker:Hide()
-		else
-			overlay.marker:Show()
-		end
-		overlay.bar:SetStatusBarColor(color[1], color[2], color[3], 1)
-	end
-
-	-- With the fix: the border recolored, and the debuffs hidden, only as the
-	-- plate becomes the target or stops being it; the target's debuffs read
-	-- again only as the game says they changed.
-	if fix then
-		if isTarget ~= overlay.isTarget then
-			overlay.isTarget = isTarget
-			if isTarget then
-				overlay.border:SetVertexColor(1, 1, 1, 1)
-			else
-				overlay.border:SetVertexColor(0, 0, 0, 1)
-				UpdatePlateDebuffs(overlay, false)
-			end
-			overlay.auraVersion = nil
-		end
-		if isTarget and overlay.auraVersion ~= auraVersion then
-			overlay.auraVersion = auraVersion
-			UpdatePlateDebuffs(overlay, true)
-		end
+	-- A 0 to 100 bar means the client only knows the percentage; anything else
+	-- is the unit's real health. A party member: what is left of it.
+	if overlay.kind == "party" then
+		overlay.health:SetText(percent.."%")
+	elseif FRIEND_KINDS[overlay.kind] then
+		overlay.health:SetText("")
+	elseif high - low == 100 or high <= 1 then
+		overlay.health:SetText(percent.."%")
+	elseif overlay.kind == "normal" then
+		overlay.health:SetText(Short(value))
 	else
-		overlay.isTarget = nil
-		if isTarget then
-			overlay.border:SetVertexColor(1, 1, 1, 1)
-		else
-			overlay.border:SetVertexColor(0, 0, 0, 1)
-		end
-		UpdatePlateDebuffs(overlay, isTarget)
+		overlay.health:SetText(Short(value).." / "..Short(high).."  "..percent.."%")
 	end
+
+	local color = overlay.classColor or overlay.style.color
+	if FRIEND_KINDS[overlay.kind] then
+		-- No execute mark on a friend.
+	elseif share <= EXECUTE_RANGE then
+		color = EXECUTE_COLOR
+		overlay.marker:Hide()
+	else
+		overlay.marker:Show()
+	end
+	overlay.bar:SetStatusBarColor(color[1], color[2], color[3], 1)
+
+	if isTarget then
+		overlay.border:SetVertexColor(1, 1, 1, 1)
+	else
+		overlay.border:SetVertexColor(0, 0, 0, 1)
+	end
+	UpdatePlateDebuffs(overlay, isTarget)
 end
 
 local function IsNameplate(frame)
@@ -771,13 +685,10 @@ local partyCount = 0
 local scanner = CreateFrame("Frame")
 scanner:SetScript("OnUpdate", function()
 	RefreshLiveKinds()
-	-- The target's kind, asked once a frame for every plate to read; with the
-	-- fix, read off the shared local instead of a copy in each plate.
-	targetKind = TargetKind()
-	if not Fix() then
-		for index = 1, table.getn(overlays) do
-			overlays[index].targetKind = targetKind
-		end
+	-- The target's kind, asked once a frame for every plate to read.
+	local targetKind = TargetKind()
+	for index = 1, table.getn(overlays) do
+		overlays[index].targetKind = targetKind
 	end
 
 	-- The party changed (a friend joined or left): every plate looks again, a
@@ -811,12 +722,26 @@ local function AnyShown(friends)
 	return false
 end
 
--- The client's enemy plates on while any enemy kind is (none for whoever chose
--- no plates at all, /splates none); its friendly plates while any friend's
--- is, and left as the game has them until one was chosen.
+-- The client's enemy plates wanted: while any enemy kind is on; with every
+-- one off, while an enemy is your target and Your target always is on, so
+-- its plate is there to show (the rest stay hidden, their kinds being off).
+-- None for whoever chose no plates at all, /splates none.
+local function EnemiesWanted()
+	local settings = Settings()
+	if settings.hidden then
+		return false
+	end
+	if AnyShown(false) then
+		return true
+	end
+	return settings.targetPlate ~= false and UnitExists("target") and UnitCanAttack("player", "target") and true or false
+end
+
+-- The client's enemy plates as wanted; its friendly plates while any
+-- friend's is, and left as the game has them until one was chosen.
 local function ApplyShown()
 	local settings = Settings()
-	if settings.hidden or not AnyShown(false) then
+	if not EnemiesWanted() then
 		HideNameplates()
 		NAMEPLATES_ON = nil
 	else
@@ -834,39 +759,24 @@ end
 
 scanner:RegisterEvent("PLAYER_ENTERING_WORLD")
 scanner:RegisterEvent("PARTY_MEMBERS_CHANGED")
--- The fix's moments to read the target's debuffs again: a new target, and
--- the game's word that the target's effects changed.
 scanner:RegisterEvent("PLAYER_TARGET_CHANGED")
-scanner:RegisterEvent("UNIT_AURA")
 scanner:SetScript("OnEvent", function()
 	if event == "PARTY_MEMBERS_CHANGED" then
 		kindsVersion = kindsVersion + 1
-	elseif event == "PLAYER_TARGET_CHANGED" then
-		targetKind = TargetKind()
-		auraVersion = auraVersion + 1
-	elseif event == "UNIT_AURA" then
-		if arg1 == "target" then
-			auraVersion = auraVersion + 1
-		end
-	else
-		ApplyShown()
+		return
 	end
+	-- A new target: the enemy plates on or off for it (EnemiesWanted), unless
+	-- V and Shift+V are left to the player.
+	if event == "PLAYER_TARGET_CHANGED" and Settings().keysAllowed then
+		return
+	end
+	ApplyShown()
 end)
 
 -- V and Shift+V are the client's own keys, out of any addon's reach. With
--- them ignored (the default; /splates keys, or Options, Nameplates), what they
--- turn on or off is put back as chosen here within half a second; the
--- friends' plates only once a friend's kind was chosen.
-local function ClientShows(cvar, global)
-	if GetCVar then
-		local ok, value = pcall(GetCVar, cvar)
-		if ok and value ~= nil and value ~= "" then
-			return value == "1"
-		end
-	end
-	return global and true or false
-end
-
+-- them ignored (the default; /splates keys, or Options, Nameplates), the
+-- plates are put back as chosen here every half second; the friends' plates
+-- only once a friend's kind was chosen.
 local guardWait = 0
 local guard = CreateFrame("Frame")
 guard:SetScript("OnUpdate", function()
@@ -875,16 +785,15 @@ guard:SetScript("OnUpdate", function()
 		return
 	end
 	guardWait = 0
-	local settings = Settings()
-	if settings.keysAllowed then
+	if Settings().keysAllowed then
 		return
 	end
-	local enemies = not settings.hidden and AnyShown(false)
-	local friends = not settings.hidden and AnyShown(true)
-	if ClientShows("nameplateShowEnemies", NAMEPLATES_ON) ~= enemies
-		or (settings.friendsChosen and ClientShows("nameplateShowFriends", FRIENDNAMEPLATES_ON) ~= friends) then
-		ApplyShown()
-	end
+	-- Said again every time, not only when it seems to differ: this engine has
+	-- no plate CVar and no way to ask whether its plates are on, and it clears
+	-- them itself as the world is entered (a game opened with the plates
+	-- chosen showed none until a setting was switched, 2026-10-26). The same
+	-- word twice changes nothing on its side.
+	ApplyShown()
 end)
 
 local function Restyle()
@@ -920,6 +829,17 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		end
 		ApplyShown()
 		Say(KIND_NAMES[kind]..(settings.show[kind] and ": plates on." or ": plates off."))
+	elseif command == "suggested" then
+		-- The setup Survivor UI's options suggest: the friends' plates only.
+		-- Enemy plates stack badly on this old engine among so many enemies;
+		-- the boss bars follow the bosses, elites and guardians.
+		for enemy in pairs(KIND_NAMES) do
+			settings.show[enemy] = FRIEND_KINDS[enemy] == true
+		end
+		settings.friendsChosen = true
+		settings.hidden = nil
+		ApplyShown()
+		Say("the suggested setup: your totems, pets and summons and co-op members' plates on, the enemies' off (the boss bars follow the bosses, elites and guardians).")
 	elseif command == "keys" then
 		settings.keysAllowed = not settings.keysAllowed
 		Say(settings.keysAllowed and "V and Shift+V turn the plates on and off again, as the game has them."
@@ -949,11 +869,9 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		return
 	elseif command == "target" then
 		settings.targetPlate = settings.targetPlate == false
+		ApplyShown()
 		Say(settings.targetPlate and "your target's plate shows, whatever its kind."
 			or "your target's plate only when its kind is on.")
-	elseif command == "vaniron" then
-		settings.vanironFix = not settings.vanironFix
-		Say(settings.vanironFix and "vaniron's fix on (under test)." or "vaniron's fix off.")
 	elseif command == "names" then
 		settings.names = not settings.names
 		Say("names on "..(settings.names and "every plate" or "elites, guardians and bosses only")..".")
@@ -965,7 +883,7 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		settings.scale = math.max(0.5, math.min(2, number))
 		Say("scale "..settings.scale..".")
 	else
-		Say("/splates none | normal | elites | guardians | bosses | pets | totems | party | target | names | keys | count | scale 0.5-2 | vaniron")
+		Say("/splates none | normal | elites | guardians | bosses | pets | totems | party | suggested | target | names | keys | count | scale 0.5-2")
 		return
 	end
 	Restyle()
@@ -984,10 +902,6 @@ end
 
 function SurvivorPlates_TargetPlate()
 	return Settings().targetPlate ~= false
-end
-
-function SurvivorPlates_VanironFix()
-	return Settings().vanironFix == true
 end
 
 function SurvivorPlates_KeysAllowed()

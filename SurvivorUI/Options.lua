@@ -474,6 +474,32 @@ local function Note(page, text)
 	return hint
 end
 
+-- A suggestion boxed in an alert's amber, apart from the page's own color
+-- (the Nameplates tab's): its title, then its words, room left on its right
+-- for a button the caller puts there.
+local ALERT = { 1.00, 0.70, 0.20 }
+local function Callout(page, title, text, room)
+	room = room or 0
+	local box = CreateFrame("Frame", nil, page)
+	box:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+	box:SetWidth(PAGE_WIDTH)
+	box:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	box:SetBackdropColor(ALERT[1], ALERT[2], ALERT[3], 0.10)
+	box:SetBackdropBorderColor(ALERT[1], ALERT[2], ALERT[3], 0.75)
+	local head = Text(box, 10, ALERT)
+	head:SetPoint("TOPLEFT", box, "TOPLEFT", 8, -7)
+	head:SetText(title)
+	local body = Text(box, 9, TEXT)
+	body:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -4)
+	body:SetWidth(PAGE_WIDTH - 16 - room)
+	body:SetJustifyH("LEFT")
+	body:SetText(text)
+	local height = 7 + 14 + 4 + 13 * Lines(body, PAGE_WIDTH - 16 - room) + 8
+	box:SetHeight(height)
+	page.y = page.y - height - 6
+	return box
+end
+
 -- A check: a square with a mark in the page's color when on (it reads in any
 -- color, a priest's white too), and its label; a note in grey beside it, or
 -- under it when it does not fit.
@@ -2658,6 +2684,17 @@ if PlatesThere() then
 		Check(page, label, function() return SurvivorPlates_Shown and SurvivorPlates_Shown(kind) end,
 			function() Plates(command) end, note)
 	end
+	local suggestion = Callout(page, "Suggested: friendly plates only",
+		"This engine is old: enemy plates stack badly, and a run brings a great many enemies. For a smoother game, untick every " ..
+		"Enemy kind below and keep the Friendly ones on. Bosses, elites and guardians still have the boss bars (Boss bars tab) " ..
+		"to follow their health and debuffs. Only a suggestion: the choice is yours.", 128)
+	-- Its button, on the box's right: the setup at once (/splates suggested).
+	local useIt = Button(page, "Use suggested", 112, 0, function()
+		Plates("suggested")
+		RefreshAll()
+	end, ALERT)
+	useIt:ClearAllPoints()
+	useIt:SetPoint("RIGHT", suggestion, "RIGHT", -8, 0)
 	Subheader(page, "Friendly")
 	Kind("Totems", "totem", "totems", "a shaman's: small and blue")
 	Kind("Pets and summons", "pet", "pets", "a warlock's demons, the Water Elemental, spirit wolves, treants, a hunter's pets: small and green, with the name and icon")
@@ -2679,10 +2716,6 @@ if PlatesThere() then
 	Slider(page, "Size", 0.5, 2, 0.05,
 		function() return SurvivorPlates_GetScale and SurvivorPlates_GetScale() or 1 end,
 		function(value) if SurvivorPlates_SetScale then SurvivorPlates_SetScale(value) end end)
-	Subheader(page, "Test")
-	Check(page, "Vaniron fix (test)", function() return SurvivorPlates_VanironFix and SurvivorPlates_VanironFix() end,
-		function() Plates("vaniron") end,
-		"vaniron's pull request #4: a plate's bar, number and color drawn again only when they change, the target's border and debuffs only as the game says they changed, a plate handed to another enemy hidden two frames. Off by default, under test.")
 else
 	Note(page, "Survivor Plates is not installed. It comes in the same download as Survivor UI.")
 end

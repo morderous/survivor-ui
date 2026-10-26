@@ -57,6 +57,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/splates names` | Names only on elites, guardians and bosses, or on every plate |
 | `/splates none` | No nameplates (the default), or back |
 | `/splates party` | Plates on your co-op friends, in their class color (also `pets`, `totems`) |
+| `/splates suggested` | The suggested setup: friendly plates on, enemy plates off |
 | `/splates scale 1.3` | Plate size, 0.6 to 2 |
 
 ## Survivor Plates
@@ -81,6 +82,7 @@ Commands:
 | `/splates all` | Switches between plates on every enemy and plates only on elites, guardians and bosses |
 | `/splates names` | Switches between names only on elites, guardians and bosses (the default) and names on every plate |
 | `/splates totems`, `/splates pets`, `/splates party` | Each friendly kind on or off: your totems, your pets and summons, your co-op friends |
+| `/splates suggested` | The suggested setup: your totems, pets and summons and co-op friends' plates on, every enemy's off (the boss bars follow bosses, elites and guardians) |
 | `/splates scale 1.3` | Plate size, 0.6 to 2 |
 
 ## Survivor UI
@@ -212,6 +214,19 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.34, 2026-10-26
+
+Friendly plates only, suggested with a button; the target's plate with every enemy kind off; plates there as the game opens; the Vaniron fix test removed.
+
+**Survivor UI**
+- **A suggestion in the Nameplates tab**, boxed in amber: friendly plates only. The engine is old, enemy plates stack badly and a run brings a great many enemies, so for a smoother game every Enemy kind off and the Friendly ones on; bosses, elites and guardians keep the boss bars for their health and debuffs. Only a suggestion: nothing changes by itself, and its **Use suggested** button sets it at once (or /splates suggested).
+
+**Survivor Plates**
+- **Vaniron fix (test) removed**: the switch that laid vaniron's optimizations into the plates (his pull request #4, off by default since v3.0.33) is gone, with /splates vaniron; the plates are drawn as they were in v3.0.32.
+- **/splates suggested**: the friends' plates (totems, pets and summons, co-op members) on, the enemies' off, the plates back on if they were all off.
+- **Your target always, with every enemy kind off**: the target's plate did not show, the game's enemy plates being off as a whole. They now come on while an enemy is your target (its plate alone shows, the other enemies' kinds being off) and go off again as the target goes.
+- **Plates missing as the game opens**: with plates chosen, a game just opened could show none until a setting was switched off and on. The game has no way to tell an addon whether its plates are on, and it clears them itself as the world is entered, after the addon had put them on; the plates are now put as chosen every half second (with V and Shift+V ignored, the default).
 
 ### Azeroth SurvivorUI Launcher 1.5.3 (beta), 2026-10-26
 
