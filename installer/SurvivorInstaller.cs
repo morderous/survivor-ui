@@ -91,7 +91,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.5.4.0")]
+[assembly: System.Reflection.AssemblyVersion("1.5.5.0")]
 
 namespace SurvivorInstaller
 {
@@ -3753,6 +3753,13 @@ namespace SurvivorInstaller
             return TextColor;
         }
 
+        // A Heroic level as the game writes it: I to V.
+        static string Numeral(int level)
+        {
+            string[] numerals = { "I", "II", "III", "IV", "V" };
+            return level >= 1 && level <= numerals.Length ? numerals[level - 1] : level.ToString();
+        }
+
         static string ResultWord(string result)
         {
             return result == "victory" ? "Victory" : result == "dead" ? "Died" : result == "left" ? "Left" : result;
@@ -3838,7 +3845,9 @@ namespace SurvivorInstaller
                 row.ForeColor = run.Archived ? Gold : Muted;
                 row.SubItems.Add(run.Str("hero"), TextColor, Panel, runList.Font);
                 row.SubItems.Add(run.Str("class"), ClassColor(run.Str("classKey")), Panel, runList.Font);
-                row.SubItems.Add(run.Str("zone"), TextColor, Panel, runList.Font);
+                // A Heroic run (the game's 0.121) says its level after the zone: "· H III".
+                int heroic = (int)run.Num("heroic");
+                row.SubItems.Add(run.Str("zone") + (heroic > 0 ? "  \u00b7 H " + Numeral(heroic) : ""), TextColor, Panel, runList.Font);
                 Dictionary<object, object> endless = run.Table("endless");
                 if (endless != null)
                 {
@@ -4059,7 +4068,10 @@ namespace SurvivorInstaller
                 int x = 10;
                 Txt(g, hero, title, new Point(x, 6), ClassColor(run.Str("classKey")), TextOnly);
                 x += MeasureW(g, hero, title, TextOnly) + 10;
-                string mods = run.Str("mods");
+                // The run's difficulty: its Heroic level from the game's 0.121, else
+                // its Run Options before it, unless normal.
+                int level = (int)run.Num("heroic");
+                string mods = level > 0 ? "Heroic " + Numeral(level) : run.Str("mods");
                 string who = "Level " + (int)view.Num("level") + " " + run.Str("race") + " " + run.Str("class") + "  ·  " + run.Str("zone") +
                     (mods != "" && mods != "normal" ? "  ·  " + mods : "");
                 Txt(g, who, BaseFont, new Rectangle(x, 9, width - x - 190, 18), Muted, TextOnly | TextFormatFlags.EndEllipsis);

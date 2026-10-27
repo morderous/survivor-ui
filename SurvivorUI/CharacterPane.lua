@@ -866,13 +866,19 @@ local function MakeView(alone)
 		local ordered = Ordered()
 		local shown = {}
 		local totalRows, totalHeaders = 0, 0
-		local hideZero = s and SurvivorUIDB and SurvivorUIDB.statsHideZero == true
+		-- And as many with the ones at 0 or less shown (the panel sized, its
+		-- rows are as tall as its size makes them for all of these).
+		local fullRows, fullHeaders = 0, 0
+		local hideZero = s and SurvivorUIDB and SurvivorUIDB.statsHideZero ~= false
 		for index = 1, table.getn(ordered) do
-			local visible = {}
+			local visible, full = {}, 0
 			local section = ordered[index]
 			for each = 1, table.getn(section.rows) do
 				local entry = section.rows[each]
 				local relevant = not entry[4] or (s and s[entry[4]] ~= 0)
+				if (relevant or arranging) and not Hidden(entry[1]) then
+					full = full + 1
+				end
 				if relevant and hideZero and ReadsAtMostZero(entry, s) then
 					relevant = false
 				end
@@ -884,6 +890,9 @@ local function MakeView(alone)
 			if table.getn(visible) > 0 then
 				totalRows = totalRows + table.getn(visible)
 				totalHeaders = totalHeaders + 1
+			end
+			if full > 0 then
+				fullRows, fullHeaders = fullRows + full, fullHeaders + 1
 			end
 		end
 
@@ -898,6 +907,18 @@ local function MakeView(alone)
 		local sized = alone and (SavedSize() or sizing)
 		if alone and not sized then
 			rowHeight, fontSize = PANEL_ROW, 10
+		elseif alone then
+			-- Sized: the rows as tall as the size (the one given, or the frame's
+			-- while dragged) makes them with every row it can show, the ones at
+			-- 0 too. Hiding those takes their room off the panel, and the rows
+			-- keep their size.
+			local height = sizing and stats:GetHeight() or SavedSize()[2]
+			local room = height - 34 - fullHeaders * headerHeight
+			rowHeight = 26
+			if fullRows > 0 and room > 0 then
+				rowHeight = math.max(ROW_MIN, math.min(26, math.floor(room / fullRows)))
+			end
+			fontSize = math.max(8, math.min(15, rowHeight - 3))
 		else
 			local room = scroll:GetHeight() - totalHeaders * headerHeight
 			local most = sized and 26 or ROW_MAX
@@ -1002,8 +1023,14 @@ local function MakeView(alone)
 		end
 
 		content:SetHeight(math.max(10, y))
-		if alone and not SavedSize() and not sizing then
-			stats:SetHeight(28 + math.max(10, y) + 6)
+		-- The panel as tall as its rows (sized, no taller than its size: past
+		-- it, they scroll).
+		if alone and not sizing then
+			local tall = 28 + math.max(10, y) + 6
+			if SavedSize() then
+				tall = math.min(tall, SavedSize()[2])
+			end
+			stats:SetHeight(tall)
 		end
 		scrollRange = math.max(0, y - scroll:GetHeight())
 		if scrollOffset > scrollRange then

@@ -170,6 +170,13 @@ local function Settings()
 		end
 	end
 	SurvivorUIDB.chatSize = SurvivorUIDB.chatSize or CHAT_SIZE
+	-- From v3.0.37 the stats at 0 or less are hidden by default
+	-- (CharacterPane.lua): put back on once for everyone, kept as each one
+	-- sets it after that.
+	if (SurvivorUIDB.statsDefaults or 0) < 1 then
+		SurvivorUIDB.statsDefaults = 1
+		SurvivorUIDB.statsHideZero = nil
+	end
 	return SurvivorUIDB
 end
 
@@ -2132,6 +2139,9 @@ globalFont:SetScript("OnEvent", function()
 			statsPanel = true, statsPanelSize = { 150, 277 }, xpBar = true, levelUp = true,
 			buildCooldown = true, trackerCoin = true, trackerElites = false, tallyPlace = "bar",
 			lootBackground = false,
+			-- The XP bar as the author has it (v3.0.37): the odds beside it as
+			-- filled bars, the time to the next level under it, not the pace.
+			xpBarOddsSide = true, xpBarOddsLook = "fill", xpBarRate = false,
 			paneStatsStep = 2, pinCacheSize = 12, pinLairSize = 11,
 			pieceFonts = { ["Damage meter"] = { step = -1 }, ["Jewelry"] = { step = -2 } },
 		}

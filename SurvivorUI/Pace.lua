@@ -105,10 +105,38 @@ local function MinRuns()
 	return Settings().paceMinRuns or MIN_RUNS
 end
 
--- The runs it is held against: the same zone and modifiers.
+-- A run's difficulty from the game's 0.121: its Heroic level, 0 for the
+-- normal one (the Run Options before it are gone), as the game writes it:
+-- "Heroic III", or "Normal".
+local HEROIC_NUMERALS = { "I", "II", "III", "IV", "V" }
+function SurvivorUI_HeroicName(level)
+	level = tonumber(level) or 0
+	if level <= 0 then
+		return SurvivorUI_T("Normal")
+	end
+	return SurvivorUI_TF("Heroic {1}", HEROIC_NUMERALS[level] or level)
+end
+
+-- Short, for a tag: the numeral alone ("III"), "N" for the normal one.
+function SurvivorUI_HeroicShort(level)
+	level = tonumber(level) or 0
+	if level <= 0 then
+		return SurvivorUI_T("@short:N")
+	end
+	return HEROIC_NUMERALS[level] or tostring(level)
+end
+
+-- The runs it is held against: the same zone and difficulty. A normal run
+-- keeps the normal Run Options' key, so the runs from before the game's
+-- 0.121 still count; each Heroic level is a key of its own.
+local NORMAL_MODS = "100 100 100 100"
 local function RunKey()
 	if not (AZS_ZONE and AZS_ZONE.zone) then
 		return nil
+	end
+	local heroic = tonumber(AZS_ZONE.heroic)
+	if heroic then
+		return AZS_ZONE.zone..":"..(heroic > 0 and ("heroic "..heroic) or NORMAL_MODS)
 	end
 	return AZS_ZONE.zone..":"..(AZS_ZONE.mods or "")
 end
@@ -757,15 +785,21 @@ frame:SetScript("OnEnter", function()
 	end
 	local slowest, count, fastest, average, slowClass, fastClass = Reference()
 	local zoneName = AZS_ZONE and AZS_ZONE.zname or SurvivorUI_T("this zone")
-	-- The run's four modifiers, each on its line: as the menu has them, harder
-	-- in orange, easier in green, the others grey; the pace is held against
-	-- runs with the same.
+	-- The run's difficulty, its Heroic level (the game's 0.121); before it the
+	-- four Run Options, each on its line: as the menu had them, harder in
+	-- orange, easier in green, the others grey. The pace is held against runs
+	-- with the same.
+	local heroic = AZS_ZONE and tonumber(AZS_ZONE.heroic)
 	local values, index = {}, 0
 	for value in string.gfind(tostring(AZS_ZONE and AZS_ZONE.mods or ""), "%d+") do
 		index = index + 1
 		values[index] = tonumber(value)
 	end
-	if index > 0 then
+	if heroic then
+		GameTooltip:AddLine(" ")
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Difficulty  |cff8a8a92(held against runs with the same)|r"),
+			SurvivorUI_HeroicName(heroic), 1, 0.82, 0, heroic > 0 and 1 or 0.62, heroic > 0 and 0.58 or 0.62, heroic > 0 and 0.25 or 0.66)
+	elseif index > 0 then
 		GameTooltip:AddLine(" ")
 		GameTooltip:AddLine(SurvivorUI_T("Modifiers  |cff8a8a92(held against runs with the same)|r"), 1, 0.82, 0)
 		for place = 1, table.getn(MOD_NAMES) do

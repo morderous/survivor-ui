@@ -3,7 +3,7 @@
 --
 -- Under the minimap, where a quest log would sit, centered: the zone, how the
 -- run stands and the lives left, the time gone against the zone's full length
--- (the time gone alone in endless mode), a green timeline with a tick for every boss, every boss with the
+-- (the time gone alone in endless mode), a green timeline with a pip for every boss, every boss with the
 -- second it comes, colored by where it stands (grey to come, white next,
 -- orange alive, green slain), and the level's progress. It stands in for the game's own clock, which is put away while it
 -- shows. Its size is fixed for the run: every line keeps its place, shown or
@@ -224,8 +224,14 @@ head.coin:SetScript("OnUpdate", function()
 		coin.spark:Hide()
 	end
 end)
-head.timeline = HeadBar(8)
+head.timeline = HeadBar(6)
 head.timeline:SetStatusBarColor(0.30, 0.80, 0.35, 1)
+-- Now, at the fill's end: a thin white cap, over the fill and under the pips.
+head.now = head.timeline:CreateTexture(nil, "OVERLAY")
+head.now:SetTexture(FLAT)
+head.now:SetWidth(2)
+head.now:SetHeight(10)
+head.now:SetVertexColor(1, 1, 1, 0.95)
 head.level = HeadText(9)
 head.xp = HeadBar(5)
 head.xp:SetStatusBarColor(0.58, 0.30, 0.85, 1)
@@ -248,6 +254,211 @@ local STATE_COLORS = {
 	up   = { 1.00, 0.55, 0.25 },
 	dead = { 0.30, 0.85, 0.35 },
 }
+
+-- A boss's pip on the timeline, where it comes: a diamond (Art\Pip.tga) in
+-- a dark edge, so it shows on the fill too. Green slain, white the next,
+-- orange alive, grey and hollow still to come; the final boss's a little
+-- bigger, in a gold ring. Over the next one's, its countdown. Run History's
+-- copy of the tracker draws them too.
+local PIP = "Interface\\AddOns\\SurvivorUI\\Art\\Pip"
+local PIP_SIZE, FINAL_PIP_SIZE = 9, 11
+local PIP_EDGE = { 0.05, 0.05, 0.07 }
+local PIP_HOLLOW = { 0.09, 0.09, 0.11 }
+local PIP_GOLD = { 1.00, 0.82, 0.00 }
+
+function SurvivorUI_NewPip(parent)
+	local pip = CreateFrame("Frame", nil, parent)
+	-- Each part a layer of its own, drawn in that order.
+	pip.edge = pip:CreateTexture(nil, "BACKGROUND")
+	pip.ring = pip:CreateTexture(nil, "BORDER")
+	pip.core = pip:CreateTexture(nil, "ARTWORK")
+	for _, part in pairs({ pip.edge, pip.ring, pip.core }) do
+		part:SetTexture(PIP)
+		part:SetPoint("CENTER", pip, "CENTER", 0, 0)
+	end
+	pip.edge:SetVertexColor(PIP_EDGE[1], PIP_EDGE[2], PIP_EDGE[3], 1)
+	pip.label = pip:CreateFontString(nil, "OVERLAY")
+	pip.label:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
+	pip.label:SetTextColor(1, 0.55, 0.15)
+	return pip
+end
+
+-- A pip in its colors: state "dead", "next", "up" or "due".
+function SurvivorUI_PaintPip(pip, state, final)
+	local size = final and FINAL_PIP_SIZE or PIP_SIZE
+	local color = STATE_COLORS[state] or STATE_COLORS.due
+	local ring = final and PIP_GOLD or color
+	local core = state == "due" and PIP_HOLLOW or color
+	pip:SetWidth(size + 4)
+	pip:SetHeight(size + 4)
+	pip.edge:SetWidth(size + 4)
+	pip.edge:SetHeight(size + 4)
+	pip.ring:SetWidth(size)
+	pip.ring:SetHeight(size)
+	pip.ring:SetVertexColor(ring[1], ring[2], ring[3], 1)
+	pip.core:SetWidth(size - 3)
+	pip.core:SetHeight(size - 3)
+	pip.core:SetVertexColor(core[1], core[2], core[3], 1)
+end
+
+-- The next boss's countdown over its pip, kept inside the box at the ends:
+-- spot is the pip's place along a bar wide across.
+function SurvivorUI_PipCountdown(pip, text, spot, wide)
+	if not text then
+		pip.label:Hide()
+		return
+	end
+	pip.label:SetText(text)
+	local half = pip.label:GetStringWidth() / 2 + 1
+	pip.label:ClearAllPoints()
+	pip.label:SetPoint("BOTTOM", pip, "TOP", math.max(half, math.min(wide - half, spot)) - spot, -1)
+	pip.label:Show()
+end
+
+-- The run's tags, on a row under the zone's name: at its left the
+-- difficulty (Normal in grey, a Heroic level in ember orange; the game's
+-- 0.121 on) and endless mode (in purple), at its right the affixes (in red,
+-- Affixes.lua). Each in a thin border of its color over a dark wash of it,
+-- short by default (N or the Heroic level's numeral, a symbol for endless
+-- and each affix: Art\Endless, Art\Affix*), or in words (the options,
+-- Run tracker: Tags in words); the full name under the mouse. Run History's
+-- copy of the tracker wears them too.
+local TAG_COLORS = {
+	normal  = { 0.62, 0.62, 0.66 },
+	heroic  = { 1.00, 0.48, 0.18 },
+	endless = { 0.82, 0.50, 1.00 },
+	affix   = { 1.00, 0.35, 0.29 },
+}
+
+local TAG_SYMBOL = 9               -- a symbol's size in its tag
+local ENDLESS_SYMBOL = "Interface\\AddOns\\SurvivorUI\\Art\\Endless"
+
+function SurvivorUI_NewTag(parent)
+	local tag = CreateFrame("Frame", nil, parent)
+	tag:SetHeight(13)
+	tag:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	tag.text = tag:CreateFontString(nil, "OVERLAY")
+	tag.text:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP)
+	tag.text:SetPoint("CENTER", tag, "CENTER", 0, 0)
+	tag.icon = tag:CreateTexture(nil, "OVERLAY")
+	tag.icon:SetWidth(TAG_SYMBOL)
+	tag.icon:SetHeight(TAG_SYMBOL)
+	tag.icon:SetPoint("CENTER", tag, "CENTER", 0, 0)
+	tag.icon:Hide()
+	-- Its full name under the mouse (an affix's tag has more: Affixes.lua).
+	tag:EnableMouse(true)
+	tag:SetScript("OnEnter", function()
+		if this.tip then
+			GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
+			GameTooltip:SetText(this.tip, this.tipColor[1], this.tipColor[2], this.tipColor[3])
+			GameTooltip:Show()
+		end
+	end)
+	tag:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	return tag
+end
+
+-- A tag's words, or its symbol (a texture), and colors, of a kind ("normal",
+-- "heroic", "endless", "affix"); its width comes back.
+local function PaintTag(tag, words, kind, symbol)
+	local color = TAG_COLORS[kind] or TAG_COLORS.normal
+	tag.tipColor = color
+	tag:SetBackdropColor(color[1] * 0.16, color[2] * 0.16, color[3] * 0.16, 0.9)
+	tag:SetBackdropBorderColor(color[1] * 0.85, color[2] * 0.85, color[3] * 0.85, 1)
+	local width = 13
+	if symbol then
+		tag.text:Hide()
+		tag.icon:SetTexture(symbol)
+		tag.icon:SetVertexColor(color[1], color[2], color[3], 1)
+		tag.icon:Show()
+	else
+		tag.icon:Hide()
+		tag.text:SetText(words)
+		tag.text:SetTextColor(color[1], color[2], color[3])
+		tag.text:Show()
+		width = math.max(13, math.floor(tag.text:GetStringWidth() + 8.5))
+	end
+	tag:SetWidth(width)
+	tag:ClearAllPoints()
+	tag:Show()
+	return width
+end
+
+-- The row of tags, at y from frame's top, between left (from its left edge)
+-- and right (from its right edge, 0 or less): the difficulty (heroic, nil
+-- before the game's 0.121) and endless mode at the left, the affixes at the
+-- right, first to last; or all of them together in the middle (the options,
+-- Run tracker: Tags, Centered). tags = { difficulty, endless, affixes = {} },
+-- made by the caller. The left edge for how the run stands comes back (after
+-- the left ones, or after the last when centered), and whether the row holds
+-- anything.
+function SurvivorUI_TagRow(tags, frame, heroic, endless, affixes, left, right, y)
+	local words = SurvivorUIDB and SurvivorUIDB.trackerTagWords == true
+	local named = SurvivorUIDB and SurvivorUIDB.trackerAffixWords == true
+	-- Each tag in its words or symbol, and its width; then where it stands.
+	local row = {}
+	heroic = tonumber(heroic)
+	if heroic then
+		tags.difficulty.tip = SurvivorUI_HeroicName(heroic)
+		table.insert(row, { tag = tags.difficulty, width = PaintTag(tags.difficulty,
+			words and SurvivorUI_HeroicName(heroic) or SurvivorUI_HeroicShort(heroic), heroic > 0 and "heroic" or "normal") })
+	else
+		tags.difficulty:Hide()
+	end
+	if endless then
+		tags.endless.tip = SurvivorUI_T("Endless")
+		table.insert(row, { tag = tags.endless, width = PaintTag(tags.endless, words and SurvivorUI_T("Endless") or nil,
+			"endless", not words and ENDLESS_SYMBOL or nil) })
+	else
+		tags.endless:Hide()
+	end
+	local leftCount = table.getn(row)
+	affixes = affixes or {}
+	local count = table.getn(affixes)
+	for index = 1, count do
+		local tag = tags.affixes[index]
+		if not tag then
+			tag = SurvivorUI_NewTag(frame)
+			if SurvivorUI_AffixTip then
+				SurvivorUI_AffixTip(tag)
+			end
+			tags.affixes[index] = tag
+		end
+		local entry = affixes[index]
+		tag.affix = entry
+		table.insert(row, { tag = tag, width = PaintTag(tag, (named or not entry.symbol) and SurvivorUI_T(entry.name or "?") or nil,
+			"affix", not named and entry.symbol or nil) })
+	end
+	for index = count + 1, table.getn(tags.affixes) do
+		tags.affixes[index]:Hide()
+	end
+	local total = table.getn(row)
+	local x = left
+	if SurvivorUIDB and SurvivorUIDB.trackerTagsCentered == true then
+		local wide = -3
+		for each = 1, total do
+			wide = wide + row[each].width + 3
+		end
+		x = left + math.floor((frame:GetWidth() + right - left - wide) / 2 + 0.5)
+		for each = 1, total do
+			row[each].tag:SetPoint("TOPLEFT", frame, "TOPLEFT", x, y)
+			x = x + row[each].width + 3
+		end
+	else
+		for each = 1, leftCount do
+			row[each].tag:SetPoint("TOPLEFT", frame, "TOPLEFT", x, y)
+			x = x + row[each].width + 3
+		end
+		-- The affixes from the right, the last rightmost.
+		local edge = right
+		for each = total, leftCount + 1, -1 do
+			row[each].tag:SetPoint("TOPRIGHT", frame, "TOPRIGHT", edge, y)
+			edge = edge - row[each].width - 3
+		end
+	end
+	return x, total > 0
+end
+
 local WAITING = STATE_COLORS.due
 
 local function Hex(color)
@@ -350,14 +561,34 @@ local function BossLine(index)
 	return line
 end
 
+-- Endless mode's bosses slain: the run's (the game's bk) less those slain as
+-- it began, as seen then; after a reload in endless mode, not seen, the
+-- zone's bosses stand for those, every one slain for the victory.
+local endlessFrom                 -- the bosses slain as endless mode began
+local runSeen                     -- the run seen before endless mode
+local function EndlessSlain(game)
+	if Num(game.endl) ~= 1 then
+		endlessFrom, runSeen = nil, true
+		return nil
+	end
+	if not endlessFrom then
+		endlessFrom = runSeen and Num(game.bk) or Num(game.bt)
+	end
+	return math.max(0, Num(game.bk) - endlessFrom)
+end
+
 -- Grey until it falls, then in its own color. Alive, its health shows by the
--- time; the next to come says how long.
-local function FillBossLine(line, entry, index, seconds, isNext)
+-- time; the next to come says how long. In endless mode the game brings the
+-- zone's bosses back on these same lines: frozen, each stays as it stood at
+-- the victory, slain at the second it first fell.
+local function FillBossLine(line, entry, index, seconds, isNext, frozen)
 	local name = Field(entry, "name", 3) or "?"
 	local at = Num(Field(entry, "at", 2))
 	local state = Field(entry, "state", 5) or "due"
 	local key = index..name
-	if state == "up" then
+	if frozen then
+		state = "dead"
+	elseif state == "up" then
 		bossSeenUp[key] = true
 	elseif state == "dead" and bossSeenUp[key] and not bossKilled[key] then
 		bossKilled[key] = seconds
@@ -598,6 +829,25 @@ end
 ------------------------------------------------------------------------------
 -- Drawing.
 
+-- The row of the run's tags under the zone's name, at y (SurvivorUI_TagRow),
+-- and after the left ones how the run stands (state: the words). The y
+-- under the row comes back (y itself with nothing in it: no room taken). A
+-- function apart from Draw (32 of the file's locals at most, in Lua 5.0).
+head.tags = { difficulty = SurvivorUI_NewTag(head), endless = SurvivorUI_NewTag(head), affixes = {} }
+local function DrawTags(game, zone, y, state)
+	local affixes = SurvivorUI_RunAffixes and SurvivorUI_RunAffixes() or nil
+	local x, any = SurvivorUI_TagRow(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes, 0, 0, y - 1)
+	head.state:SetText(state)
+	head.state:SetJustifyH("LEFT")
+	head.state:ClearAllPoints()
+	head.state:SetPoint("TOPLEFT", head, "TOPLEFT", x > 0 and x + 1 or 0, y - 3)
+	head.state:Show()
+	if any or state ~= "" then
+		return y - 17
+	end
+	return y
+end
+
 local function Draw(game, phase)
 	local zone = AZS_ZONE or {}
 	local seconds = (AZS_GetRunTime and AZS_GetRunTime()) or Num(game.t)
@@ -616,9 +866,18 @@ local function Draw(game, phase)
 
 	local y = 0
 
-	-- How the run stands: won, fallen or endless, and the lives left, small on
-	-- the zone's line, right of its name: the clock's sides hold the coin and
-	-- the kill pace.
+	-- The zone's name centered, in green; under it the run's tags, its
+	-- difficulty and endless mode at the left, its affixes at the right, and
+	-- after the left ones how the run stands: won, fallen, paused..., and the
+	-- lives left. The clock's sides hold the coin and the kill pace.
+	head.zone:SetText(zoneName)
+	head.zone:SetTextColor(0.45, 0.90, 0.45)
+	head.zone:SetJustifyH("CENTER")
+	head.zone:SetWidth(WIDTH)
+	head.zone:ClearAllPoints()
+	head.zone:SetPoint("TOP", head, "TOP", 0, y)
+	head.zone:Show()
+	y = y - 15
 	local parts = {}
 	if phase == "victory" then
 		table.insert(parts, "|cff4dd94d"..SurvivorUI_T("Victory").."|r")
@@ -631,29 +890,12 @@ local function Draw(game, phase)
 		table.insert(parts, "|cff9a9a9a"..SurvivorUI_T("Paused").."|r")
 	elseif phase == "choosing" then
 		table.insert(parts, "|cff9a9a9a"..SurvivorUI_T("Choosing").."|r")
-	elseif Num(game.endl) == 1 then
-		table.insert(parts, "|cffd080ff"..SurvivorUI_T("Endless").."|r")
 	end
 	local lives = Num(game.lives)
 	if lives > 0 then
 		table.insert(parts, "|cffff8080"..SurvivorUI_TF(lives == 1 and "{1} life left" or "{1} lives left", lives).."|r")
 	end
-	head.state:SetText(table.concat(parts, "  "))
-	head.state:ClearAllPoints()
-	head.state:SetPoint("TOPRIGHT", head, "TOPRIGHT", 0, y - 2)
-	head.state:Show()
-	-- The zone's name on the left, cut short before the state if need be.
-	local room = WIDTH
-	if table.getn(parts) > 0 then
-		room = WIDTH - head.state:GetStringWidth() - 10
-	end
-	head.zone:SetText(zoneName)
-	head.zone:SetTextColor(1, 0.82, 0)
-	head.zone:SetWidth(room)
-	head.zone:ClearAllPoints()
-	head.zone:SetPoint("TOPLEFT", head, "TOPLEFT", 0, y)
-	head.zone:Show()
-	y = y - 15
+	y = DrawTags(game, zone, y, table.concat(parts, "  "))
 
 	-- Elapsed / the zone's full length, the time to victory. In endless mode,
 	-- once chosen, the elapsed time alone.
@@ -707,17 +949,27 @@ local function Draw(game, phase)
 		coin.pays = nil
 		coin:Hide()
 	end
-	-- Room over the timeline for each coming boss's countdown.
-	y = y - 10
+	-- Room over the timeline for the next boss's countdown.
+	y = y - 12
 
-	-- The timeline: green up to now, each boss's tick in its own color.
-	head.timeline:SetValue(length > 0 and math.min(1, seconds / length) or 1)
+	-- The timeline: green up to now (purple in endless mode), a white cap
+	-- where now is, each boss's pip in its own color.
+	local gone = length > 0 and math.min(1, seconds / length) or 1
+	head.timeline:SetValue(gone)
 	if endless then
 		head.timeline:SetStatusBarColor(0.70, 0.40, 1.00, 1)
 	else
 		head.timeline:SetStatusBarColor(0.30, 0.80, 0.35, 1)
 	end
-	y = Put(head.timeline, y, 15)
+	if endless or gone >= 1 then
+		head.now:Hide()
+	else
+		head.now:ClearAllPoints()
+		head.now:SetPoint("CENTER", head.timeline, "LEFT", WIDTH * gone, 0)
+		head.now:Show()
+	end
+	-- Room under it for the pips' lower half.
+	y = Put(head.timeline, y, 13)
 
 	local schedule = AZS_SCHEDULE or {}
 	local count = table.getn(schedule)
@@ -726,64 +978,33 @@ local function Draw(game, phase)
 	local nextShown = false
 	for index = 1, count do
 		local entry = schedule[index]
-		local state = Field(entry, "state", 5) or "due"
+		-- In endless mode, the list as it stood at the victory: all slain.
+		local state = endless and "dead" or Field(entry, "state", 5) or "due"
 		local isNext = state == "due" and not nextShown
 		if isNext then
 			nextShown = true
 		end
-		-- A tick is white until its boss is slain, then green.
-		local color = state == "dead" and STATE_COLORS.dead or STATE_COLORS.next
 		local final = Num(Field(entry, "final", 4)) == 1
-
-		local tick = head.ticks[index]
-		if not tick then
-			tick = head.timeline:CreateTexture(nil, "OVERLAY")
-			tick:SetTexture(FLAT)
-			tick:SetWidth(3)
-			tick:SetHeight(14)
-			head.ticks[index] = tick
-		end
 		local at = Num(Field(entry, "at", 2))
-		-- The final boss's tick is a little heavier.
-		tick:SetWidth(final and 5 or 3)
-		tick:ClearAllPoints()
-		tick:SetPoint("CENTER", head.timeline, "LEFT", length > 0 and WIDTH * math.min(1, at / length) or WIDTH, 0)
-		tick:SetVertexColor(color[1], color[2], color[3], 1)
-		tick:Show()
-
-		-- Over a boss still to come, small and yellow, the time until it does.
-		if not tick.label then
-			tick.label = head.timeline:CreateFontString(nil, "OVERLAY")
-			tick.label:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
+		local pip = head.ticks[index]
+		if not pip then
+			pip = SurvivorUI_NewPip(head.timeline)
+			head.ticks[index] = pip
 		end
-		-- The next boss's countdown in orange, the later ones in yellow.
-		if isNext then
-			tick.label:SetTextColor(1, 0.55, 0.15)
-		else
-			tick.label:SetTextColor(1, 0.82, 0.2)
-		end
-		if state == "due" and at > seconds then
-			-- Over its tick, kept inside the box at the ends.
-			tick.label:SetText(Clock(at - seconds))
-			local half = tick.label:GetStringWidth() / 2 + 1
-			local x = length > 0 and WIDTH * math.min(1, at / length) or WIDTH
-			x = math.max(half, math.min(WIDTH - half, x))
-			tick.label:ClearAllPoints()
-			tick.label:SetPoint("BOTTOM", head.timeline, "TOPLEFT", x, 4)
-			tick.label:Show()
-		else
-			tick.label:Hide()
-		end
+		local spot = length > 0 and WIDTH * math.min(1, at / length) or WIDTH
+		SurvivorUI_PaintPip(pip, isNext and "next" or state, final)
+		pip:ClearAllPoints()
+		pip:SetPoint("CENTER", head.timeline, "LEFT", spot, 0)
+		pip:Show()
+		-- Over the next boss's pip only, the time until it comes.
+		SurvivorUI_PipCountdown(pip, isNext and at > seconds and Clock(at - seconds) or nil, spot, WIDTH)
 
 		local line = BossLine(index)
-		FillBossLine(line, entry, index, seconds, isNext)
+		FillBossLine(line, entry, index, seconds, isNext, endless)
 		y = Put(line, y, 13)
 	end
 	for index = count + 1, table.getn(head.ticks) do
 		head.ticks[index]:Hide()
-		if head.ticks[index].label then
-			head.ticks[index].label:Hide()
-		end
 	end
 	for index = count + 1, table.getn(head.bosses) do
 		head.bosses[index]:Hide()
@@ -792,26 +1013,37 @@ local function Draw(game, phase)
 	y = y - (slots - count) * 13
 
 	-- Endless mode: the schedule is spent and bosses return on a timer, so one
-	-- more line, kept all run long, says when the next comes.
+	-- more line, kept all run long, says when the next comes (not which: the
+	-- game does not say), and in endless mode one under it, the bosses slain
+	-- since it began.
 	local nextLine = head.nextBoss
 	if not nextLine then
 		nextLine = BossLine(table.getn(head.bosses) + 1)
 		head.bosses[table.getn(head.bosses)] = nil
 		head.nextBoss = nextLine
+		head.endlessSlain = BossLine(table.getn(head.bosses) + 1)
+		head.bosses[table.getn(head.bosses)] = nil
 	end
 	local nextIn = tonumber(game.nb) or -1
-	if Num(game.endl) == 1 and nextIn >= 0 then
-		local name = game.nbn
-		if not name or name == "" then
-			name = SurvivorUI_T("Next boss")
-		end
-		nextLine.name:SetText(name)
+	if endless and nextIn >= 0 then
+		nextLine.name:SetText(SurvivorUI_T("Next boss"))
 		nextLine.name:SetTextColor(1, 1, 1)
 		nextLine.time:SetText("|cffffd24d"..SurvivorUI_TF("in {1}", Clock(nextIn)).."|r")
 		y = Put(nextLine, y, 13)
 	else
 		nextLine:Hide()
 		y = y - 13
+	end
+	local slain = EndlessSlain(game)
+	if slain then
+		local slainLine = head.endlessSlain
+		slainLine.name:SetText(SurvivorUI_T("Endless bosses slain"))
+		slainLine.name:SetTextColor(0.82, 0.50, 1.00)
+		slainLine.time:SetText(slain)
+		slainLine.time:SetTextColor(1, 1, 1)
+		y = Put(slainLine, y, 13)
+	else
+		head.endlessSlain:Hide()
 	end
 	-- The guardians' bar, when it stands here (Guardians.lua).
 	if SurvivorUI_GuardianBar then
@@ -873,15 +1105,17 @@ function SurvivorUI_TrackerSnapshot()
 	local schedule = AZS_SCHEDULE or {}
 	local shot = {
 		zone = zoneName, phase = phase, lives = Num(game.lives), seconds = seconds, length = length,
-		endless = Num(game.endl) == 1 or nil,
+		endless = Num(game.endl) == 1 or nil, heroic = tonumber(zone.heroic),
 		slots = math.max(BOSS_SLOTS, Num(zone.bt), table.getn(schedule)),
 		bosses = {},
 	}
 	for index = 1, table.getn(schedule) do
 		local entry = schedule[index]
 		local name = Field(entry, "name", 3) or "?"
+		-- In endless mode, the list as it stood at the victory (FillBossLine).
 		local boss = {
-			name = name, at = Num(Field(entry, "at", 2)), state = Field(entry, "state", 5) or "due",
+			name = name, at = Num(Field(entry, "at", 2)),
+			state = shot.endless and "dead" or Field(entry, "state", 5) or "due",
 			final = Num(Field(entry, "final", 4)) == 1 or nil, fell = bossKilled[index..name],
 		}
 		if boss.state == "up" then
@@ -893,9 +1127,11 @@ function SurvivorUI_TrackerSnapshot()
 		table.insert(shot.bosses, boss)
 	end
 	if shot.endless and (tonumber(game.nb) or -1) >= 0 then
-		local name = game.nbn
-		shot.nextBoss = { name = (name and name ~= "") and name or "Next boss", left = tonumber(game.nb) }
+		shot.nextBoss = { name = "Next boss", left = tonumber(game.nb) }
 	end
+	shot.endlessSlain = EndlessSlain(game)
+	-- The run's affixes (Affixes.lua), as their tags had them.
+	shot.affixes = SurvivorUI_RunAffixes and SurvivorUI_RunAffixes() or nil
 	shot.guardians = SurvivorUI_GuardianSnapshot and SurvivorUI_GuardianSnapshot() or nil
 	-- The elites alive, the hurt first, the lowest leftmost.
 	if TrackerElites() then
@@ -1001,8 +1237,15 @@ head:SetScript("OnEnter", function()
 	if tonumber(zone.diff) and tonumber(zone.diff) ~= 1 then
 		Pair(SurvivorUI_T("Zone difficulty"), "x"..zone.diff)
 	end
-	-- "100 100 100 100" is a normal run; anything else is worth a line.
-	if zone.mods then
+	-- A Heroic level (the game's 0.121) is worth a line, the normal one not;
+	-- before it, the Run Options: "100 100 100 100" is a normal run, anything
+	-- else is worth a line.
+	local heroic = tonumber(zone.heroic)
+	if heroic then
+		if heroic > 0 then
+			Pair(SurvivorUI_T("Difficulty"), SurvivorUI_HeroicName(heroic))
+		end
+	elseif zone.mods then
 		local index = 0
 		for value in string.gfind(zone.mods, "%d+") do
 			index = index + 1

@@ -1666,11 +1666,6 @@ local function ReviveIsOn()
 	return SurvivorUI_ReviveOn ~= nil and SurvivorUI_ReviveOn()
 end
 
--- The item tooltip laid out again: on only when chosen (AbilityTooltip.lua).
-local function ItemTipOn()
-	return SurvivorUI_ItemTooltipOn ~= nil and SurvivorUI_ItemTooltipOn()
-end
-
 local MODULES = {
 	{ "Run", {
 		{ "Run tracker", OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"),
@@ -1733,8 +1728,6 @@ local MODULES = {
 			"Every amulet, ring and trinket found, and what is left to find." },
 		{ "Ability tooltips", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"),
 			"A spell's tooltip laid out again: what it does, its numbers in colors, its upgrades, bonuses and talents.", true },
-		{ "Item tooltips", ItemTipOn, Call("SurvivorUI_ToggleItemTooltip"),
-			"An item's tooltip laid out again: no bind line, its health green, each effect a line of its own, its numbers in colors. Off (the default): the game's own, in the flat look." },
 	} },
 	{ "Interface", {
 		{ "Unit frames", FeatureOn("unitFrames"), FeatureToggle("unitFrames"),
@@ -2824,6 +2817,13 @@ end
 page = pages.tracker
 Header(page, "Run tracker", "Under the minimap: the zone, the run's clock against its length, the bosses, the guardians, the elites alive and your level, each part on its own.")
 PanelHead(page, OnUnlessOff("tracker"), Call("SurvivorUI_ToggleTracker"), "tracker", "Run tracker", nil, GAME.clock)
+-- The tags under the zone's name: short (N or V, symbols) unless in words;
+-- at the row's two ends unless centered.
+InlineChecks(page, {
+	{ "Difficulty in words", OnlyIfOn("trackerTagWords"), function() DB().trackerTagWords = not DB().trackerTagWords or nil end },
+	{ "Affixes in words", OnlyIfOn("trackerAffixWords"), function() DB().trackerAffixWords = not DB().trackerAffixWords or nil end },
+	{ "Centered", OnlyIfOn("trackerTagsCentered"), function() DB().trackerTagsCentered = not DB().trackerTagsCentered or nil end },
+}, "Tags")
 
 Subheader(page, "Bosses")
 Check(page, "Boss health", OnlyIfOn("trackerHealth"), function()
@@ -2839,31 +2839,49 @@ Inline(page, "Health shows as", {
 }, function() return DB().trackerHealthLook or "percent" end, function(look) DB().trackerHealthLook = look end)
 
 Subheader(page, "Guardians")
-Inline(page, "Show as", {
-	{ "bar", "A bar" },
-	{ "list", "A list" },
-	{ "count", "A count" },
-	{ "off", "Off" },
-}, function()
+-- The count's three kinds (Guardians.lua's CountStyle): guardiansCount
+-- "count", "line" or "row" (true, before v3.0.37, is "count").
+local COUNTS = { count = true, line = true, row = true }
+Dropdown(page, "Show as", function()
+	return {
+		{ value = "bar", name = "A bar" },
+		{ value = "list", name = "A list" },
+		{ value = "count", name = "A count and the next" },
+		{ value = "line", name = "Each lair's timer" },
+		{ value = "row", name = "A count, timers under" },
+		{ value = "off", name = "Off" },
+	}
+end, function()
 	if DB().guardians == false then
 		return "off"
 	end
-	if DB().guardiansCount then
-		return "count"
+	local count = DB().guardiansCount
+	if count then
+		return count == true and "count" or count
 	end
 	return DB().guardiansDocked and "bar" or "list"
 end, function(choice)
 	DB().guardians = choice ~= "off"
 	if choice ~= "off" then
 		DB().guardiansDocked = choice ~= "list"
-		DB().guardiansCount = choice == "count" or nil
+		DB().guardiansCount = COUNTS[choice] and choice or nil
 	end
 end)
-Note(page, "Bar: a stretch a lair in the tracker, red once slain. List: a line a lair beside it, yards and an arrow. Count: 3 / 5 alive. Off: none, as in Modules.")
-Check(page, "Arrows north up", OnlyIfOn("guardiansNorth"), Call("SurvivorUI_ToggleGuardians", "north"), "off: they turn with you, straight ahead up")
+Note(page, "Bar: a stretch a lair, red once slain. List: a line a lair beside the tracker. The counts: how many alive and the next lair to fill, each lair's time to fill again, or both. Off: none, as in Modules.")
 Check(page, "Lair marks", OnUnlessOff("guardianMarks"), Flip("guardianMarks"), "each lair its own heraldic mark: the same in the tracker, on the minimap and on its boss bar")
--- The list's Back to its place, on a row of its own: by Show as, its four
--- choices reach the page's edge.
+-- The arrows, on one row (the page has no room to spare): on the bar
+-- (Guardians.lua; off, a stretch still flashes up close), and north up
+-- (off, they turn with you, straight ahead up).
+InlineChecks(page, {
+	{ "On the bar", OnUnlessOff("guardiansBarArrows"), Flip("guardiansBarArrows") },
+	{ "North up", OnlyIfOn("guardiansNorth"), Call("SurvivorUI_ToggleGuardians", "north") },
+}, "Arrows")
+Slider(page, "Bar thickness", 4, 16, 1, function() return DB().guardiansBarHeight or 9 end,
+	function(value)
+		value = math.floor(value + 0.5)
+		DB().guardiansBarHeight = value ~= 9 and value or nil
+	end, "%d")
+-- The list's Back to its place, on a row of its own.
 local listPlace = Text(page, 10, TEXT)
 listPlace:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 6)
 listPlace:SetText("List place")
@@ -2891,9 +2909,13 @@ Check(page, "Coin on the tracker", OnlyIfOn("trackerCoin"), function()
 	DB().trackerCoin = not DB().trackerCoin
 end, "left of the clock: gold when you can pay, red when not; it shines as the kills and gold line's coin does (Kills & gold tab)")
 
+-- On one row (the page has no room to spare): the bar at the tracker's
+-- foot, and beside the level the time to the next, from the recent pace.
 Subheader(page, "XP bar")
-Check(page, "Level and experience", OnUnlessOff("trackerXp"), Flip("trackerXp"), "the bar at the tracker's foot")
-Check(page, "Time to the next level", OnUnlessOff("trackerXpEta"), Flip("trackerXpEta"), "beside the level, from the recent pace")
+InlineChecks(page, {
+	{ "Level and experience", OnUnlessOff("trackerXp"), Flip("trackerXp") },
+	{ "Time to the next level", OnUnlessOff("trackerXpEta"), Flip("trackerXpEta") },
+})
 
 ------------------------------------------------------------------------------
 -- Kill pace: the orb by the run tracker's clock (Pace.lua).
@@ -3089,7 +3111,17 @@ page = pages.xpbar
 Header(page, "XP bar", "Your level and experience as a bar of its own, at the top of the screen; the run tracker shows them too, at its foot (Run tracker tab).")
 PanelHead(page, OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"), "xpbar", "XP bar")
 Subheader(page, "What shows")
-Check(page, "Time to the next level", OnUnlessOff("xpBarEta"), Flip("xpBarEta"), "and the experience a minute, from the recent pace")
+Check(page, "Time to the next level", OnUnlessOff("xpBarEta"), Flip("xpBarEta"), "under the bar's left end, from the recent pace")
+Check(page, "Experience a minute", function()
+	-- Off before v3.0.37 with the time (one choice then): off still.
+	if DB().xpBarRate == nil and DB().xpBarEta == false then
+		return false
+	end
+	return DB().xpBarRate ~= false
+end, function()
+	local on = DB().xpBarRate ~= false and not (DB().xpBarRate == nil and DB().xpBarEta == false)
+	DB().xpBarRate = not on
+end, "under the bar's right end, the recent pace")
 Check(page, "Luck and the cards' odds", OnUnlessOff("xpBarLuck"), Flip("xpBarLuck"),
 	"your luck over the bar; hover the bar for every kind of pick, or a side's odds for its own")
 Check(page, "The odds' ribbon under the bar", function() return DB().xpBarRibbon == true end,
@@ -3098,6 +3130,12 @@ Check(page, "The odds' ribbon under the bar", function() return DB().xpBarRibbon
 Check(page, "The odds beside the bar", function() return DB().xpBarOddsSide == true end,
 	function() DB().xpBarOddsSide = (not DB().xpBarOddsSide) or nil end,
 	"to read without the mouse: a legendary's, an epic's and a rare's chance, the spells' and jewelry's on its left, the amulets' on its right")
+-- Their look (XpBar.lua): the numbers, or each in a small bar.
+Inline(page, "The odds as", {
+	{ "numbers", "Numbers" },
+	{ "fill", "Bars filled" },
+	{ "tag", "Tags" },
+}, function() return DB().xpBarOddsLook or "numbers" end, function(look) DB().xpBarOddsLook = look ~= "numbers" and look or nil end)
 
 ------------------------------------------------------------------------------
 -- Level Up! (LevelUp.lua): the button for the levels waiting, and the game's
@@ -3715,9 +3753,8 @@ page = pages.stats
 Header(page, "Stats panel", "The run's numbers as a panel of their own, on the screen all the time, apart from the character pane. Drag it by its title while this tab is open; its corner resizes it (a right click there: the first size again).")
 PanelHead(page, OnlyIfOn("statsPanel"), Call("SurvivorUI_ToggleStatsPanel"), "stats", "Stats")
 Subheader(page, "What shows")
-Check(page, "Hide the numbers at 0 or below", OnlyIfOn("statsHideZero"), function()
-	DB().statsHideZero = not DB().statsHideZero
-end, "in the pane and on the panel, back once past 0; every class")
+Check(page, "Hide the numbers at 0 or below", OnUnlessOff("statsHideZero"), Flip("statsHideZero"),
+	"in the pane and on the panel, back once past 0; every class")
 
 -- The class whose choices these are, named in the section's title.
 local classTitle = Subheader(page, "Stats for this class")
@@ -4088,10 +4125,7 @@ Kit.Chips(page, {
 -- the ranks' option also the meter's.
 
 page = pages.tooltips
-Header(page, "Tooltips", "Your spells' tooltips, on the action bar and the build list, the Biggest Crits' cards, and the items'.")
-Subheader(page, "Items")
-Check(page, "Item tooltips laid out again", ItemTipOn, Call("SurvivorUI_ToggleItemTooltip"),
-	"no bind line, the health a piece gives in green, each effect a line of its own, its numbers in colors. Off (the default): the game's own layout, in the flat look")
+Header(page, "Tooltips", "Your spells' tooltips, on the action bar and the build list, and the Biggest Crits' cards.")
 Subheader(page, "Spell ranks")
 Check(page, "Roman spell ranks (also applied to the meter)", OnlyIfOn("romanRanks"), function() DB().romanRanks = not DB().romanRanks or nil end,
 	"LXIII instead of Rank 63 in the spells' tooltips and the Biggest Crits' cards, and instead of 63 after the spells' names in the damage meter, the run's and the Run History's")

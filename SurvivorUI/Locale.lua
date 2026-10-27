@@ -96,7 +96,8 @@ local function Translate(text)
 				for index = 1, table.getn(line[3]) do
 					values[line[3][index]] = found[index + 2] or ""
 				end
-				return (string.gsub(line[2], "{([%a_]+)}", function(key) return values[key] or "" end))
+				-- A placeholder may end in a digit: {v2}.
+				return (string.gsub(line[2], "{([%a_][%w_]*)}", function(key) return values[key] or "" end))
 			end
 		end
 	end

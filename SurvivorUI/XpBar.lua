@@ -10,7 +10,7 @@
 --
 -- Shown two ways, each on its own: at the run tracker's foot (Tracker.lua,
 -- the time beside the level; Run tracker tab), and as an XP bar of its own,
--- movable (XP bar tab): the level, the bar with the experience and its share,
+-- movable (XP bar tab): the level, the bar with the experience's share,
 -- marked at every 20%, and under it the time to the next level and the
 -- experience a minute. No backing: it sits on the world.
 
@@ -21,6 +21,7 @@ local WINDOW = 45               -- seconds of the run the pace is measured over
 local LEAST = 10                -- seconds of it before a pace is told
 local PURPLE = { 0.58, 0.30, 0.85 }
 local MUTED = "|cff9a9a9a"
+local NEXT_COLOR = "|cffbf8cff"   -- "Next lv. in", as "Lv. 12" over the bar
 
 ------------------------------------------------------------------------------
 -- The pace.
@@ -179,8 +180,19 @@ local function PanelOn()
 	return Settings().xpBar == true
 end
 
+-- Under the bar, each on its own: the time to the next level, and the
+-- experience a minute (one choice before v3.0.37, the time's: off, it keeps
+-- both away).
 local function EtaOn()
 	return Settings().xpBarEta ~= false
+end
+
+local function RateOn()
+	local settings = Settings()
+	if settings.xpBarRate == nil and settings.xpBarEta == false then
+		settings.xpBarRate = false
+	end
+	return settings.xpBarRate ~= false
 end
 
 ------------------------------------------------------------------------------
@@ -413,8 +425,14 @@ end
 -- Beside the bar, to read without the mouse (XP bar tab: The odds beside the
 -- bar): a legendary's, an epic's and a rare's chance, one under the other in
 -- their colors; the spells' and jewelry's on its left, the amulets' on its
--- right (the card's two columns).
+-- right (the card's two columns), under a title in the luck's green. As
+-- numbers, or (XP bar tab, The odds as) each in a small bar of one size, the
+-- number inside: filled in its rarity's color as far as the chance goes
+-- (full at 40%), or in the run tracker's tag look (a thin border, a dark
+-- wash of the color).
 local SIDE_ROWS = { 5, 4, 3 }
+-- The bars centered under their title, which goes over their middle.
+local ODDS_BAR, ODDS_TALL, ODDS_STEP, ODDS_FULL = 76, 13, 14, 0.40
 local SIDE_HEADS = { "SPELLS & JEWELRY", "AMULETS" }
 local sides = {}
 for index = 1, 2 do
@@ -436,11 +454,27 @@ for index = 1, 2 do
 		text:SetPoint("TOP"..justify, side, "TOP"..justify, 0, y)
 		return text
 	end
-	side.head = Text(7, 0, { 0.62, 0.62, 0.62 })
+	-- The title a little over the bar's top, apart from the legendary's line.
+	side.head = Text(7, 2, { 0.35, 0.90, 0.55 })
+	side.justify = justify
 	side.head:SetText(SurvivorUI_T(SIDE_HEADS[index]))
-	side.lines = {}
+	side.lines, side.bars = {}, {}
 	for row = 1, 3 do
-		side.lines[row] = Text(9, -9 - (row - 1) * 11, RARITIES[SIDE_ROWS[row]].color)
+		side.lines[row] = Text(9, -10 - (row - 1) * 11, RARITIES[SIDE_ROWS[row]].color)
+		local bar = CreateFrame("Frame", nil, side)
+		bar:SetWidth(ODDS_BAR)
+		bar:SetHeight(ODDS_TALL)
+		bar:SetPoint("TOP", side, "TOP", 0, -11 - (row - 1) * ODDS_STEP)
+		bar:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+		bar.fill = bar:CreateTexture(nil, "ARTWORK")
+		bar.fill:SetTexture(FLAT)
+		bar.fill:SetPoint("TOPLEFT", bar, "TOPLEFT", 1, -1)
+		bar.fill:SetHeight(ODDS_TALL - 2)
+		bar.text = bar:CreateFontString(nil, "OVERLAY")
+		bar.text:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
+		bar.text:SetPoint("CENTER", bar, "CENTER", 0, 0)
+		bar:Hide()
+		side.bars[row] = bar
 	end
 	side:Hide()
 	sides[index] = side
@@ -450,6 +484,26 @@ local function SidesOn()
 	return Settings().xpBarOddsSide == true
 end
 
+-- A chance's small bar, in a look ("fill" or "tag").
+local function PaintOddsBar(bar, value, color, look)
+	bar.text:SetText(Percent(value))
+	if look == "fill" then
+		bar:SetBackdropColor(0.11, 0.10, 0.13, 0.9)
+		bar:SetBackdropBorderColor(color[1] * 0.6, color[2] * 0.6, color[3] * 0.6, 1)
+		-- A stretch of 0 width shows as the whole texture: the least is kept.
+		bar.fill:SetWidth(math.max(0.01, math.min(1, value / ODDS_FULL) * (ODDS_BAR - 2)))
+		bar.fill:SetVertexColor(color[1], color[2], color[3], 0.75)
+		bar.fill:Show()
+		bar.text:SetTextColor(1, 1, 1)
+	else
+		bar:SetBackdropColor(color[1] * 0.16, color[2] * 0.16, color[3] * 0.16, 0.9)
+		bar:SetBackdropBorderColor(color[1] * 0.85, color[2] * 0.85, color[3] * 0.85, 1)
+		bar.fill:Hide()
+		bar.text:SetTextColor(color[1], color[2], color[3])
+	end
+	bar:Show()
+end
+
 local function FillSides(luck, level)
 	if not (luck and SidesOn()) then
 		sides[1]:Hide()
@@ -457,10 +511,31 @@ local function FillSides(luck, level)
 		return
 	end
 	local m = 1 + luck + LevelBonus(level)
+	local look = Settings().xpBarOddsLook
+	local barred = look == "fill" or look == "tag"
 	for index = 1, 2 do
+		-- The title over the bars' middle, or at the numbers' side.
+		local head, justify = sides[index].head, sides[index].justify
+		head:ClearAllPoints()
+		if barred then
+			head:SetJustifyH("CENTER")
+			head:SetPoint("TOP", sides[index], "TOP", 0, 2)
+		else
+			head:SetJustifyH(justify)
+			head:SetPoint("TOP"..justify, sides[index], "TOP"..justify, 0, 2)
+		end
 		local odds = Odds(m + COLUMNS[index].bonus)
 		for row = 1, 3 do
-			sides[index].lines[row]:SetText(Percent(odds[SIDE_ROWS[row]]))
+			local value = odds[SIDE_ROWS[row]]
+			local line, bar = sides[index].lines[row], sides[index].bars[row]
+			if barred then
+				line:Hide()
+				PaintOddsBar(bar, value, RARITIES[SIDE_ROWS[row]].color, look)
+			else
+				bar:Hide()
+				line:SetText(Percent(value))
+				line:Show()
+			end
 		end
 		sides[index]:Show()
 	end
@@ -620,28 +695,33 @@ local function Fill()
 	-- The levels waiting (Store Level-Ups, LevelUp.lua): "Lv. 12 +3".
 	local stored = SurvivorUI_StoredLevels and SurvivorUI_StoredLevels() or 0
 	panel.level:SetText("|cffbf8cff"..SurvivorUI_TF("Lv. {1}", estimate.lvl).."|r"..(stored > 0 and " |cffffd100+"..stored.."|r" or ""))
+	-- How far into the level, as a share (the experience itself, in the
+	-- thousands late in a run, ran into the luck over the bar).
 	local amount = Short(estimate.xp)
 	if estimate.xpn and estimate.xpn > 0 then
-		amount = amount.." / "..Short(estimate.xpn).."  "..MUTED..math.floor(estimate.share * 100 + 0.5).."%|r"
+		amount = math.floor(estimate.share * 100 + 0.5).."%"
 	end
 	panel.amount:SetText(amount)
 	panel.fill:SetValue(estimate.share)
 	FillLuck(estimate.lvl)
 	if EtaOn() then
 		if estimate.eta then
-			panel.next:SetText(MUTED..SurvivorUI_T("Next lv. in").."|r "..Clock(estimate.eta))
+			-- Its words in the level's light purple, the time white.
+			panel.next:SetText(NEXT_COLOR..SurvivorUI_T("Next lv. in").."|r "..Clock(estimate.eta))
 		else
-			panel.next:SetText(MUTED..SurvivorUI_T("Next lv. in ...").."|r")
+			panel.next:SetText(NEXT_COLOR..SurvivorUI_T("Next lv. in ...").."|r")
 		end
-		panel.rate:SetText(estimate.perMinute and (Short(estimate.perMinute)..MUTED.." "..SurvivorUI_T("XP/min").."|r") or "")
 		panel.next:Show()
-		panel.rate:Show()
-		panel:SetHeight(42)
 	else
 		panel.next:Hide()
-		panel.rate:Hide()
-		panel:SetHeight(26)
 	end
+	if RateOn() then
+		panel.rate:SetText(estimate.perMinute and (Short(estimate.perMinute)..MUTED.." "..SurvivorUI_T("XP/min").."|r") or "")
+		panel.rate:Show()
+	else
+		panel.rate:Hide()
+	end
+	panel:SetHeight((EtaOn() or RateOn()) and 42 or 26)
 	panel:Show()
 end
 

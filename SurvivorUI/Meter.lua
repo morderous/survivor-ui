@@ -707,6 +707,14 @@ local function FromSpellbook(name)
 	end
 end
 
+-- A talent of the game's (TalentIcons.lua, written from its exe): a proc's
+-- own damage (Nightfall's, Daybreak's) shows its talent's icon, which the
+-- client's 1.12 talents have only now and then.
+local function FromGameTalents(name)
+	local icon = SurvivorUI_TALENT_ICONS and SurvivorUI_TALENT_ICONS[name]
+	return icon and "Interface\\Icons\\"..icon or nil
+end
+
 local function FromTalents(name)
 	if not (GetNumTalentTabs and GetNumTalents and GetTalentInfo) then
 		return nil
@@ -784,7 +792,7 @@ local function IconOf(name)
 		if missedAt[name] and GetTime() - missedAt[name] < 10 then
 			return nil
 		end
-		texture = FromSpellbook(name) or FromTalents(name) or FromItems(name)
+		texture = FromGameTalents(name) or FromSpellbook(name) or FromTalents(name) or FromItems(name)
 	end
 	if not texture and BORROWED[name] then
 		for _, source in pairs(BORROWED[name]) do
@@ -855,6 +863,29 @@ end
 -- The same icon for a source anywhere in the interface (the Biggest Crits box).
 function SurvivorUI_MeterIcon(name)
 	return IconOf(name)
+end
+
+-- The tag after a proc's name (the game marks its procs): an amulet's own
+-- damage "(neck)" (a codex amulet by its name, JewelryData.lua, or a class
+-- amulet's "Amulet of the Inferno: Consecration"), a talent's "(talent)"
+-- (TalentIcons.lua, the game's talents), the rest "(proc)" (a ring's, a
+-- trinket's). Run History's copy of the meter wears the same.
+local necks
+function SurvivorUI_ProcTag(name)
+	name = English(name or "")
+	if not necks then
+		necks = {}
+		local list = SurvivorUI_JEWELRY and SurvivorUI_JEWELRY.Neck or {}
+		for index = 1, table.getn(list) do
+			necks[list[index][1]] = true
+		end
+	end
+	if necks[name] or string.find(name, ": ", 1, true) then
+		return SurvivorUI_T("(neck)")
+	elseif SurvivorUI_TALENT_ICONS and SurvivorUI_TALENT_ICONS[name] then
+		return SurvivorUI_T("(talent)")
+	end
+	return SurvivorUI_T("(proc)")
 end
 
 -- The same color for the same source anywhere in the interface (the build list).
@@ -1175,9 +1206,12 @@ local function PaintBar(bar, line, top, key)
 		bar.icon:SetTexture(OWN_ICON)
 		bar.icon:SetTexCoord(0, 1, 0, 1)
 	end
-	-- With "(proc)" after it, the name gives it room: neither runs into
-	-- the numbers, a long name ends in "..." first.
-	local room = NAME_ROOM - (proc and 30 or 0)
+	-- With its tag after it, "(proc)", "(talent)" or "(neck)", the name gives
+	-- it room: neither runs into the numbers, a long name ends in "..." first.
+	if proc then
+		bar.tag:SetText(SurvivorUI_ProcTag(name))
+	end
+	local room = NAME_ROOM - (proc and math.floor(bar.tag:GetStringWidth() + 6) or 0)
 	if bar.room ~= room then
 		bar.room = room
 		bar.name:SetWidth(room)

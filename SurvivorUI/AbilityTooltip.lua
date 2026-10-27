@@ -480,17 +480,11 @@ end
 
 local written                   -- the signature of the last layout written
 
--- An item's tooltip laid out again only when chosen (Modules, or the Tooltips
--- tab): from v3.0.30 the game's own layout is the default, in the flat look.
+-- An item's tooltip is the game's own, in the flat look, for everyone from
+-- v3.0.37 (the default from v3.0.30; the choice is gone, the layout below to
+-- be retired). The spells' are still laid out again.
 function SurvivorUI_ItemTooltipOn()
-	local features = SurvivorUIDB and SurvivorUIDB.features
-	return features ~= nil and features.itemTooltip == true
-end
-
-function SurvivorUI_ToggleItemTooltip()
-	if SurvivorUI_SetFeature then
-		SurvivorUI_SetFeature("itemTooltip", not SurvivorUI_ItemTooltipOn())
-	end
+	return false
 end
 
 local watcher = CreateFrame("Frame")

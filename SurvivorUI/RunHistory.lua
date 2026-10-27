@@ -182,6 +182,8 @@ local function Snapshot(phase)
 		classKey = classKey,
 		zone = zone.zname or GetZoneText(),
 		mods = SurvivorUI_ModsLabel and SurvivorUI_ModsLabel(zone.mods) or nil,
+		-- From the game's 0.121, the run's Heroic level (0 the normal one).
+		heroic = tonumber(zone.heroic),
 		time = seconds,
 		level = Num(run.lvl),
 		kills = Num(run.kills),
@@ -1970,6 +1972,12 @@ for index = 1, 4 do
 	chip:EnableMouse(true)
 	chip:SetScript("OnEnter", function()
 		GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
+		if this.heroic then
+			GameTooltip:SetText(SurvivorUI_T("Difficulty"), 1, 0.82, 0)
+			GameTooltip:AddLine(SurvivorUI_T("The run's Heroic level, I to V, or Normal."), 1, 1, 1, 1)
+			GameTooltip:Show()
+			return
+		end
 		GameTooltip:SetText(SurvivorUI_T("Modifiers"), 1, 0.82, 0)
 		GameTooltip:AddLine(SurvivorUI_T("The run's Run Options: enemy density, health, damage and speed."), 1, 1, 1, 1)
 		GameTooltip:AddLine(SurvivorUI_T("Orange: harder than normal. Green: easier. Grey: normal."), 0.7, 0.7, 0.7, 1)
@@ -1980,9 +1988,27 @@ for index = 1, 4 do
 	modChips[index] = chip
 end
 
-local function DrawMods(label)
+local function DrawMods(label, heroic)
 	for _, chip in pairs(modChips) do
 		chip:Hide()
+		chip.heroic = nil
+	end
+	-- A run from the game's 0.121 on: its Heroic level, one chip, orange
+	-- for a Heroic one, grey for the normal one.
+	if heroic then
+		local chip = modChips[1]
+		local color = heroic > 0 and { 1.00, 0.58, 0.25 } or { 0.62, 0.62, 0.66 }
+		chip.heroic = true
+		chip.name:SetText(SurvivorUI_T("Difficulty"))
+		chip.value:SetText(SurvivorUI_HeroicName(heroic))
+		chip.value:SetTextColor(color[1], color[2], color[3])
+		chip:SetBackdropColor(color[1] * 0.14, color[2] * 0.14, color[3] * 0.14, 0.85)
+		chip:SetBackdropBorderColor(color[1] * 0.6, color[2] * 0.6, color[3] * 0.6, 1)
+		chip:SetWidth(chip.name:GetStringWidth() + chip.value:GetStringWidth() + 16)
+		chip:ClearAllPoints()
+		chip:SetPoint("TOPLEFT", window, "TOP", -math.floor(chip:GetWidth() / 2 + 0.5), -40)
+		chip:Show()
+		return
 	end
 	if not label then
 		return
@@ -2080,7 +2106,7 @@ end
 ------------------------------------------------------------------------------
 -- The run tracker, as it stood when the run ended (Tracker.lua's look): the
 -- zone and how the run ended, the clock against the zone's length, the
--- timeline with a tick for every boss, each boss colored by where it stood
+-- timeline with a pip for every boss, each boss colored by where it stood
 -- and the second it fell, the guardians and the elites, the level.
 
 local STATE_COLORS = {
@@ -2102,9 +2128,12 @@ tracker.state = Font(tracker, 9, WHITE, nil, "RIGHT")
 tracker.clock = Font(tracker, 18, WHITE, "THICKOUTLINE", "CENTER")
 tracker.timeline = Flat(tracker, "BORDER", BACKING, 0.9)
 tracker.timeline:SetWidth(INNER)
-tracker.timeline:SetHeight(8)
+tracker.timeline:SetHeight(6)
 tracker.gone = Flat(tracker, "ARTWORK")
-tracker.gone:SetHeight(8)
+tracker.gone:SetHeight(6)
+tracker.now = Flat(tracker, "OVERLAY", WHITE, 0.95)
+tracker.now:SetWidth(2)
+tracker.now:SetHeight(10)
 tracker.guardTitle = Font(tracker, 9, DIM)
 tracker.guardTitle:SetText(SurvivorUI_T("Guardians"))
 tracker.guardNote = Font(tracker, 9, WHITE, nil, "RIGHT")
@@ -2118,20 +2147,24 @@ tracker.xpBack:SetHeight(5)
 tracker.xpFill = Flat(tracker, "ARTWORK", { 0.58, 0.30, 0.85 }, 1)
 tracker.xpFill:SetHeight(5)
 tracker.ticks, tracker.segments, tracker.slots, tracker.guardMarks = {}, {}, {}, {}
+-- The guardians' cells, for a count with each lair's time (Guardians.lua).
+tracker.guardCells = CreateFrame("Frame", nil, tracker)
+tracker.guardCells:SetWidth(INNER)
+tracker.guardCells:SetHeight(12)
+tracker.guardBox = SurvivorUI_NewLairBox and SurvivorUI_NewLairBox(tracker)
+-- The run's tags on the zone's line (Tracker.lua's).
+tracker.tags = SurvivorUI_NewTag and { difficulty = SurvivorUI_NewTag(tracker), endless = SurvivorUI_NewTag(tracker), affixes = {} }
 tracker:EnableMouse(true)
 tracker:SetScript("OnEnter", function() ShowKept(this, this.tip, 1) end)
 tracker:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
--- Pieces made as they are needed: a boss's tick (its countdown over it), a
--- boss's line, a lair's stretch of the guardians' bar, an elite's bar.
+-- Pieces made as they are needed: a boss's pip (Tracker.lua's, its
+-- countdown over it), a boss's line, a lair's stretch of the guardians' bar,
+-- an elite's bar.
 local function Tick(index)
 	local tick = tracker.ticks[index]
 	if not tick then
-		tick = CreateFrame("Frame", nil, tracker)
-		tick:SetHeight(14)
-		tick.mark = Flat(tick, "OVERLAY")
-		tick.mark:SetAllPoints(tick)
-		tick.label = Font(tick, 8, WHITE, nil, "CENTER")
+		tick = SurvivorUI_NewPip(tracker)
 		tracker.ticks[index] = tick
 	end
 	return tick
@@ -2191,20 +2224,32 @@ local function DrawTracker(shot, result)
 		table.insert(parts, "|cff4dd94d"..SurvivorUI_T("Victory").."|r")
 	elseif shot.phase == "dead" then
 		table.insert(parts, "|cffff4040"..SurvivorUI_T("Fallen").."|r")
-	elseif shot.endless then
-		table.insert(parts, "|cffd080ff"..SurvivorUI_T("Endless").."|r")
 	end
 	local lives = Num(shot.lives)
 	if lives > 0 then
 		table.insert(parts, "|cffff8080"..SurvivorUI_TF(lives == 1 and "{1} life left" or "{1} lives left", lives).."|r")
 	end
-	tracker.state:SetText(table.concat(parts, "  "))
-	tracker.state:ClearAllPoints()
-	tracker.state:SetPoint("TOPRIGHT", tracker, "TOPRIGHT", -6, y - 2)
+	-- The zone's name centered in green; under it the run's tags as the
+	-- tracker had them (Tracker.lua: the difficulty and endless mode at the
+	-- left, the affixes at the right; a run kept before v3.0.37 has none),
+	-- and after the left ones how the run ended.
 	tracker.zone:SetText(shot.zone or "")
-	tracker.zone:SetWidth(INNER - tracker.state:GetStringWidth() - 10)
+	tracker.zone:SetTextColor(0.45, 0.90, 0.45)
+	tracker.zone:SetJustifyH("CENTER")
+	tracker.zone:SetWidth(INNER)
 	At(tracker.zone, tracker, x, y)
 	y = y - 15
+	local after, any = x, false
+	if tracker.tags then
+		after, any = SurvivorUI_TagRow(tracker.tags, tracker, shot.heroic, shot.endless, shot.affixes, x, -6, y - 1)
+	end
+	tracker.state:SetText(table.concat(parts, "  "))
+	tracker.state:SetJustifyH("LEFT")
+	tracker.state:ClearAllPoints()
+	tracker.state:SetPoint("TOPLEFT", tracker, "TOPLEFT", after > x and after + 1 or x, y - 3)
+	if any or table.getn(parts) > 0 then
+		y = y - 17
+	end
 
 	-- The clock against the zone's length; in endless mode, alone.
 	local seconds, length = Num(shot.seconds), Num(shot.length)
@@ -2215,24 +2260,38 @@ local function DrawTracker(shot, result)
 	end
 	tracker.clock:ClearAllPoints()
 	tracker.clock:SetPoint("TOP", tracker, "TOP", 0, y - 1)
-	-- Room over the timeline for the coming bosses' countdowns.
-	y = y - 25 - 10
+	-- Room over the timeline for the next boss's countdown.
+	y = y - 25 - 12
 
-	-- The timeline: green up to the end, a tick for every boss, white until
-	-- it fell, then green; over each boss still to come, the time it had left.
+	-- The timeline: green up to the end (purple in endless mode), a white cap
+	-- where a fallen run stopped, a pip for every boss, as in the tracker;
+	-- over the next boss's, the time it had left.
 	At(tracker.timeline, tracker, x, y)
-	tracker.gone:SetWidth(math.max(1, INNER * (length > 0 and math.min(1, seconds / length) or 1)))
+	local gone = length > 0 and math.min(1, seconds / length) or 1
+	tracker.gone:SetWidth(math.max(1, INNER * gone))
 	if shot.endless then
 		tracker.gone:SetVertexColor(0.70, 0.40, 1.00, 1)
 	else
 		tracker.gone:SetVertexColor(0.30, 0.80, 0.35, 1)
 	end
 	At(tracker.gone, tracker, x, y)
+	if shot.endless or gone >= 1 then
+		tracker.now:Hide()
+	else
+		tracker.now:ClearAllPoints()
+		tracker.now:SetPoint("CENTER", tracker, "TOPLEFT", x + INNER * gone, y - 3)
+		tracker.now:Show()
+	end
 	local bosses = shot.bosses or {}
 	local total = table.getn(bosses)
+	-- In endless mode the list as it stood at the victory, all slain (a run
+	-- kept before v3.0.37 has the bosses the game brought back on its lines).
+	local function State(boss)
+		return shot.endless and "dead" or boss.state
+	end
 	local nextIndex
 	for index = 1, total do
-		if not nextIndex and bosses[index].state == "due" then
+		if not nextIndex and State(bosses[index]) == "due" then
 			nextIndex = index
 		end
 	end
@@ -2241,29 +2300,16 @@ local function DrawTracker(shot, result)
 		local at = Num(boss.at)
 		local spot = length > 0 and INNER * math.min(1, at / length) or INNER
 		local tick = Tick(index)
-		tick:SetWidth(boss.final and 5 or 3)
-		local color = boss.state == "dead" and STATE_COLORS.dead or STATE_COLORS.next
-		tick.mark:SetVertexColor(color[1], color[2], color[3], 1)
+		local isNext = index == nextIndex
+		SurvivorUI_PaintPip(tick, isNext and "next" or State(boss), boss.final)
 		tick:ClearAllPoints()
-		tick:SetPoint("CENTER", tracker, "TOPLEFT", x + spot, y - 4)
+		tick:SetPoint("CENTER", tracker, "TOPLEFT", x + spot, y - 3)
 		tick:Show()
-		if boss.state == "due" and at > seconds then
-			tick.label:SetText(Clock(at - seconds))
-			if index == nextIndex then
-				tick.label:SetTextColor(1, 0.55, 0.15)
-			else
-				tick.label:SetTextColor(1, 0.82, 0.2)
-			end
-			local half = tick.label:GetStringWidth() / 2 + 1
-			tick.label:ClearAllPoints()
-			tick.label:SetPoint("BOTTOM", tracker, "TOPLEFT", x + math.max(half, math.min(INNER - half, spot)), y + 4)
-			tick.label:Show()
-		else
-			tick.label:Hide()
-		end
+		SurvivorUI_PipCountdown(tick, isNext and at > seconds and Clock(at - seconds) or nil, spot, INNER)
 	end
 	HideAll(tracker.ticks, total + 1)
-	y = y - 15
+	-- Room under it for the pips' lower half.
+	y = y - 13
 
 	-- A line a boss: grey to come, white the next, orange alive, green slain
 	-- with the second it came and the second it fell.
@@ -2272,17 +2318,18 @@ local function DrawTracker(shot, result)
 		local at = Num(boss.at)
 		local line = BossLine(index)
 		local color, timeColor, timeText
-		if boss.state == "dead" then
+		local state = State(boss)
+		if state == "dead" then
 			color = STATE_COLORS.dead
 			timeColor = color
 			timeText = boss.fell and ("|cff8a8a8a"..Clock(at).."  /|r  "..Clock(boss.fell)) or Clock(at)
-		elseif boss.state == "up" then
+		elseif state == "up" then
 			color, timeColor = STATE_COLORS.up, WHITE
 			timeText = (boss.hp and ("|cffff8c40"..math.floor(boss.hp * 100 + 0.5).."%|r   ") or "")..Clock(at)
 		elseif index == nextIndex then
 			color = STATE_COLORS.next
 			timeColor = color
-			timeText = (at > seconds and ("|cffffd24din "..Clock(at - seconds).."|r   ") or "")..Clock(at)
+			timeText = (at > seconds and ("|cffffd24d"..SurvivorUI_TF("in {1}", Clock(at - seconds)).."|r   ") or "")..Clock(at)
 		else
 			color = STATE_COLORS.due
 			timeColor = color
@@ -2298,36 +2345,69 @@ local function DrawTracker(shot, result)
 	end
 	-- The empty lines keep their room, as in the tracker.
 	y = y - math.max(0, Num(shot.slots) - total) * 13
-	-- Endless mode: when the next boss was to come.
+	-- Endless mode: when the next boss was to come (not which), and under it
+	-- the bosses slain since endless mode began.
 	local used = total
 	if shot.nextBoss then
 		used = used + 1
 		local line = BossLine(used)
-		line.name:SetText(SurvivorUI_T(shot.nextBoss.name or "Next boss"))
+		line.name:SetText(SurvivorUI_T("Next boss"))
 		line.name:SetTextColor(1, 1, 1)
 		line.time:SetText("|cffffd24d"..SurvivorUI_TF("in {1}", Clock(shot.nextBoss.left)).."|r")
+		line.time:SetTextColor(1, 1, 1)
 		line.name:SetWidth(INNER - line.time:GetStringWidth() - 8)
 		At(line, tracker, x, y)
 	end
-	HideAll(tracker.rows, used + 1)
 	y = y - 13
+	if shot.endlessSlain then
+		used = used + 1
+		local line = BossLine(used)
+		line.name:SetText(SurvivorUI_T("Endless bosses slain"))
+		line.name:SetTextColor(0.82, 0.50, 1.00)
+		line.time:SetText(shot.endlessSlain)
+		line.time:SetTextColor(1, 1, 1)
+		line.name:SetWidth(INNER - line.time:GetStringWidth() - 8)
+		At(line, tracker, x, y)
+		y = y - 13
+	end
+	HideAll(tracker.rows, used + 1)
 
-	-- The guardians, as they stood in the tracker: their count, or a stretch
-	-- of the bar a lair, the 8:00 achievement over it.
+	-- The guardians, as they stood in the tracker: their count (with the next
+	-- lair to fill, or each lair's cell on its line or under it), or a
+	-- stretch of the bar a lair, the 8:00 achievement over it.
 	local guard = shot.guardians
 	local lairs = guard and not guard.count and guard.lairs or {}
 	local marked = 0
+	local style = guard and (guard.count == true and "count" or guard.count)
+	local cells = {}
 	if guard then
 		At(tracker.guardTitle, tracker, x, y - 6)
 		tracker.guardNote:ClearAllPoints()
 		tracker.guardNote:SetPoint("TOPRIGHT", tracker, "TOPRIGHT", -6, y - 6)
 		tracker.guardNote:Show()
-		if guard.count then
+		if style then
 			local color = Num(guard.awake) > 0 and AWAKE or (Num(guard.alive) > 0 and SPAWNED or DIM)
-			tracker.guardNote:SetText(SurvivorUI_TF("{1} / {2} alive", Num(guard.alive), table.getn(guard.lairs or {})))
+			local next = style == "count" and guard.next
+				and "|cff8c8c94  · "..SurvivorUI_TF("next {1}", "|cffff4738"..guard.next.."|cff8c8c94").."|r" or ""
+			tracker.guardNote:SetText(SurvivorUI_TF("{1} / {2} alive", Num(guard.alive), table.getn(guard.lairs or {}))..next)
 			tracker.guardNote:SetTextColor(color[1], color[2], color[3])
+			if style == "line" then
+				tracker.guardNote:Hide()
+			end
+			if style ~= "count" then
+				cells = guard.lairs or {}
+			end
+			-- With the row, a box round the count and it (Guardians.lua).
+			if tracker.guardBox then
+				if style == "row" then
+					SurvivorUI_PlaceLairBox(tracker.guardBox, tracker, x - 4, y - 6 + 3, INNER + 8, 12 + 12 + 6)
+				else
+					SurvivorUI_PlaceLairBox(tracker.guardBox)
+				end
+			end
+			At(tracker.guardCells, tracker, x, y - 6)
 			-- The lairs' marks after the title, as the count showed them.
-			for index = 1, table.getn(guard.lairs or {}) do
+			for index = 1, table.getn(style == "count" and guard.lairs or {}) do
 				local lair = guard.lairs[index]
 				if lair.mark and SurvivorUI_SetLairMark then
 					marked = marked + 1
@@ -2343,18 +2423,25 @@ local function DrawTracker(shot, result)
 					SurvivorUI_SetLairMark(texture, lair.mark, lair.empty)
 				end
 			end
-			y = y - 6 - 12
+			y = y - 6 - 12 - (style == "row" and 12 + 3 or 0)
 		else
 			local goal = guard.goalColor or DIM
 			tracker.guardNote:SetText(SurvivorUI_T(guard.goal or ""))
 			tracker.guardNote:SetTextColor(goal[1], goal[2], goal[3])
 			y = y - 6 - 12
+			if tracker.guardBox then
+				SurvivorUI_PlaceLairBox(tracker.guardBox)
+			end
 			local lairCount = table.getn(lairs)
 			local each = (INNER - 3 * (lairCount - 1)) / math.max(lairCount, 1)
+			-- As thick as the tracker's bar was (9 before v3.0.37).
+			local thick = Num(guard.height) > 0 and Num(guard.height) or 9
 			for index = 1, lairCount do
 				local lair = lairs[index]
 				local piece = Stretch(tracker.segments, index, 9)
 				piece:SetWidth(each)
+				piece:SetHeight(thick)
+				piece.fill:SetHeight(thick)
 				local color = lair.color or SPAWNED
 				piece.fill:SetWidth(math.max(1, each * Num(lair.share)))
 				piece.fill:SetVertexColor(color[1], color[2], color[3], 0.9)
@@ -2388,14 +2475,24 @@ local function DrawTracker(shot, result)
 				piece.text:SetText(SurvivorUI_T(lair.text or ""))
 				At(piece, tracker, x + (index - 1) * (each + 3), y)
 			end
-			y = y - 9
+			y = y - thick
 		end
 	else
 		tracker.guardTitle:Hide()
 		tracker.guardNote:Hide()
+		if tracker.guardBox then
+			SurvivorUI_PlaceLairBox(tracker.guardBox)
+		end
 	end
 	HideAll(tracker.segments, table.getn(lairs) + 1)
 	HideAll(tracker.guardMarks, marked + 1)
+	if SurvivorUI_LairCells then
+		if style == "line" then
+			SurvivorUI_LairCells(tracker.guardCells, cells, "line", tracker.guardTitle:GetStringWidth() + 8, INNER, 0)
+		else
+			SurvivorUI_LairCells(tracker.guardCells, cells, "row", 0, INNER, -12)
+		end
+	end
 
 	-- The elites alive as the run ended: a small bar each, bright once hurt.
 	local elites = shot.elites
@@ -3047,7 +3144,11 @@ local function DrawDamage(run)
 			bar.icon:SetTexCoord(0, 1, 0, 1)
 		end
 		local rank = source.rank or ranks[source.name]
-		local room = NAME_ROOM - (source.proc and 30 or 0)
+		-- Its tag, "(proc)", "(talent)" or "(neck)" (Meter.lua), with its room.
+		if source.proc and SurvivorUI_ProcTag then
+			bar.tag:SetText(SurvivorUI_ProcTag(source.name))
+		end
+		local room = NAME_ROOM - (source.proc and math.floor(bar.tag:GetStringWidth() + 6) or 0)
 		bar.name:SetWidth(room)
 		local ranked = rank and rank > 0 and SurvivorUI_RankText and SurvivorUIDB and SurvivorUIDB.meterRanks
 		bar.name:SetText(SurvivorUI_Native(source.name or "?")..(ranked and "  |cffbdbdbd"..SurvivorUI_RankText(rank, true).."|r" or ""))
@@ -3588,7 +3689,7 @@ local function DrawHeader(run, final, moment)
 	heroText:SetText(SurvivorUI_TF("Lv. {1}", Num(moment.level)).."  "..SurvivorUI_T(run.race or "").." "..SurvivorUI_T(run.class or ""))
 	heroText:SetTextColor(light[1], light[2], light[3])
 	party.Draw(run)
-	DrawMods(run.mods)
+	DrawMods(run.mods, run.heroic)
 end
 
 -- The panels in their four columns, the window's height to hold them.
