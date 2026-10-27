@@ -1935,6 +1935,9 @@ InlineChecks(page, {
 	{ "Damage taken", CTGet("ctTaken"), CTToggle("ctTaken") },
 })
 Slider(page, "Smallest heal", 0, 10, 1, CTGet("ctHealMin"), CTSet("ctHealMin"), "%d%% HP")
+Check(page, "Buffs gaining and fading", function() return SurvivorUI_CombatTextAuras and SurvivorUI_CombatTextAuras() end,
+	function() if SurvivorUI_SetCombatTextAuras then SurvivorUI_SetCombatTextAuras(not SurvivorUI_CombatTextAuras()) end end,
+	"the game's <Power Word: Shield> and its debuffs, off by default")
 InlineChecks(page, {
 	{ "Damage", CTGet("ctAddDealt"), CTToggle("ctAddDealt") },
 	{ "Crits", CTGet("ctAddCrits"), CTToggle("ctAddCrits") },
@@ -2115,7 +2118,9 @@ Inline(page, "How many", { { 10, "10" }, { 25, "25" }, { 50, "50" }, { 100, "100
 	function() return tonumber(DB().historyKeep) or 100 end, Sets("historyKeep"))
 Inline(page, "The 10 longest", { { true, "Always kept" }, { false, "Go like the others" } },
 	function() return DB().historyLongest ~= false end, Sets("historyLongest"))
-Note(page, "Past the limit, the oldest run goes as a new one is kept; the longest (when kept) and the pinned ones (Pin, in the window) never go. Changes here apply from the next run on, so nothing is deleted at a click.")
+Inline(page, "Victory & Endless", { { true, "Always kept" }, { false, "Go like the others" } },
+	function() return DB().historyKeepWins ~= false end, Sets("historyKeepWins"))
+Note(page, "Past the limit, the oldest run goes as a new one is kept: a Fallen or Left one first, a Victory or an Endless one only when no other can (when always kept; also at the Run History window's foot). The longest (when kept) and the pinned ones (Pin, in the window) never go. Changes here apply from the next run on, so nothing is deleted at a click.")
 
 Subheader(page, "Tooltips")
 Inline(page, "Keep them for", { { "all", "All" }, { "50", "Newest 50" }, { "25", "Newest 25" }, { "0", "None" } },
@@ -2315,7 +2320,7 @@ local function StatCheck(x, y, width, label, color)
 	check.box:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -1, 1)
 	check.label = Text(check, 9, TEXT)
 	check.label:SetPoint("LEFT", check.edge, "RIGHT", 6, 0)
-	check.label:SetText(label)
+	check.label:SetText(SurvivorUI_StatName and SurvivorUI_StatName(label) or label)
 	check:SetScript("OnClick", function()
 		if SurvivorUI_SetStatShown and SurvivorUI_StatShown then
 			SurvivorUI_SetStatShown(label, not SurvivorUI_StatShown(label))

@@ -90,7 +90,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.5.3.0")]
+[assembly: System.Reflection.AssemblyVersion("1.5.4.0")]
 
 namespace SurvivorInstaller
 {
@@ -2117,8 +2117,8 @@ namespace SurvivorInstaller
 
         // --- Play ---------------------------------------------------------------
 
-        static readonly string[] StripNames = { "Today", "Last played", "Runs", "Wins" };
-        readonly Label[] stripValues = new Label[4];
+        static readonly string[] StripNames = { "Today", "Total", "Last played", "Runs", "Wins" };
+        readonly Label[] stripValues = new Label[5];
         readonly TextBox gameNews = new TextBox();
 
         void BuildPlayPage(Panel page)
@@ -2197,14 +2197,15 @@ namespace SurvivorInstaller
             subLines[playButton] = delegate { return playNote; };
             page.Controls.Add(playButton);
 
-            // Beside Play, the player's numbers: today's and the last session
-            // the launcher saw, and the save's runs and wins (Statistics).
+            // Beside Play, the player's numbers: today's playtime and all of it,
+            // the last session the launcher saw, and the save's runs and wins
+            // (Statistics).
             for (int i = 0; i < StripNames.Length; i++)
             {
                 Panel card = new Panel();
                 card.BackColor = Panel;
-                card.Location = new Point(340 + i * 101, 46);
-                card.Size = new Size(95, 62);
+                card.Location = new Point(340 + i * 81, 46);
+                card.Size = new Size(76, 62);
                 Label name = new Label();
                 name.Text = StripNames[i];
                 name.Font = new Font("Segoe UI", 8f);
@@ -3351,34 +3352,66 @@ namespace SurvivorInstaller
             }
         }
 
-        // The numbers beside Play: today's playtime and the last session the
-        // launcher saw (the one going on counted too), the save's runs and wins.
+        // The numbers beside Play: today's playtime and all of it (Statistics'
+        // Playtime), the last session the launcher saw (the one going on
+        // counted too), the save's runs and wins.
         void ShowStrip()
         {
             List<KeyValuePair<DateTime, int>> sessions = Sessions();
-            int today = 0;
+            int today = 0, total = 0;
             DateTime last = DateTime.MinValue;
             foreach (KeyValuePair<DateTime, int> session in sessions)
             {
                 if (session.Key.Date == DateTime.Today) today += session.Value;
+                total += session.Value;
                 DateTime end = session.Key.AddSeconds(session.Value);
                 if (end > last) last = end;
             }
             if (sessionStart != DateTime.MinValue)
             {
                 today += (int)(DateTime.Now - (sessionStart.Date == DateTime.Today ? sessionStart : DateTime.Today)).TotalSeconds;
+                total += (int)(DateTime.Now - sessionStart).TotalSeconds;
                 last = DateTime.Now;
             }
             stripValues[0].Text = Hours(today);
-            stripValues[1].Text = sessionStart != DateTime.MinValue ? "now" : last == DateTime.MinValue ? "—"
+            // Past 100 hours, the hours alone, to fit its card.
+            stripValues[1].Text = total >= 360000 ? (total / 3600) + "h" : Hours(total);
+            stripValues[2].Text = sessionStart != DateTime.MinValue ? "now" : last == DateTime.MinValue ? "—"
                 : last.Date == DateTime.Today ? "today" : last.Date == DateTime.Today.AddDays(-1) ? "yesterday"
                 : last.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture);
             SaveStats stats = ReadSaveStats();
             if (stats != null)
             {
-                stripValues[2].Text = Count(stats.Total("runs"));
-                stripValues[3].Text = Count(stats.Total("wins"));
+                stripValues[3].Text = Count(stats.Total("runs"));
+                stripValues[4].Text = Count(stats.Total("wins"));
             }
+            foreach (Label value in stripValues) FitCard(value);
+        }
+
+        // A card's number too wide for it, smaller by half points until it
+        // fits (its first font kept in its Tag); back to that font once it
+        // fits again. A font made here is let go when changed again.
+        static void FitCard(Label value)
+        {
+            if (value.Parent == null) return;
+            Font first = value.Tag as Font;
+            if (first == null)
+            {
+                first = value.Font;
+                value.Tag = first;
+            }
+            int room = value.Parent.ClientSize.Width - value.Left - value.Left / 2;
+            float size = first.Size;
+            while (size > 7f)
+            {
+                using (Font trial = new Font(first.FontFamily, size, first.Style, first.Unit))
+                    if (TextRenderer.MeasureText(value.Text, trial).Width <= room) break;
+                size -= 0.5f;
+            }
+            if (Math.Abs(value.Font.Size - size) < 0.01f) return;
+            Font old = value.Font;
+            value.Font = size == first.Size ? first : new Font(first.FontFamily, size, first.Style, first.Unit);
+            if (old != first) old.Dispose();
         }
 
         // --- Run History ------------------------------------------------------------
@@ -3425,8 +3458,9 @@ namespace SurvivorInstaller
             runCount.ForeColor = Muted;
             runCount.Location = new Point(352, 12);
             page.Controls.Add(runCount);
-            // Survivor UI's own Keep setting (Options, Run History), from here.
-            keepWins.Text = "Keep only victories and endless";
+            // A filter: only the victories and the endless runs, those the
+            // launcher keeps for good (its archive).
+            keepWins.Text = "Only victories and endless";
             keepWins.AutoSize = true;
             keepWins.FlatStyle = FlatStyle.Flat;
             keepWins.FlatAppearance.BorderColor = TickEdge;
@@ -3435,8 +3469,10 @@ namespace SurvivorInstaller
             page.Controls.Add(keepWins);
             TickLook(keepWins);
             keepWins.CheckedChanged += delegate { KeepWinsChanged(); };
-            tips.SetToolTip(keepWins, "Only here, in the launcher: the list keeps your victories and the runs gone on in endless mode.\n" +
-                "The game's own Run History keeps what its options say (Survivor UI's Options, Run History).");
+            tips.SetToolTip(runCount, "Your victories and endless runs are kept here for good, whatever the game's Run History lets go\n" +
+                "(it keeps 100 runs at most). A date in gold: a run gone from the game's, kept here.");
+            tips.SetToolTip(keepWins, "The list shows only your victories and the runs gone on in endless mode.\n" +
+                "Those are kept here for good, whatever the game's Run History lets go (a date in gold: kept here only).");
 
             // The runs, newest first; one picked is shown under them.
             runList.View = View.Details;
@@ -3519,7 +3555,9 @@ namespace SurvivorInstaller
                     Rectangle shadow = words;
                     shadow.Offset(1, 1);
                     TextRenderer.DrawText(e.Graphics, e.SubItem.Text, runList.Font, shadow, Color.FromArgb(10, 6, 4), flags);
-                    TextRenderer.DrawText(e.Graphics, e.SubItem.Text, runList.Font, words, Color.White, flags);
+                    // A run kept only here: its date in gold.
+                    TextRenderer.DrawText(e.Graphics, e.SubItem.Text, runList.Font, words,
+                        e.ColumnIndex == 0 && run.Archived ? Gold : Color.White, flags);
                     return;
                 }
                 TextRenderer.DrawText(e.Graphics, e.SubItem.Text, runList.Font, words, e.SubItem.ForeColor, flags);
@@ -3593,7 +3631,7 @@ namespace SurvivorInstaller
             Cursor = Cursors.WaitCursor;
             try
             {
-                runs = RunRecord.ReadAll(path, out runsKeep);
+                runs = WithArchive(RunRecord.ReadAll(path, out runsKeep));
                 runsNote = runs.Count == 0
                     ? "No runs kept yet. Run History is Survivor UI's: play a run with it on, and once the game goes back to the character screen its runs show here."
                     : "";
@@ -3612,6 +3650,58 @@ namespace SurvivorInstaller
             }
             shownRun = null;
             FillRuns();
+        }
+
+        static string RunArchivePath
+        {
+            get { return Path.Combine(Path.GetDirectoryName(ConfigPath), "run-archive.lua"); }
+        }
+
+        // The game's runs and the archive's (RunRecord's archive): each victory
+        // or endless run read is put in the archive, or put there again when
+        // the game's copy changed; the archived runs gone from the game's Run
+        // History are shown with its own, newest first. An archive that cannot
+        // be read is left as it is, never written over.
+        List<RunRecord> WithArchive(List<RunRecord> game)
+        {
+            List<RunRecord> archive;
+            try { archive = RunRecord.ReadArchive(RunArchivePath); }
+            catch (Exception)
+            {
+                return game;
+            }
+            bool changed = false;
+            foreach (RunRecord run in game)
+            {
+                if (!run.Won) continue;
+                RunRecord kept = run.Unphotographed();
+                int at = archive.FindIndex(delegate(RunRecord old) { return old.SameAs(run); });
+                if (at < 0)
+                {
+                    archive.Add(kept);
+                    changed = true;
+                }
+                else if (RunRecord.Text(archive[at].Data) != RunRecord.Text(kept.Data))
+                {
+                    archive[at] = kept;
+                    changed = true;
+                }
+            }
+            archive.Sort(delegate(RunRecord a, RunRecord b) { return b.Num("at").CompareTo(a.Num("at")); });
+            if (changed)
+            {
+                try { RunRecord.WriteArchive(RunArchivePath, archive); }
+                catch (Exception) { }
+            }
+            List<RunRecord> all = new List<RunRecord>(game);
+            foreach (RunRecord old in archive)
+            {
+                if (game.Exists(delegate(RunRecord run) { return run.SameAs(old); })) continue;
+                old.Archived = true;
+                all.Add(old);
+            }
+            all.Sort(delegate(RunRecord a, RunRecord b) { return b.Num("at").CompareTo(a.Num("at")); });
+            return all;
         }
 
         static Color ClassColor(string classKey)
@@ -3658,15 +3748,15 @@ namespace SurvivorInstaller
             showingKeep = false;
         }
 
-        // Only in the launcher: its list keeps the victories and the runs gone
-        // on in endless mode; the game's Run History keeps by its own options.
+        // The list's filter: only the victories and the runs gone on in endless
+        // mode.
         void KeepWinsChanged()
         {
             if (showingKeep) return;
             SetSetting("runsWinsOnly", keepWins.Checked ? "1" : "0");
             shownRun = null;
             FillRuns();
-            Status(keepWins.Checked ? "Run History here shows only your victories and endless runs; the game's own keeps by its options."
+            Status(keepWins.Checked ? "Run History here shows only your victories and endless runs."
                 : "Run History here shows every run again.");
         }
 
@@ -3702,7 +3792,8 @@ namespace SurvivorInstaller
                 if (keepWins.Checked && run.Str("result") != "victory" && run.Table("endless") == null) continue;
                 ListViewItem row = new ListViewItem(run.Num("at") > 0 ? When(Local(run.Num("at"))) : run.Str("when"));
                 row.UseItemStyleForSubItems = false;
-                row.ForeColor = Muted;
+                // Gone from the game's Run History, kept here: its date in gold.
+                row.ForeColor = run.Archived ? Gold : Muted;
                 row.SubItems.Add(run.Str("hero"), TextColor, Panel, runList.Font);
                 row.SubItems.Add(run.Str("class"), ClassColor(run.Str("classKey")), Panel, runList.Font);
                 row.SubItems.Add(run.Str("zone"), TextColor, Panel, runList.Font);
@@ -7589,6 +7680,171 @@ namespace SurvivorInstaller
     class RunRecord
     {
         public Dictionary<object, object> Data;
+        public bool Archived;       // gone from Survivor UI's Run History, kept in the launcher's archive
+
+        // A victory, or a run gone on in endless mode: what the archive keeps.
+        public bool Won
+        {
+            get { return Str("result") == "victory" || Table("endless") != null; }
+        }
+
+        // The same run in the game's Run History and in the archive: its hero
+        // and zone, ended within three minutes (the game may keep a run's end
+        // again a moment later, as its later moment).
+        public bool SameAs(RunRecord other)
+        {
+            return Str("hero") == other.Str("hero") && Str("zone") == other.Str("zone")
+                && Str("classKey") == other.Str("classKey") && Math.Abs(Num("at") - other.Num("at")) < 180;
+        }
+
+        // --- The archive: the victories and endless runs for good -------------
+        //
+        // Survivor UI's Run History keeps 100 runs at most. Each victory or
+        // endless run the launcher reads there is copied into run-archive.lua
+        // (a Lua table, as the game writes its own), once, or again when the
+        // game's copy changed (an endless run gone on); without its tooltips'
+        // photos (7 kB a run, not 20). The archive is never trimmed, and is
+        // never written over when it could not be read.
+
+        public static List<RunRecord> ReadArchive(string path)
+        {
+            List<RunRecord> runs = new List<RunRecord>();
+            if (!File.Exists(path)) return runs;
+            string text = File.ReadAllText(path, System.Text.Encoding.UTF8);
+            object archive;
+            if (!LuaData.Globals(text).TryGetValue("SurvivorUIRunArchive", out archive)) return runs;
+            foreach (Dictionary<object, object> entry in List(archive))
+            {
+                RunRecord run = new RunRecord();
+                run.Data = entry;
+                runs.Add(run);
+            }
+            return runs;
+        }
+
+        public static void WriteArchive(string path, List<RunRecord> runs)
+        {
+            System.Text.StringBuilder text = new System.Text.StringBuilder();
+            text.Append("-- Survivor UI Launcher: your victories and endless runs, kept for good.\r\n");
+            text.Append("SurvivorUIRunArchive = {\r\n");
+            for (int i = 0; i < runs.Count; i++)
+            {
+                text.Append("\t[").Append(i + 1).Append("] = ");
+                Write(text, runs[i].Data, 1);
+                text.Append(",\r\n");
+            }
+            text.Append("}\r\n");
+            // Written beside it first, then put in its place: a cut-off write
+            // never leaves half an archive.
+            string next = path + ".new";
+            File.WriteAllText(next, text.ToString(), new System.Text.UTF8Encoding(false));
+            if (File.Exists(path)) File.Replace(next, path, path + ".bak");
+            else File.Move(next, path);
+        }
+
+        // The run's table without its tooltips' photos, as Survivor UI drops
+        // them from an older run (its Unphotograph): the cards, the rows'
+        // tips, the tracker's, and each piece of gear's and loot's.
+        public RunRecord Unphotographed()
+        {
+            RunRecord copy = new RunRecord();
+            copy.Data = Copy(Data);
+            Unphotograph(copy.Data);
+            Unphotograph(copy.Table("endless"));
+            return copy;
+        }
+
+        static void Unphotograph(Dictionary<object, object> moment)
+        {
+            if (moment == null) return;
+            moment.Remove("cards");
+            moment.Remove("rowTips");
+            Dictionary<object, object> tracker = Field(moment, "tracker") as Dictionary<object, object>;
+            if (tracker != null) tracker.Remove("tip");
+            foreach (string list in new[] { "gear", "loot" })
+            {
+                Dictionary<object, object> pieces = Field(moment, list) as Dictionary<object, object>;
+                if (pieces == null) continue;
+                foreach (object piece in pieces.Values)
+                {
+                    Dictionary<object, object> fields = piece as Dictionary<object, object>;
+                    if (fields != null) fields.Remove("tip");
+                }
+            }
+        }
+
+        static Dictionary<object, object> Copy(Dictionary<object, object> table)
+        {
+            Dictionary<object, object> copy = new Dictionary<object, object>();
+            foreach (KeyValuePair<object, object> pair in table)
+            {
+                Dictionary<object, object> inner = pair.Value as Dictionary<object, object>;
+                copy[pair.Key] = inner != null ? Copy(inner) : pair.Value;
+            }
+            return copy;
+        }
+
+        // A run's table as Lua text, its keys sorted so the same run writes
+        // the same text.
+        public static string Text(Dictionary<object, object> table)
+        {
+            System.Text.StringBuilder text = new System.Text.StringBuilder();
+            Write(text, table, 0);
+            return text.ToString();
+        }
+
+        static void Write(System.Text.StringBuilder text, object value, int depth)
+        {
+            Dictionary<object, object> table = value as Dictionary<object, object>;
+            if (table == null)
+            {
+                WriteValue(text, value);
+                return;
+            }
+            List<object> keys = new List<object>(table.Keys);
+            keys.Sort(delegate(object a, object b)
+            {
+                bool an = a is double, bn = b is double;
+                if (an && bn) return ((double)a).CompareTo((double)b);
+                if (an != bn) return an ? -1 : 1;
+                return string.CompareOrdinal(Convert.ToString(a, System.Globalization.CultureInfo.InvariantCulture),
+                    Convert.ToString(b, System.Globalization.CultureInfo.InvariantCulture));
+            });
+            text.Append("{");
+            foreach (object key in keys)
+            {
+                text.Append("[");
+                WriteValue(text, key);
+                text.Append("]=");
+                Write(text, table[key], depth + 1);
+                text.Append(",");
+            }
+            text.Append("}");
+        }
+
+        static void WriteValue(System.Text.StringBuilder text, object value)
+        {
+            if (value is double)
+            {
+                double n = (double)value;
+                if (double.IsNaN(n)) n = 0;
+                if (double.IsInfinity(n)) n = n > 0 ? double.MaxValue : double.MinValue;
+                text.Append(n.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            else if (value is bool) text.Append((bool)value ? "true" : "false");
+            else
+            {
+                text.Append('"');
+                foreach (char c in Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture))
+                {
+                    if (c == '"' || c == '\\') text.Append('\\').Append(c);
+                    else if (c == '\n') text.Append("\\n");
+                    else if (c == '\r') text.Append("\\r");
+                    else text.Append(c);
+                }
+                text.Append('"');
+            }
+        }
 
         public static List<RunRecord> ReadAll(string path)
         {

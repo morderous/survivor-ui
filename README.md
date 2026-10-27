@@ -215,6 +215,18 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### Azeroth SurvivorUI Launcher 1.5.4 (beta), in progress
+
+- **Your victories and endless runs, kept for good**: Survivor UI's Run History keeps 100 runs at most. Each victory and endless run the Run History tab reads is now copied into the launcher's own archive (`run-archive.lua` in `%APPDATA%\SurvivorUIInstaller`, without the tooltips' photos: some 8 kB a run), never trimmed; an endless run gone on is copied again. The tab shows the archive's runs with the game's, newest first: a date in gold is a run gone from the game's Run History, kept here. The tick beside the list is now **Only victories and endless**, a filter.
+- **Total playtime on the Play tab**: a **Total** card beside **Today**, all the playtime the launcher has seen (the Statistics tab's Playtime).
+
+### v3.0.36, in progress
+
+**Survivor UI**
+- **Always keep Victory & Endless** in the Run History (on by default, at the window's foot beside Delete, and in the Run History tab): once the runs kept are full, a new run makes the oldest Fallen or Left one go; a Victory or an Endless run goes only when no other can. Pinned runs, and the 10 longest when kept, never go.
+- **The game's buff notices hidden**: the "<Power Word: Shield>" floating over the fight as a buff or debuff comes, and its notice as it fades, now stay away. Combat text tab, **Buffs gaining and fading**, to have them back.
+- **Armor is now called Dmg Reduction** in the stats (the character pane, the Stats panel, its options and the Run History), as that is what it is: the damage you take is reduced by that much, 60% at most. The game's own pane still calls it Armor, and the tooltip says so. Its place and whether it shows are kept.
+
 ### v3.0.35, 2026-10-26
 
 Luck and the cards' odds on the XP bar; a new chat panel; the mouse cursor in a color of yours; a coin for every cache your gold pays for, with a new sound; how Damage and Crit Dmg work together.

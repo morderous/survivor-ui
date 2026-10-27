@@ -226,6 +226,15 @@ local function Pct(value)
 	return string.format("%+.0f%%", value * 100)
 end
 
+-- A row's name as shown. Its label stays its key (the order and the hidden
+-- rows are saved by it): Armor shows as what it is, Dmg Reduction (asked on
+-- Discord where it was), though the game's own pane calls it Armor.
+local SHOWN_AS = { Armor = "Dmg Reduction" }
+
+function SurvivorUI_StatName(label)
+	return SHOWN_AS[label] or label
+end
+
 -- label, value(s), what it means, and for the conditional rows when to show.
 local SECTIONS = {
 	{ title = "Offense", color = { 1.00, 0.45, 0.25 }, rows = {
@@ -239,7 +248,7 @@ local SECTIONS = {
 		{ "Health",    function(s) return string.format("%.0f", s.hp) end, "The most health you can have." },
 		{ "Regen",     function(s) return string.format("%.1f", s.reg) end, "Health you regain every second." },
 		{ "Lifesteal", function(s) return string.format("%.1f%%", s.lch * 100) end, "Heals you for this much of all the damage you deal." },
-		{ "Armor",     function(s) return string.format("%.0f%%", s.arm * 100) end, "Damage you take is reduced by this much (60% at most)." },
+		{ "Armor",     function(s) return string.format("%.0f%%", s.arm * 100) end, "Damage you take is reduced by this much (60% at most). The game's own pane calls it Armor." },
 		{ "Kill Heal", function(s) return string.format("%.0f", s.heal) end, "Every kill heals you for this much." },
 		{ "Thorns",    function(s) return string.format("%.0f%%", s.thn * 100) end, "This much of the melee damage you take is dealt back to the attacker." },
 		{ "Lives",     function(s) return string.format("%d", s.liv) end, "Times you rise again instead of dying." },
@@ -952,10 +961,10 @@ local function MakeView(alone)
 					local value = s and entry[2](s) or "-"
 					row:ClearAllPoints()
 					row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
-					row.label:SetText(entry[1])
+					row.label:SetText(SurvivorUI_StatName(entry[1]))
 					row.value:SetText(value)
 					row.value:SetTextColor(color[1], color[2], color[3])
-					row.title = entry[1].." "..value
+					row.title = SurvivorUI_StatName(entry[1]).." "..value
 					row.text = entry[3]
 					row.section, row.key = section.title, entry[1]
 					-- Arranging: a grip, the label moved off it, hidden rows faint.

@@ -333,12 +333,18 @@ local function Trim()
 			protected[sorted[index]] = true
 		end
 	end
-	local index = table.getn(history)
-	while table.getn(history) > count and index >= 1 do
-		if not protected[history[index]] then
-			table.remove(history, index)
+	-- The oldest go first among the runs fallen or left; with Always keep
+	-- Victory & Endless on (the default, at the window's foot), a victory or an
+	-- endless run goes only when no other can.
+	for pass = db.historyKeepWins ~= false and 1 or 2, 2 do
+		local index = table.getn(history)
+		while table.getn(history) > count and index >= 1 do
+			local run = history[index]
+			if not protected[run] and (pass == 2 or not (run.result == "victory" or run.endless)) then
+				table.remove(history, index)
+			end
+			index = index - 1
 		end
-		index = index - 1
 	end
 	local withPhotos = photos == "all" and table.getn(history) or (tonumber(photos) or 0)
 	for place = 1, table.getn(history) do
@@ -1242,6 +1248,56 @@ deleteButton.drop:SetPoint("RIGHT", deleteButton, "RIGHT", -4, 0)
 deleteButton.tipTitle = "Delete"
 deleteButton.tipText = "This run, or every run kept."
 deleteButton:SetScript("OnClick", function() del.Toggle() end)
+
+-- Always keep Victory & Endless, left of Delete (on by default): past the
+-- runs kept, the oldest fallen or left run goes; a victory or an endless one
+-- only when there is no other.
+del.wins = CreateFrame("Button", nil, window)
+del.wins:SetHeight(17)
+del.wins:SetPoint("RIGHT", deleteButton, "LEFT", -12, 0)
+del.wins.edge = Flat(del.wins, "BORDER", GOLD, 0.7)
+del.wins.edge:SetWidth(11)
+del.wins.edge:SetHeight(11)
+del.wins.edge:SetPoint("LEFT", del.wins, "LEFT", 0, 0)
+del.wins.box = Flat(del.wins, "ARTWORK", { 0, 0, 0 }, 1)
+del.wins.box:SetPoint("TOPLEFT", del.wins.edge, "TOPLEFT", 1, -1)
+del.wins.box:SetPoint("BOTTOMRIGHT", del.wins.edge, "BOTTOMRIGHT", -1, 1)
+del.wins.tick = Flat(del.wins, "OVERLAY", GOLD, 1)
+del.wins.tick:SetPoint("TOPLEFT", del.wins.edge, "TOPLEFT", 3, -3)
+del.wins.tick:SetPoint("BOTTOMRIGHT", del.wins.edge, "BOTTOMRIGHT", -3, 3)
+del.wins.text = Font(del.wins, 9, { 1, 0.88, 0.5 })
+del.wins.text:SetPoint("LEFT", del.wins.edge, "RIGHT", 5, 0)
+del.wins.text:SetText("Always keep Victory & Endless")
+del.wins:SetWidth(16 + del.wins.text:GetStringWidth())
+function del.wins:Paint()
+	if Settings().historyKeepWins ~= false then
+		self.tick:Show()
+	else
+		self.tick:Hide()
+	end
+end
+del.wins:Paint()
+del.wins:SetScript("OnClick", function()
+	Settings().historyKeepWins = (Settings().historyKeepWins == false) or false
+	this:Paint()
+end)
+del.wins:SetScript("OnShow", function() this:Paint() end)
+del.wins:SetScript("OnEnter", function()
+	this.text:SetTextColor(1, 1, 1)
+	GameTooltip:SetOwner(this, "ANCHOR_TOP")
+	GameTooltip:SetText("Always keep Victory & Endless", 1, 0.82, 0)
+	GameTooltip:AddLine("Once the runs kept are full, a new run makes the oldest Fallen or Left one go. "
+		.."A Victory or an Endless run goes only when no other can. Pinned runs never go.", 1, 1, 1, 1)
+	GameTooltip:Show()
+end)
+del.wins:SetScript("OnLeave", function()
+	this.text:SetTextColor(1, 0.88, 0.5)
+	GameTooltip:Hide()
+end)
+-- The foot's line between Career and it, so the two never meet.
+footer:ClearAllPoints()
+footer:SetPoint("LEFT", careerButton, "RIGHT", 8, 0)
+footer:SetPoint("RIGHT", del.wins, "LEFT", -8, 0)
 
 -- The list, over the button.
 del.menu = CreateFrame("Frame", nil, window)
@@ -3374,7 +3430,8 @@ function statsPanel.Draw(run)
 			head.rule:SetVertexColor(color[1], color[2], color[3], 0.6)
 			for each = 1, table.getn(lines) do
 				local line = lines[each]
-				local row = Place(statsPanel.LINE, line[1], line[2], color, line[3])
+				local row = Place(statsPanel.LINE, SurvivorUI_StatName and SurvivorUI_StatName(line[1]) or line[1],
+					line[2], color, line[3])
 				if SurvivorUI_StatGear then
 					row.gear, row.rest = SurvivorUI_StatGear(line[1], kept)
 				end

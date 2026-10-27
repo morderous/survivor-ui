@@ -3108,6 +3108,30 @@ local DAMAGE_EVENTS = {
 -- Each kind's own "show", as the stock code set it, to give back after "no
 -- combat text at all".
 local stockShow
+-- The buffs and debuffs coming and going ("<Power Word: Shield>", "<Shield>
+-- fades"), hidden unless asked for (Combat text: Buffs gaining and fading):
+-- tied to a setting no one sets while hidden, their own setting given back
+-- when shown, so the stock refresh keeps either.
+local AURA_TYPES = { AURA_START = true, AURA_START_HARMFUL = true, AURA_END = true, AURA_END_HARMFUL = true }
+local stockVar = {}
+
+local function ApplyAuraText()
+	for kind in pairs(AURA_TYPES) do
+		local info = COMBAT_TEXT_TYPE_INFO[kind]
+		if info then
+			if info.var ~= "SURVIVORUI_NEVER" then
+				stockVar[kind] = info.var
+			end
+			if Settings().combatTextAuras then
+				info.var = stockVar[kind]
+				info.show = info.var and getglobal(info.var) == "1" and 1 or nil
+			else
+				info.var = "SURVIVORUI_NEVER"
+				info.show = nil
+			end
+		end
+	end
+end
 
 local function ApplyTakenText()
 	if not COMBAT_TEXT_TYPE_INFO then
@@ -3119,6 +3143,7 @@ local function ApplyTakenText()
 			stockShow[kind] = info.show
 		end
 	end
+	ApplyAuraText()
 	-- No combat text at all (/sui damage none): every kind of the stock
 	-- floating text silenced; back as it was when switched off.
 	local none = Settings().damageNone
@@ -3157,6 +3182,18 @@ local function ApplyTakenText()
 		if info then
 			info.show = not heals and 1 or nil
 		end
+	end
+end
+
+-- For the options (Combat text: Buffs gaining and fading).
+function SurvivorUI_CombatTextAuras()
+	return Settings().combatTextAuras == true
+end
+
+function SurvivorUI_SetCombatTextAuras(on)
+	Settings().combatTextAuras = on and true or nil
+	if COMBAT_TEXT_TYPE_INFO then
+		ApplyAuraText()
 	end
 end
 
