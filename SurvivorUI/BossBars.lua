@@ -178,8 +178,8 @@ local function Bar(index)
 		if this.kindLabel then
 			GameTooltip:AddLine(this.kindLabel, this.color[1], this.color[2], this.color[3])
 		end
-		GameTooltip:AddDoubleLine("Health", (this.hp or 0).." / "..(this.hpm or 0), 0.7, 0.7, 0.7, 1, 1, 1)
-		GameTooltip:AddLine("Click to target. "..SurvivorUI_MoveHint(), 0.7, 0.7, 0.7, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Health"), (this.hp or 0).." / "..(this.hpm or 0), 0.7, 0.7, 0.7, 1, 1, 1)
+		GameTooltip:AddLine(SurvivorUI_T("Click to target.").." "..SurvivorUI_MoveHint(), 0.7, 0.7, 0.7, 1)
 		GameTooltip:Show()
 	end)
 	bar:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -254,7 +254,7 @@ local function DebuffIcon(bar, index)
 			GameTooltip:AddLine(this.dispel, 0.7, 0.7, 0.7)
 		end
 		if this.left then
-			GameTooltip:AddLine(math.floor(this.left + 0.5).." sec left", 0.8, 0.8, 0.8)
+			GameTooltip:AddLine(SurvivorUI_TF("{1} sec left", math.floor(this.left + 0.5)), 0.8, 0.8, 0.8)
 		end
 		GameTooltip:Show()
 	end)

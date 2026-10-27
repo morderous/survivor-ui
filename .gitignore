@@ -11,6 +11,11 @@ SurvivorUI/Fonts/*
 !SurvivorUI/Fonts/OFL-RussoOne.txt
 !SurvivorUI/Fonts/CinzelDecorative-Bold.ttf
 !SurvivorUI/Fonts/OFL-CinzelDecorative.txt
+!SurvivorUI/Fonts/NotoSansSC-Medium.ttf
+!SurvivorUI/Fonts/OFL-NotoSansSC.txt
+!SurvivorUI/Fonts/BarlowSemiCondensed-SemiBold.ttf
+!SurvivorUI/Fonts/BarlowCondensed-SemiBold.ttf
+!SurvivorUI/Fonts/OFL-Barlow.txt
 # A face kept for local development only
 SurvivorUI/Media/
 # The installer is built by installer\build.bat and attached to releases

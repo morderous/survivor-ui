@@ -311,7 +311,7 @@ local function Title(text, tip)
 		Beside(this, panel)
 		GameTooltip:SetText(text, 1, 0.82, 0)
 		GameTooltip:AddLine(SurvivorUI_MoveHint(), 1, 1, 1)
-		GameTooltip:AddLine(this.tip, 0.7, 0.7, 0.7, 1)
+		GameTooltip:AddLine(SurvivorUI_T(this.tip), 0.7, 0.7, 0.7, 1)
 		GameTooltip:Show()
 	end)
 	handle:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -327,7 +327,7 @@ end
 
 local RUN_TIP_GAME = "The game's numbers. Hover a row for more."
 local RUN_TIP_OWN = "Counted by the addon from the combat log. A new run starts it over."
-local runTitle = Title("This Run", RUN_TIP_OWN)
+local runTitle = Title(SurvivorUI_T("This Run"), RUN_TIP_OWN)
 
 -- A row: a label and a value in one color, on a faint wash of that color, over
 -- a rule of it.
@@ -371,7 +371,7 @@ local runRows = {}
 for index = 1, table.getn(RUN_ROWS) do
 	local info = RUN_ROWS[index]
 	local row = MakeRow(11, "OUTLINE")
-	row.label:SetText(info.label)
+	row.label:SetText(SurvivorUI_T(info.label))
 	Paint(row, info.color)
 	runRows[info.key] = row
 	runRows[index] = row
@@ -394,24 +394,24 @@ runRows.kpm.average:SetPoint("RIGHT", runRows.kpm.value, "LEFT", -6, -1)
 runRows.time:EnableMouse(true)
 runRows.time:SetScript("OnEnter", function()
 	Beside(this, panel)
-	GameTooltip:SetText("Survived", 1, 0.82, 0)
+	GameTooltip:SetText(SurvivorUI_T("Survived"), 1, 0.82, 0)
 	local game = Game()
 	if game then
-		GameTooltip:AddLine("The game's clock. It stops while you pause or choose a card.", 1, 1, 1, 1)
+		GameTooltip:AddLine(SurvivorUI_T("The game's clock. It stops while you pause or choose a card."), 1, 1, 1, 1)
 		if Num(game.left) >= 0 and Num(game.endl) == 0 then
-			GameTooltip:AddDoubleLine("Final boss in", Clock(Num(game.left)), 0.7, 0.7, 0.7, 1, 1, 1)
+			GameTooltip:AddDoubleLine(SurvivorUI_T("Final boss in"), Clock(Num(game.left)), 0.7, 0.7, 0.7, 1, 1, 1)
 		elseif Num(game.endl) == 1 then
-			GameTooltip:AddLine("Endless mode.", 0.85, 0.5, 1)
+			GameTooltip:AddLine(SurvivorUI_T("Endless mode."), 0.85, 0.5, 1)
 		end
-		GameTooltip:AddDoubleLine("Bosses so far", Num(game.bs).." / "..Num(game.bt), 0.7, 0.7, 0.7, 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Bosses so far"), Num(game.bs).." / "..Num(game.bt), 0.7, 0.7, 0.7, 1, 1, 1)
 		GameTooltip:Show()
 		return
 	end
-	GameTooltip:AddLine("An estimate. The game does not share its clock with addons, so this one can drift from it.", 1, 1, 1, 1)
-	GameTooltip:AddLine("Starts at your first step, or your first blow if the step was missed.", 0.7, 0.7, 0.7, 1)
-	GameTooltip:AddLine("Pauses after 1.5 seconds with no movement and no combat, which is how it sees Escape and the level-up cards.", 0.7, 0.7, 0.7, 1)
-	GameTooltip:AddLine("Standing still out of combat is not counted either.", 0.7, 0.7, 0.7, 1)
-	GameTooltip:AddLine("Stops when the run ends.", 0.7, 0.7, 0.7, 1)
+	GameTooltip:AddLine(SurvivorUI_T("An estimate. The game does not share its clock with addons, so this one can drift from it."), 1, 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Starts at your first step, or your first blow if the step was missed."), 0.7, 0.7, 0.7, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Pauses after 1.5 seconds with no movement and no combat, which is how it sees Escape and the level-up cards."), 0.7, 0.7, 0.7, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Standing still out of combat is not counted either."), 0.7, 0.7, 0.7, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Stops when the run ends."), 0.7, 0.7, 0.7, 1)
 	GameTooltip:Show()
 end)
 runRows.time:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -446,36 +446,36 @@ local function RowTip(key, fill)
 end
 
 RowTip("kpm", function(game)
-	GameTooltip:SetText("Kills / min", 0.78, 0.80, 0.88)
+	GameTooltip:SetText(SurvivorUI_T("Kills / min"), 0.78, 0.80, 0.88)
 	local rate, window
 	if SurvivorUI_PaceRate then
 		rate, window = SurvivorUI_PaceRate()
 	end
 	local seconds = AZS_GetRunTime and AZS_GetRunTime() or Num(game.t)
-	Pair("Last "..(window or 20).." seconds", rate and string.format("%.0f", rate) or "-")
-	Pair("The whole run", (seconds or 0) >= 10 and string.format("%.0f", Num(game.kills) / seconds * 60) or "-")
-	GameTooltip:AddLine("The last seconds' rate is the kill pace's (/sui pace): off with it.", 0.7, 0.7, 0.7, 1)
+	Pair(SurvivorUI_TF("Last {1} seconds", window or 20), rate and string.format("%.0f", rate) or "-")
+	Pair(SurvivorUI_T("The whole run"), (seconds or 0) >= 10 and string.format("%.0f", Num(game.kills) / seconds * 60) or "-")
+	GameTooltip:AddLine(SurvivorUI_T("The last seconds' rate is the kill pace's (/sui pace): off with it."), 0.7, 0.7, 0.7, 1)
 end)
 
 RowTip("kills", function(game)
-	GameTooltip:SetText("Kills", 0.92, 0.92, 0.92)
-	Pair("Enemies alive", Num(game.en))
-	Pair("Elites alive", Num(game.el))
-	Pair("Guardians awake", Num(game.ga).." / "..Num(game.gu))
+	GameTooltip:SetText(SurvivorUI_T("Kills"), 0.92, 0.92, 0.92)
+	Pair(SurvivorUI_T("Enemies alive"), Num(game.en))
+	Pair(SurvivorUI_T("Elites alive"), Num(game.el))
+	Pair(SurvivorUI_T("Guardians awake"), Num(game.ga).." / "..Num(game.gu))
 end)
 
 -- The game's damage meter: every source, the most damage first.
 local function MeterTip()
-	GameTooltip:SetText("Damage dealt", 1, 0.76, 0.08)
+	GameTooltip:SetText(SurvivorUI_T("Damage dealt"), 1, 0.76, 0.08)
 	local lines, total, dps = nil, 0, 0
 	if AZS_GetMeter then
 		lines, total, dps = AZS_GetMeter()
 	end
 	if not lines or table.getn(lines) == 0 then
-		GameTooltip:AddLine("Nothing yet.", MUTED[1], MUTED[2], MUTED[3])
+		GameTooltip:AddLine(SurvivorUI_T("Nothing yet."), MUTED[1], MUTED[2], MUTED[3])
 		return
 	end
-	Pair("Total", Short(Num(total)).."  ("..Short(Num(dps)).." / sec)")
+	Pair(SurvivorUI_T("Total"), SurvivorUI_TF("{1}  ({2} / sec)", Short(Num(total)), Short(Num(dps))))
 	for index = 1, math.min(10, table.getn(lines)) do
 		local line = lines[index]
 		-- A talent's or amulet's own damage is blue, as in the game's meter.
@@ -490,10 +490,10 @@ RowTip("dealt", MeterTip)
 RowTip("dps", MeterTip)
 
 RowTip("taken", function(game)
-	GameTooltip:SetText("Damage taken", 0.90, 0.25, 0.25)
+	GameTooltip:SetText(SurvivorUI_T("Damage taken"), 0.90, 0.25, 0.25)
 	local list = AZS_TAKEN
 	if not list or table.getn(list) == 0 then
-		GameTooltip:AddLine("Nothing yet.", MUTED[1], MUTED[2], MUTED[3])
+		GameTooltip:AddLine(SurvivorUI_T("Nothing yet."), MUTED[1], MUTED[2], MUTED[3])
 		return
 	end
 	local total = Num(game.taken)
@@ -505,27 +505,27 @@ RowTip("taken", function(game)
 end)
 
 local function GoldTip(game)
-	GameTooltip:SetText("Gold", 1, 0.86, 0.35)
-	Pair("Gold now", Num(game.gold))
-	Pair("Earned this run", Num(game.ge))
-	Pair("Next cache costs", Num(game.chest))
-	Pair("Caches opened", Num(game.ck))
-	Pair("Rerolls left", Num(game.rr))
-	Pair("Extra lives", Num(game.lives))
+	GameTooltip:SetText(SurvivorUI_T("Gold"), 1, 0.86, 0.35)
+	Pair(SurvivorUI_T("Gold now"), Num(game.gold))
+	Pair(SurvivorUI_T("Earned this run"), Num(game.ge))
+	Pair(SurvivorUI_T("Next cache costs"), Num(game.chest))
+	Pair(SurvivorUI_T("Caches opened"), Num(game.ck))
+	Pair(SurvivorUI_T("Rerolls left"), Num(game.rr))
+	Pair(SurvivorUI_T("Extra lives"), Num(game.lives))
 end
 RowTip("gold", GoldTip)
 RowTip("caches", GoldTip)
 
 RowTip("jumps", function()
-	GameTooltip:SetText("Jumps", 1, 0.55, 0.2)
+	GameTooltip:SetText(SurvivorUI_T("Jumps"), 1, 0.55, 0.2)
 	local run, best, total = 0, 0, 0
 	if SurvivorUI_RunJumps then
 		run, best, total = SurvivorUI_RunJumps()
 	end
-	Pair("This run", run)
-	Pair("Your record, in one run", best)
-	Pair("All your jumps", total)
-	GameTooltip:AddLine("Just for fun. Beat your record and it says so, in fire.", 0.7, 0.7, 0.7, 1)
+	Pair(SurvivorUI_T("This run"), run)
+	Pair(SurvivorUI_T("Your record, in one run"), best)
+	Pair(SurvivorUI_T("All your jumps"), total)
+	GameTooltip:AddLine(SurvivorUI_T("Just for fun. Beat your record and it says so, in fire."), 0.7, 0.7, 0.7, 1)
 end)
 
 -- For the last runs (RunHistory.lua): each row's tooltip as it would show
@@ -695,7 +695,7 @@ local function SpellEntry(ability)
 end
 
 local function Seconds1(value)
-	return string.format("%.1f sec", value)
+	return SurvivorUI_TF("{1} sec", string.format("%.1f", value))
 end
 
 -- An ability's card as data: its title, color and lines ({ kind, label,
@@ -714,7 +714,7 @@ local function CardOf(row, kept)
 	end
 	-- The row's own color (the damage meter's), else the crit's.
 	local color = row.color or critColor[ability] or { 0.8, 0.8, 0.8 }
-	local card = { title = ability, color = { color[1], color[2], color[3] }, lines = {} }
+	local card = { title = SurvivorUI_Native(ability), color = { color[1], color[2], color[3] }, lines = {} }
 	local function Add(kind, label, value)
 		table.insert(card.lines, { kind, label, value })
 	end
@@ -726,19 +726,19 @@ local function CardOf(row, kept)
 		local left, full = Num(Field(spell, "cd", 4)), Num(Field(spell, "cdmax", 5))
 		-- Its rank as the spells' tooltips have it: "Rank 2", or II.
 		local rank = Num(Field(spell, "rank", 3))
-		Add("head", "Spell", SurvivorUI_RankText and SurvivorUI_RankText(rank) or "Rank "..rank)
-		Add("row", "Cooldown", full > 0 and Seconds1(full) or "none")
+		Add("head", SurvivorUI_T("Spell"), SurvivorUI_RankText and SurvivorUI_RankText(rank) or SurvivorUI_TF("Rank {1}", rank))
+		Add("row", SurvivorUI_T("Cooldown"), full > 0 and Seconds1(full) or SurvivorUI_T("none"))
 		if not kept then
-			Add("row", "Ready in", left > 0.05 and Seconds1(left) or "ready")
+			Add("row", SurvivorUI_T("Ready in"), left > 0.05 and Seconds1(left) or SurvivorUI_T("ready"))
 		end
 		-- A buff also says how long it lasts and how long it has left.
 		local spellId = tonumber(Field(spell, "spell", 2))
 		local length = spellId and buffLength[spellId]
 		if length then
-			Add("row", "Lasts", Seconds1(length))
+			Add("row", SurvivorUI_T("Lasts"), Seconds1(length))
 			if not kept then
 				local up = BuffLeft(spellId)
-				Add("row", "Active", up and up > 0.05 and Seconds1(up).." left" or "not now")
+				Add("row", SurvivorUI_T("Active"), up and up > 0.05 and SurvivorUI_TF("{1} left", Seconds1(up)) or SurvivorUI_T("not now"))
 			end
 		end
 	end
@@ -749,44 +749,44 @@ local function CardOf(row, kept)
 		if SurvivorUI_Racials then
 			race, traits = SurvivorUI_Racials()
 		end
-		Add("head", (race or "Race").."'s traits", "")
+		Add("head", SurvivorUI_TF("{1}'s traits", race or SurvivorUI_T("Race")), "")
 		if traits and table.getn(traits) > 0 then
 			for _, trait in pairs(traits) do
 				Add("text", "|cffffd100"..trait.name.."|r  "..trait.text)
 			end
 		else
-			Add("text", "Read from the chat as a run begins: start one to see them.")
+			Add("text", SurvivorUI_T("Read from the chat as a run begins: start one to see them."))
 		end
 	end
 	if meter then
-		Add("head", "Damage done", Short(Num(meter.dmg)))
-		Add("row", "Share of all", math.floor(Num(meter.share) * 100 + 0.5).."%")
-		Add("row", "Per second", Short(Num(meter.dps)))
+		Add("head", SurvivorUI_T("Damage done"), Short(Num(meter.dmg)))
+		Add("row", SurvivorUI_T("Share of all"), math.floor(Num(meter.share) * 100 + 0.5).."%")
+		Add("row", SurvivorUI_T("Per second"), Short(Num(meter.dps)))
 		if Num(meter.proc) == 1 then
-			Add("row", "A talent's or amulet's own", "proc")
+			Add("row", SurvivorUI_T("A talent's or amulet's own"), SurvivorUI_T("proc"))
 		end
 	end
 	-- A racial with no damage of its own: no empty crits and hits.
 	local quiet = row.racial and not stats and not hits and not meter
 	if not quiet then
-	Add("head", "Critical strikes", stats and stats.count or 0)
+	Add("head", SurvivorUI_T("Critical strikes"), stats and stats.count or 0)
 	if stats then
-		Add("row", "Biggest", Short(critBest[ability]))
+		Add("row", SurvivorUI_T("Biggest"), Short(critBest[ability]))
 		if critBestAt[ability] and not kept then
-			Add("row", "Beaten last", Clock(RunNow() - critBestAt[ability]).." ago")
+			Add("row", SurvivorUI_T("Beaten last"), SurvivorUI_TF("{1} ago", Clock(RunNow() - critBestAt[ability])))
 		end
-		Add("row", "Last", Short(stats.last))
-		Add("row", "Average", Short(stats.sum / stats.count))
-		Add("row", "Smallest", Short(stats.least))
+		Add("row", SurvivorUI_T("Last"), Short(stats.last))
+		Add("row", SurvivorUI_T("Average"), Short(stats.sum / stats.count))
+		Add("row", SurvivorUI_T("Smallest"), Short(stats.least))
 	else
-		Add("row", "None seen", "")
+		Add("row", SurvivorUI_T("None seen"), "")
 	end
-	Add("head", "Normal hits", hits and hits.count or 0)
+	Add("head", SurvivorUI_T("Normal hits"), hits and hits.count or 0)
 	if hits then
-		Add("row", "Average", Short(hits.sum / hits.count))
-		Add("row", "Last", Short(hits.last))
+		Add("row", SurvivorUI_T("Average"), Short(hits.sum / hits.count))
+		Add("row", SurvivorUI_T("Last"), Short(hits.last))
 	else
-		Add("row", "None seen", "")
+		Add("row", SurvivorUI_T("None seen"), "")
 	end
 	end
 	return card
@@ -891,14 +891,14 @@ local function Draw()
 		end
 		seconds = seconds or 0
 		if paused then
-			runRows.time.label:SetText(phase == "choosing" and "Survived (choosing)" or "Survived (paused)")
+			runRows.time.label:SetText(SurvivorUI_T(phase == "choosing" and "Survived (choosing)" or "Survived (paused)"))
 			runRows.time.value:SetTextColor(0.6, 0.6, 0.6)
 		else
-			runRows.time.label:SetText("Survived")
+			runRows.time.label:SetText(SurvivorUI_T("Survived"))
 			runRows.time.value:SetTextColor(1, 0.82, 0)
 		end
 		runRows.time.value:SetText(Clock(seconds))
-		runRows.elites.label:SetText(game and "Elites slain" or "Elites & guardians slain")
+		runRows.elites.label:SetText(SurvivorUI_T(game and "Elites slain" or "Elites & guardians slain"))
 
 		local dealt
 		if game then
@@ -911,8 +911,10 @@ local function Draw()
 				rate, window = SurvivorUI_PaceRate()
 			end
 			runRows.kpm.value:SetText(rate and string.format("%.0f", rate) or "-")
-			runRows.kpm.window:SetText("last "..(window or 20).."s")
-			runRows.kpm.average:SetText(seconds >= 10 and string.format("run %.0f", Num(game.kills) / seconds * 60) or "")
+			runRows.kpm.window:SetText(SurvivorUI_TF("last {1}s", window or 20))
+			-- Beside its label, which the game's language can make shorter.
+			runRows.kpm.window:SetPoint("LEFT", runRows.kpm, "LEFT", 5 + runRows.kpm.label:GetStringWidth() + 4, -1)
+			runRows.kpm.average:SetText(seconds >= 10 and SurvivorUI_TF("run {1}", string.format("%.0f", Num(game.kills) / seconds * 60)) or "")
 			runRows.elites.value:SetText(Num(game.ek))
 			runRows.guardians.value:SetText(Num(game.gk))
 			runRows.bosses.value:SetText(Num(game.bk))
@@ -995,7 +997,7 @@ critBox.title = critBox:CreateFontString(nil, "OVERLAY")
 critBox.title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 critBox.title:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -9)
 critBox.title:SetTextColor(1, 0.82, 0)
-critBox.title:SetText("Biggest Crits")
+critBox.title:SetText(SurvivorUI_T("Biggest Crits"))
 
 local critReset = CreateFrame("Button", nil, critBox)
 critReset:SetWidth(40)
@@ -1004,12 +1006,12 @@ critReset:SetPoint("TOPRIGHT", critBox, "TOPRIGHT", -8, -8)
 critReset.text = critReset:CreateFontString(nil, "OVERLAY")
 critReset.text:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 critReset.text:SetPoint("RIGHT", critReset, "RIGHT", 0, 0)
-critReset.text:SetText("Reset")
+critReset.text:SetText(SurvivorUI_T("Reset"))
 critReset.text:SetTextColor(0.6, 0.6, 0.6)
 critReset:SetScript("OnEnter", function()
 	this.text:SetTextColor(1, 1, 1)
 	Beside(this, critBox)
-	GameTooltip:SetText("Clears the crits.", 1, 1, 1)
+	GameTooltip:SetText(SurvivorUI_T("Clears the crits."), 1, 1, 1)
 	GameTooltip:Show()
 end)
 critReset:SetScript("OnLeave", function()
@@ -1092,7 +1094,7 @@ local function DrawCrits()
 		local ability = sorted[index]
 		if ability then
 			row.ability = ability
-			row.label:SetText(ability)
+			row.label:SetText(SurvivorUI_Native(ability))
 			row.value:SetText(Short(critBest[ability]))
 			-- The damage meter's color for the ability, so both lists match.
 			local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(ability) or critColor[ability]
@@ -1242,6 +1244,10 @@ local function RecordCrit(ability, amount)
 	if not ability or not amount then
 		return
 	end
+	-- Kept in English: the combat log names a pet in the game's language
+	-- ("小鬼", "小鬼's Fireball"), shown again in the language of the moment.
+	local _, _, owner, spell = string.find(ability, "^(.-)'s (.+)$")
+	ability = owner and (English(owner).."'s "..spell) or English(ability)
 	if not critColor[ability] then
 		critSeen = critSeen + 1
 		critColor[ability] = CRIT_PALETTE[math.mod(critSeen - 1, table.getn(CRIT_PALETTE)) + 1]

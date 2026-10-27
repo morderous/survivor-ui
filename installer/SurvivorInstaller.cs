@@ -17,7 +17,8 @@
 //     older folder of the game into it, what was there set aside, nothing
 //     deleted;
 //   - minimized or closed, waits in the tray, asking GitHub again every half
-//     hour (only the tray's Exit quits it): when
+//     hour (only the tray's Exit quits it; with "Close to the tray" off, a
+//     tick in the window and in the tray's menu, the close button quits): when
 //     a release newer than the one installed is out, a green arrow shows on
 //     its tray icon and on its taskbar button, and a note says so once; the
 //     tray's "Check for updates now" brings it forward and installs a newer
@@ -260,6 +261,8 @@ namespace SurvivorInstaller
         readonly Label statusLabel = new Label();
         readonly Label upToDate = new Label();
         readonly CheckBox startBox = new CheckBox();
+        readonly CheckBox closeBox = new CheckBox();
+        Button windowClose;         // the header's close button, its tip told by closeBox
         readonly LinkLabel openLink = new LinkLabel();
         readonly Button foldersButton = new Button();
         readonly ToolTip folderTip = new ToolTip();
@@ -295,6 +298,7 @@ namespace SurvivorInstaller
         bool installing;
         bool startHidden;           // started with Windows: the window stays away until asked for
         readonly ToolStripMenuItem startItem = new ToolStripMenuItem("Start with Windows");
+        readonly ToolStripMenuItem closeItem = new ToolStripMenuItem("Close to the tray");
         readonly ToolStripMenuItem playItem = new ToolStripMenuItem("Play");
         bool exiting;               // the tray's Exit: the window closes for good
         readonly ToolStripMenuItem selfItem = new ToolStripMenuItem("Update the launcher");
@@ -375,6 +379,20 @@ namespace SurvivorInstaller
         static string SelfOffPath
         {
             get { return Path.Combine(Path.GetDirectoryName(ConfigPath), "self-update-off.txt"); }
+        }
+
+        // The close button: into the tray (the default, as before 1.5.4), or
+        // quitting the launcher (launcher.ini closeToTray=0).
+        static bool CloseToTray()
+        {
+            return Setting("closeToTray", "1") != "0";
+        }
+
+        static string CloseTip()
+        {
+            return CloseToTray()
+                ? "Close: the launcher waits in the tray (right click its icon, Exit, to quit it)."
+                : "Close: the launcher quits.";
         }
 
         static bool SelfAuto()
@@ -1367,7 +1385,8 @@ namespace SurvivorInstaller
             }
             close.Location = new Point(733, 7);
             minimize.Location = new Point(710, 7);
-            tips.SetToolTip(close, "Close: the launcher waits in the tray (right click its icon, Exit, to quit it).");
+            windowClose = close;
+            tips.SetToolTip(close, CloseTip());
             tips.SetToolTip(minimize, "Minimize");
             close.Click += delegate { Close(); };
             minimize.Click += delegate { WindowState = FormWindowState.Minimized; };
@@ -2228,7 +2247,7 @@ namespace SurvivorInstaller
             // The game's own news: Aethus' notes for its newest version.
             Section(page, "Game news", 20, 124, 720);
             gameNews.Location = new Point(20, 144);
-            gameNews.Size = new Size(720, 226);
+            gameNews.Size = new Size(720, 202);
             gameNews.Multiline = true;
             gameNews.ReadOnly = true;
             gameNews.ScrollBars = ScrollBars.Vertical;
@@ -2256,6 +2275,28 @@ namespace SurvivorInstaller
                     : "It will no longer start with Windows.");
             };
             page.Controls.Add(startBox);
+
+            // What the close button does: into the tray, or quitting.
+            closeBox.Text = "Close to the tray";
+            closeBox.AutoSize = true;
+            closeBox.Location = new Point(20, 364);
+            closeBox.ForeColor = TickText;
+            closeBox.FlatStyle = FlatStyle.Flat;
+            closeBox.FlatAppearance.BorderColor = TickEdge;
+            closeBox.Cursor = Cursors.Hand;
+            closeBox.Checked = CloseToTray();
+            closeBox.CheckedChanged += delegate
+            {
+                SetSetting("closeToTray", closeBox.Checked ? "1" : "0");
+                closeItem.Checked = closeBox.Checked;
+                if (windowClose != null) tips.SetToolTip(windowClose, CloseTip());
+                Status(closeBox.Checked
+                    ? "Closing the window puts the launcher in the tray; the tray's Exit quits it."
+                    : "Closing the window quits the launcher.");
+            };
+            tips.SetToolTip(closeBox, "On: the close button puts the launcher in the tray, where it keeps looking for updates " +
+                "and backs up your save as the game closes. Off: the close button quits it.");
+            page.Controls.Add(closeBox);
             // Moved since it was set: the line follows the exe.
             if (startBox.Checked) SetStartWithWindows(true);
 
@@ -2277,6 +2318,7 @@ namespace SurvivorInstaller
             };
             page.Controls.Add(selfBox);
             TickLook(startBox);
+            TickLook(closeBox);
             TickLook(selfBox);
 
             // The game's Discord: news, help and the other players.
@@ -4584,6 +4626,10 @@ namespace SurvivorInstaller
             startItem.Checked = StartsWithWindows();
             startItem.Click += delegate { startBox.Checked = !startBox.Checked; };
             menu.Items.Add(startItem);
+            closeItem.CheckOnClick = false;
+            closeItem.Checked = CloseToTray();
+            closeItem.Click += delegate { closeBox.Checked = !closeBox.Checked; };
+            menu.Items.Add(closeItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, delegate { exiting = true; Close(); });
             tray.ContextMenuStrip = menu;
@@ -4619,11 +4665,12 @@ namespace SurvivorInstaller
             }
         }
 
-        // The window's close button: into the tray. Only the tray's Exit (or
-        // Windows shutting down) closes it for good.
+        // The window's close button: into the tray, unless Close to the tray
+        // is off. Only the tray's Exit (or Windows shutting down) closes it
+        // for good otherwise.
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (!exiting && e.CloseReason == CloseReason.UserClosing)
+            if (!exiting && e.CloseReason == CloseReason.UserClosing && CloseToTray())
             {
                 e.Cancel = true;
                 ToTray();

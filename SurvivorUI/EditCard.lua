@@ -83,40 +83,52 @@ local GAME_FONTS = {
 }
 
 -- The free faces that come with the addon, in its Fonts folder, under the SIL
--- Open Font License (each one's license beside it). None writes Chinese,
--- Korean or Japanese; Exo and Cinzel Decorative write no Cyrillic (Russian,
--- Ukrainian), Russo One no Romanian ț: each is offered only where it can
--- write the game's language.
+-- Open Font License (each one's license beside it). None but Noto Sans SC
+-- writes Chinese or Japanese, none Korean; Exo, Cinzel Decorative and the two
+-- Barlows write no Cyrillic (Russian, Ukrainian), Russo One no Romanian ț,
+-- Noto Sans SC none of the Czech, Polish, Romanian, Turkish or Ukrainian
+-- letters: each is offered only where it can write the game's language.
 local OWN_FONTS = "Interface\\AddOns\\SurvivorUI\\Fonts\\"
-local CYRILLIC = { ru = true, uk = true }
 local ADDON_FONTS = {
-	{ name = "Fira Sans", path = OWN_FONTS.."FiraSans-Medium.ttf" },
-	{ name = "Noto Sans", path = OWN_FONTS.."NotoSans-Medium.ttf" },
-	{ name = "Exo", path = OWN_FONTS.."Exo-SemiBold.ttf", cannot = CYRILLIC },
-	{ name = "Russo One", path = OWN_FONTS.."RussoOne-Regular.ttf", cannot = { ro = true } },
-	{ name = "Cinzel Decorative", path = OWN_FONTS.."CinzelDecorative-Bold.ttf", cannot = CYRILLIC },
+	{ name = "Fira Sans", path = OWN_FONTS.."FiraSans-Medium.ttf", cannot = { ko = true } },
+	{ name = "Noto Sans", path = OWN_FONTS.."NotoSans-Medium.ttf", cannot = { ko = true } },
+	{ name = "Exo", path = OWN_FONTS.."Exo-SemiBold.ttf", cannot = { ru = true, uk = true, ko = true } },
+	{ name = "Russo One", path = OWN_FONTS.."RussoOne-Regular.ttf", cannot = { ro = true, ko = true } },
+	{ name = "Cinzel Decorative", path = OWN_FONTS.."CinzelDecorative-Bold.ttf", cannot = { ru = true, uk = true, ko = true } },
+	{ name = "Barlow Semi Condensed", path = OWN_FONTS.."BarlowSemiCondensed-SemiBold.ttf", cannot = { ru = true, uk = true, ko = true } },
+	{ name = "Barlow Condensed", path = OWN_FONTS.."BarlowCondensed-SemiBold.ttf", cannot = { ru = true, uk = true, ko = true } },
+	{ name = "Noto Sans SC", path = OWN_FONTS.."NotoSansSC-Medium.ttf", writes = { zh = true, ja = true },
+		cannot = { cs = true, pl = true, ro = true, tr = true, uk = true, ko = true } },
 }
-local NO_FREE_FONT = { zh = true, ko = true, ja = true }
+
+-- Chinese and Japanese are written only by the faces that say so (writes):
+-- any other draws those letters from a face of the game's, and the engine
+-- mixes them up with its own (SurvivorUI.lua, the global font).
+local FAR_EAST = { zh = true, ja = true }
 
 local function Writes(face)
 	local language = SurvivorUI_Language and SurvivorUI_Language()
 	if not language then
 		return true
 	end
-	if NO_FREE_FONT[language] then
-		return false
+	if FAR_EAST[language] then
+		return face.writes ~= nil and face.writes[language] == true
 	end
 	return not (face.cannot and face.cannot[language])
 end
 
--- A face by its file: the addon's as Writes says, the game's always.
+-- A face by its file, as Writes says; one in no list (Expressway, dropped
+-- in) writes every language but those two.
 local function WritesPath(path)
-	for _, face in pairs(ADDON_FONTS) do
-		if string.lower(face.path) == string.lower(path) then
-			return Writes(face)
+	path = string.lower(path)
+	for _, list in pairs({ GAME_FONTS, ADDON_FONTS }) do
+		for _, face in pairs(list) do
+			if string.lower(face.path) == path then
+				return Writes(face)
+			end
 		end
 	end
-	return true
+	return Writes({})
 end
 
 -- Whether a face loads: set on a probe, it holds only when the file is there.
@@ -144,7 +156,7 @@ function SurvivorUI_FontList(forGlobal)
 	end
 	local list = { first }
 	for _, face in pairs(GAME_FONTS) do
-		if Loads(face.path) and not (forGlobal and string.lower(face.path) == default) then
+		if Writes(face) and Loads(face.path) and not (forGlobal and string.lower(face.path) == default) then
 			table.insert(list, face)
 		end
 	end
@@ -173,11 +185,12 @@ local function PieceFonts()
 	return fonts
 end
 
--- A piece's font; one that cannot write the game's language is left aside.
+-- A piece's font; a face that cannot write the game's language is left aside
+-- for the global font, its size step kept.
 local function PieceFont(name)
 	local chosen = PieceFonts()[FontName(name)]
 	if chosen and chosen.path and not WritesPath(chosen.path) then
-		return nil
+		return { step = chosen.step }
 	end
 	return chosen
 end
@@ -455,7 +468,7 @@ local prev = Button("<", 22, function() Step(-1) end)
 prev:SetPoint("TOPLEFT", card, "TOPLEFT", 8, -6)
 local after = Button(">", 22, function() Step(1) end)
 after:SetPoint("TOPRIGHT", card, "TOPRIGHT", -30, -6)
-local close = Button("x", 18, function() Select(nil) end)
+local close = Button(SurvivorUI_T("x"), 18, function() Select(nil) end)
 close:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -6)
 
 -- The place: X and Y, each with - and + by one.
@@ -470,7 +483,7 @@ end
 
 local placeLabel = Text(card, 9, MUTED)
 placeLabel:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -34)
-placeLabel:SetText("Place, from the screen's middle")
+placeLabel:SetText(SurvivorUI_T("Place, from the screen's middle"))
 
 local rows = {}
 for index, axis in pairs({ "X", "Y" }) do
@@ -516,7 +529,7 @@ end
 -- The size: the piece's own, on top of the whole interface's.
 local sizeLabel = Text(card, 10, TEXT)
 sizeLabel:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -103)
-sizeLabel:SetText("Size")
+sizeLabel:SetText(SurvivorUI_T("Size"))
 local sizeValue = Text(card, 10, ACCENT)
 sizeValue:SetPoint("TOPRIGHT", card, "TOPRIGHT", -12, -103)
 
@@ -560,16 +573,16 @@ slider:SetScript("OnMouseWheel", function()
 end)
 local noSize = Text(card, 9, MUTED)
 noSize:SetPoint("TOPLEFT", card, "TOPLEFT", 50, -104)
-noSize:SetText("with the whole interface")
+noSize:SetText(SurvivorUI_T("with the whole interface"))
 
 -- The font: a dropdown of the faces, each written in itself; its size a step
 -- at a time, on the row under it.
 local fontLabel = Text(card, 10, TEXT)
 fontLabel:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -127)
-fontLabel:SetText("Font")
+fontLabel:SetText(SurvivorUI_T("Font"))
 local stepLabel = Text(card, 10, TEXT)
 stepLabel:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -151)
-stepLabel:SetText("Text size")
+stepLabel:SetText(SurvivorUI_T("Text size"))
 local stepText = Text(card, 10, ACCENT)
 stepText:SetPoint("TOPRIGHT", card, "TOPRIGHT", -36, -151)
 stepText:SetWidth(30)
@@ -657,7 +670,7 @@ picker.text:ClearAllPoints()
 picker.text:SetPoint("LEFT", picker, "LEFT", 8, 0)
 picker.arrow = Text(picker, 9, ACCENT)
 picker.arrow:SetPoint("RIGHT", picker, "RIGHT", -6, 0)
-picker.arrow:SetText("v")
+picker.arrow:SetText(SurvivorUI_T("v"))
 
 local stepDown = Button("-", 18, function()
 	local chosen = selected and PieceFont(selected.name)
@@ -671,7 +684,7 @@ end)
 stepUp:SetPoint("TOPRIGHT", card, "TOPRIGHT", -12, -148)
 local gameFont = Text(card, 9, MUTED)
 gameFont:SetPoint("TOPLEFT", card, "TOPLEFT", 50, -128)
-gameFont:SetText("Default")
+gameFont:SetText(SurvivorUI_T("Default"))
 
 -- Shown or hidden, for the pieces that can be put away.
 local function Shown(piece)
@@ -682,7 +695,7 @@ local function Shown(piece)
 	return db[piece.key] ~= false
 end
 
-local visible = Button("Shown", WIDTH - 24, function()
+local visible = Button(SurvivorUI_T("Shown"), WIDTH - 24, function()
 	local piece = selected and PIECES[selected.name]
 	local toggle = piece and piece.toggle and getglobal(piece.toggle)
 	if toggle then
@@ -693,7 +706,7 @@ end)
 visible:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -174)
 
 -- Back to its first place, and undo.
-local reset = Button("Reset (Default)", 88, function()
+local reset = Button(SurvivorUI_T("Reset (Default)"), 88, function()
 	if not (selected and selected.default) then
 		return
 	end
@@ -716,15 +729,15 @@ local function Undo()
 	MoveTo(last.handle, last.x, last.y)
 	Select(last.handle)
 end
-local undoButton = Button("Undo", 56, Undo)
+local undoButton = Button(SurvivorUI_T("Undo"), 56, Undo)
 undoButton:SetPoint("TOPLEFT", reset, "TOPRIGHT", 6, 0)
-local done = Button("Done", 56, function() Select(nil) end)
+local done = Button(SurvivorUI_T("Done"), 56, function() Select(nil) end)
 done:SetPoint("TOPRIGHT", card, "TOPRIGHT", -12, -198)
 
 local hint = Text(card, 8, MUTED)
 hint:SetPoint("BOTTOM", card, "BOTTOM", 0, 8)
 hint:SetWidth(WIDTH - 16)
-hint:SetText("Arrows move 1, Shift 10  ·  Ctrl+Z undoes  ·  Esc closes")
+hint:SetText(SurvivorUI_T("Arrows move 1, Shift 10  ·  Ctrl+Z undoes  ·  Esc closes"))
 
 ------------------------------------------------------------------------------
 -- Filling and placing the card.
@@ -734,7 +747,7 @@ function Fill()
 		return
 	end
 	local piece = PIECES[selected.name] or {}
-	title:SetText(selected.name or "?")
+	title:SetText(SurvivorUI_PieceName(selected.name))
 	local x, y = Center(selected)
 	if not rows.X.focused then
 		rows.X:SetText(x and tostring(math.floor(x + 0.5)) or "")
@@ -788,10 +801,10 @@ function Fill()
 		visible.text:SetText(Shown(piece) and "Shown  -  click to hide" or "Hidden  -  click to show")
 		visible:Enable()
 	else
-		visible.text:SetText("Always shown")
+		visible.text:SetText(SurvivorUI_T("Always shown"))
 		visible:Disable()
 	end
-	undoButton.text:SetText(table.getn(undo) > 0 and ("Undo ("..table.getn(undo)..")") or "Undo")
+	undoButton.text:SetText(table.getn(undo) > 0 and SurvivorUI_TF("Undo ({1})", table.getn(undo)) or SurvivorUI_T("Undo"))
 end
 
 -- Beside the piece: right of it where there is room, else left of it.
@@ -804,6 +817,23 @@ local function Place()
 		card:SetPoint("TOPRIGHT", selected, "TOPLEFT", -10, 0)
 	end
 end
+
+-- While the size's thumb is dragged the card stays where it is: beside the
+-- piece it moved as the piece grew, the thumb with it, out from under the
+-- cursor, and one push went from 50% to 200% (reported on Discord). Back
+-- beside the piece when let go.
+slider:SetScript("OnMouseDown", function()
+	local left, top = card:GetLeft(), card:GetTop()
+	if left and top then
+		card:ClearAllPoints()
+		card:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+	end
+end)
+slider:SetScript("OnMouseUp", function()
+	if selected then
+		Place()
+	end
+end)
 
 -- The handle picked shows white; the others go back to the addon's color.
 local function Mark(handle, on)

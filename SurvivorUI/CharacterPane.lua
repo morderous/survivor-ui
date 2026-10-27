@@ -231,8 +231,11 @@ end
 -- Discord where it was), though the game's own pane calls it Armor.
 local SHOWN_AS = { Armor = "Dmg Reduction" }
 
-function SurvivorUI_StatName(label)
-	return SHOWN_AS[label] or label
+function SurvivorUI_StatName(label, english)
+	if english then
+		return SHOWN_AS[label] or label
+	end
+	return SurvivorUI_T(SHOWN_AS[label] or label)
 end
 
 -- label, value(s), what it means, and for the conditional rows when to show.
@@ -338,21 +341,21 @@ function SurvivorUI_StatTogether(label, stats)
 	local hit = 100 * damage
 	-- Short and plain, with your own numbers worked out step by step.
 	GameTooltip:AddLine(" ")
-	GameTooltip:AddLine("How Damage and Crit Dmg work together", 0.60, 0.80, 1.00)
-	GameTooltip:AddLine("Damage makes every hit bigger.", 0.85, 0.85, 0.85, 1)
-	GameTooltip:AddLine("Crit Dmg makes critical hits bigger.", 0.85, 0.85, 0.85, 1)
-	GameTooltip:AddLine("A critical hit gets both, one after the other.", 0.85, 0.85, 0.85, 1)
+	GameTooltip:AddLine(SurvivorUI_T("How Damage and Crit Dmg work together"), 0.60, 0.80, 1.00)
+	GameTooltip:AddLine(SurvivorUI_T("Damage makes every hit bigger."), 0.85, 0.85, 0.85, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Crit Dmg makes critical hits bigger."), 0.85, 0.85, 0.85, 1)
+	GameTooltip:AddLine(SurvivorUI_T("A critical hit gets both, one after the other."), 0.85, 0.85, 0.85, 1)
 	GameTooltip:AddLine(" ")
-	GameTooltip:AddLine("If a spell hits for 100:", 1, 1, 1)
-	GameTooltip:AddDoubleLine("Normal hit", string.format("100 x %.2f = %.0f", damage, hit),
+	GameTooltip:AddLine(SurvivorUI_T("If a spell hits for 100:"), 1, 1, 1)
+	GameTooltip:AddDoubleLine(SurvivorUI_T("Normal hit"), string.format("100 x %.2f = %.0f", damage, hit),
 		0.85, 0.85, 0.85, 0.35, 0.90, 0.55)
-	GameTooltip:AddDoubleLine("Critical hit", string.format("%.0f x %.2f = %.0f", hit, critical, hit * critical),
+	GameTooltip:AddDoubleLine(SurvivorUI_T("Critical hit"), string.format("%.0f x %.2f = %.0f", hit, critical, hit * critical),
 		0.85, 0.85, 0.85, 0.35, 0.90, 0.55)
-	GameTooltip:AddDoubleLine(string.format("Average, with %.0f%% Crit", chance * 100),
+	GameTooltip:AddDoubleLine(SurvivorUI_TF("Average, with {1} Crit", string.format("%.0f%%", chance * 100)),
 		string.format("%.0f", hit * (1 + chance * (critical - 1))), 0.85, 0.85, 0.85, 0.35, 0.90, 0.55)
 	GameTooltip:AddLine(" ")
-	GameTooltip:AddLine("Bonuses of the same kind add up: +25% and +25% Damage make +50%. "
-		.."So raising both Damage and Crit Dmg pays more than raising just one.", 0.62, 0.62, 0.65, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Bonuses of the same kind add up: +25% and +25% Damage make +50%. So raising both Damage and Crit Dmg pays more than raising just one."),
+		0.62, 0.62, 0.65, 1)
 end
 
 -- A missing number reads as 0, so a row the game has not learned yet shows a
@@ -570,7 +573,7 @@ local function MakeView(alone)
 		title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 		title:SetPoint("TOPLEFT", stats, "TOPLEFT", 8, -9)
 		title:SetTextColor(1, 0.82, 0)
-		title:SetText("Stats")
+		title:SetText(SurvivorUI_T("Stats"))
 		-- The top strip, where the panel is taken to be moved (the rows under
 		-- it stay free for arranging).
 		grip = CreateFrame("Frame", nil, stats)
@@ -631,18 +634,18 @@ local function MakeView(alone)
 		end
 		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
 		GameTooltip:SetText(this.title, 1, 1, 1)
-		GameTooltip:AddLine(this.text, 1, 0.82, 0, 1)
+		GameTooltip:AddLine(SurvivorUI_T(this.text), 1, 0.82, 0, 1)
 		-- Its parts: what the gear worn gives, and the rest.
 		local gear, rest = SurvivorUI_StatGear(this.key)
 		if gear then
-			GameTooltip:AddDoubleLine("Worn gear", gear, 0.12, 1, 0, 0.12, 1, 0)
+			GameTooltip:AddDoubleLine(SurvivorUI_T("Worn gear"), gear, 0.12, 1, 0, 0.12, 1, 0)
 			if rest then
-				GameTooltip:AddDoubleLine("Everything else", rest, 0.62, 0.62, 0.65, 0.85, 0.85, 0.85)
+				GameTooltip:AddDoubleLine(SurvivorUI_T("Everything else"), rest, 0.62, 0.62, 0.65, 0.85, 0.85, 0.85)
 			end
 		end
 		SurvivorUI_StatTogether(this.key)
 		if Arranging() then
-			GameTooltip:AddLine("Drag to move it within its group. Which numbers show: /sui opt, Stats panel.", 0.6, 0.6, 0.65, 1)
+			GameTooltip:AddLine(SurvivorUI_T("Drag to move it within its group. Which numbers show: /sui opt, Stats panel."), 0.6, 0.6, 0.65, 1)
 		end
 		GameTooltip:Show()
 	end
@@ -795,8 +798,8 @@ local function MakeView(alone)
 			header:SetScript("OnEnter", function()
 				if Arranging() and not dragging then
 					GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-					GameTooltip:SetText(this.section, 1, 1, 1)
-					GameTooltip:AddLine("Drag to move the whole group.", 0.6, 0.6, 0.65, 1)
+					GameTooltip:SetText(SurvivorUI_T(this.section), 1, 1, 1)
+					GameTooltip:AddLine(SurvivorUI_T("Drag to move the whole group."), 0.6, 0.6, 0.65, 1)
 					GameTooltip:Show()
 				end
 			end)
@@ -851,10 +854,10 @@ local function MakeView(alone)
 		if headline then
 			if s then
 				headline:SetText(Pct(s.dmg - 1))
-				headlineCaption:SetText("|cffa0a0a0Damage  \194\183  Health:|r |cff4da6ff"..string.format("%.0f", s.hp).."|r")
+				headlineCaption:SetText("|cffa0a0a0"..SurvivorUI_T("Damage").."  \194\183  "..SurvivorUI_T("Health")..":|r |cff4da6ff"..string.format("%.0f", s.hp).."|r")
 			else
 				headline:SetText("-")
-				headlineCaption:SetText("|cffa0a0a0Start a run to see its numbers|r")
+				headlineCaption:SetText(SurvivorUI_T("|cffa0a0a0Start a run to see its numbers|r"))
 			end
 		end
 
@@ -908,6 +911,10 @@ local function MakeView(alone)
 		if not alone then
 			fontSize = math.max(6, fontSize + (SurvivorUIDB and tonumber(SurvivorUIDB.paneStatsStep) or 0))
 		end
+		-- Chinese characters stand as tall as the type: no taller than the row.
+		if SurvivorUI_Translated() then
+			fontSize = math.min(fontSize, rowHeight - 2)
+		end
 
 		local y = 0
 		local headerCount, rowCount = 0, 0
@@ -924,7 +931,7 @@ local function MakeView(alone)
 				header:SetHeight(headerHeight)
 				header:ClearAllPoints()
 				header:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
-				header.text:SetText(section.title)
+				header.text:SetText(SurvivorUI_T(section.title))
 				header.text:SetTextColor(color[1], color[2], color[3])
 				header.left:SetVertexColor(color[1], color[2], color[3], 0.6)
 				header.right:SetVertexColor(color[1], color[2], color[3], 0.6)
@@ -1103,8 +1110,8 @@ local function MakeView(alone)
 		corner:SetScript("OnEnter", function()
 			this:SetAlpha(1)
 			GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-			GameTooltip:SetText("Drag to resize", 1, 1, 1)
-			GameTooltip:AddLine("Right click: the first size again.", 0.7, 0.7, 0.7)
+			GameTooltip:SetText(SurvivorUI_T("Drag to resize"), 1, 1, 1)
+			GameTooltip:AddLine(SurvivorUI_T("Right click: the first size again."), 0.7, 0.7, 0.7)
 			GameTooltip:Show()
 		end)
 		corner:SetScript("OnLeave", function()

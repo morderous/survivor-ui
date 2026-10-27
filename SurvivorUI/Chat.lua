@@ -251,11 +251,12 @@ end
 
 local function TabName(window)
 	local name = window.GetID and GetChatWindowInfo and GetChatWindowInfo(window:GetID())
+	-- The stock names (General, Combat Log) in the game's language.
 	if name and name ~= "" then
-		return name
+		return SurvivorUI_T(name)
 	end
 	local stock = getglobal(window:GetName().."Tab")
-	return stock and stock:GetText() or window:GetName()
+	return stock and SurvivorUI_T(stock:GetText()) or window:GetName()
 end
 
 -- A tab for each docked window but the Combat Log while the chat filter keeps
@@ -447,7 +448,7 @@ local function BuildCopyBox()
 	copyBox.hint:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 	copyBox.hint:SetTextColor(DIM[1], DIM[2], DIM[3])
 	copyBox.hint:SetPoint("BOTTOMLEFT", copyBox, "BOTTOMLEFT", 12, 10)
-	copyBox.hint:SetText("Selected: Ctrl+C copies it. Drag over a part to copy just that.")
+	copyBox.hint:SetText(SurvivorUI_T("Selected: Ctrl+C copies it. Drag over a part to copy just that."))
 
 	local shut = CreateFrame("Button", nil, copyBox)
 	shut:SetWidth(18)
@@ -457,7 +458,7 @@ local function BuildCopyBox()
 	shut.text:SetFont(SurvivorUI_FONT, 12 + FONT_BUMP, "OUTLINE")
 	shut.text:SetTextColor(DIM[1], DIM[2], DIM[3])
 	shut.text:SetPoint("CENTER", shut, "CENTER", 0, 0)
-	shut.text:SetText("x")
+	shut.text:SetText(SurvivorUI_T("x"))
 	shut:SetScript("OnEnter", function() this.text:SetTextColor(1, 1, 1) end)
 	shut:SetScript("OnLeave", function() this.text:SetTextColor(DIM[1], DIM[2], DIM[3]) end)
 	shut:SetScript("OnClick", function() copyBox:Hide() end)
@@ -524,7 +525,7 @@ local function ShowCopy()
 	end
 	local window = Shown()
 	local told = Told(window)
-	copyBox.title:SetText("Copy chat: "..TabName(window))
+	copyBox.title:SetText(SurvivorUI_TF("Copy chat: {1}", TabName(window)))
 	copyBox.edit.told = told
 	copyBox.edit:SetText(told)
 	copyBox:Show()
@@ -565,8 +566,8 @@ local function CopyButton()
 	button:SetScript("OnEnter", function()
 		Light(true)
 		GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
-		GameTooltip:SetText("Copy chat", 1, 1, 1)
-		GameTooltip:AddLine("The shown tab's last lines in a box, to copy.", 0.8, 0.8, 0.8, 1)
+		GameTooltip:SetText(SurvivorUI_T("Copy chat"), 1, 1, 1)
+		GameTooltip:AddLine(SurvivorUI_T("The shown tab's last lines in a box, to copy."), 0.8, 0.8, 0.8, 1)
 		GameTooltip:Show()
 	end)
 	button:SetScript("OnLeave", function()
@@ -647,8 +648,8 @@ local function Grip()
 	grip:SetScript("OnEnter", function()
 		Light(true)
 		GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
-		GameTooltip:SetText("Size the chat", 1, 1, 1)
-		GameTooltip:AddLine("Drag this corner; the size is kept.", 0.8, 0.8, 0.8, 1)
+		GameTooltip:SetText(SurvivorUI_T("Size the chat"), 1, 1, 1)
+		GameTooltip:AddLine(SurvivorUI_T("Drag this corner; the size is kept."), 0.8, 0.8, 0.8, 1)
 		GameTooltip:Show()
 	end)
 	grip:SetScript("OnLeave", function()

@@ -47,7 +47,7 @@ end
 local function TitleOf(key)
 	for _, page in pairs(Pages()) do
 		if page.key == key then
-			return page.title
+			return SurvivorUI_T(page.title)
 		end
 	end
 	return key
@@ -147,7 +147,7 @@ local function OpenMenu(window)
 			menu.rows[index] = row
 		end
 		row.key, row.shared = pages[index].key, pages[index].shared
-		row.text:SetText(pages[index].title)
+		row.text:SetText(SurvivorUI_T(pages[index].title))
 	end
 	menu:SetHeight(6 + table.getn(pages) * 18)
 	PaintMenu(window)
@@ -263,7 +263,7 @@ local function Window(index)
 	close:SetScript("OnEnter", function()
 		this.text:SetTextColor(1, 0.45, 0.4)
 		GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
-		GameTooltip:SetText("Close this window", 1, 1, 1)
+		GameTooltip:SetText(SurvivorUI_T("Close this window"), 1, 1, 1)
 		GameTooltip:Show()
 	end)
 	close:SetScript("OnLeave", function()
@@ -323,7 +323,7 @@ local function SetCells(window, cells)
 		cell.label:ClearAllPoints()
 		if data then
 			cell.label:SetPoint("LEFT", strip, "LEFT", (index - 1) * each + 6, 0)
-			cell.label:SetText(data[1])
+			cell.label:SetText(SurvivorUI_T(data[1]))
 			cell.value:SetText(data[2])
 			cell.value:SetTextColor(data[3][1], data[3][2], data[3][3])
 			cell.label:Show()
@@ -367,7 +367,7 @@ Draw = function(window)
 		SetCells(window, { { unit, Short(rate or 0), GOLD }, { "TOTAL", Short(total or 0), WHITE } })
 	end
 	if table.getn(lines) == 0 then
-		window.empty:SetText(EMPTY[key] or "")
+		window.empty:SetText(SurvivorUI_T(EMPTY[key] or ""))
 		window.empty:Show()
 	else
 		window.empty:Hide()

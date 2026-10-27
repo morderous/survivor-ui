@@ -178,7 +178,7 @@ local header = frame:CreateFontString(nil, "OVERLAY")
 header:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 header:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
 header:SetTextColor(1, 0.82, 0)
-header:SetText("Guardians")
+header:SetText(SurvivorUI_T("Guardians"))
 
 local goal = frame:CreateFontString(nil, "OVERLAY")
 goal:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
@@ -428,13 +428,13 @@ local function DrawGoal(time)
 		before = math.max(before, slain)
 	end
 	if before >= GOAL then
-		goal:SetText("4/4 by 8:00 · done")
+		goal:SetText(SurvivorUI_T("4/4 by 8:00 · done"))
 		goal:SetTextColor(GREEN[1], GREEN[2], GREEN[3])
 	elseif time < GOAL_TIME then
-		goal:SetText(before.."/4 by 8:00 · "..Clock(GOAL_TIME - time))
+		goal:SetText(SurvivorUI_TF("{1}/4 by 8:00 · {2}", before, Clock(GOAL_TIME - time)))
 		goal:SetTextColor(0.9, 0.9, 0.92)
 	else
-		goal:SetText(before.."/4 by 8:00")
+		goal:SetText(SurvivorUI_TF("{1}/4 by 8:00", before))
 		goal:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
 	end
 	local r, g, b = goal:GetTextColor()
@@ -555,23 +555,23 @@ local function Draw()
 			if entry.left and entry.left > 0 then
 				row.state:SetText(Clock(entry.left))
 			else
-				row.state:SetText("soon")
+				row.state:SetText(SurvivorUI_T("soon"))
 			end
 			row.state:SetTextColor(RESPAWN[1], RESPAWN[2], RESPAWN[3])
 			row.color = MUTED
 		elseif entry.state == "awake" then
 			local share = healths[entry.id]
 			row.name:SetTextColor(AWAKE[1], AWAKE[2], AWAKE[3])
-			row.state:SetText(share and string.format("%d%%", share * 100 + 0.5) or "AWAKE")
+			row.state:SetText(share and string.format("%d%%", share * 100 + 0.5) or SurvivorUI_T("AWAKE"))
 			row.state:SetTextColor(AWAKE[1], AWAKE[2], AWAKE[3])
 			row.color = AWAKE
 		else
 			row.name:SetTextColor(NAME[1], NAME[2], NAME[3])
-			row.state:SetText("SPAWNED")
+			row.state:SetText(SurvivorUI_T("SPAWNED"))
 			row.state:SetTextColor(SPAWNED[1], SPAWNED[2], SPAWNED[3])
 			row.color = SPAWNED
 		end
-		row.yards:SetText(entry.yards and (math.floor(entry.yards + 0.5).." yd") or "")
+		row.yards:SetText(entry.yards and SurvivorUI_TF("{1} yd", math.floor(entry.yards + 0.5)) or "")
 		if index == 1 then
 			local color = entry.state == "empty" and RESPAWN or entry.state == "awake" and AWAKE or SPAWNED
 			-- The fade and the color set together: a color set after would
@@ -803,7 +803,7 @@ function SurvivorUI_GuardianBar(head, y)
 			counter.title:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 			counter.title:SetPoint("LEFT", counter, "LEFT", 0, 0)
 			counter.title:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
-			counter.title:SetText("Guardians")
+			counter.title:SetText(SurvivorUI_T("Guardians"))
 			counter.value = counter:CreateFontString(nil, "OVERLAY")
 			counter.value:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 			counter.value:SetPoint("RIGHT", counter, "RIGHT", 0, 0)
@@ -845,7 +845,7 @@ function SurvivorUI_GuardianBar(head, y)
 			end
 		end
 		local color = awake > 0 and AWAKE or (alive > 0 and SPAWNED or MUTED)
-		counter.value:SetText(alive.." / "..total.." alive")
+		counter.value:SetText(SurvivorUI_TF("{1} / {2} alive", alive, total))
 		counter.value:SetTextColor(color[1], color[2], color[3])
 		counter:SetWidth(head:GetWidth())
 		counter:ClearAllPoints()
@@ -863,7 +863,7 @@ function SurvivorUI_GuardianBar(head, y)
 		bar.title:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 		bar.title:SetPoint("BOTTOMLEFT", bar, "TOPLEFT", 0, 3)
 		bar.title:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
-		bar.title:SetText("Guardians")
+		bar.title:SetText(SurvivorUI_T("Guardians"))
 		bar.goal = bar:CreateFontString(nil, "OVERLAY")
 		bar.goal:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 		bar.goal:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", 0, 3)
@@ -934,7 +934,7 @@ function SurvivorUI_GuardianBar(head, y)
 			segment.shadow:Hide()
 		end
 		if fighting then
-			segment.time:SetText(entry.share and string.format("%d%%", entry.share * 100 + 0.5) or "FIGHT")
+			segment.time:SetText(entry.share and string.format("%d%%", entry.share * 100 + 0.5) or SurvivorUI_T("FIGHT"))
 			segment.time:Show()
 		elseif not entry.alive and entry.left and entry.left > 0 then
 			segment.time:SetText(Clock(entry.left))

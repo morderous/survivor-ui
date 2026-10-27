@@ -131,7 +131,7 @@ list.title = list:CreateFontString(nil, "OVERLAY")
 list.title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 list.title:SetPoint("TOPLEFT", list, "TOPLEFT", 7, -6)
 list.title:SetTextColor(1, 0.82, 0)
-list.title:SetText("Build")
+list.title:SetText(SurvivorUI_T("Build"))
 
 list.count = list:CreateFontString(nil, "OVERLAY")
 list.count:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
@@ -198,9 +198,9 @@ local function HeadLabel(text)
 	label:SetText(text)
 	return label
 end
-head.range = HeadLabel("Info")
-head.cd = HeadLabel("CD")
-head.rank = HeadLabel("Rank")
+head.range = HeadLabel(SurvivorUI_T("Info"))
+head.cd = HeadLabel(SurvivorUI_T("CD"))
+head.rank = HeadLabel(SurvivorUI_T("Rank"))
 
 -- The dividers, over the rows: from the header's top to the racial's bottom,
 -- each at its column's left.
@@ -706,7 +706,9 @@ local function Fill(row, entry, actionSlot, isRacial)
 	row.actionSlot = actionSlot
 	row.icon:SetTexture(GetActionTexture and GetActionTexture(actionSlot) or nil)
 	row.icon:SetAlpha(1)
-	row.name:SetText(isRacial and name.."  |cff8a8a8a(racial)|r" or name)
+	-- Its name as the game writes it in its language (Locale.lua).
+	local shown = SurvivorUI_Native(name)
+	row.name:SetText(isRacial and shown.."  |cff8a8a8a"..SurvivorUI_T("(racial)").."|r" or shown)
 	row.rank:SetText(tonumber(Field(entry, "rank", 3)) or "")
 	local showRange, showCooldown = Shows()
 	local lasting = LASTING[key] and not isRacial
@@ -761,7 +763,7 @@ local function Empty(row)
 	row.icon:SetTexture(FLAT)
 	row.icon:SetVertexColor(0.15, 0.15, 0.18)
 	row.icon:SetAlpha(0.8)
-	row.name:SetText("empty slot")
+	row.name:SetText(SurvivorUI_T("empty slot"))
 	row.rank:SetText("")
 	PlaceReach(row, false)
 	row.range:SetText("")
@@ -956,14 +958,16 @@ end
 
 -- How a bonus reads in the list: the number first, then its word; a leap the
 -- other way round, its two numbers together; a stun or a root its word first
--- and its seconds (STUN 1.5s), or the chance of it (STUN 20%).
+-- and its seconds (STUN 1.5s), or the chance of it (STUN 20%). The word in
+-- the game's language where the addon speaks it.
 local CONTROL = { STUN = true, ROOT = true }
-local function Tagged(tag, value)
+local function Tagged(english, value)
+	local tag = SurvivorUI_T(english)
 	if not value then
 		return tag
-	elseif tag == "LEAP" then
+	elseif english == "LEAP" then
 		return tag.." "..value
-	elseif CONTROL[tag] then
+	elseif CONTROL[english] then
 		if string.find(value, "%", 1, true) then
 			return tag.." "..value
 		end
@@ -985,6 +989,36 @@ end
 -- The same short names for the jewelry collection (Jewelry.lua).
 function SurvivorUI_StatOf(text)
 	return StatOf(string.lower(text or ""))
+end
+
+-- A jewelry line kept in English (a run's, in Run History) in the game's
+-- language where the addon speaks it: its slot ("Ring  II"), or its short
+-- words ("+30% LUCK · +25% GOLD"), the longer ones first (CRIT DMG before CRIT).
+local tagOrder
+function SurvivorUI_GearWords(text)
+	if not (text and SurvivorUI_Translated()) then
+		return text
+	end
+	local _, _, slot, rest = string.find(text, "^(%a+)(  .*)$")
+	if slot then
+		return SurvivorUI_T(slot)..rest
+	end
+	if not tagOrder then
+		local seen = {}
+		tagOrder = {}
+		for index = 1, table.getn(STAT_WORDS) do
+			local tag = STAT_WORDS[index][2]
+			if not seen[tag] then
+				seen[tag] = true
+				table.insert(tagOrder, tag)
+			end
+		end
+		table.sort(tagOrder, function(a, b) return string.len(a) > string.len(b) end)
+	end
+	for index = 1, table.getn(tagOrder) do
+		text = string.gsub(text, tagOrder[index], SurvivorUI_T(tagOrder[index]))
+	end
+	return SurvivorUI_T(text)
 end
 
 local scan = CreateFrame("GameTooltip", "SurvivorUIScanTip", nil, "GameTooltipTemplate")
@@ -1046,7 +1080,7 @@ list.gearTitle = list:CreateFontString(nil, "OVERLAY")
 list.gearTitle:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 list.gearTitle:SetPoint("TOPLEFT", list, "TOPLEFT", 7, -GEAR_TOP)
 list.gearTitle:SetTextColor(1, 0.82, 0)
-list.gearTitle:SetText("Gear")
+list.gearTitle:SetText(SurvivorUI_T("Gear"))
 
 -- The jewelry worn, the gear a run drops: one row a slot, filled with the
 -- piece's quality color, the slot's name and what the piece gives in short;
@@ -1115,6 +1149,10 @@ end
 local SMALL_WORDS = { of = true, the = true, ["and"] = true }
 
 local function Short(spell)
+	-- In a language the addon speaks: the game's name, its first characters.
+	if SurvivorUI_Translated() then
+		return SurvivorUI_Cut(SurvivorUI_Native(spell), 3)
+	end
 	local initials, words = "", 0
 	for word in string.gfind(spell, "%S+") do
 		words = words + 1
@@ -1149,7 +1187,7 @@ local function FitTags(line, text)
 end
 
 local function DrawGear()
-	list.gearTitle:SetText("Jewelry")
+	list.gearTitle:SetText(SurvivorUI_T("Jewelry"))
 	for index = 1, table.getn(GEAR_SLOTS) do
 		local slot, label = GEAR_SLOTS[index][1], GEAR_SLOTS[index][2]
 		local line = gearLines[index]
@@ -1165,15 +1203,15 @@ local function DrawGear()
 			-- The slot, then the piece's rank as a Roman numeral: "Ring  II". A
 			-- legendary amulet shows the spell it boosts in the slot's place.
 			local piece = ReadPiece(slot, link)
-			line.label:SetText((piece.spell and Short(piece.spell) or label).."  "..piece.rank)
+			line.label:SetText((piece.spell and Short(piece.spell) or SurvivorUI_T(label)).."  "..piece.rank)
 			line.label:SetTextColor(1, 1, 1)
 			FitTags(line, piece.tags ~= "" and piece.tags or "-")
 			line.tags:SetTextColor(1, 1, 1)
 		else
 			PaintGear(line, 0.5, 0.5, 0.55, 0.06, 0.15)
-			line.label:SetText(label)
+			line.label:SetText(SurvivorUI_T(label))
 			line.label:SetTextColor(0.45, 0.45, 0.5)
-			FitTags(line, "empty")
+			FitTags(line, SurvivorUI_T("empty"))
 			line.tags:SetTextColor(0.4, 0.4, 0.45)
 		end
 		line:Show()

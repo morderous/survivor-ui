@@ -97,7 +97,7 @@ log.title = log:CreateFontString(nil, "OVERLAY")
 log.title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 log.title:SetPoint("LEFT", log, "TOPLEFT", 8, -TOP - (TITLE_HEIGHT - 6) / 2)
 log.title:SetTextColor(1, 0.82, 0)
-log.title:SetText("Loot")
+log.title:SetText(SurvivorUI_T("Loot"))
 
 
 ------------------------------------------------------------------------------
@@ -201,7 +201,7 @@ local function Bar(index)
 			if this.qualityName then
 				GameTooltip:AddLine(string.upper(string.sub(this.qualityName, 1, 1))..string.sub(this.qualityName, 2), color[1], color[2], color[3])
 			end
-			GameTooltip:AddLine("Not yet seen equipped in a run: its details show here once you have worn it in one.", 0.62, 0.62, 0.68, 1)
+			GameTooltip:AddLine(SurvivorUI_T("Not yet seen equipped in a run: its details show here once you have worn it in one."), 0.62, 0.62, 0.68, 1)
 		end
 		GameTooltip:Show()
 	end)
@@ -254,7 +254,7 @@ local function Draw()
 			extra = "  x"..entry.count
 		end
 		if entry.new then
-			extra = extra.."  |cff7dff7dnew|r"
+			extra = extra.."  |cff7dff7d"..SurvivorUI_T("new").."|r"
 		end
 		bar.extra:SetText(extra)
 		local extraWidth = extra ~= "" and bar.extra:GetStringWidth() or 0

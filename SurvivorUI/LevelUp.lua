@@ -244,10 +244,11 @@ button:SetScript("OnEnter", function()
 	this:SetBackdropBorderColor(1, 1, 1, 1)
 	local stored = SurvivorUI_StoredLevels()
 	GameTooltip:SetOwner(this, "ANCHOR_TOP")
-	GameTooltip:SetText(stored == 1 and "1 level waiting" or stored.." levels waiting",
+	GameTooltip:SetText(stored == 1 and SurvivorUI_T("1 level waiting") or SurvivorUI_TF("{1} levels waiting", stored),
 		this.cr or GOLD[1], this.cg or GOLD[2], this.cb or GOLD[3])
-	GameTooltip:AddLine("Click to choose them, one after another"..(Key() and ", or press "..Key().."." or "."), 1, 1, 1, 1)
-	GameTooltip:AddLine("Store Level-Ups: the game's Options, Controls, or /sui opt, Level Up!", 0.6, 0.6, 0.65, 1)
+	GameTooltip:AddLine(Key() and SurvivorUI_TF("Click to choose them, one after another, or press {1}.", Key())
+		or SurvivorUI_T("Click to choose them, one after another."), 1, 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Store Level-Ups: the game's Options, Controls, or /sui opt, Level Up!"), 0.6, 0.6, 0.65, 1)
 	GameTooltip:Show()
 end)
 
@@ -272,7 +273,7 @@ watcher:SetScript("OnUpdate", function()
 	local stored = SurvivorUI_StoredLevels()
 	local placing = SurvivorUI_Placing and SurvivorUI_Placing(NAME)
 	if On() and (placing or (stored > 0 and Phase() == "playing")) then
-		button.text:SetText("LEVEL UP!  |cffffffffx"..(stored > 0 and stored or 2).."|r")
+		button.text:SetText(SurvivorUI_T("LEVEL UP!").."  |cffffffffx"..(stored > 0 and stored or 2).."|r")
 		ShowKey(Key())
 		button:Show()
 	else

@@ -169,13 +169,13 @@ head.coin:SetScript("OnEnter", function()
 	local gold = Num(AZS_RUN and AZS_RUN.gold)
 	local cost = Num(AZS_RUN and AZS_RUN.chest)
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
-	GameTooltip:SetText("Next cache", PAYS[1], PAYS[2], PAYS[3])
-	GameTooltip:AddDoubleLine("It costs", Short(cost).." gold", 0.8, 0.8, 0.8, 1, 1, 1)
-	GameTooltip:AddDoubleLine("You carry", Short(gold).." gold", 0.8, 0.8, 0.8, 1, 1, 1)
+	GameTooltip:SetText(SurvivorUI_T("Next cache"), PAYS[1], PAYS[2], PAYS[3])
+	GameTooltip:AddDoubleLine(SurvivorUI_T("It costs"), SurvivorUI_TF("{1} gold", Short(cost)), 0.8, 0.8, 0.8, 1, 1, 1)
+	GameTooltip:AddDoubleLine(SurvivorUI_T("You carry"), SurvivorUI_TF("{1} gold", Short(gold)), 0.8, 0.8, 0.8, 1, 1, 1)
 	if gold >= cost then
-		GameTooltip:AddLine("Enough to open it.", 0.55, 0.85, 0.55)
+		GameTooltip:AddLine(SurvivorUI_T("Enough to open it."), 0.55, 0.85, 0.55)
 	else
-		GameTooltip:AddLine(Short(cost - gold).." gold short.", SHORT[1], SHORT[2], SHORT[3])
+		GameTooltip:AddLine(SurvivorUI_TF("{1} gold short.", Short(cost - gold)), SHORT[1], SHORT[2], SHORT[3])
 	end
 	GameTooltip:Show()
 end)
@@ -415,7 +415,7 @@ local function FillBossLine(line, entry, index, seconds, isNext)
 		local color = isNext and STATE_COLORS.next or WAITING
 		line.name:SetTextColor(color[1], color[2], color[3])
 		if isNext then
-			line.time:SetText("|cffffd24din "..Clock(at - seconds).."|r   "..Clock(at))
+			line.time:SetText("|cffffd24d"..SurvivorUI_TF("in {1}", Clock(at - seconds)).."|r   "..Clock(at))
 		else
 			line.time:SetText(Clock(at))
 		end
@@ -447,7 +447,7 @@ end
 
 head.eliteTitle = HeadText(9, nil, "LEFT")
 head.eliteTitle:SetTextColor(0.55, 0.55, 0.58)
-head.eliteTitle:SetText("Elites")
+head.eliteTitle:SetText(SurvivorUI_T("Elites"))
 head.eliteCount = HeadText(9, nil, "RIGHT")
 head.elites = {}
 local eliteSince = {}               -- [unit id] = the GetTime() it was first seen alive
@@ -552,11 +552,11 @@ local function EliteRow(y)
 		end
 	end
 	if total == 0 then
-		head.eliteCount:SetText("|cff8a8a8anone|r")
+		head.eliteCount:SetText(SurvivorUI_T("|cff8a8a8anone|r"))
 	elseif hurt > 0 then
-		head.eliteCount:SetText("|cffffffff"..total.." alive|r  ·  |cffff8c26"..hurt.." fighting|r")
+		head.eliteCount:SetText("|cffffffff"..SurvivorUI_TF("{1} alive", total).."|r  ·  |cffff8c26"..SurvivorUI_TF("{1} fighting", hurt).."|r")
 	else
-		head.eliteCount:SetText("|cffffffff"..total.." alive|r")
+		head.eliteCount:SetText("|cffffffff"..SurvivorUI_TF("{1} alive", total).."|r")
 	end
 	head.eliteTitle:ClearAllPoints()
 	head.eliteTitle:SetPoint("TOPLEFT", head, "TOPLEFT", 0, y - ELITE_TOP)
@@ -621,22 +621,22 @@ local function Draw(game, phase)
 	-- the kill pace.
 	local parts = {}
 	if phase == "victory" then
-		table.insert(parts, "|cff4dd94dVictory|r")
+		table.insert(parts, "|cff4dd94d"..SurvivorUI_T("Victory").."|r")
 	elseif SurvivorUI_IsDown and SurvivorUI_IsDown() then
 		-- A co-op hero down: the run goes on while a friend brings them back.
-		table.insert(parts, "|cffff4040Down|r")
+		table.insert(parts, "|cffff4040"..SurvivorUI_T("Down").."|r")
 	elseif phase == "dead" then
-		table.insert(parts, "|cffff4040Fallen|r")
+		table.insert(parts, "|cffff4040"..SurvivorUI_T("Fallen").."|r")
 	elseif phase == "paused" then
-		table.insert(parts, "|cff9a9a9aPaused|r")
+		table.insert(parts, "|cff9a9a9a"..SurvivorUI_T("Paused").."|r")
 	elseif phase == "choosing" then
-		table.insert(parts, "|cff9a9a9aChoosing|r")
+		table.insert(parts, "|cff9a9a9a"..SurvivorUI_T("Choosing").."|r")
 	elseif Num(game.endl) == 1 then
-		table.insert(parts, "|cffd080ffEndless|r")
+		table.insert(parts, "|cffd080ff"..SurvivorUI_T("Endless").."|r")
 	end
 	local lives = Num(game.lives)
 	if lives > 0 then
-		table.insert(parts, "|cffff8080"..lives..(lives == 1 and " life" or " lives").." left|r")
+		table.insert(parts, "|cffff8080"..SurvivorUI_TF(lives == 1 and "{1} life left" or "{1} lives left", lives).."|r")
 	end
 	head.state:SetText(table.concat(parts, "  "))
 	head.state:ClearAllPoints()
@@ -803,11 +803,11 @@ local function Draw(game, phase)
 	if Num(game.endl) == 1 and nextIn >= 0 then
 		local name = game.nbn
 		if not name or name == "" then
-			name = "Next boss"
+			name = SurvivorUI_T("Next boss")
 		end
 		nextLine.name:SetText(name)
 		nextLine.name:SetTextColor(1, 1, 1)
-		nextLine.time:SetText("|cffffd24din "..Clock(nextIn).."|r")
+		nextLine.time:SetText("|cffffd24d"..SurvivorUI_TF("in {1}", Clock(nextIn)).."|r")
 		y = Put(nextLine, y, 13)
 	else
 		nextLine:Hide()
@@ -823,7 +823,7 @@ local function Draw(game, phase)
 	-- level beside it (XpBar.lua). Each as chosen (Run tracker, XP bar).
 	if not (SurvivorUIDB and SurvivorUIDB.trackerXp == false) then
 		local xp, xpNeeded = Num(game.xp), Num(game.xpn)
-		local level = "|cffbf8cffLv. "..Num(game.lvl).."|r"
+		local level = "|cffbf8cff"..SurvivorUI_TF("Lv. {1}", Num(game.lvl)).."|r"
 		-- The levels waiting (Store Level-Ups, LevelUp.lua): "Lv. 12 +3".
 		local stored = SurvivorUI_StoredLevels and SurvivorUI_StoredLevels() or 0
 		if stored > 0 then
@@ -990,16 +990,16 @@ head:SetScript("OnEnter", function()
 	end
 	local zone = AZS_ZONE or {}
 	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
-	GameTooltip:SetText(zone.zname or "This run", 1, 0.82, 0)
+	GameTooltip:SetText(zone.zname or SurvivorUI_T("This run"), 1, 0.82, 0)
 	if Num(game.endl) == 1 then
-		GameTooltip:AddLine("Endless mode: bosses return on a timer.", 0.85, 0.5, 1, 1)
+		GameTooltip:AddLine(SurvivorUI_T("Endless mode: bosses return on a timer."), 0.85, 0.5, 1, 1)
 	elseif Num(game.left) >= 0 then
-		Pair("Final boss in", Clock(Num(game.left)))
+		Pair(SurvivorUI_T("Final boss in"), Clock(Num(game.left)))
 	end
-	Pair("Bosses so far", Num(game.bs).." / "..Num(game.bt))
-	Pair("Lairs on the map", Num(game.lairs))
+	Pair(SurvivorUI_T("Bosses so far"), Num(game.bs).." / "..Num(game.bt))
+	Pair(SurvivorUI_T("Lairs on the map"), Num(game.lairs))
 	if tonumber(zone.diff) and tonumber(zone.diff) ~= 1 then
-		Pair("Zone difficulty", "x"..zone.diff)
+		Pair(SurvivorUI_T("Zone difficulty"), "x"..zone.diff)
 	end
 	-- "100 100 100 100" is a normal run; anything else is worth a line.
 	if zone.mods then
@@ -1007,11 +1007,11 @@ head:SetScript("OnEnter", function()
 		for value in string.gfind(zone.mods, "%d+") do
 			index = index + 1
 			if MOD_NAMES[index] and value ~= "100" then
-				Pair(MOD_NAMES[index], value.."%")
+				Pair(SurvivorUI_T(MOD_NAMES[index]), value.."%")
 			end
 		end
 	end
-	GameTooltip:AddLine(SurvivorUI_MoveHint().." /sui tracker hides it.", 0.7, 0.7, 0.7, 1)
+	GameTooltip:AddLine(SurvivorUI_MoveHint().." "..SurvivorUI_T("/sui tracker hides it."), 0.7, 0.7, 0.7, 1)
 	GameTooltip:Show()
 end)
 head:SetScript("OnLeave", function() GameTooltip:Hide() end)

@@ -109,9 +109,9 @@ function SurvivorUI_XpNextText()
 		return nil
 	end
 	if estimate.eta then
-		return "next in "..Clock(estimate.eta)
+		return SurvivorUI_TF("next in {1}", Clock(estimate.eta))
 	end
-	return "next in ..."
+	return SurvivorUI_T("next in ...")
 end
 
 local function Running()
@@ -328,12 +328,13 @@ card.title = CardText(12, LUCK_COLOR[1], LUCK_COLOR[2], LUCK_COLOR[3])
 card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 10, -9)
 card.cap = CardText(8, WARNING[1], WARNING[2], WARNING[3])
 card.cap:SetPoint("TOPLEFT", card.title, "BOTTOMLEFT", 0, -3)
-card.cap:SetText("No cap: the more luck, the better your odds of a legendary.")
+card.cap:SetText(SurvivorUI_T("No cap: the more luck, the better your odds of a legendary."))
 
+card.heads = {}
 for index = 1, table.getn(COLUMNS) do
 	local head = CardText(8, 0.65, 0.65, 0.65)
-	head:SetPoint("TOPLEFT", card, "TOPLEFT", COLUMNS[index].x, ROW_TOP + 14)
-	head:SetText(COLUMNS[index].head)
+	head:SetText(SurvivorUI_T(COLUMNS[index].head))
+	card.heads[index] = head
 end
 
 card.rows = {}
@@ -344,7 +345,7 @@ for rarity = 1, 5 do
 	row.name = CardText(10, color[1], color[2], color[3])
 	-- Level with its bars' middle (they hang 3 below the row and are 8 tall).
 	row.name:SetPoint("LEFT", card, "TOPLEFT", 10, y - 7)
-	row.name:SetText(RARITIES[rarity].name)
+	row.name:SetText(SurvivorUI_T(RARITIES[rarity].name))
 	for index = 1, table.getn(COLUMNS) do
 		local cell = {}
 		local x = COLUMNS[index].x
@@ -369,38 +370,41 @@ for rarity = 1, 5 do
 end
 
 card.three = CardText(9, 0.85, 0.85, 0.85)
-card.three:SetPoint("TOPLEFT", card, "TOPLEFT", 10, ROW_TOP - 5 * ROW_STEP - 6)
-card.three:SetWidth(CARD_WIDTH - 20)
+-- The amulets' card only: why their odds are better.
+card.amulets = CardText(9, 0.85, 0.85, 0.85)
+card.amulets:SetText(SurvivorUI_T("An amulet rolls with +50% luck of its own, on top of yours."))
 
 -- Where luck comes from: a line each, its luck on the card's right.
 card.sourceHead = CardText(8, 0.65, 0.65, 0.65)
 card.sourceHead:SetPoint("TOPLEFT", card.three, "BOTTOMLEFT", 0, -8)
-card.sourceHead:SetText("LUCK FROM")
+card.sourceHead:SetText(SurvivorUI_T("LUCK FROM"))
 card.sources = {}
 local above = card.sourceHead
 for index = 1, table.getn(SOURCES) do
 	local label = CardText(9, 0.85, 0.85, 0.85)
 	label:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -2)
-	label:SetText(SOURCES[index][1])
+	label:SetText(SurvivorUI_T(SOURCES[index][1]))
 	if SOURCES[index][2] then
 		local value = CardText(9, LUCK_COLOR[1], LUCK_COLOR[2], LUCK_COLOR[3])
 		value:SetPoint("TOPRIGHT", label, "TOPLEFT", CARD_WIDTH - 20, 0)
 		value:SetJustifyH("RIGHT")
 		value:SetText(SOURCES[index][2])
+		label.value = value
 	end
 	card.sources[index] = label
 	above = label
 end
 card.jewelry = CardText(9, 0.6, 0.6, 0.6)
 card.jewelry:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -2)
-card.jewelry:SetText("Jewelry gives more stats the better its quality and the higher its rank.")
+card.jewelry:SetWidth(CARD_WIDTH - 20)
+card.jewelry:SetText(SurvivorUI_T("Jewelry gives more stats the better its quality and the higher its rank."))
 
 -- The hoards' own luck (the game adds 0.25 to a guardian's hoard's and a
 -- boss's jewelry rolls, none to a bought cache's), a warning of its own.
 card.hoard = CardText(9, WARNING[1], WARNING[2], WARNING[3])
 card.hoard:SetPoint("TOPLEFT", card.jewelry, "BOTTOMLEFT", 0, -8)
 card.hoard:SetWidth(CARD_WIDTH - 20)
-card.hoard:SetText("Guardian hoards and bosses: |cff59e68c+25%|r native luck on their jewelry.")
+card.hoard:SetText(SurvivorUI_T("Guardian hoards and bosses: |cff59e68c+25%|r native luck on their jewelry."))
 
 local function Percent(value)
 	return string.format("%.1f%%", value * 100)
@@ -433,7 +437,7 @@ for index = 1, 2 do
 		return text
 	end
 	side.head = Text(7, 0, { 0.62, 0.62, 0.62 })
-	side.head:SetText(SIDE_HEADS[index])
+	side.head:SetText(SurvivorUI_T(SIDE_HEADS[index]))
 	side.lines = {}
 	for row = 1, 3 do
 		side.lines[row] = Text(9, -9 - (row - 1) * 11, RARITIES[SIDE_ROWS[row]].color)
@@ -462,31 +466,89 @@ local function FillSides(luck, level)
 	end
 end
 
-local function FillCard()
+-- The card whole (the bar's), or one column only (only = 1, the spells' and
+-- jewelry's, or 2, the amulets'), narrower, for the odds beside the bar:
+-- the column at the first one's place, the rows as low as the lines over
+-- them make them.
+local SINGLE_WIDTH = 210
+local function Shown(region, on)
+	if on then
+		region:Show()
+	else
+		region:Hide()
+	end
+end
+
+local function FillCard(only)
+	card.only = only
+	local width = only and SINGLE_WIDTH or CARD_WIDTH
+	card:SetWidth(width)
+	card.cap:SetWidth(width - 20)
 	local luck, estimate = Luck() or 0, SurvivorUI_XpEstimate()
 	local level = estimate and estimate.lvl or tonumber(AZS_RUN and AZS_RUN.lvl) or 1
 	local m = 1 + luck + LevelBonus(level)
 	-- The luck the cards roll with: the hero's, and the level's (1% a level,
 	-- 30% at most).
-	card.title:SetText(string.format("Luck: %.0f%% + %.0f%% (from Lv. %d)", luck * 100, LevelBonus(level) * 100, level))
+	card.title:SetText(SurvivorUI_TF("Luck: {1} + {2} (from Lv. {3})", string.format("%.0f%%", luck * 100),
+		string.format("%.0f%%", LevelBonus(level) * 100), level))
+	local rowTop = math.min(ROW_TOP, -(9 + card.title:GetHeight() + 3 + card.cap:GetHeight() + 20))
+	for rarity = 1, 5 do
+		card.rows[rarity].name:SetPoint("LEFT", card, "TOPLEFT", 10, rowTop - (rarity - 1) * ROW_STEP - 7)
+	end
 	for index = 1, table.getn(COLUMNS) do
+		local on = not only or only == index
+		local x = only and COLUMNS[1].x or COLUMNS[index].x
+		card.heads[index]:SetPoint("TOPLEFT", card, "TOPLEFT", x, rowTop + 14)
+		Shown(card.heads[index], on)
 		local odds = Odds(m + COLUMNS[index].bonus)
 		for rarity = 1, 5 do
 			local cell = card.rows[rarity].cells[index]
+			local y = rowTop - (rarity - 1) * ROW_STEP
+			cell.track:SetPoint("TOPLEFT", card, "TOPLEFT", x, y - 3)
+			cell.bar:SetPoint("TOPLEFT", card, "TOPLEFT", x, y - 3)
+			cell.text:SetPoint("RIGHT", card, "TOPLEFT", x + BAR_MAX + NUMBER_RIGHT, y - 7)
 			-- A bar of no width shows as the whole texture: one pixel at least.
 			cell.bar:SetWidth(math.max(1, odds[rarity] * BAR_MAX))
 			cell.text:SetText(Percent(odds[rarity]))
+			Shown(cell.track, on)
+			Shown(cell.bar, on)
+			Shown(cell.text, on)
 		end
 	end
+	-- Under the rows: the three cards' legendary (not on the amulets' card),
+	-- the amulets' note (theirs only); the whole card then where luck comes
+	-- from and the hoards.
+	local under = rowTop - 5 * ROW_STEP - 6
+	local note = only == 2 and card.amulets or card.three
+	card.three:SetPoint("TOPLEFT", card, "TOPLEFT", 10, under)
+	card.amulets:SetPoint("TOPLEFT", card, "TOPLEFT", 10, under)
+	card.three:SetWidth(width - 20)
+	card.amulets:SetWidth(width - 20)
+	Shown(card.three, only ~= 2)
+	Shown(card.amulets, only == 2)
 	local none = 1 - Odds(m)[5]
-	card.three:SetText("A legendary among a level-up's 3 cards: |cffff8000"
-		..Percent(1 - none * none * none).."|r (each rolled on its own)")
-	-- A wrapped text is as tall as its lines, as in the confirm box.
-	local height = -ROW_TOP + 5 * ROW_STEP + 6 + card.three:GetHeight() + 8 + card.sourceHead:GetHeight()
+	card.three:SetText(SurvivorUI_TF("A legendary among a level-up's 3 cards: {1} (each rolled on its own)",
+		"|cffff8000"..Percent(1 - none * none * none).."|r"))
+	local whole = not only
+	Shown(card.sourceHead, whole)
 	for index = 1, table.getn(card.sources) do
-		height = height + 2 + card.sources[index]:GetHeight()
+		Shown(card.sources[index], whole)
+		if card.sources[index].value then
+			Shown(card.sources[index].value, whole)
+		end
 	end
-	card:SetHeight(height + 2 + card.jewelry:GetHeight() + 8 + card.hoard:GetHeight() + 10)
+	Shown(card.jewelry, whole)
+	Shown(card.hoard, whole)
+	-- A wrapped text is as tall as its lines, as in the confirm box.
+	local height = -under + note:GetHeight() + 10
+	if whole then
+		height = height - 2 + 8 + card.sourceHead:GetHeight()
+		for index = 1, table.getn(card.sources) do
+			height = height + 2 + card.sources[index]:GetHeight()
+		end
+		height = height + 2 + card.jewelry:GetHeight() + 8 + card.hoard:GetHeight()
+	end
+	card:SetHeight(height)
 end
 
 hover:SetScript("OnEnter", function()
@@ -498,6 +560,28 @@ end)
 hover:SetScript("OnLeave", function()
 	card:Hide()
 end)
+
+-- Each side's odds answer the mouse with their own card under them, their
+-- column only.
+for index = 1, 2 do
+	local side = sides[index]
+	side:EnableMouse(true)
+	side.noHoverOutline = true
+	side.index = index
+	side:SetScript("OnEnter", function()
+		FillCard(this.index)
+		card:ClearAllPoints()
+		if this.index == 1 then
+			card:SetPoint("TOPRIGHT", this, "BOTTOMRIGHT", 0, -6)
+		else
+			card:SetPoint("TOPLEFT", this, "BOTTOMLEFT", 0, -6)
+		end
+		card:Show()
+	end)
+	side:SetScript("OnLeave", function()
+		card:Hide()
+	end)
+end
 
 -- The luck and the ribbon, as the run now has them; away with no luck told
 -- (a game before AZS_STATS) or switched off (XP bar tab).
@@ -512,13 +596,18 @@ local function FillLuck(level)
 		return
 	end
 	-- The hero's luck and the level's, summed: what the cards roll with.
-	panel.luck:SetText(string.format("|cff59e68cLuck %+.0f%%|r", (luck + LevelBonus(level)) * 100))
+	panel.luck:SetText("|cff59e68c"..SurvivorUI_TF("Luck {1}", string.format("%+.0f%%", (luck + LevelBonus(level)) * 100)).."|r")
 	SetRibbon(panel.ribbon, Odds(1 + luck + LevelBonus(level)), WIDTH)
 	panel.luck:Show()
-	panel.ribbon:Show()
+	-- The ribbon of the odds under the bar, when chosen (XP bar tab).
+	if Settings().xpBarRibbon then
+		panel.ribbon:Show()
+	else
+		panel.ribbon:Hide()
+	end
 	hover:Show()
 	if card:IsShown() then
-		FillCard()
+		FillCard(card.only)
 	end
 end
 
@@ -530,7 +619,7 @@ local function Fill()
 	end
 	-- The levels waiting (Store Level-Ups, LevelUp.lua): "Lv. 12 +3".
 	local stored = SurvivorUI_StoredLevels and SurvivorUI_StoredLevels() or 0
-	panel.level:SetText("|cffbf8cffLv. "..estimate.lvl.."|r"..(stored > 0 and " |cffffd100+"..stored.."|r" or ""))
+	panel.level:SetText("|cffbf8cff"..SurvivorUI_TF("Lv. {1}", estimate.lvl).."|r"..(stored > 0 and " |cffffd100+"..stored.."|r" or ""))
 	local amount = Short(estimate.xp)
 	if estimate.xpn and estimate.xpn > 0 then
 		amount = amount.." / "..Short(estimate.xpn).."  "..MUTED..math.floor(estimate.share * 100 + 0.5).."%|r"
@@ -540,11 +629,11 @@ local function Fill()
 	FillLuck(estimate.lvl)
 	if EtaOn() then
 		if estimate.eta then
-			panel.next:SetText(MUTED.."Next lv. in|r "..Clock(estimate.eta))
+			panel.next:SetText(MUTED..SurvivorUI_T("Next lv. in").."|r "..Clock(estimate.eta))
 		else
-			panel.next:SetText(MUTED.."Next lv. in ...|r")
+			panel.next:SetText(MUTED..SurvivorUI_T("Next lv. in ...").."|r")
 		end
-		panel.rate:SetText(estimate.perMinute and (Short(estimate.perMinute)..MUTED.." XP/min|r") or "")
+		panel.rate:SetText(estimate.perMinute and (Short(estimate.perMinute)..MUTED.." "..SurvivorUI_T("XP/min").."|r") or "")
 		panel.next:Show()
 		panel.rate:Show()
 		panel:SetHeight(42)

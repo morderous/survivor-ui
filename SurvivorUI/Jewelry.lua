@@ -340,7 +340,7 @@ local function Forget()
 	if SurvivorUIJewelryPanel and SurvivorUIJewelryPanel:IsShown() then
 		SurvivorUIJewelryPanel.Draw()
 	end
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the Jewelry Collection is empty again. Pieces you wear now come back on their own.")
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: the Jewelry Collection is empty again. Pieces you wear now come back on their own."))
 end
 
 function SurvivorUI_ResetCollection()
@@ -349,7 +349,7 @@ function SurvivorUI_ResetCollection()
 		count = count + 1
 	end
 	if count == 0 then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the Jewelry Collection holds no piece yet.")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: the Jewelry Collection holds no piece yet."))
 		return
 	end
 	if not SurvivorUI_Confirm then
@@ -357,12 +357,12 @@ function SurvivorUI_ResetCollection()
 		return
 	end
 	SurvivorUI_Confirm({
-		title = "Forget the collection?",
-		text = "Every piece found goes: "..count..(count == 1 and " piece" or " pieces")
-			..", for every class and account on this game. Pieces you wear come back on their own."
-			.."\n|cff9a9aa0Type|r forget |cff9a9aa0to forget them.|r",
+		title = SurvivorUI_T("Forget the collection?"),
+		text = SurvivorUI_TF(count == 1 and "Every piece found goes: {1} piece, for every class and account on this game. Pieces you wear come back on their own."
+			or "Every piece found goes: {1} pieces, for every class and account on this game. Pieces you wear come back on their own.", count)
+			.."\n|cff9a9aa0"..SurvivorUI_T("Type|r forget |cff9a9aa0to forget them.").."|r",
 		word = "forget",
-		yes = "Forget all",
+		yes = SurvivorUI_T("Forget all"),
 		onYes = Forget,
 	})
 end
@@ -645,7 +645,7 @@ close:SetHeight(14)
 close:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -3, -3)
 close.text = Text(close, 9, MUTED)
 close.text:SetPoint("CENTER", close, "CENTER", 0, 0)
-close.text:SetText("x")
+close.text:SetText(SurvivorUI_T("x"))
 close:SetScript("OnEnter", function() this.text:SetTextColor(1, 0.35, 0.3) end)
 close:SetScript("OnLeave", function() this.text:SetTextColor(MUTED[1], MUTED[2], MUTED[3]) end)
 close:SetScript("OnClick", function() panel:Hide() end)
@@ -727,14 +727,14 @@ local function ShowTip(row)
 	GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
 	local item = entry.item
 	local color = row.color or { 1, 1, 1 }
-	GameTooltip:SetText(entry.name, color[1], color[2], color[3])
+	GameTooltip:SetText(SurvivorUI_Native(entry.name), color[1], color[2], color[3])
 	if entry.spell then
-		GameTooltip:AddLine("Legendary amulet  ·  remakes "..entry.spell, 1, 0.5, 0)
+		GameTooltip:AddLine(SurvivorUI_TF("Legendary amulet  ·  remakes {1}", SurvivorUI_Native(entry.spell)), 1, 0.5, 0)
 	elseif entry.slot then
-		GameTooltip:AddLine(entry.slot == "Neck" and "Amulet" or entry.slot, 0.7, 0.7, 0.7)
+		GameTooltip:AddLine(SurvivorUI_T(entry.slot == "Neck" and "Amulet" or entry.slot), 0.7, 0.7, 0.7)
 	end
 	if item then
-		GameTooltip:AddLine("Found "..item.found.." time"..(item.found == 1 and "" or "s")..", the values seen:", 0.7, 0.7, 0.7)
+		GameTooltip:AddLine(SurvivorUI_TF(item.found == 1 and "Found {1} time, the values seen:" or "Found {1} times, the values seen:", item.found), 0.7, 0.7, 0.7)
 		for each = 1, table.getn(item.stats) do
 			local stat = item.stats[each]
 			-- Each number as the lowest and highest seen.
@@ -750,25 +750,25 @@ local function ShowTip(row)
 			GameTooltip:AddLine("  "..text, 0.3, 1, 0.4, 1)
 		end
 	else
-		GameTooltip:AddLine("Not found yet", 0.55, 0.55, 0.6)
+		GameTooltip:AddLine(SurvivorUI_T("Not found yet"), 0.55, 0.55, 0.6)
 	end
 	-- What the codex says it gives: by rarity for a ring or trinket, or the
 	-- amulet's own.
 	local codex = entry.codex
 	if codex and codex.byRarity then
 		GameTooltip:AddLine(" ")
-		GameTooltip:AddLine("A new one, by rarity", 1, 0.82, 0)
+		GameTooltip:AddLine(SurvivorUI_T("A new one, by rarity"), 1, 0.82, 0)
 		for index = 1, 5 do
 			local value = codex.byRarity[index]
 			if value then
 				local c = RARITY_COLORS[index]
-				GameTooltip:AddDoubleLine(RARITY_NAMES[index], value, c[1], c[2], c[3], 0.9, 0.9, 0.9)
+				GameTooltip:AddDoubleLine(SurvivorUI_T(RARITY_NAMES[index]), value, c[1], c[2], c[3], 0.9, 0.9, 0.9)
 			end
 		end
 	elseif codex and codex.bonuses then
 		GameTooltip:AddLine(" ")
 		local c = RARITY_COLORS[RARITY_INDEX[codex.rarity] or 1]
-		GameTooltip:AddLine(codex.rarity.." amulet", c[1], c[2], c[3])
+		GameTooltip:AddLine(SurvivorUI_TF("{1} amulet", SurvivorUI_T(codex.rarity)), c[1], c[2], c[3])
 		for each = 1, table.getn(codex.bonuses) do
 			GameTooltip:AddLine("  "..codex.bonuses[each], 0.9, 0.9, 0.9, 1)
 		end
@@ -798,7 +798,7 @@ local function Row(index)
 	row.badge.fill:SetAllPoints(row.badge)
 	row.badge.text = Text(row.badge, 7, { 1, 1, 1 })
 	row.badge.text:SetPoint("CENTER", row.badge, "CENTER", 1, 0)
-	row.badge.text:SetText("E")
+	row.badge.text:SetText(SurvivorUI_T("E"))
 	row.badge:Hide()
 	row.worn = function(on)
 		if on then
@@ -886,7 +886,7 @@ local function Header(row, label, color, found, total, worn, slots, class)
 	else
 		row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
 	end
-	row.name:SetText(label)
+	row.name:SetText(SurvivorUI_T(label))
 	row.name:SetTextColor(1, 1, 1)
 	row.extra:ClearAllPoints()
 	row.extra:SetPoint("LEFT", row.name, "RIGHT", 4, 0)
@@ -916,7 +916,11 @@ local function Piece(row, entry)
 	row.icon:Show()
 	row.name:ClearAllPoints()
 	row.name:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
-	row.name:SetText(Abbrev(entry.short or entry.name))
+	-- In a language the addon speaks, the game's own name, whole; a class
+	-- amulet by its spell, as the ones still to find (its name is in no
+	-- table of the game's the addon has).
+	row.name:SetText(SurvivorUI_Translated() and SurvivorUI_Native(entry.spell or entry.name)
+		or Abbrev(entry.short or entry.name))
 	local item = entry.item
 	if item then
 		local hex = item.color or "ffffff"
@@ -966,7 +970,7 @@ local function More(row, count)
 	row.edge:SetVertexColor(0, 0, 0, 0)
 	row.name:ClearAllPoints()
 	row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
-	row.name:SetText(count.." more to find")
+	row.name:SetText(SurvivorUI_TF("{1} more to find", count))
 	row.name:SetTextColor(0.45, 0.45, 0.5)
 end
 
@@ -1134,7 +1138,7 @@ function panel.Draw()
 		rows[index]:Hide()
 	end
 
-	title:SetText("Jewelry Collection  |cffe0e0e0"..found.."|r|cff8a8a90 / "..total.."  ·  "..className.."|r")
+	title:SetText(SurvivorUI_T("Jewelry Collection").."  |cffe0e0e0"..found.."|r|cff8a8a90 / "..total.."  ·  "..SurvivorUI_T(className).."|r")
 	local tallest = math.max(table.getn(left), table.getn(right))
 	panel:SetHeight(22 + tallest * ROW + 12 + 6)
 end
@@ -1185,7 +1189,7 @@ end
 
 function SurvivorUI_ToggleJewelry()
 	if not Enabled() then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the Jewelry Collection is off (/sui opt, Modules).")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: the Jewelry Collection is off (/sui opt, Modules)."))
 		return
 	end
 	if panel:IsShown() then
@@ -1251,8 +1255,8 @@ if pane then
 		this.hot = true
 		this:Refresh()
 		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-		GameTooltip:SetText("Jewelry Collection", 1, 0.82, 0)
-		GameTooltip:AddLine(WithPane() and "Click to put it away." or "Click to show it beside the character pane, every time it opens.", 1, 1, 1, 1)
+		GameTooltip:SetText(SurvivorUI_T("Jewelry Collection"), 1, 0.82, 0)
+		GameTooltip:AddLine(SurvivorUI_T(WithPane() and "Click to put it away." or "Click to show it beside the character pane, every time it opens."), 1, 1, 1, 1)
 		GameTooltip:Show()
 	end)
 	paneButton:SetScript("OnLeave", function()

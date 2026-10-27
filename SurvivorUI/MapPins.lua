@@ -142,10 +142,10 @@ local function Pin(index)
 			GameTooltip:AddLine(this.note, 0.8, 0.8, 0.8)
 		end
 		if this.flagged then
-			GameTooltip:AddLine("The game's flag points here.", 1, 0.82, 0.2)
+			GameTooltip:AddLine(SurvivorUI_T("The game's flag points here."), 1, 0.82, 0.2)
 		end
 		if this.yards then
-			GameTooltip:AddLine(math.floor(this.yards + 0.5).." yards away", 0.6, 0.6, 0.6)
+			GameTooltip:AddLine(SurvivorUI_TF("{1} yards away", math.floor(this.yards + 0.5)), 0.6, 0.6, 0.6)
 		end
 		GameTooltip:Show()
 	end)
@@ -453,7 +453,7 @@ local function Update()
 						pin.note = "Empty lair"
 					end
 					local markName = SurvivorUI_LairMarkName and SurvivorUI_LairMarkName(mark)
-					pin.title = markName and (markName.." lair") or "Lair"
+					pin.title = markName and SurvivorUI_TF("{1} lair", SurvivorUI_T(markName)) or SurvivorUI_T("Lair")
 					pin.flagged = tonumber(lair.flag) == 1 or nil
 					if pin.flagged and FlagChoice() == "ours" then
 						flaggedPin = pin

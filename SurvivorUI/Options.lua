@@ -22,19 +22,28 @@
 --   Character    the pane's size, where the stats show, which this class keeps
 --   Size         each part's own size, in sections
 --   Layout       the frames joined to the bar, resets
--- Most things act at once. Move UI, at the top beside each page's title,
--- unlocks every piece over a grid; each tab's own pieces can be dragged while
--- it is open, so one can play while setting them. Save & Close at the bottom
--- (Reload & Close while a look waits for a reload), or Escape, closes the
--- window; the - beside the x minimizes it to a bar of three buttons.
+-- Most things act at once. Move UI, at the sidebar's foot, unlocks every
+-- piece over a grid; each tab's own pieces can be dragged while it is open, so
+-- one can play while setting them. Save & Close at the bottom (Reload & Close
+-- while a look waits for a reload), or Escape, closes the window; the - beside
+-- the x minimizes it to a bar of three buttons.
+--
+-- The options menu rework (v3.1): a search box over the groups, each group
+-- open one at a time, and the pages made of one kit (Kit, below the old
+-- pieces): a head with the part's switch, a live preview where there is
+-- something to see, choices as segments, pictures and chips, a size as S M L
+-- and a bar, the fine settings in an Advanced box, Reset this page at the
+-- foot. A page still made of the old pieces works as before, and every piece,
+-- old or new, is found by the search.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
+local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 
-local WIDTH, HEIGHT = 640, 740
-local SIDEBAR = 150
-local PAGE_X = SIDEBAR + 18               -- the pages' left edge
-local PAGE_WIDTH = WIDTH - PAGE_X - 18
+local WIDTH, HEIGHT = 740, 740
+local SIDEBAR = 184
+local PAGE_X = SIDEBAR + 20               -- the pages' left edge
+local PAGE_WIDTH = WIDTH - PAGE_X - 20
 local ROW = 20
 local MUTED = { 0.6, 0.6, 0.65 }
 local TEXT = { 0.9, 0.9, 0.92 }
@@ -150,6 +159,13 @@ end
 panel:RegisterForDrag("LeftButton")
 panel:SetScript("OnDragStart", function() this:StartMoving() end)
 panel:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+-- A click on the window itself gives the keys back to the game, from the
+-- search box (set below).
+panel:SetScript("OnMouseDown", function()
+	if this.box then
+		this.box:ClearFocus()
+	end
+end)
 panel:Hide()
 -- Escape closes it, as it does the game's own windows.
 if UISpecialFrames then
@@ -188,7 +204,7 @@ title:SetPoint("TOPLEFT", panel, "TOPLEFT", 14, -14)
 title:SetText("Survivor UI")
 
 local version = Text(panel, 9, MUTED)
-version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 1, -3)
+version:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 7, 1)
 local versionNumber = GetAddOnMetadata and GetAddOnMetadata("SurvivorUI", "Version")
 version:SetText(versionNumber and ("v"..versionNumber) or "")
 
@@ -226,11 +242,11 @@ close:SetScript("OnClick", function() panel:Hide() end)
 -- Pages and their tabs.
 
 local TABS = {
-	{ group = "General" },
+	{ group = "General", color = ACCENT },
 	{ key = "global", label = "Global", color = ACCENT },
 	{ key = "modules", label = "Modules", color = { 0.95, 0.80, 0.35 } },
 	{ key = "layout", label = "Layout", color = { 0.25, 0.85, 0.80 } },
-	{ group = "Run" },
+	{ group = "Run", color = { 0.35, 0.82, 0.50 } },
 	{ key = "tracker", label = "Run tracker", color = { 0.30, 0.82, 0.40 } },
 	{ key = "pace", label = "Kill pace", color = { 0.78, 0.95, 0.30 } },
 	{ key = "bosses", label = "Boss bars", color = { 0.95, 0.45, 0.35 } },
@@ -239,7 +255,7 @@ local TABS = {
 	{ key = "levelup", label = "Level Up!", color = { 1.00, 0.86, 0.30 } },
 	{ key = "loot", label = "Loot list", color = { 0.55, 0.75, 1.00 } },
 	{ key = "history", label = "Run History", color = { 0.82, 0.62, 1.00 } },
-	{ group = "Combat" },
+	{ group = "Combat", color = { 1.00, 0.50, 0.38 } },
 	{ key = "combat", label = "Combat text", color = { 1.00, 0.38, 0.32 } },
 	{ key = "meter", label = "Damage meter", color = { 1.00, 0.58, 0.25 } },
 	{ key = "run", label = "This Run", color = { 0.45, 0.60, 1.00 } },
@@ -248,12 +264,12 @@ local TABS = {
 	{ key = "counters", label = "Counters", color = { 0.40, 0.92, 0.70 } },
 	{ key = "summons", label = "Summons", color = { 0.62, 0.42, 0.95 } },
 	{ key = "party", label = "Party", color = { 0.45, 0.78, 1.00 } },
-	{ group = "Character" },
+	{ group = "Character", color = { 0.95, 0.55, 0.78 } },
 	{ key = "build", label = "Build list", color = { 0.45, 0.85, 1.00 } },
 	{ key = "character", label = "Character pane", color = { 1.00, 0.50, 0.70 } },
 	{ key = "stats", label = "Stats panel", color = { 0.95, 0.62, 0.88 } },
 	{ key = "jewelry", label = "Jewelry", color = { 0.92, 0.76, 0.45 } },
-	{ group = "Interface" },
+	{ group = "Interface", color = { 0.45, 0.72, 1.00 } },
 	{ key = "units", label = "Frames & bar", color = { 1.00, 0.62, 0.25 } },
 	{ key = "minimap", label = "Minimap", color = { 0.55, 0.82, 0.40 } },
 	{ key = "chat", label = "Chat", color = { 0.60, 0.80, 0.95 } },
@@ -264,6 +280,10 @@ local TABS = {
 
 local pages, tabButtons, widgets = {}, {}, {}
 local current
+
+-- The sidebar's own (below): its groups, the one open, the search box, the
+-- search's index and its results.
+local side = { groups = {}, index = {} }
 
 local function RefreshAll()
 	for index = 1, table.getn(widgets) do
@@ -338,6 +358,20 @@ local function ShowPage(key)
 		SurvivorUI_SetMoveFocus(TAB_PIECES[key])
 	end
 	CharacterPaneFor(key)
+	if side.results then
+		side.results:Hide()
+	end
+	-- A tab picked in the middle of a search: the search ends, and the keys
+	-- go back to the game (not when the search was only emptied: typing).
+	if side.box and not side.typing then
+		if side.box:GetText() ~= "" then
+			side.going = true
+			side.box:SetText("")
+			side.going = nil
+			side.found = nil
+		end
+		side.box:ClearFocus()
+	end
 	for _, tab in pairs(TABS) do
 		if tab.key then
 			local page, button = pages[tab.key], tabButtons[tab.key]
@@ -349,20 +383,63 @@ local function ShowPage(key)
 			button:Refresh()
 		end
 	end
+	-- Its group open in the sidebar, the page's tab in sight.
+	if side.Open and pages[key] then
+		side.Open(pages[key].group)
+	end
 	RefreshAll()
 end
 
--- The sidebar from its top down: a group's name over its tabs.
--- A pixel tighter since the Records tab (v3.0.29): the list clears the credit.
-local TAB_TOP, TAB_HEIGHT, TAB_STEP, GROUP_STEP = -54, 18, 19, 16
-local tabY = TAB_TOP
+-- The sidebar from its top down: the search box, then each group's head (an
+-- arrow, its name, how many tabs it holds), the open group's tabs under it,
+-- one group open at a time. Donate and Move UI stand at its foot.
+local GROUP_TOP, GROUP_HEIGHT, TAB_HEIGHT = -78, 24, 20
+local group
 for index = 1, table.getn(TABS) do
 	local tab = TABS[index]
 	if tab.group then
-		local groupTitle = Text(panel, 8, MUTED)
-		groupTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", 14, tabY - 6)
-		groupTitle:SetText(string.upper(tab.group))
-		tabY = tabY - GROUP_STEP
+		group = { name = tab.group, color = tab.color, tabs = {} }
+		table.insert(side.groups, group)
+		local head = CreateFrame("Button", nil, panel)
+		head:SetWidth(SIDEBAR - 16)
+		head:SetHeight(GROUP_HEIGHT)
+		head.wash = Fill(head, "BACKGROUND", 1, 1, 1, 0)
+		head.wash:SetAllPoints(head)
+		head.arrow = head:CreateTexture(nil, "ARTWORK")
+		head.arrow:SetTexture(ART.."DropArrow")
+		head.arrow:SetWidth(11)
+		head.arrow:SetHeight(11)
+		head.arrow:SetPoint("LEFT", head, "LEFT", 6, 0)
+		head.label = Text(head, 10, TEXT)
+		head.label:SetPoint("LEFT", head, "LEFT", 23, 0)
+		head.label:SetText(string.upper(tab.group))
+		head.count = Text(head, 9, MUTED)
+		head.count:SetPoint("RIGHT", head, "RIGHT", -7, 0)
+		head.group = group
+		group.head = head
+		function head:Refresh()
+			local open = side.open == self.group.name
+			local c = self.group.color
+			-- The arrow down while open, turned to the right while shut.
+			if open then
+				self.arrow:SetTexCoord(0, 1, 0, 1)
+			else
+				self.arrow:SetTexCoord(1, 0, 0, 0, 1, 1, 0, 1)
+			end
+			self.arrow:SetVertexColor(c[1], c[2], c[3], open and 1 or 0.7)
+			self.wash:SetVertexColor(1, 1, 1, self.hot and 0.05 or 0)
+			if self.hot then
+				self.label:SetTextColor(1, 1, 1)
+			elseif open then
+				self.label:SetTextColor(c[1], c[2], c[3])
+			else
+				self.label:SetTextColor(TEXT[1] * 0.85, TEXT[2] * 0.85, TEXT[3] * 0.85)
+			end
+			self.count:SetText(table.getn(self.group.tabs))
+		end
+		head:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+		head:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+		head:SetScript("OnClick", function() side.Open(this.group.name, true) end)
 	else
 		local page = CreateFrame("Frame", nil, panel)
 		page:SetPoint("TOPLEFT", panel, "TOPLEFT", PAGE_X, -16)
@@ -370,15 +447,19 @@ for index = 1, table.getn(TABS) do
 		page:SetHeight(HEIGHT - 70)
 		page.color = tab.color
 		page.y = 0
+		page.key, page.label, page.group = tab.key, tab.label, group.name
 		page:Hide()
 		pages[tab.key] = page
+		-- Found by its name too.
+		table.insert(side.index, { page = page, key = tab.key, label = tab.label, y = 0, height = 22,
+			words = string.lower(tab.label.." "..group.name), order = table.getn(side.index) })
 
-		-- The tab: its name, a bar of its color at the left, a wash when chosen.
+		-- The tab: its name, a bar of its color at the left, a wash when chosen;
+		-- set in its place as its group opens.
 		local button = CreateFrame("Button", nil, panel)
-		button:SetWidth(SIDEBAR - 12)
+		button:SetWidth(SIDEBAR - 26)
 		button:SetHeight(TAB_HEIGHT)
-		button:SetPoint("TOPLEFT", panel, "TOPLEFT", 7, tabY)
-		tabY = tabY - TAB_STEP
+		table.insert(group.tabs, button)
 		button.wash = Fill(button, "BACKGROUND", tab.color[1], tab.color[2], tab.color[3], 0)
 		button.wash:SetAllPoints(button)
 		button.bar = Fill(button, "BORDER", tab.color[1], tab.color[2], tab.color[3], 1)
@@ -412,6 +493,261 @@ for index = 1, table.getn(TABS) do
 		button:SetScript("OnClick", function() ShowPage(this.key) end)
 		tabButtons[tab.key] = button
 	end
+end
+
+-- Each group's head and, under the open one, its tabs, from the top down.
+function side.Lay()
+	local y = GROUP_TOP
+	for index = 1, table.getn(side.groups) do
+		local each = side.groups[index]
+		each.head:ClearAllPoints()
+		each.head:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, y)
+		each.head:Refresh()
+		y = y - GROUP_HEIGHT - 2
+		local open = side.open == each.name
+		for slot = 1, table.getn(each.tabs) do
+			local button = each.tabs[slot]
+			if open then
+				button:ClearAllPoints()
+				button:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, y)
+				button:Show()
+				y = y - TAB_HEIGHT - 1
+			else
+				button:Hide()
+			end
+		end
+		if open then
+			y = y - 6
+		end
+	end
+end
+
+-- A group open, the rest shut; its head clicked again shuts it (clicked).
+function side.Open(name, clicked)
+	if clicked and side.open == name then
+		side.open = nil
+	else
+		side.open = name
+	end
+	side.Lay()
+end
+
+-- The search box, under the title: what is typed finds every setting by its
+-- name, its note or its tab's (the search's words, each found somewhere);
+-- Enter opens the first found, Escape empties it.
+local searchBox = CreateFrame("EditBox", nil, panel)
+side.box = searchBox
+panel.box = searchBox
+searchBox:SetWidth(SIDEBAR - 20)
+searchBox:SetHeight(24)
+searchBox:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -42)
+searchBox:SetAutoFocus(false)
+searchBox:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "")
+searchBox:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+searchBox:SetTextInsets(24, 8, 0, 0)
+searchBox:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+searchBox:SetBackdropColor(0.085, 0.085, 0.11, 1)
+searchBox:SetBackdropBorderColor(0.2, 0.2, 0.25, 1)
+searchBox.glass = searchBox:CreateTexture(nil, "OVERLAY")
+searchBox.glass:SetTexture(ART.."Search")
+searchBox.glass:SetWidth(12)
+searchBox.glass:SetHeight(12)
+searchBox.glass:SetPoint("LEFT", searchBox, "LEFT", 8, 0)
+searchBox.glass:SetVertexColor(MUTED[1], MUTED[2], MUTED[3], 1)
+searchBox.hint = Text(searchBox, 9, MUTED, "")
+searchBox.hint:SetPoint("LEFT", searchBox, "LEFT", 24, 0)
+searchBox.hint:SetText("Search: crit, size, sound")
+searchBox:SetScript("OnEditFocusGained", function()
+	this.hint:Hide()
+	this:SetBackdropBorderColor(ACCENT[1], ACCENT[2], ACCENT[3], 1)
+end)
+searchBox:SetScript("OnEditFocusLost", function()
+	if this:GetText() == "" then
+		this.hint:Show()
+	end
+	this:SetBackdropBorderColor(0.2, 0.2, 0.25, 1)
+end)
+searchBox:SetScript("OnTextChanged", function()
+	if not side.going then
+		side.Search(this:GetText())
+	end
+end)
+searchBox:SetScript("OnEscapePressed", function()
+	this:SetText("")
+	this:ClearFocus()
+end)
+searchBox:SetScript("OnEnterPressed", function()
+	if side.found and side.found[1] then
+		side.Go(side.found[1])
+	else
+		this:ClearFocus()
+	end
+end)
+
+-- What the search finds, in the page's place: a row for each setting, its
+-- tab's color, its name, and where it is.
+local RESULT_ROWS = 20
+local results = CreateFrame("Frame", nil, panel)
+side.results = results
+results:SetPoint("TOPLEFT", panel, "TOPLEFT", PAGE_X, -16)
+results:SetWidth(PAGE_WIDTH)
+results:SetHeight(HEIGHT - 70)
+results:Hide()
+results.title = Text(results, 13, ACCENT)
+results.title:SetPoint("TOPLEFT", results, "TOPLEFT", 0, 0)
+results.title:SetText("Search")
+results.line = Text(results, 9, MUTED)
+results.line:SetPoint("TOPLEFT", results.title, "BOTTOMLEFT", 0, -6)
+results.rows = {}
+for index = 1, RESULT_ROWS do
+	local row = CreateFrame("Button", nil, results)
+	row:SetWidth(PAGE_WIDTH)
+	row:SetHeight(26)
+	row:SetPoint("TOPLEFT", results, "TOPLEFT", 0, -44 - (index - 1) * 28)
+	row:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	row:SetBackdropColor(0.075, 0.075, 0.095, 1)
+	row:SetBackdropBorderColor(0.15, 0.15, 0.19, 1)
+	row.dot = Fill(row, "ARTWORK", 1, 1, 1, 1)
+	row.dot:SetWidth(6)
+	row.dot:SetHeight(6)
+	row.dot:SetPoint("LEFT", row, "LEFT", 10, 0)
+	row.label = Text(row, 10, TEXT)
+	row.label:SetPoint("LEFT", row, "LEFT", 24, 0)
+	row.where = Text(row, 9, MUTED)
+	row.where:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+	row:SetScript("OnEnter", function()
+		local c = this.entry.page.color
+		this:SetBackdropBorderColor(c[1], c[2], c[3], 1)
+		this.label:SetTextColor(1, 1, 1)
+	end)
+	row:SetScript("OnLeave", function()
+		this:SetBackdropBorderColor(0.15, 0.15, 0.19, 1)
+		this.label:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+	end)
+	row:SetScript("OnClick", function() side.Go(this.entry) end)
+	row:Hide()
+	results.rows[index] = row
+end
+
+-- A setting found by the search: its page (or a page's Advanced box, which
+-- opens with it), its name, its note's words too, and where it stands, to
+-- light it once its page opens.
+function side.Index(page, label, note, y, height)
+	if not (page and page.key and label and label ~= "") then
+		return
+	end
+	local clean = string.gsub(string.gsub(label, "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
+	table.insert(side.index, { page = page, key = page.key, label = clean, y = y or 0, height = height or ROW,
+		advanced = page.advanced, words = string.lower(clean.." "..(note or "").." "..(page.label or "")),
+		order = table.getn(side.index) })
+end
+
+function side.Search(text)
+	local query = string.lower(string.gsub(text or "", "^%s*(.-)%s*$", "%1"))
+	if query == "" then
+		side.found = nil
+		if results:IsShown() then
+			side.typing = true
+			ShowPage(current or "global")
+			side.typing = nil
+		end
+		return
+	end
+	for _, page in pairs(pages) do
+		page:Hide()
+	end
+	results:Show()
+	-- Every word of it in the setting's words; the ones whose name holds it
+	-- first, the rest in the window's order.
+	local found = {}
+	for index = 1, table.getn(side.index) do
+		local entry = side.index[index]
+		local all = true
+		for word in string.gfind(query, "%S+") do
+			if not string.find(entry.words, word, 1, true) then
+				all = false
+				break
+			end
+		end
+		if all then
+			entry.score = string.find(string.lower(entry.label), query, 1, true) and 0 or 1
+			table.insert(found, entry)
+		end
+	end
+	table.sort(found, function(a, b)
+		if a.score ~= b.score then
+			return a.score < b.score
+		end
+		return a.order < b.order
+	end)
+	side.found = found
+	local count = table.getn(found)
+	if count == 0 then
+		results.line:SetText("Nothing found for \""..text.."\".")
+	elseif count > RESULT_ROWS then
+		results.line:SetText(count.." found; the first "..RESULT_ROWS.." here. Another word narrows them.")
+	else
+		results.line:SetText(count.." found.")
+	end
+	for index = 1, RESULT_ROWS do
+		local row, entry = results.rows[index], found[index]
+		if entry then
+			local c = entry.page.color
+			row.entry = entry
+			row.dot:SetVertexColor(c[1], c[2], c[3], 1)
+			row.label:SetText(entry.label)
+			local tab = pages[entry.key]
+			row.where:SetText(tab.group.."  >  "..tab.label..(entry.advanced and "  >  Advanced" or ""))
+			row:Show()
+		else
+			row:Hide()
+		end
+	end
+end
+
+-- A setting picked from the search: the box emptied, its page open (its
+-- Advanced box too), and the setting lit a moment.
+local flasher = CreateFrame("Frame", nil, panel)
+flasher:Hide()
+flasher:SetScript("OnUpdate", function()
+	this.age = this.age + arg1
+	local left = 1.6 - this.age
+	if left <= 0 then
+		this.light:SetAlpha(0)
+		this:Hide()
+		return
+	end
+	-- Two beats, then it fades.
+	local beat = 0.5 + 0.5 * math.cos(this.age * 7.8)
+	this.light:SetAlpha(math.min(1, left) * (0.12 + 0.2 * beat))
+end)
+
+function side.Go(entry)
+	side.going = true
+	searchBox:SetText("")
+	searchBox:ClearFocus()
+	side.going = nil
+	side.found = nil
+	if entry.advanced then
+		DB().optionsAdvanced = true
+	end
+	ShowPage(entry.key)
+	local holder = entry.page
+	if not holder.light then
+		holder.light = Fill(holder, "BORDER", 1, 1, 1, 0)
+	end
+	local c = holder.color
+	holder.light:SetVertexColor(c[1], c[2], c[3], 1)
+	holder.light:ClearAllPoints()
+	holder.light:SetPoint("TOPLEFT", holder, "TOPLEFT", -6, entry.y + 3)
+	holder.light:SetWidth((holder.width or PAGE_WIDTH) + 12)
+	holder.light:SetHeight(entry.height + 6)
+	if flasher.light and flasher.light ~= holder.light then
+		flasher.light:SetAlpha(0)
+	end
+	flasher.light = holder.light
+	flasher.age = 0
+	flasher:Show()
 end
 
 ------------------------------------------------------------------------------
@@ -452,6 +788,7 @@ local function Subheader(page, text)
 	local header = Text(page, 9, page.color)
 	header:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 	header:SetText(string.upper(text))
+	side.Index(page, text, nil, page.y, 16)
 	local rule = Fill(page, "ARTWORK", page.color[1], page.color[2], page.color[3], 0.15)
 	if page.color == ACCENT then
 		table.insert(accented, function() rule:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.15) end)
@@ -562,6 +899,7 @@ local function Check(page, label, isOn, toggle, note)
 		end
 	end
 	table.insert(widgets, check)
+	side.Index(page, label, note, page.y, check:GetHeight())
 	page.y = page.y - check:GetHeight()
 	return check
 end
@@ -622,6 +960,7 @@ local function Choice(page, options, get, set)
 			end
 		end
 		table.insert(widgets, row)
+		side.Index(page, option[2], option[3], page.y, row:GetHeight())
 		page.y = page.y - row:GetHeight() - 2
 	end
 end
@@ -680,6 +1019,12 @@ local function Inline(page, label, options, get, set, labelWidth)
 		end
 		table.insert(widgets, row)
 	end
+	local names = {}
+	for index = 1, table.getn(options) do
+		table.insert(names, options[index][2])
+	end
+	names = table.concat(names, " / ")
+	side.Index(page, (label and label ~= "") and label or names, names, page.y, ROW)
 	page.y = page.y - ROW - 2
 end
 
@@ -739,6 +1084,7 @@ local function InlineChecks(page, items, label)
 			end
 		end
 		table.insert(widgets, check)
+		side.Index(page, item[1], label, page.y, ROW)
 	end
 	page.y = page.y - ROW
 end
@@ -803,6 +1149,7 @@ local function Swatches(page, label, colors, get, set)
 		end
 		table.insert(widgets, swatch)
 	end
+	side.Index(page, label, "color", page.y, ROW)
 	page.y = page.y - ROW
 end
 
@@ -876,6 +1223,7 @@ local function Slider(page, label, low, high, step, get, set, format)
 		slider.quiet = nil
 	end
 	table.insert(widgets, holder)
+	side.Index(page, label, nil, page.y, 20)
 	page.y = page.y - 22
 	return holder
 end
@@ -908,6 +1256,7 @@ local function Button(page, text, width, x, onClick, color)
 		this:SetBackdropBorderColor(this.color[1] * 0.6, this.color[2] * 0.6, this.color[3] * 0.6, 1)
 	end)
 	button:SetScript("OnClick", onClick)
+	side.Index(page, text, nil, page.y, 24)
 	return button
 end
 
@@ -1020,6 +1369,15 @@ local function Dropdown(page, label, Items, get, set, width)
 		button.text:SetTextColor(tint[1], tint[2], tint[3])
 	end
 	table.insert(widgets, holder)
+	-- Found by its items' names too (Survivor's Hoard by "hoard").
+	local names = {}
+	local listed, list = pcall(Items)
+	if listed and type(list) == "table" then
+		for index = 1, table.getn(list) do
+			table.insert(names, list[index].name or "")
+		end
+	end
+	side.Index(page, label, table.concat(names, " "), page.y, 22)
 	page.y = page.y - 28
 end
 
@@ -1048,6 +1406,7 @@ FontPicker(page, "Global font",
 	function() return SurvivorUI_GlobalFont and SurvivorUI_GlobalFont() end,
 	function(path) if SurvivorUI_SetGlobalFont then SurvivorUI_SetGlobalFont(path) end end)
 Note(page, "Changes every text of the addon at once. A piece given a font of its own, on its card in move mode, keeps that one.")
+Note(page, "Playing in English? Any font works. With the game in Chinese or Japanese, the addon switches by itself to Noto Sans SC, a font that has those letters: the other fonts don't, and the game mixes them up with English letters and numbers."):SetTextColor(1, 0.35, 0.35)
 Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"), "the game's windows too, after a reload")
 page.y = page.y - 6
 Button(page, "Every font back to default", 200, 0, Asked("Every font back to default?",
@@ -1292,6 +1651,7 @@ local function ModuleCheck(page, x, y, item)
 		end
 	end
 	table.insert(widgets, check)
+	side.Index(page, label, tip, y, ROW)
 	if game then
 		GameTick(page, x + PAGE_WIDTH / 2 - 92, y, 86, "The game's", game, isOn, toggle)
 	end
@@ -1468,6 +1828,7 @@ local function HealthRow(label, key, default)
 		end
 		table.insert(widgets, option)
 	end
+	side.Index(page, label.." health", "health numbers percent", page.y, ROW)
 	page.y = page.y - ROW - 2
 end
 
@@ -1531,6 +1892,7 @@ local function SizeSlider(page, x, y, width, label, low, high, step, get, set, f
 		slider.quiet = nil
 	end
 	table.insert(widgets, holder)
+	side.Index(page, label, "size", y, 30)
 	return holder
 end
 
@@ -1646,6 +2008,812 @@ local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads, game, 
 	end
 	if font then
 		TextSize(page, font)
+	end
+end
+
+------------------------------------------------------------------------------
+-- The kit (the options menu rework): the pieces a reworked page is made of,
+-- alike on every page, so a new tab is laid out the same way. Each goes under
+-- the last one (page.y), as the old pieces do, in the page's column:
+-- Kit.Split, Kit.Right and Kit.Join lay two columns side by side; an Advanced
+-- box is a page of its own inside the page (inset, full: its room).
+
+local Kit = {}
+local Paint = {}                       -- the pages' previews and pictures
+local WELL = { 0.075, 0.075, 0.095 }    -- a control's ground
+local EDGE = { 0.20, 0.20, 0.25 }       -- and its edge, at rest
+
+-- A piece's left edge and its width, in the column it goes in.
+local function Span(page)
+	return (page.inset or 0) + (page.left or 0), page.width or page.full or PAGE_WIDTH
+end
+
+-- A color lightened toward white: a chosen control's words.
+function Kit.Light(color, share)
+	share = share or 0.45
+	return color[1] + (1 - color[1]) * share, color[2] + (1 - color[2]) * share, color[3] + (1 - color[3]) * share
+end
+
+local function Boxed(frame, ground, edge)
+	frame:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	frame:SetBackdropColor(ground[1], ground[2], ground[3], 1)
+	frame:SetBackdropBorderColor(edge[1], edge[2], edge[3], 1)
+end
+
+function Kit.Split(page)
+	page.splitY = page.y
+	page.left, page.width = 0, math.floor(((page.full or PAGE_WIDTH) - 24) / 2)
+end
+
+function Kit.Right(page)
+	page.leftY = page.y
+	page.y = page.splitY
+	page.left = page.width + 24
+end
+
+function Kit.Join(page)
+	page.y = math.min(page.y, page.leftY or page.y)
+	page.left, page.width, page.splitY, page.leftY = nil, nil, nil, nil
+end
+
+-- A "?" in a ring after a piece's words: what it is, on hover.
+function Kit.Help(parent, anchor, title, text, color)
+	color = color or parent.color or MUTED
+	local help = CreateFrame("Button", nil, parent)
+	help:SetWidth(14)
+	help:SetHeight(14)
+	help:SetPoint("LEFT", anchor, "RIGHT", 6, 0)
+	help.ring = help:CreateTexture(nil, "ARTWORK")
+	help.ring:SetTexture(ART.."Ring")
+	help.ring:SetAllPoints(help)
+	help.ring:SetVertexColor(MUTED[1], MUTED[2], MUTED[3], 0.9)
+	help.mark = Text(help, 8, MUTED, "")
+	help.mark:SetPoint("CENTER", help, "CENTER", 1, 0)
+	help.mark:SetText("?")
+	help:SetScript("OnEnter", function()
+		this.ring:SetVertexColor(color[1], color[2], color[3], 1)
+		this.mark:SetTextColor(1, 1, 1)
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		GameTooltip:SetText(title, color[1], color[2], color[3])
+		GameTooltip:AddLine(text, 1, 1, 1, 1)
+		GameTooltip:Show()
+	end)
+	help:SetScript("OnLeave", function()
+		this.ring:SetVertexColor(MUTED[1], MUTED[2], MUTED[3], 0.9)
+		this.mark:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+		GameTooltip:Hide()
+	end)
+	return help
+end
+
+-- A section's name in small grey capitals, its help after it.
+function Kit.Section(page, text, help)
+	local left = Span(page)
+	page.y = page.y - 4
+	local label = Text(page, 9, MUTED)
+	label:SetPoint("TOPLEFT", page, "TOPLEFT", left, page.y)
+	label:SetText(string.upper(text))
+	if help then
+		Kit.Help(page, label, text, help)
+	end
+	side.Index(page, text, help, page.y, 14)
+	page.y = page.y - 17
+	return label
+end
+
+-- One of a few, side by side in one box: the chosen one lit in the page's
+-- color with a bar under it. options: { { value, name }, ... }.
+local function Segs(parent, options, get, set, color)
+	local holder = CreateFrame("Frame", nil, parent)
+	holder:SetHeight(26)
+	Boxed(holder, WELL, EDGE)
+	holder.parts = {}
+	local x = 2
+	for index = 1, table.getn(options) do
+		local part = CreateFrame("Button", nil, holder)
+		part:SetHeight(22)
+		part:SetPoint("TOPLEFT", holder, "TOPLEFT", x, -2)
+		part.wash = Fill(part, "BACKGROUND", color[1], color[2], color[3], 0)
+		part.wash:SetAllPoints(part)
+		part.bar = Fill(part, "BORDER", color[1], color[2], color[3], 0)
+		part.bar:SetHeight(2)
+		part.bar:SetPoint("BOTTOMLEFT", part, "BOTTOMLEFT", 0, 0)
+		part.bar:SetPoint("BOTTOMRIGHT", part, "BOTTOMRIGHT", 0, 0)
+		part.label = Text(part, 10, TEXT)
+		part.label:SetPoint("CENTER", part, "CENTER", 0, 0)
+		part.label:SetText(options[index][2])
+		part:SetWidth(math.ceil(part.label:GetStringWidth()) + 24)
+		part.value = options[index][1]
+		x = x + part:GetWidth()
+		part:SetScript("OnClick", function()
+			set(this.value)
+			RefreshAll()
+		end)
+		part:SetScript("OnEnter", function() this.hot = true holder:Refresh() end)
+		part:SetScript("OnLeave", function() this.hot = nil holder:Refresh() end)
+		table.insert(holder.parts, part)
+	end
+	holder:SetWidth(x + 2)
+	function holder:Refresh()
+		local chosen = get()
+		for index = 1, table.getn(self.parts) do
+			local part = self.parts[index]
+			local on = chosen == part.value
+			part.wash:SetVertexColor(color[1], color[2], color[3], on and 0.24 or (part.hot and 0.08 or 0))
+			part.bar:SetVertexColor(color[1], color[2], color[3], on and 1 or 0)
+			if part.hot then
+				part.label:SetTextColor(1, 1, 1)
+			elseif on then
+				part.label:SetTextColor(Kit.Light(color))
+			else
+				part.label:SetTextColor(TEXT[1] * 0.75, TEXT[2] * 0.75, TEXT[3] * 0.78)
+			end
+		end
+	end
+	table.insert(widgets, holder)
+	return holder
+end
+
+function Kit.Segments(page, options, get, set)
+	local left = Span(page)
+	local holder = Segs(page, options, get, set, page.color)
+	holder:SetPoint("TOPLEFT", page, "TOPLEFT", left, page.y)
+	local names = {}
+	for index = 1, table.getn(options) do
+		table.insert(names, options[index][2])
+	end
+	names = table.concat(names, " / ")
+	side.Index(page, names, names, page.y, 26)
+	page.y = page.y - 34
+	return holder
+end
+
+-- Simple or Advanced, at the page's top right: Advanced opens every page's
+-- box of fine settings, and stays so.
+function Kit.Mode(page)
+	local holder = Segs(page, { { "simple", "Simple" }, { "advanced", "Advanced" } },
+		function() return DB().optionsAdvanced and "advanced" or "simple" end,
+		function(mode) DB().optionsAdvanced = mode == "advanced" or nil end, page.color)
+	holder:SetPoint("RIGHT", close, "LEFT", -40, 0)
+	return holder
+end
+
+-- A choice among pictures: each a tile with a small drawing of what it does
+-- (Paint(tile, ground) lays it on the ground), its name and a line.
+-- options: { { value, name, line, Paint }, ... }.
+function Kit.Tiles(page, options, get, set)
+	local left, width = Span(page)
+	local color = page.color
+	local count, gap = table.getn(options), 10
+	local each = math.floor((width - gap * (count - 1)) / count)
+	for index = 1, count do
+		local option = options[index]
+		local tile = CreateFrame("Button", nil, page)
+		tile:SetWidth(each)
+		tile:SetHeight(56)
+		tile:SetPoint("TOPLEFT", page, "TOPLEFT", left + (index - 1) * (each + gap), page.y)
+		Boxed(tile, WELL, EDGE)
+		tile.ground = Fill(tile, "BORDER", 0.10, 0.14, 0.09, 1)
+		tile.ground:SetWidth(72)
+		tile.ground:SetHeight(42)
+		tile.ground:SetPoint("LEFT", tile, "LEFT", 7, 0)
+		if option[4] then
+			option[4](tile, tile.ground)
+		end
+		tile.name = Text(tile, 11, TEXT)
+		tile.name:SetPoint("TOPLEFT", tile.ground, "TOPRIGHT", 10, -5)
+		tile.name:SetText(option[2])
+		tile.line = Text(tile, 9, MUTED)
+		tile.line:SetPoint("TOPLEFT", tile.name, "BOTTOMLEFT", 0, -4)
+		tile.line:SetWidth(each - 72 - 26)
+		tile.line:SetJustifyH("LEFT")
+		tile.line:SetText(option[3] or "")
+		tile.value = option[1]
+		tile:SetScript("OnClick", function()
+			set(this.value)
+			RefreshAll()
+		end)
+		tile:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+		tile:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+		function tile:Refresh()
+			local on = get() == self.value
+			if on then
+				self:SetBackdropColor(color[1] * 0.16, color[2] * 0.16, color[3] * 0.16, 1)
+				self:SetBackdropBorderColor(color[1], color[2], color[3], 1)
+			else
+				self:SetBackdropColor(WELL[1], WELL[2], WELL[3], 1)
+				local edge = self.hot and 0.45 or EDGE[1]
+				self:SetBackdropBorderColor(edge, edge, edge + 0.05, 1)
+			end
+			if self.hot then
+				self.name:SetTextColor(1, 1, 1)
+			elseif on then
+				self.name:SetTextColor(Kit.Light(color))
+			else
+				self.name:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+			end
+		end
+		table.insert(widgets, tile)
+		side.Index(page, option[2], option[3], page.y, 56)
+	end
+	page.y = page.y - 56 - 10
+end
+
+-- Things on or off, as pills that wrap: on, filled in the page's color with
+-- a tick; off, an outline with a +. Hover one for its help.
+-- items: { { name, isOn, toggle, help }, ... }.
+function Kit.Chips(page, items)
+	local left, width = Span(page)
+	local color = page.color
+	local x, row = 0, 0
+	for index = 1, table.getn(items) do
+		local item = items[index]
+		local chip = CreateFrame("Button", nil, page)
+		chip:SetHeight(22)
+		Boxed(chip, WELL, EDGE)
+		chip.tick = chip:CreateTexture(nil, "OVERLAY")
+		chip.tick:SetTexture(ART.."Tick")
+		chip.tick:SetWidth(10)
+		chip.tick:SetHeight(10)
+		chip.tick:SetPoint("LEFT", chip, "LEFT", 9, 0)
+		chip.plus = Text(chip, 10, MUTED, "")
+		chip.plus:SetPoint("CENTER", chip.tick, "CENTER", 0, 0)
+		chip.plus:SetText("+")
+		chip.label = Text(chip, 10, TEXT)
+		chip.label:SetPoint("LEFT", chip, "LEFT", 24, 0)
+		chip.label:SetText(item[1])
+		local chipWidth = 24 + math.ceil(chip.label:GetStringWidth()) + 11
+		chip:SetWidth(chipWidth)
+		if x > 0 and x + chipWidth > width then
+			x, row = 0, row + 1
+		end
+		chip:SetPoint("TOPLEFT", page, "TOPLEFT", left + x, page.y - row * 27)
+		x = x + chipWidth + 6
+		chip.name, chip.isOn, chip.toggle, chip.help = item[1], item[2], item[3], item[4]
+		chip:SetScript("OnClick", function()
+			this.toggle()
+			RefreshAll()
+		end)
+		chip:SetScript("OnEnter", function()
+			this.hot = true
+			this:Refresh()
+			if this.help then
+				GameTooltip:SetOwner(this, "ANCHOR_TOP")
+				GameTooltip:SetText(this.name, color[1], color[2], color[3])
+				GameTooltip:AddLine(this.help, 1, 1, 1, 1)
+				GameTooltip:Show()
+			end
+		end)
+		chip:SetScript("OnLeave", function()
+			this.hot = nil
+			this:Refresh()
+			GameTooltip:Hide()
+		end)
+		function chip:Refresh()
+			local on = self.isOn()
+			if on then
+				self:SetBackdropColor(color[1] * 0.22, color[2] * 0.22, color[3] * 0.22, 1)
+				self:SetBackdropBorderColor(color[1], color[2], color[3], self.hot and 1 or 0.8)
+				self.tick:SetVertexColor(Kit.Light(color))
+				self.tick:Show()
+				self.plus:Hide()
+			else
+				self:SetBackdropColor(WELL[1], WELL[2], WELL[3], 1)
+				local edge = self.hot and 0.45 or EDGE[1]
+				self:SetBackdropBorderColor(edge, edge, edge + 0.05, 1)
+				self.tick:Hide()
+				self.plus:Show()
+			end
+			if self.hot then
+				self.label:SetTextColor(1, 1, 1)
+			elseif on then
+				self.label:SetTextColor(Kit.Light(color, 0.6))
+			else
+				self.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+			end
+		end
+		table.insert(widgets, chip)
+		side.Index(page, item[1], item[4], page.y - row * 27, 22)
+	end
+	page.y = page.y - (row + 1) * 27 - 5
+end
+
+-- A bar to drag, filled in the page's color, its value on the right: the
+-- old Slider's, at any place and width.
+function Kit.Bar(page, x, y, width, low, high, step, get, set, format)
+	local color = page.color
+	local holder = CreateFrame("Frame", nil, page)
+	holder:SetWidth(width)
+	holder:SetHeight(18)
+	holder:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+	holder.value = Text(holder, 10, color)
+	holder.value:SetPoint("RIGHT", holder, "RIGHT", -2, 0)
+	local slider = CreateFrame("Slider", nil, holder)
+	slider:SetOrientation("HORIZONTAL")
+	slider:SetWidth(width - 58)
+	slider:SetHeight(14)
+	slider:SetPoint("LEFT", holder, "LEFT", 0, 0)
+	slider:SetMinMaxValues(low, high)
+	slider:SetValueStep(step)
+	slider:EnableMouseWheel(true)
+	slider:SetScript("OnMouseDown", function() panel.sliding = true end)
+	slider:SetScript("OnMouseUp", function() panel.sliding = nil end)
+	slider.track = Fill(slider, "BACKGROUND", 0.14, 0.14, 0.18, 1)
+	slider.track:SetHeight(4)
+	slider.track:SetPoint("LEFT", slider, "LEFT", 0, 0)
+	slider.track:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
+	slider.fill = Fill(slider, "BORDER", color[1], color[2], color[3], 0.8)
+	slider.fill:SetHeight(4)
+	slider.fill:SetPoint("LEFT", slider, "LEFT", 0, 0)
+	local thumb = Fill(slider, "OVERLAY", 1, 1, 1, 1)
+	thumb:SetWidth(8)
+	thumb:SetHeight(14)
+	slider:SetThumbTexture(thumb)
+	local function Show(value)
+		holder.value:SetText(type(format) == "function" and format(value) or string.format(format or "%.2f", value))
+		slider.fill:SetWidth(math.max(1, (slider:GetWidth() - 8) * (value - low) / (high - low) + 4))
+	end
+	slider:SetScript("OnValueChanged", function()
+		local me = this
+		local value = math.floor(me:GetValue() / step + 0.5) * step
+		Show(value)
+		if not me.quiet then
+			set(value)
+			-- The page's other pieces (its preview, its S M L) follow.
+			if not me.refreshing then
+				me.refreshing = true
+				RefreshAll()
+				me.refreshing = nil
+			end
+		end
+	end)
+	slider:SetScript("OnMouseWheel", function()
+		this:SetValue(this:GetValue() + arg1 * step)
+	end)
+	slider:SetScript("OnEnter", function() thumb:SetVertexColor(color[1], color[2], color[3], 1) end)
+	slider:SetScript("OnLeave", function() thumb:SetVertexColor(1, 1, 1, 1) end)
+	function holder:Refresh()
+		slider.quiet = true
+		local value = get()
+		slider:SetValue(value)
+		Show(value)
+		slider.quiet = nil
+	end
+	table.insert(widgets, holder)
+	return holder
+end
+
+-- A size: its name with S, M and L on the right, and the bar under them for
+-- any size between. presets: { { "S", value }, ... }.
+function Kit.Size(page, label, low, high, step, get, set, presets, format)
+	local left, width = Span(page)
+	local color = page.color
+	local top = page.y - 4
+	local title = Text(page, 9, MUTED)
+	title:SetPoint("TOPLEFT", page, "TOPLEFT", left, top)
+	title:SetText(string.upper(label))
+	local x = left + width
+	for index = table.getn(presets), 1, -1 do
+		local preset = presets[index]
+		local button = CreateFrame("Button", nil, page)
+		button:SetWidth(26)
+		button:SetHeight(18)
+		x = x - 26
+		button:SetPoint("TOPLEFT", page, "TOPLEFT", x, top + 4)
+		x = x - 4
+		Boxed(button, WELL, EDGE)
+		button.text = Text(button, 9, TEXT)
+		button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
+		button.text:SetText(preset[1])
+		button.value = preset[2]
+		button:SetScript("OnClick", function()
+			set(this.value)
+			RefreshAll()
+		end)
+		button:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+		button:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+		function button:Refresh()
+			local on = math.abs((get() or 0) - self.value) < step / 2
+			if on then
+				self:SetBackdropColor(color[1] * 0.26, color[2] * 0.26, color[3] * 0.26, 1)
+				self:SetBackdropBorderColor(color[1], color[2], color[3], 1)
+			else
+				self:SetBackdropColor(WELL[1], WELL[2], WELL[3], 1)
+				local edge = self.hot and 0.45 or EDGE[1]
+				self:SetBackdropBorderColor(edge, edge, edge + 0.05, 1)
+			end
+			if self.hot then
+				self.text:SetTextColor(1, 1, 1)
+			elseif on then
+				self.text:SetTextColor(Kit.Light(color))
+			else
+				self.text:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+			end
+		end
+		table.insert(widgets, button)
+	end
+	local bar = Kit.Bar(page, left, top - 20, width, low, high, step, get, set, format)
+	side.Index(page, label, "size small medium large", top, 40)
+	page.y = top - 46
+	return bar
+end
+
+-- Fine settings, two to a row: each its name and value over its bar.
+-- items: { { label, low, high, step, get, set, format }, ... }.
+function Kit.Fine(page, items)
+	local left, width = Span(page)
+	local column = math.floor((width - 24) / 2)
+	for index = 1, table.getn(items) do
+		local item = items[index]
+		local slot = math.mod(index - 1, 2)
+		-- The page's preview follows each one.
+		SizeSlider(page, left + slot * (column + 24), page.y, column,
+			item[1], item[2], item[3], item[4], item[5], function(value)
+				item[6](value)
+				if page.preview then
+					page.preview:Refresh()
+				end
+			end, item[7])
+		if slot == 1 or index == table.getn(items) then
+			page.y = page.y - 36
+		end
+	end
+end
+
+-- A number a step at a time: - and + about its value, in a box.
+function Kit.Stepper(page, label, low, high, step, get, set, format)
+	local left = Span(page)
+	local x = left
+	if label then
+		local text = Text(page, 10, TEXT)
+		text:SetPoint("TOPLEFT", page, "TOPLEFT", left + 2, page.y - 5)
+		text:SetText(label)
+		x = left + 140
+	end
+	local color = page.color
+	local holder = CreateFrame("Frame", nil, page)
+	holder:SetWidth(116)
+	holder:SetHeight(24)
+	holder:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
+	Boxed(holder, WELL, EDGE)
+	holder.value = Text(holder, 10, TEXT)
+	holder.value:SetPoint("CENTER", holder, "CENTER", 0, 0)
+	local function Step(by)
+		local value = math.max(low, math.min(high, (get() or 0) + by))
+		set(value)
+		RefreshAll()
+	end
+	local function Side(sign, point, by)
+		local button = CreateFrame("Button", nil, holder)
+		button:SetWidth(26)
+		button:SetHeight(22)
+		button:SetPoint(point, holder, point, point == "LEFT" and 1 or -1, 0)
+		button.wash = Fill(button, "BACKGROUND", color[1], color[2], color[3], 0)
+		button.wash:SetAllPoints(button)
+		button.text = Text(button, 12, TEXT)
+		button.text:SetPoint("CENTER", button, "CENTER", 0, 1)
+		button.text:SetText(sign)
+		button:SetScript("OnClick", function() Step(by) end)
+		button:SetScript("OnEnter", function()
+			this.wash:SetVertexColor(color[1], color[2], color[3], 0.2)
+			this.text:SetTextColor(1, 1, 1)
+		end)
+		button:SetScript("OnLeave", function()
+			this.wash:SetVertexColor(color[1], color[2], color[3], 0)
+			this.text:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+		end)
+		return button
+	end
+	holder.less = Side("-", "LEFT", -step)
+	holder.more = Side("+", "RIGHT", step)
+	function holder:Refresh()
+		local value = get() or 0
+		self.value:SetText(type(format) == "function" and format(value) or string.format(format or "%d", value))
+		self.value:SetTextColor(Kit.Light(color, 0.3))
+		self.less:SetAlpha(value <= low and 0.35 or 1)
+		self.more:SetAlpha(value >= high and 0.35 or 1)
+	end
+	table.insert(widgets, holder)
+	if label then
+		side.Index(page, label, nil, page.y, 24)
+	end
+	page.y = page.y - 30
+	return holder
+end
+
+-- The part's switch: a track with a knob, On in the page's color, Off in red.
+function Kit.Switch(page, x, y, isOn, toggle)
+	local color = page.color
+	local switch = CreateFrame("Button", nil, page)
+	switch:SetWidth(76)
+	switch:SetHeight(20)
+	switch:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+	switch.track = Fill(switch, "BORDER", 0.22, 0.22, 0.27, 1)
+	switch.track:SetWidth(32)
+	switch.track:SetHeight(16)
+	switch.track:SetPoint("LEFT", switch, "LEFT", 0, 0)
+	switch.knob = Fill(switch, "ARTWORK", 1, 1, 1, 1)
+	switch.knob:SetWidth(12)
+	switch.knob:SetHeight(12)
+	switch.label = Text(switch, 11, TEXT)
+	switch.label:SetPoint("LEFT", switch.track, "RIGHT", 8, 0)
+	switch:SetScript("OnClick", function()
+		if toggle then
+			toggle()
+		end
+		RefreshAll()
+	end)
+	switch:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+	switch:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+	function switch:Refresh()
+		local on = not isOn or isOn()
+		self.knob:ClearAllPoints()
+		if on then
+			self.track:SetVertexColor(color[1], color[2], color[3], 0.9)
+			self.knob:SetPoint("RIGHT", self.track, "RIGHT", -2, 0)
+			self.knob:SetVertexColor(1, 1, 1, 1)
+		else
+			self.track:SetVertexColor(0.22, 0.22, 0.27, 1)
+			self.knob:SetPoint("LEFT", self.track, "LEFT", 2, 0)
+			self.knob:SetVertexColor(0.62, 0.62, 0.66, 1)
+		end
+		self.label:SetText(on and "On" or "Off")
+		if self.hot then
+			self.label:SetTextColor(1, 1, 1)
+		elseif on then
+			self.label:SetTextColor(Kit.Light(color, 0.3))
+		else
+			self.label:SetTextColor(1, 0.42, 0.36)
+		end
+	end
+	table.insert(widgets, switch)
+	return switch
+end
+
+-- A quiet button (an outline) and the page's one strong button (filled in
+-- its color).
+function Kit.Quiet(page, text, width, onClick)
+	local button = CreateFrame("Button", nil, page)
+	button:SetWidth(width)
+	button:SetHeight(24)
+	Boxed(button, WELL, { 0.3, 0.3, 0.36 })
+	button.text = Text(button, 10, TEXT)
+	button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button.text:SetText(text)
+	button:SetScript("OnEnter", function()
+		this.text:SetTextColor(1, 1, 1)
+		this:SetBackdropBorderColor(0.6, 0.6, 0.66, 1)
+	end)
+	button:SetScript("OnLeave", function()
+		this.text:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+		this:SetBackdropBorderColor(0.3, 0.3, 0.36, 1)
+	end)
+	button:SetScript("OnClick", onClick)
+	return button
+end
+
+function Kit.Strong(page, text, width, onClick)
+	local color = page.color
+	local button = CreateFrame("Button", nil, page)
+	button:SetWidth(width)
+	button:SetHeight(24)
+	Boxed(button, { color[1] * 0.5, color[2] * 0.5, color[3] * 0.5 }, color)
+	button.text = Text(button, 10, { 1, 1, 1 })
+	button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button.text:SetText(text)
+	button:SetScript("OnEnter", function()
+		this:SetBackdropColor(color[1] * 0.7, color[2] * 0.7, color[3] * 0.7, 1)
+		this:SetBackdropBorderColor(1, 1, 1, 1)
+	end)
+	button:SetScript("OnLeave", function()
+		this:SetBackdropColor(color[1] * 0.5, color[2] * 0.5, color[3] * 0.5, 1)
+		this:SetBackdropBorderColor(color[1], color[2], color[3], 1)
+	end)
+	button:SetScript("OnClick", onClick)
+	return button
+end
+
+-- A page's head: its name in its color (Simple and Advanced at the top right
+-- when it has fine settings), a line on what it is, then the part's switch,
+-- The game's beside it where the game has its own, and Back to its place.
+-- spec: { title, line, isOn, toggle, reloads, game, piece, back, advanced }.
+function Kit.Head(page, spec)
+	local color = page.color
+	local title = Text(page, 15, color)
+	title:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
+	title:SetText(spec.title or page.label)
+	if spec.advanced then
+		Kit.Mode(page)
+	end
+	page.y = -27
+	if spec.line then
+		local line = Text(page, 9, MUTED)
+		line:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+		line:SetWidth(PAGE_WIDTH)
+		line:SetJustifyH("LEFT")
+		line:SetText(spec.line)
+		page.y = page.y - 13 * Lines(line, PAGE_WIDTH) - 9
+	end
+	if spec.isOn then
+		local y = page.y
+		Kit.Switch(page, 0, y, spec.isOn, spec.toggle)
+		local x = 84
+		if spec.reloads then
+			local note = Text(page, 9, MUTED)
+			note:SetPoint("TOPLEFT", page, "TOPLEFT", x, y - 5)
+			note:SetText("after a reload")
+			x = x + math.ceil(note:GetStringWidth()) + 16
+		end
+		if spec.game then
+			GameTick(page, x, y, 120, "The game's", spec.game, spec.isOn, spec.toggle)
+		end
+		if spec.piece or spec.back then
+			local back = Kit.Quiet(page, "Back to its place", 140, spec.back or function()
+				if SurvivorUI_ResetPiece then
+					SurvivorUI_ResetPiece(spec.piece)
+				end
+			end)
+			back:SetPoint("TOPLEFT", page, "TOPLEFT", PAGE_WIDTH - 140, y + 2)
+			side.Index(page, "Back to its place", "reset place position", y, 22)
+		end
+		page.y = y - 30
+	end
+	local rule = Fill(page, "ARTWORK", color[1], color[2], color[3], 0.22)
+	rule:SetHeight(1)
+	rule:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y + 4)
+	rule:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, page.y + 4)
+	page.y = page.y - 6
+end
+
+-- What the settings do, shown as they change: a strip of ground, LIVE
+-- PREVIEW in its corner, and Paint(preview) drawing on it each refresh with
+-- its pool of words (preview:Word) and boxes (preview:Box, in a layer: two
+-- boxes in one layer may draw either way round, so one over another goes a
+-- layer up).
+function Kit.Preview(page, height, Paint)
+	local preview = CreateFrame("Frame", nil, page)
+	preview:SetWidth(PAGE_WIDTH)
+	preview:SetHeight(height)
+	preview:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+	Boxed(preview, { 0.085, 0.115, 0.075 }, { 0.17, 0.23, 0.15 })
+	preview.tag = Text(preview, 8, { 0.55, 0.66, 0.50 }, "")
+	preview.tag:SetPoint("TOPLEFT", preview, "TOPLEFT", 8, -6)
+	preview.tag:SetText("LIVE PREVIEW")
+	preview.words, preview.boxes = {}, {}
+	function preview:Begin()
+		for index = 1, table.getn(self.words) do
+			self.words[index]:Hide()
+		end
+		for _, pool in pairs(self.boxes) do
+			for index = 1, table.getn(pool) do
+				pool[index]:Hide()
+			end
+			pool.used = 0
+		end
+		self.wordCount = 0
+	end
+	function preview:Word(font, size, flags, r, g, b, text)
+		self.wordCount = self.wordCount + 1
+		local word = self.words[self.wordCount]
+		if not word then
+			word = self:CreateFontString(nil, "OVERLAY")
+			self.words[self.wordCount] = word
+		end
+		word:SetFont(font, math.max(6, math.floor(size + 0.5)), flags)
+		word:SetTextColor(r, g, b)
+		word:SetText(text)
+		word:ClearAllPoints()
+		word:Show()
+		return word
+	end
+	function preview:Box(r, g, b, a, texture, layer)
+		layer = layer or "ARTWORK"
+		local pool = self.boxes[layer]
+		if not pool then
+			pool = { used = 0 }
+			self.boxes[layer] = pool
+		end
+		pool.used = pool.used + 1
+		local box = pool[pool.used]
+		if not box then
+			box = self:CreateTexture(nil, layer)
+			pool[pool.used] = box
+		end
+		box:SetTexture(texture or FLAT)
+		box:SetTexCoord(0, 1, 0, 1)
+		box:SetVertexColor(r, g, b, a or 1)
+		box:ClearAllPoints()
+		box:Show()
+		return box
+	end
+	function preview:Refresh()
+		if self:IsVisible() then
+			Paint(self)
+		end
+	end
+	table.insert(widgets, preview)
+	page.preview = preview
+	page.y = page.y - height - 12
+	return preview
+end
+
+-- A line that opens another tab: where a setting of this one lives.
+function Kit.Link(page, text, key)
+	local left = Span(page)
+	local link = CreateFrame("Button", nil, page)
+	link:SetHeight(16)
+	link:SetPoint("TOPLEFT", page, "TOPLEFT", left, page.y)
+	link.text = Text(link, 9, MUTED)
+	link.text:SetPoint("LEFT", link, "LEFT", 0, 0)
+	local target = pages[key]
+	link.text:SetText(text.."  |cffd8d8de"..target.label.."  >|r")
+	link:SetWidth(math.ceil(link.text:GetStringWidth()) + 4)
+	link:SetScript("OnEnter", function() this.text:SetTextColor(1, 1, 1) end)
+	link:SetScript("OnLeave", function() this.text:SetTextColor(MUTED[1], MUTED[2], MUTED[3]) end)
+	link:SetScript("OnClick", function() ShowPage(key) end)
+	page.y = page.y - 20
+	return link
+end
+
+-- The fine settings: a box of its own under the rest, shown in Advanced only
+-- (a line in Simple says what it holds, and opens it). The pieces go in the
+-- box as in a page (Kit.Advanced returns it); Kit.EndAdvanced closes it.
+-- It comes last, so nothing under it moves as it opens.
+function Kit.Advanced(page, holds)
+	local box = CreateFrame("Frame", nil, page)
+	box:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y - 2)
+	box:SetWidth(PAGE_WIDTH)
+	Boxed(box, { 0.062, 0.062, 0.08 }, { 0.17, 0.17, 0.22 })
+	box.color, box.key, box.label, box.advanced = page.color, page.key, page.label, true
+	box.preview = page.preview
+	box.inset, box.full, box.y = 12, PAGE_WIDTH - 24, -10
+	local more = CreateFrame("Button", nil, page)
+	more:SetHeight(18)
+	more:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y - 2)
+	more.text = Text(more, 9, MUTED)
+	more.text:SetPoint("LEFT", more, "LEFT", 0, 0)
+	more.text:SetText("Advanced: "..holds.."  |cffd8d8de>|r")
+	more:SetWidth(math.ceil(more.text:GetStringWidth()) + 4)
+	more:SetScript("OnEnter", function() this.text:SetTextColor(1, 1, 1) end)
+	more:SetScript("OnLeave", function() this.text:SetTextColor(MUTED[1], MUTED[2], MUTED[3]) end)
+	more:SetScript("OnClick", function()
+		DB().optionsAdvanced = true
+		RefreshAll()
+	end)
+	box.more = more
+	Kit.Section(box, "Fine-tuning")
+	return box
+end
+
+function Kit.EndAdvanced(page, box)
+	box:SetHeight(-box.y + 4)
+	function box:Refresh()
+		if DB().optionsAdvanced then
+			self:Show()
+			self.more:Hide()
+		else
+			self:Hide()
+			self.more:Show()
+		end
+	end
+	table.insert(widgets, box)
+	page.y = page.y - 2 - box:GetHeight() - 8
+end
+
+-- The page's foot, level with Save & Close: Reset this page at the left,
+-- the page's one strong button beside Save & Close.
+-- spec: { reset = its action, resetText, strong = { text, action } }.
+function Kit.Foot(page, spec)
+	if spec.reset then
+		local reset = Kit.Quiet(page, spec.resetText or "Reset this page", 140, spec.reset)
+		reset:SetHeight(28)
+		reset:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", PAGE_X, 12)
+		side.Index(page, spec.resetText or "Reset this page", "default", -(HEIGHT - 16 - 40), 28)
+	end
+	if spec.strong then
+		local strong = Kit.Strong(page, spec.strong[1], 150, spec.strong[2])
+		strong:SetHeight(28)
+		strong:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14 - 170 - 10, 12)
 	end
 end
 
@@ -1769,13 +2937,101 @@ page.y = page.y - 28
 ------------------------------------------------------------------------------
 -- Boss bars (BossBars.lua).
 
+-- Reworked (the kit): the preview draws the bars as BossBars.lua does, a
+-- boss's, a guardian's and an elite's, at their size and text size.
+
 page = pages.bosses
-Header(page, "Boss bars", "At the top of the screen: the bosses and the awake guardians, with their debuffs, apart from the run tracker.")
-PanelHead(page, OnUnlessOff("bossBars"), Call("SurvivorUI_BossBars"), "bosses", "Boss bars", nil, GAME.bosses)
-Subheader(page, "What shows")
-Check(page, "Elites on the boss bars", OnlyIfOn("bossBarsElites"), Call("SurvivorUI_BossBars", "elites"))
-Note(page, "Only the run tracker's own bosses? Untick these and The game's, and keep the tracker's Boss health on (Run tracker tab): with it on, the game's bars stay away anyway.")
-HealthRow("Health", "bossHealth", "absolutePercent")
+Kit.Head(page, { line = "At the top of the screen: the bosses and the awake guardians, with their debuffs, apart from the run tracker.",
+	isOn = OnUnlessOff("bossBars"), toggle = Call("SurvivorUI_BossBars"), game = GAME.bosses, piece = "Boss bars", advanced = true })
+
+function Paint.Bosses(self)
+	self:Begin()
+	if DB().bossBars == false then
+		self:Word(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], "No boss bars"):SetPoint("CENTER", self, "CENTER", 0, 0)
+		return
+	end
+	local scale = SurvivorUI_GetScale and SurvivorUI_GetScale("bosses") or 1
+	local step = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Boss bars") or 0
+	local look = DB().bossHealth or "absolutePercent"
+	local width, height = math.floor(220 * scale + 0.5), math.floor(18 * scale + 0.5)
+	local bars = {
+		{ { 0.72, 0.32, 1.00 }, "Hogger", 2400000, 3300000 },
+		{ { 0.20, 0.75, 0.95 }, "Lair guardian", 640000, 1500000 },
+	}
+	if DB().bossBarsElites then
+		table.insert(bars, { { 1.00, 0.55, 0.10 }, "Elite", 90000, 120000 })
+	end
+	local x = math.floor((PAGE_WIDTH - width) / 2)
+	local y = -math.floor((self:GetHeight() - table.getn(bars) * (height + 4)) / 2) - 4
+	for index = 1, table.getn(bars) do
+		local bar = bars[index]
+		local color = bar[1]
+		-- The black edge a layer under; the health and the dark rest of the
+		-- bar side by side over it.
+		local border = self:Box(0, 0, 0, 1, nil, "BORDER")
+		border:SetPoint("TOPLEFT", self, "TOPLEFT", x - 1, y + 1)
+		border:SetWidth(width + 2)
+		border:SetHeight(height + 2)
+		local filled = math.floor(width * bar[3] / bar[4] + 0.5)
+		local fill = self:Box(color[1], color[2], color[3], 0.9)
+		fill:SetPoint("TOPLEFT", self, "TOPLEFT", x, y)
+		fill:SetWidth(filled)
+		fill:SetHeight(height)
+		local rest = self:Box(0.08, 0.08, 0.1, 1)
+		rest:SetPoint("TOPLEFT", fill, "TOPRIGHT", 0, 0)
+		rest:SetWidth(width - filled)
+		rest:SetHeight(height)
+		local size = (10 + FONT_BUMP + step) * math.max(0.7, scale)
+		self:Word(SurvivorUI_FONT, size, "OUTLINE", 1, 1, 1, bar[2]):SetPoint("LEFT", border, "LEFT", 6, 0)
+		local value = SurvivorUI_HealthText and SurvivorUI_HealthText(bar[3], bar[4], look) or ""
+		self:Word(SurvivorUI_FONT, size, "OUTLINE", 1, 1, 1, value):SetPoint("RIGHT", border, "RIGHT", -6, 0)
+		y = y - height - 4
+	end
+end
+Kit.Preview(page, 96, Paint.Bosses)
+
+Kit.Section(page, "Health", "As each bar's right end reads it. Always short: 1.2M for 1,200,000.")
+do
+	local looks = {}
+	for index = 1, table.getn(HEALTH_LOOKS) do
+		table.insert(looks, { HEALTH_LOOKS[index][1], HEALTH_LOOKS[index][2] })
+	end
+	Kit.Segments(page, looks, function() return DB().bossHealth or "absolutePercent" end,
+		function(look) DB().bossHealth = look end)
+end
+Kit.Split(page)
+Kit.Size(page, "Size", 0.5, 2, 0.05,
+	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("bosses") or 1 end,
+	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("bosses", value) end end,
+	{ { "S", 0.8 }, { "M", 1 }, { "L", 1.25 } })
+Kit.Right(page)
+Kit.Section(page, "Shows", "Only the run tracker's own bosses? Untick Elites and The game's, and keep the tracker's Boss health on (Run tracker tab): with it on, the game's bars stay away anyway.")
+Kit.Chips(page, {
+	{ "Elites", OnlyIfOn("bossBarsElites"), Call("SurvivorUI_BossBars", "elites"), "The elites alive get a bar too, under the bosses and guardians." },
+})
+Kit.Join(page)
+do
+	local box = Kit.Advanced(page, "text size")
+	Kit.Stepper(box, "Text size", -4, 8, 1,
+		function() return SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Boss bars") or 0 end,
+		function(value) if SurvivorUI_SetPieceTextStep then SurvivorUI_SetPieceTextStep("Boss bars", value) end end,
+		function(value) return value == 0 and "normal" or ((value > 0 and "+" or "")..value) end)
+	Kit.EndAdvanced(page, box)
+end
+Kit.Foot(page, { reset = Asked("Boss bars back to default?",
+	"The health as 1.2M | 73%, no elites, the first size and text size. Where it stands stays: Back to its place for that.", "Back to default",
+	function()
+		DB().bossHealth = nil
+		if DB().bossBarsElites and SurvivorUI_BossBars then
+			SurvivorUI_BossBars("elites")
+		end
+		if SurvivorUI_SetPartScale then
+			SurvivorUI_SetPartScale("bosses", 1)
+		end
+		if SurvivorUI_SetPieceTextStep then
+			SurvivorUI_SetPieceTextStep("Boss bars", 0)
+		end
+	end) })
 
 ------------------------------------------------------------------------------
 -- Kills & gold: the line of the kills, the gold and the cache (Tally.lua).
@@ -1835,7 +3091,10 @@ PanelHead(page, OnlyIfOn("xpBar"), Call("SurvivorUI_ToggleXpBar"), "xpbar", "XP 
 Subheader(page, "What shows")
 Check(page, "Time to the next level", OnUnlessOff("xpBarEta"), Flip("xpBarEta"), "and the experience a minute, from the recent pace")
 Check(page, "Luck and the cards' odds", OnUnlessOff("xpBarLuck"), Flip("xpBarLuck"),
-	"your luck over the bar, and under it a ribbon of the next card's odds, each rarity's color as wide as its chance; hover the bar for every kind of pick")
+	"your luck over the bar; hover the bar for every kind of pick, or a side's odds for its own")
+Check(page, "The odds' ribbon under the bar", function() return DB().xpBarRibbon == true end,
+	function() DB().xpBarRibbon = (not DB().xpBarRibbon) or nil end,
+	"the next card's odds, each rarity's color as wide as its chance")
 Check(page, "The odds beside the bar", function() return DB().xpBarOddsSide == true end,
 	function() DB().xpBarOddsSide = (not DB().xpBarOddsSide) or nil end,
 	"to read without the mouse: a legendary's, an epic's and a rare's chance, the spells' and jewelry's on its left, the amulets' on its right")
@@ -1882,13 +3141,7 @@ Slider(page, "Lines shown", 3, 15, 1, function() return DB().lootLines or 8 end,
 -- Combat text.
 
 page = pages.combat
-Header(page, "Combat text", "The combat numbers: SurvivorUI's, set below; the game's; or off.")
-Inline(page, "Combat numbers", {
-	{ "survivor", "SurvivorUI's" },
-	{ "game", "The game's" },
-	{ "none", "Off" },
-}, function() return SurvivorUI_DamageMode and SurvivorUI_DamageMode() or "survivor" end,
-	function(mode) if SurvivorUI_SetDamageMode then SurvivorUI_SetDamageMode(mode) end end)
+Kit.Head(page, { line = "The numbers of the fight: SurvivorUI's, set here, the game's own, or none.", advanced = true })
 
 -- Survivor's settings: each a setting of SurvivorUI.lua's (SurvivorUI_CT).
 local function CTGet(key)
@@ -1909,56 +3162,227 @@ local function CTSet(key)
 	end
 end
 
-Subheader(page, "Where")
-Inline(page, nil, {
-	{ "sides", "Beside the hero" },
-	{ "enemies", "Over the enemies" },
-}, CTGet("ctLayout"), CTSet("ctLayout"))
-Slider(page, "Distance from hero", 60, 320, 10, CTGet("ctDistance"), CTSet("ctDistance"), "%d")
-Slider(page, "How high they rise", 80, 320, 10, CTGet("ctRise"), CTSet("ctRise"), "%d")
-Check(page, "Crits in a separate column", CTGet("ctCritColumn"), CTToggle("ctCritColumn"), "on the right")
-Note(page, "Drag a column while this tab is open, or click it for its card; moved, it stays put whatever the distance. Over the enemies needs nameplates.")
+-- A dab of color on a tile's picture: x and y from the picture's top left.
+function Kit.Dab(tile, ground, x, y, width, height, r, g, b, a)
+	local dab = tile:CreateTexture(nil, "ARTWORK")
+	dab:SetTexture(FLAT)
+	dab:SetVertexColor(r, g, b, a or 1)
+	dab:SetWidth(width)
+	dab:SetHeight(height)
+	dab:SetPoint("CENTER", ground, "TOPLEFT", x, -y)
+	return dab
+end
 
-Subheader(page, "Look")
-InlineChecks(page, {
-	{ "Source icons", CTGet("ctIcons"), CTToggle("ctIcons") },
-	{ "Meter colors", CTGet("ctMeterColors"), CTToggle("ctMeterColors") },
-	{ "Short numbers", CTGet("ctShort"), CTToggle("ctShort") },
-})
-Slider(page, "Size", 0.5, 1.5, 0.05, CTGet("ctSize"), CTSet("ctSize"))
-Slider(page, "Crit size", 0.6, 1.6, 0.05, CTGet("ctCritSize"), CTSet("ctCritSize"))
-
-Subheader(page, "What shows")
-InlineChecks(page, {
-	{ "Damage over time", CTGet("ctPeriodic"), CTToggle("ctPeriodic") },
-	{ "Heals", CTGet("ctHeals"), CTToggle("ctHeals") },
-	{ "Damage taken", CTGet("ctTaken"), CTToggle("ctTaken") },
-})
-Slider(page, "Smallest heal", 0, 10, 1, CTGet("ctHealMin"), CTSet("ctHealMin"), "%d%% HP")
-Check(page, "Buffs gaining and fading", function() return SurvivorUI_CombatTextAuras and SurvivorUI_CombatTextAuras() end,
-	function() if SurvivorUI_SetCombatTextAuras then SurvivorUI_SetCombatTextAuras(not SurvivorUI_CombatTextAuras()) end end,
-	"the game's <Power Word: Shield> and its debuffs, off by default")
-InlineChecks(page, {
-	{ "Damage", CTGet("ctAddDealt"), CTToggle("ctAddDealt") },
-	{ "Crits", CTGet("ctAddCrits"), CTToggle("ctAddCrits") },
-	{ "Heals", CTGet("ctAddHeals"), CTToggle("ctAddHeals") },
-	{ "Taken", CTGet("ctMergeTaken"), CTToggle("ctMergeTaken") },
-}, "Add up")
-Slider(page, "Add up within", 50, 500, 25, CTGet("ctAddWindow"), CTSet("ctAddWindow"), "%d ms")
-Note(page, "One source's hits that close: one number, their sum and count (1.2k x3).")
-
-Subheader(page, "New best crit")
-Note(page, "On or off, which crits, its effect, how long it stays and its size: the Records tab.")
-page.y = page.y - 4
-Button(page, "Show a sample", 150, 0, function()
-	if SurvivorUI_CTSample then
-		SurvivorUI_CTSample()
+-- The hero in the previews and pictures: its class's color.
+function Paint.HeroColor()
+	local _, class = UnitClass("player")
+	if class and SurvivorUI_ClassColor then
+		return SurvivorUI_ClassColor(class)
 	end
-end)
-Button(page, "Combat text back to default", 220, 162, Asked("Combat text back to default?",
-	"Every setting of this tab as it first was; the columns you moved stay where they are.", "Back to default",
-	function() if SurvivorUI_CTDefaults then SurvivorUI_CTDefaults() end end))
-page.y = page.y - 28
+	return 0.58, 0.51, 0.79
+end
+
+-- The preview: the hero and the numbers about it as SurvivorUI.lua lays them
+-- (the hits dealt left of the hero, the crits right of it, the heals over it,
+-- the damage taken under it; over the enemies, over three of them), in their
+-- sizes, colors and icons. The sources: the meter's top three this run, else
+-- three spells to show the look.
+Paint.SAMPLE = {
+	{ "Fireball", "Interface\\Icons\\Spell_Fire_FlameBolt" },
+	{ "Corruption", "Interface\\Icons\\Spell_Shadow_AbominationExplosion" },
+	{ "Holy Light", "Interface\\Icons\\Spell_Holy_HolyBolt" },
+}
+function Paint.Combat(self)
+	self:Begin()
+	local function CT(key)
+		return SurvivorUI_CT and SurvivorUI_CT(key)
+	end
+	local mode = SurvivorUI_DamageMode and SurvivorUI_DamageMode() or "survivor"
+	if mode == "none" then
+		self:Word(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], "No combat numbers"):SetPoint("CENTER", self, "CENTER", 0, 0)
+		return
+	end
+	local middle = -math.floor(self:GetHeight() / 2) - 4
+	local sides = mode == "survivor" and CT("ctLayout") ~= "enemies"
+	local heroX = sides and math.floor(PAGE_WIDTH / 2) or 150
+	-- The hero: a ball of its class's color, a soft glow round it.
+	local r, g, b = Paint.HeroColor()
+	local glow = self:Box(r, g, b, 0.5, ART.."PaceDot", "BORDER")
+	glow:SetWidth(44)
+	glow:SetHeight(44)
+	glow:SetPoint("CENTER", self, "TOPLEFT", heroX, middle)
+	local lr, lg, lb = Kit.Light({ r, g, b }, 0.35)
+	local hero = self:Box(lr, lg, lb, 1, ART.."PaceDot")
+	hero:SetWidth(24)
+	hero:SetHeight(24)
+	hero:SetPoint("CENTER", glow, "CENTER", 0, 0)
+	local foes = {}
+	if not sides then
+		for index = 1, 3 do
+			foes[index] = 270 + (index - 1) * 82
+			local foe = self:Box(0.45, 0.16, 0.13, 1)
+			foe:SetWidth(18)
+			foe:SetHeight(18)
+			foe:SetPoint("CENTER", self, "TOPLEFT", foes[index], middle - 6)
+		end
+	end
+	if mode == "game" then
+		-- The game's own: plain numbers over the enemies, in its font.
+		local font = "Fonts\\FRIZQT__.TTF"
+		self:Word(font, 16, "OUTLINE", 1, 1, 1, "1234"):SetPoint("BOTTOM", self, "TOPLEFT", foes[1], middle + 6)
+		self:Word(font, 16, "OUTLINE", 1, 1, 1, "348"):SetPoint("BOTTOM", self, "TOPLEFT", foes[2], middle + 14)
+		self:Word(font, 24, "OUTLINE", 1, 1, 1, "12960"):SetPoint("BOTTOM", self, "TOPLEFT", foes[3], middle + 6)
+		self:Word(SurvivorUI_FONT, 9 + FONT_BUMP, "", MUTED[1], MUTED[2], MUTED[3], "The game's own numbers"):SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -8, 6)
+		return
+	end
+	local size = CT("ctSize") or 0.85
+	local critScale = CT("ctCritSize") or 1
+	local names, icons = {}, {}
+	for index = 1, 3 do
+		local entry = AZS_METER and AZS_METER[index]
+		names[index] = entry and entry.name or Paint.SAMPLE[index][1]
+		icons[index] = entry and SurvivorUI_MeterIcon and SurvivorUI_MeterIcon(entry.name) or Paint.SAMPLE[index][2]
+	end
+	-- The distance as the screen has it, near enough, kept in the strip.
+	local distance = math.min(heroX - 50, math.floor((CT("ctDistance") or 140) * 0.75))
+	local critApart = CT("ctCritColumn")
+	-- Each: its kind, amount, source, periodic, crit, where, and shown or not.
+	local hits = {
+		{ "dealt", 1234, 1, nil, nil, sides and heroX - distance or foes[1], middle - 2, true },
+		{ "dealt", 3480, 2, "periodic", nil, sides and heroX - distance or foes[2], sides and middle + 18 or middle + 6, CT("ctPeriodic") },
+		{ "dealt", 12960, 1, nil, "crit", sides and (critApart and heroX + distance or heroX - distance) or foes[3],
+			(sides and not critApart) and middle + 40 or middle - 2, true },
+		{ "heal", 640, 3, nil, nil, heroX, middle + 28, CT("ctHeals") },
+		{ "taken", 212, nil, nil, nil, heroX, middle - 30, CT("ctTaken") },
+	}
+	for index = 1, table.getn(hits) do
+		local hit = hits[index]
+		local kind, amount, source, periodic, crit, x, y = hit[1], hit[2], hit[3], hit[4], hit[5], hit[6], hit[7]
+		if hit[8] then
+			local text = CT("ctShort") and SurvivorUI_Abbrev and SurvivorUI_Abbrev(amount) or tostring(amount)
+			if kind == "taken" then
+				text = "-"..text
+			elseif kind == "heal" then
+				text = "+"..text
+			end
+			if periodic then
+				text = text.." |cffc8c8c8x3|r"
+			end
+			local cr, cg, cb = 1, 1, 1
+			if kind == "taken" then
+				cr, cg, cb = 1, 0.22, 0.22
+			elseif kind == "heal" then
+				cr, cg, cb = 0.3, 1, 0.4
+			elseif crit then
+				cr, cg, cb = 1, 0.76, 0.08
+			elseif periodic then
+				cr, cg, cb = 0.8, 0.8, 0.8
+			end
+			if kind == "dealt" and CT("ctMeterColors") and SurvivorUI_MeterColor then
+				local color = SurvivorUI_MeterColor(names[source]) or { 1, 1, 1 }
+				cr, cg, cb = color[1], color[2], color[3]
+			end
+			local points = crit and 22 * critScale or ((periodic and 12 or 14) + FONT_BUMP)
+			local word = self:Word(SurvivorUI_FONT, points * size, crit and "THICKOUTLINE" or "OUTLINE", cr, cg, cb, text)
+			word:SetPoint(sides and "CENTER" or "BOTTOM", self, "TOPLEFT", x, sides and y or y + 10)
+			if source and kind ~= "taken" and CT("ctIcons") then
+				local edgeSize = math.floor((crit and 22 * critScale or 16) * size + 0.5)
+				local icon = self:Box(1, 1, 1, 1, icons[source])
+				icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+				icon:SetWidth(edgeSize)
+				icon:SetHeight(edgeSize)
+				icon:SetPoint("RIGHT", word, "LEFT", -3, 0)
+			end
+		end
+	end
+end
+
+Kit.Preview(page, 112, Paint.Combat)
+Kit.Split(page)
+Kit.Section(page, "Numbers")
+Kit.Segments(page, { { "survivor", "SurvivorUI's" }, { "game", "The game's" }, { "none", "Off" } },
+	function() return SurvivorUI_DamageMode and SurvivorUI_DamageMode() or "survivor" end,
+	function(mode) if SurvivorUI_SetDamageMode then SurvivorUI_SetDamageMode(mode) end end)
+Kit.Right(page)
+Kit.Size(page, "Size", 0.5, 1.5, 0.05, CTGet("ctSize"), CTSet("ctSize"), { { "S", 0.7 }, { "M", 0.85 }, { "L", 1.1 } })
+Kit.Join(page)
+
+-- The two places, each a small picture: the hero, the damage's white, the
+-- crits' gold, the heals' green, the damage taken's red; enemies dark red.
+function Paint.Sides(tile, ground)
+	local r, g, b = Paint.HeroColor()
+	Kit.Dab(tile, ground, 36, 22, 6, 6, r, g, b)
+	Kit.Dab(tile, ground, 15, 20, 14, 3, 1, 1, 1)
+	Kit.Dab(tile, ground, 13, 14, 10, 3, 1, 1, 1, 0.7)
+	Kit.Dab(tile, ground, 57, 20, 14, 4, 1, 0.76, 0.08)
+	Kit.Dab(tile, ground, 36, 10, 10, 3, 0.3, 1, 0.4)
+	Kit.Dab(tile, ground, 36, 33, 10, 3, 1, 0.22, 0.22)
+end
+function Paint.Over(tile, ground)
+	local r, g, b = Paint.HeroColor()
+	Kit.Dab(tile, ground, 14, 24, 6, 6, r, g, b)
+	for index = 1, 3 do
+		local x = 32 + (index - 1) * 16
+		local crit = index == 3
+		Kit.Dab(tile, ground, x, 28, 8, 8, 0.45, 0.16, 0.13)
+		Kit.Dab(tile, ground, x, 17 - math.mod(index, 2) * 4, 10, 3, 1, crit and 0.76 or 1, crit and 0.08 or 1)
+	end
+end
+Kit.Section(page, "Where", "Drag a column while this tab is open, or click it for its card; moved, it stays put whatever the distance. Over the enemies needs nameplates.")
+Kit.Tiles(page, {
+	{ "sides", "Beside the hero", "Damage left, crits right, heals over you", Paint.Sides },
+	{ "enemies", "Over the enemies", "Each number over the enemy it hit", Paint.Over },
+}, CTGet("ctLayout"), CTSet("ctLayout"))
+
+Kit.Split(page)
+Kit.Section(page, "Look")
+Kit.Chips(page, {
+	{ "Source icons", CTGet("ctIcons"), CTToggle("ctIcons"), "Each number with its spell's icon." },
+	{ "Meter colors", CTGet("ctMeterColors"), CTToggle("ctMeterColors"), "Each spell's numbers in its damage meter color." },
+	{ "Short numbers", CTGet("ctShort"), CTToggle("ctShort"), "1.2k for 1234, as the health reads." },
+	{ "Crits apart", CTGet("ctCritColumn"), CTToggle("ctCritColumn"), "Beside the hero: the crits in a column of their own, on the right." },
+})
+Kit.Right(page)
+Kit.Section(page, "Shows")
+Kit.Chips(page, {
+	{ "Damage over time", CTGet("ctPeriodic"), CTToggle("ctPeriodic"), "Your DoTs' ticks, a little smaller, in grey." },
+	{ "Heals", CTGet("ctHeals"), CTToggle("ctHeals"), "The heals you get, green, over you." },
+	{ "Damage taken", CTGet("ctTaken"), CTToggle("ctTaken"), "What hits you, red, under you." },
+	{ "Buff notices", function() return SurvivorUI_CombatTextAuras and SurvivorUI_CombatTextAuras() end,
+		function() if SurvivorUI_SetCombatTextAuras then SurvivorUI_SetCombatTextAuras(not SurvivorUI_CombatTextAuras()) end end,
+		"The game's own notices as a buff comes or goes, <Power Word: Shield>, and its debuffs. Off by default." },
+})
+Kit.Join(page)
+Kit.Link(page, "New best crit: on or off, its effect and its size, in", "records")
+
+do
+	local box = Kit.Advanced(page, "crit size, adding up, distance, rise, smallest heal")
+	Kit.Section(box, "Add up", "One source's hits that close together: one number, their sum and how many (1.2k x3).")
+	Kit.Chips(box, {
+		{ "Damage", CTGet("ctAddDealt"), CTToggle("ctAddDealt") },
+		{ "Crits", CTGet("ctAddCrits"), CTToggle("ctAddCrits") },
+		{ "Heals", CTGet("ctAddHeals"), CTToggle("ctAddHeals") },
+		{ "Taken", CTGet("ctMergeTaken"), CTToggle("ctMergeTaken") },
+	})
+	Kit.Fine(box, {
+		{ "Crit size", 0.6, 1.6, 0.05, CTGet("ctCritSize"), CTSet("ctCritSize") },
+		{ "Add up within", 50, 500, 25, CTGet("ctAddWindow"), CTSet("ctAddWindow"), "%d ms" },
+		{ "Distance from hero", 60, 320, 10, CTGet("ctDistance"), CTSet("ctDistance"), "%d" },
+		{ "How high they rise", 80, 320, 10, CTGet("ctRise"), CTSet("ctRise"), "%d" },
+		{ "Smallest heal", 0, 10, 1, CTGet("ctHealMin"), CTSet("ctHealMin"), "%d%% HP" },
+	})
+	Kit.EndAdvanced(page, box)
+end
+Kit.Foot(page, {
+	reset = Asked("Combat text back to default?",
+		"Every setting of this tab as it first was, and the columns and the new best crit back in their first places.", "Back to default",
+		function() if SurvivorUI_CTDefaults then SurvivorUI_CTDefaults() end end),
+	strong = { "Show a sample", function()
+		if SurvivorUI_CTSample then
+			SurvivorUI_CTSample()
+		end
+	end },
+})
 
 ------------------------------------------------------------------------------
 -- Damage meter (Meter.lua).
@@ -2320,7 +3744,7 @@ local function StatCheck(x, y, width, label, color)
 	check.box:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -1, 1)
 	check.label = Text(check, 9, TEXT)
 	check.label:SetPoint("LEFT", check.edge, "RIGHT", 6, 0)
-	check.label:SetText(SurvivorUI_StatName and SurvivorUI_StatName(label) or label)
+	check.label:SetText(SurvivorUI_StatName and SurvivorUI_StatName(label, true) or label)
 	check:SetScript("OnClick", function()
 		if SurvivorUI_SetStatShown and SurvivorUI_StatShown then
 			SurvivorUI_SetStatShown(label, not SurvivorUI_StatShown(label))
@@ -2342,6 +3766,7 @@ local function StatCheck(x, y, width, label, color)
 		end
 	end
 	table.insert(widgets, check)
+	side.Index(page, SurvivorUI_StatName and SurvivorUI_StatName(label, true) or label, "stat "..label, y, 15)
 end
 
 local groups = SurvivorUI_StatList and SurvivorUI_StatList() or {}
@@ -2595,42 +4020,68 @@ page.y = page.y - 46
 ------------------------------------------------------------------------------
 -- Chat.
 
+-- Reworked (the kit): the looks as pictures, the filter as chips.
+
 page = pages.chat
-Header(page, "Chat", "The chat window: its look (Flat chat, in the Modules tab), its text's size, and what reaches it.")
-PanelHead(page, FeatureOn("chat"), FeatureToggle("chat"), nil, "Chat", true, nil, { font = false })
-local backgroundSlider
-Dropdown(page, "Look", function()
-	return {
-		{ value = "panel", name = "Panel", note = "tabs on top, a copy button" },
-		{ value = "text", name = "Text on the world", note = "as before" },
-	}
-end, function() return SurvivorUI_ChatLook and SurvivorUI_ChatLook() or "panel" end, function(look)
-	if SurvivorUI_SetChatLook then
-		SurvivorUI_SetChatLook(look)
-	end
-	-- The slider below is the look's own: it shows the new one's strength.
-	if backgroundSlider then
-		backgroundSlider:Refresh()
-	end
-end, 220)
-Check(page, "Lock the chat", function() return SurvivorUI_ChatLocked and SurvivorUI_ChatLocked() end,
-	function() if SurvivorUI_SetChatLocked then SurvivorUI_SetChatLocked(not SurvivorUI_ChatLocked()) end end,
-	"the Panel look's panel alone: no tabs, no copy button, no grip, no edges")
-Slider(page, "Text size", 8, 18, 1,
+Kit.Head(page, { line = "The chat window, flat (Flat chat): its look, its text's size, and what reaches it.",
+	isOn = FeatureOn("chat"), toggle = FeatureToggle("chat"), reloads = true, piece = "Chat" })
+
+-- The two looks, each a small picture: the panel, its tabs along its top
+-- and the copy button; the lines alone on the world, the addon's color down
+-- their left edge.
+function Paint.Panel(tile, ground)
+	Kit.Dab(tile, ground, 36, 23, 60, 30, 0.03, 0.03, 0.04, 0.95)
+	Kit.Dab(tile, ground, 14, 9, 14, 4, ACCENT[1], ACCENT[2], ACCENT[3])
+	Kit.Dab(tile, ground, 30, 9, 14, 4, 0.4, 0.4, 0.45)
+	Kit.Dab(tile, ground, 62, 9, 5, 4, 0.75, 0.75, 0.8)
+	Kit.Dab(tile, ground, 26, 18, 40, 2, 0.85, 0.85, 0.88)
+	Kit.Dab(tile, ground, 22, 24, 32, 2, 0.6, 0.85, 1)
+	Kit.Dab(tile, ground, 29, 30, 46, 2, 0.85, 0.85, 0.88)
+end
+function Paint.World(tile, ground)
+	Kit.Dab(tile, ground, 8, 23, 2, 26, ACCENT[1], ACCENT[2], ACCENT[3])
+	Kit.Dab(tile, ground, 32, 14, 40, 2, 0.95, 0.95, 0.97)
+	Kit.Dab(tile, ground, 28, 21, 32, 2, 0.6, 0.85, 1)
+	Kit.Dab(tile, ground, 35, 28, 46, 2, 0.95, 0.95, 0.97)
+	Kit.Dab(tile, ground, 26, 35, 28, 2, 1, 0.82, 0.3)
+end
+Kit.Section(page, "Look", "Panel: one dark panel holds the chat, the windows as tabs along its top (right-click a tab for its menu), the copy button at its top right, the typing box under it. Text on the world: the lines alone, a dark backing behind them as dark as Background chooses, the addon's color down their left edge.")
+Kit.Tiles(page, {
+	{ "panel", "Panel", "Tabs on top, a copy button", Paint.Panel },
+	{ "text", "Text on the world", "The lines alone, as before", Paint.World },
+}, function() return SurvivorUI_ChatLook and SurvivorUI_ChatLook() or "panel" end,
+	function(look) if SurvivorUI_SetChatLook then SurvivorUI_SetChatLook(look) end end)
+
+Kit.Split(page)
+Kit.Section(page, "Text size")
+Kit.Stepper(page, nil, 8, 18, 1,
 	function() return SurvivorUI_ChatSize and SurvivorUI_ChatSize() or 8 end,
 	function(value) if SurvivorUI_SetChatSize then SurvivorUI_SetChatSize(value) end end, "%d pt")
-backgroundSlider = Slider(page, "Background", 0, 100, 5,
-	function() return math.floor((SurvivorUI_ChatBackground and SurvivorUI_ChatBackground() or 0) * 100 + 0.5) end,
-	function(value) if SurvivorUI_SetChatBackground then SurvivorUI_SetChatBackground(value / 100) end end, "%d%%")
-Note(page, "Panel: one dark panel holds the chat, the windows as tabs along its top (right-click a tab for its menu), the copy button at its top right, the typing box under it; Background sets how dark. Text on the world: 0% is the text alone, up from there a dark backing behind it, the addon's color down its left edge. With Flat chat on.")
+Kit.Right(page)
+-- The look's own: each look keeps its strength.
+Kit.Section(page, "Background", "How dark behind the lines. Text on the world: 0% is the text alone.")
+do
+	local left, width = Span(page)
+	Kit.Bar(page, left, page.y - 3, width, 0, 100, 5,
+		function() return math.floor((SurvivorUI_ChatBackground and SurvivorUI_ChatBackground() or 0) * 100 + 0.5) end,
+		function(value) if SurvivorUI_SetChatBackground then SurvivorUI_SetChatBackground(value / 100) end end, "%d%%")
+	page.y = page.y - 30
+end
+Kit.Join(page)
+Kit.Chips(page, {
+	{ "Locked", function() return SurvivorUI_ChatLocked and SurvivorUI_ChatLocked() end,
+		function() if SurvivorUI_SetChatLocked then SurvivorUI_SetChatLocked(not SurvivorUI_ChatLocked()) end end,
+		"The Panel look's panel alone: no tabs, no copy button, no grip, no edges. Unlocked, it moves and sizes again." },
+})
 
-Subheader(page, "Chat filter")
-Note(page, "What a run fills the chat with, kept away, in every language; the alerts stay: a new spell, an upgrade's news, the run's end. New lines only.")
-Check(page, "Level-ups", OnUnlessOff("chatFilterLevels"), Flip("chatFilterLevels"), "\"you have reached level 12\" and its gains: the XP bar shows the level")
-Check(page, "What the banners show", OnUnlessOff("chatFilterBanners"), Flip("chatFilterBanners"), "the horde's moves, a boss or a guardian coming or slain, shown mid-screen by the game; keep them if its Show Banners is off")
-Check(page, "Boss yells", OnUnlessOff("chatFilterYells"), Flip("chatFilterYells"), "\"Hogger yells: Grrr... fresh meat!\"")
-Check(page, "Loot, while the loot list is on", OnUnlessOff("chatFilterLoot"), Flip("chatFilterLoot"), "the list has it")
-Check(page, "The Combat Log window", OnUnlessOff("chatFilterCombat"), Flip("chatFilterCombat"), "fed 13 lines a second, opened or not; SurvivorUI reads the fight from the game's own events, never from it")
+Kit.Section(page, "Kept out of the chat", "What a run fills the chat with, kept away, in every language; the alerts stay: a new spell, an upgrade's news, the run's end. New lines only.")
+Kit.Chips(page, {
+	{ "Level-ups", OnUnlessOff("chatFilterLevels"), Flip("chatFilterLevels"), "\"You have reached level 12\" and its gains: the XP bar shows the level." },
+	{ "Banners", OnUnlessOff("chatFilterBanners"), Flip("chatFilterBanners"), "The horde's moves, a boss or a guardian coming or slain, shown mid-screen by the game. Keep them in the chat if the game's Show Banners is off." },
+	{ "Boss yells", OnUnlessOff("chatFilterYells"), Flip("chatFilterYells"), "\"Hogger yells: Grrr... fresh meat!\"" },
+	{ "Loot", OnUnlessOff("chatFilterLoot"), Flip("chatFilterLoot"), "While the loot list is on: the list has it." },
+	{ "Combat Log", OnUnlessOff("chatFilterCombat"), Flip("chatFilterCombat"), "The Combat Log window, fed 13 lines a second, opened or not; SurvivorUI reads the fight from the game's own events, never from it." },
+})
 
 ------------------------------------------------------------------------------
 -- Tooltips: the spells' (AbilityTooltip.lua) and the Biggest Crits' cards;
@@ -2753,6 +4204,7 @@ local function KeyButton(page, label, command, note)
 		end
 	end
 	table.insert(widgets, button)
+	side.Index(page, label, note, page.y, ROW)
 	page.y = page.y - ROW - 2
 end
 
@@ -2788,6 +4240,8 @@ if PlatesThere() then
 	Subheader(page, "Look")
 	Check(page, "Names on every plate", function() return SurvivorPlatesDB and SurvivorPlatesDB.names == true end,
 		function() Plates("names") end, "off: only on elites, guardians, bosses and friends")
+	Check(page, "Click through the plates", function() return SurvivorPlates_ClickThrough and SurvivorPlates_ClickThrough() end,
+		function() Plates("click") end, "the camera turns from over a plate; a click on one no longer targets it")
 	Check(page, "Ignore V and Shift+V", function() return not (SurvivorPlates_KeysAllowed and SurvivorPlates_KeysAllowed()) end,
 		function() Plates("keys") end, "the game's keys for its plates: what they turn on or off goes back to the choices here")
 	KeyButton(page, "Plates on or off key", "SURVIVORPLATES_TOGGLE",
@@ -2953,9 +4407,9 @@ page.y = page.y - 28
 ------------------------------------------------------------------------------
 -- The bottom: the reload, and who made it.
 
--- Move UI: on every page, at the top right beside the page's title (and on
--- the minimized bar), in the Layout tab's color, filled and breathing a glow
--- so it is seen at once; "Done moving" while it is on.
+-- Move UI: at the sidebar's foot, beside Donate (and on the minimized bar),
+-- in the Layout tab's color, filled and breathing a glow so it is seen at
+-- once; "Done moving" while it is on.
 local MOVE = { 0.25, 0.85, 0.8 }
 local moveButtons = {}
 local Minimize                  -- the window down to its bar, set below
@@ -3010,7 +4464,10 @@ local function MakeMoveButton(parent)
 end
 
 local editButton = MakeMoveButton(panel)
-editButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -72, -10)
+editButton:SetWidth(98)
+editButton:SetHeight(24)
+editButton:SetPoint("BOTTOMRIGHT", panel, "BOTTOMLEFT", SIDEBAR - 8, 46)
+editButton.glow:SetWidth(140)
 table.insert(widgets, editButton)
 
 -- Save & Close: at the bottom right; Reload & Close, lit, while a look waits
@@ -3172,11 +4629,11 @@ minimize:SetScript("OnClick", Minimize)
 
 local credit = panel:CreateFontString(nil, "OVERLAY")
 credit:SetFont(SurvivorUI_FONT, 9, "")
-credit:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12, 6)
+credit:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12, 8)
 credit:SetWidth(SIDEBAR - 18)
 credit:SetJustifyH("LEFT")
 credit:SetTextColor(0.42, 0.42, 0.47)
-credit:SetText("by morderous\ngithub.com/morderous/\nsurvivor-ui\nGPL-3.0")
+credit:SetText("by morderous \194\183 GPL-3.0\ngithub.com/morderous/\nsurvivor-ui")
 
 -- Donate, for the Ko-fi, in a light blue. The game opens no link: it shows in
 -- a box, selected, for Ctrl+C.
@@ -3249,9 +4706,9 @@ local donate = CreateFrame("Button", nil, panel)
 donate:SetScale(SUPPORT_SCALE)
 donate:SetWidth(100)
 donate:SetHeight(24)
--- At the page's foot, level with Save & Close: over the credit it covered
--- the sidebar's last tab once the list grew (Summons, v3.0.22).
-donate:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", (SIDEBAR + 18) / SUPPORT_SCALE, 20 / SUPPORT_SCALE)
+-- At the sidebar's foot beside Move UI, over the credit: the groups open
+-- one at a time, so the list no longer reaches down there (v3.1).
+donate:SetPoint("LEFT", panel, "BOTTOMLEFT", 10 / SUPPORT_SCALE, (46 + 12) / SUPPORT_SCALE)
 -- Set again each time the window opens: its width by the word in the font
 -- worn by then (the global font comes after this file), the word in its
 -- middle, and a burst of sparks.
@@ -3328,6 +4785,12 @@ end)
 -- Closing the panel ends move mode, and its tab's pieces lock again; not when
 -- it is only minimized.
 panel:SetScript("OnHide", function()
+	-- The search ends with the window, minimized or closed.
+	side.going = true
+	side.box:SetText("")
+	side.box:ClearFocus()
+	side.going = nil
+	side.found = nil
 	if minimizing then
 		return
 	end
@@ -3339,6 +4802,23 @@ panel:SetScript("OnHide", function()
 		SurvivorUI_SetMoveFocus(nil)
 	end
 end)
+
+-- The window open on a tab, by its key (Run History's and the tests' way to
+-- a page): global, combat, bosses, chat...
+function SurvivorUI_OpenOptions(key)
+	if mini:IsShown() then
+		Maximize()
+	end
+	if not pages[key] then
+		key = current or "global"
+	end
+	current = key
+	if panel:IsShown() then
+		ShowPage(key)
+	else
+		panel:Show()
+	end
+end
 
 function SurvivorUI_ToggleOptions()
 	if mini:IsShown() then

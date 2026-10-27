@@ -61,6 +61,18 @@ end
 SurvivorUI_DEFAULT_FONT = SurvivorUI_FONT
 local FONT_BUMP = SurvivorUI_FONT_BUMP
 
+-- With the game in Chinese or Japanese, the global font is the addon's Noto
+-- Sans SC, which writes them (Japanese's kanji the Chinese way). Any other
+-- face draws those letters from a face of the game's, and the engine keeps
+-- both faces' letters under one number, so a letter and a character trade
+-- places as they are drawn ("e克pty slot", seen 2026-10-27). The game's own
+-- faces for them (Fonts\AZS_SC.TTF and the like) cannot be set: they answer
+-- as Friz Quadrata. Korean has no face here yet.
+SurvivorUI_LANGUAGE_FONTS = {
+	zh = "Interface\\AddOns\\SurvivorUI\\Fonts\\NotoSansSC-Medium.ttf",
+	ja = "Interface\\AddOns\\SurvivorUI\\Fonts\\NotoSansSC-Medium.ttf",
+}
+
 local BAR_BUTTONS = { 1, 2, 3, 4, 5, 6, 12 }     -- 12 is the = key
 local BUTTON_SIZE = 36
 local BUTTON_GAP = 2
@@ -119,6 +131,10 @@ end
 function SurvivorUI_MoveHint(what)
 	local names = { alt = "Alt", ctrl = "Ctrl", shift = "Shift" }
 	local name = names[SurvivorUI_MoveKey()]
+	-- In a language the addon speaks, one sentence for every piece (Locale.lua).
+	if SurvivorUI_Translated and SurvivorUI_Translated() then
+		return name and SurvivorUI_TF("Hold {1} and drag to move.", name) or SurvivorUI_T("Move UI moves it, at the top of /sui opt.")
+	end
 	if name then
 		return "Hold "..name.." and drag to move"..(what or "").."."
 	end
@@ -900,7 +916,7 @@ local function UpdateUnitFrame(frame)
 
 	if UnitIsDead(unit) or UnitIsGhost(unit) then
 		-- Down in a co-op run (the game's 0.113): a friend can bring you back.
-		frame.value:SetText((unit == "player" and SurvivorUI_IsDown and SurvivorUI_IsDown()) and "Down" or "Dead")
+		frame.value:SetText((unit == "player" and SurvivorUI_IsDown and SurvivorUI_IsDown()) and SurvivorUI_T("Down") or SurvivorUI_T("Dead"))
 	else
 		frame.value:SetText(SurvivorUI_HealthText(hp, hpm, style))
 	end
@@ -1073,7 +1089,7 @@ end
 local function LockSays()
 	if not lockSaid then
 		lockSaid = true
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the spells are locked on the bar, where the game lays them (Frames & bar, Spells locked on the bar, unlocks them).")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: the spells are locked on the bar, where the game lays them (Frames & bar, Spells locked on the bar, unlocks them)."))
 	end
 end
 
@@ -1436,7 +1452,7 @@ do
 
 		local title = Text(setter, 12, "TOPLEFT", 10, -8)
 		title:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-		title:SetText("Your time")
+		title:SetText(SurvivorUI_T("Your time"))
 		local close = TextButton(setter, "x", function() setter:Hide() end)
 		close:SetPoint("TOPRIGHT", setter, "TOPRIGHT", -4, -5)
 		close:Paint()
@@ -1507,7 +1523,7 @@ do
 		local note = Text(setter, 9, "BOTTOM", 0, 8)
 		note:SetWidth(220)
 		note:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
-		note:SetText("Slide until the time above is yours. The game's clock runs in UTC; this time zone also dates Run History.")
+		note:SetText(SurvivorUI_T("Slide until the time above is yours. The game's clock runs in UTC; this time zone also dates Run History."))
 
 		-- The minutes go on while it is open.
 		setter.wait = 0
@@ -1634,8 +1650,8 @@ local function SquareMinimap()
 				line:Show()
 			end
 			GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
-			GameTooltip:SetText("Your time", 1, 0.82, 0)
-			GameTooltip:AddLine("Click to set it: the game's clock runs in UTC, so the time takes your time zone.", 1, 1, 1, 1)
+			GameTooltip:SetText(SurvivorUI_T("Your time"), 1, 0.82, 0)
+			GameTooltip:AddLine(SurvivorUI_T("Click to set it: the game's clock runs in UTC, so the time takes your time zone."), 1, 1, 1, 1)
 			GameTooltip:Show()
 		end)
 		strip.button:SetScript("OnLeave", function()
@@ -1944,6 +1960,17 @@ local function PathLoads(path)
 	return got ~= nil and string.lower(got) == string.lower(path)
 end
 
+-- The face the game's language needs (SurvivorUI_LANGUAGE_FONTS), when it
+-- loads; nil for every other language, and until the hero's race has told.
+local function LanguageFont()
+	local language = SurvivorUI_Language and SurvivorUI_Language()
+	local face = language and SurvivorUI_LANGUAGE_FONTS[language]
+	if face and PathLoads(face) then
+		return face
+	end
+	return nil
+end
+
 -- A frame of the addon's: under one named SurvivorUI..., or under none with a
 -- name up to the screen (a mover's handle).
 local function Ours(frame)
@@ -2030,11 +2057,11 @@ local function Wear(face)
 	end
 end
 
--- The default global font: the face found as the files ran, the game's Friz
--- Quadrata (it writes every language the game speaks) unless one of one's own
+-- The default global font: the face the game's language needs, else the face
+-- found as the files ran, the game's Friz Quadrata unless one of one's own
 -- was dropped in (Expressway).
 function SurvivorUI_DefaultFont()
-	return SurvivorUI_DEFAULT_FONT
+	return LanguageFont() or SurvivorUI_DEFAULT_FONT
 end
 
 function SurvivorUI_DefaultFontName()
@@ -2043,19 +2070,38 @@ function SurvivorUI_DefaultFontName()
 		return "Expressway"
 	elseif string.find(face, "barlow", 1, true) then
 		return "Barlow Condensed"
+	elseif string.find(face, "notosanssc", 1, true) then
+		return "Noto Sans SC"
 	end
 	return "Friz Quadrata"
 end
 
--- path nil: the default face. Saved, and worn at once.
+-- path nil: the default face. Saved, and worn at once; in a language that
+-- needs a face of its own, that one is worn and the choice kept for later.
 function SurvivorUI_SetGlobalFont(path)
 	Settings().globalFont = path
-	if path and PathLoads(path) then
+	local needed = LanguageFont()
+	if path and PathLoads(path) and not (needed and string.lower(path) ~= string.lower(needed)) then
 		Wear(path)
 	else
 		Wear(SurvivorUI_DefaultFont())
 	end
 end
+
+-- The game's language is told by the hero's race once a run begins: the face
+-- it needs worn then, each time the zone is told again.
+local languageWatch = CreateFrame("Frame")
+local zoneSeen
+languageWatch:SetScript("OnUpdate", function()
+	if AZS_ZONE_UPDATED == zoneSeen then
+		return
+	end
+	zoneSeen = AZS_ZONE_UPDATED
+	local needed = LanguageFont()
+	if needed and string.lower(SurvivorUI_FONT) ~= string.lower(needed) then
+		SurvivorUI_SetGlobalFont(Settings().globalFont)
+	end
+end)
 
 function SurvivorUI_GlobalFont()
 	return SurvivorUIDB and SurvivorUIDB.globalFont
@@ -2889,7 +2935,7 @@ function ShowRecord(amount, source, fx)
 	recordShown.number:SetText(Amount(amount))
 	Face(recordShown.label, 10 * math.max(0.8, scale), "OUTLINE")
 	recordShown.label:SetTextColor(1, 0.95, 0.75)
-	recordShown.label:SetText("NEW BEST CRIT")
+	recordShown.label:SetText(SurvivorUI_T("NEW BEST CRIT"))
 	local icon, whole = nil, false
 	if source and ct.ctIcons then
 		icon, whole = SourceIcon(source)
@@ -3294,7 +3340,7 @@ end)
 function SurvivorUI_CTSample()
 	local db = Settings()
 	if not db.damageText or db.damageNone then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the sample shows SurvivorUI's numbers; choose SurvivorUI in Combat text first.")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: the sample shows SurvivorUI's numbers; choose SurvivorUI in Combat text first."))
 		return
 	end
 	local source = AZS_METER and AZS_METER[1] and AZS_METER[1].name or "Melee"
@@ -3476,28 +3522,28 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		SurvivorUI_SetDamageMode(none and "none" or "survivor")
 		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(none and "no combat text at all." or "quick damage numbers."))
 	else
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui opt  opens the options: every piece on or off, panel size, and a move mode with a grid")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage  switches between SurvivorUI's damage numbers and Default")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui damage side  puts the damage numbers beside the hero, or back over the enemies")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui dots  shows or hides the counters over the action bar: DoTs, fears and totems")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui history  your run history, each run as it ended: the run tracker, the numbers, the build, the damage, the crits and the loot")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui record  shows how a new best crit looks in the combat numbers")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui sample  shows a sample of every combat number as set")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui guardians  shows or hides the guardians' list; /sui guardians north  points its arrows north up; /sui guardians bar  makes it a bar in the run tracker")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui collection  the Jewelry Collection: every amulet, ring and trinket found, and what is left to find; /sui collection reset  forgets it all")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui chat 10  sets the chat text size, 8 to 18 (default 10)")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hold Alt (or the move key chosen in Layout) to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui bosses  switches the boss bars on or off; /sui bosses elites  lists elites too")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tally  switches between the kills and gold line under the minimap and the Default box")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui pace  shows or hides the kill pace, the orb by the run tracker's clock; /sui pace class  against this class's runs only, or every class's; /sui pace reset  forgets the runs it holds against")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui run  shows or hides the run panel (the run's numbers and biggest crits); /sui run reset clears the crits")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui tracker  shows or hides the run tracker under the minimap (the clock and the bosses)")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui build  shows or hides the build list (spells, ranks, slots)")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui crits  shows or hides the Biggest Crits box (off by default)")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui hover  switches the white outline around what the mouse is on")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui scale 0.85  sizes the panels, 0.6 to 1.4, for smaller screens")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: /sui meter  switches between SurvivorUI's damage meter, with the crits, and Default")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui opt  opens the options: every piece on or off, panel size, and a move mode with a grid"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui damage  switches between SurvivorUI's damage numbers and Default"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui damage side  puts the damage numbers beside the hero, or back over the enemies"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui dots  shows or hides the counters over the action bar: DoTs, fears and totems"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui history  your run history, each run as it ended: the run tracker, the numbers, the build, the damage, the crits and the loot"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui record  shows how a new best crit looks in the combat numbers"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui sample  shows a sample of every combat number as set"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui guardians  shows or hides the guardians' list; /sui guardians north  points its arrows north up; /sui guardians bar  makes it a bar in the run tracker"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui collection  the Jewelry Collection: every amulet, ring and trinket found, and what is left to find; /sui collection reset  forgets it all"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui chat 10  sets the chat text size, 8 to 18 (default 10)"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: hold Alt (or the move key chosen in Layout) to see everything that moves, and drag; /sui center puts the middle back, /sui layout puts everything back"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui bosses  switches the boss bars on or off; /sui bosses elites  lists elites too"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui tally  switches between the kills and gold line under the minimap and the Default box"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui pace  shows or hides the kill pace, the orb by the run tracker's clock; /sui pace class  against this class's runs only, or every class's; /sui pace reset  forgets the runs it holds against"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui run  shows or hides the run panel (the run's numbers and biggest crits); /sui run reset clears the crits"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui tracker  shows or hides the run tracker under the minimap (the clock and the bosses)"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui build  shows or hides the build list (spells, ranks, slots)"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui crits  shows or hides the Biggest Crits box (off by default)"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui hover  switches the white outline around what the mouse is on"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui scale 0.85  sizes the panels, 0.6 to 1.4, for smaller screens"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui meter  switches between SurvivorUI's damage meter, with the crits, and Default"))
 	end
 end
 

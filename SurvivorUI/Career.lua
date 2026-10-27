@@ -100,10 +100,10 @@ end
 
 local title = Font(window, 16, GOLD)
 title:SetPoint("TOPLEFT", window, "TOPLEFT", PAD, -10)
-title:SetText("Career")
+title:SetText(SurvivorUI_T("Career"))
 local subtitle = Font(window, 9, MUTED)
 subtitle:SetPoint("TOPLEFT", window, "TOPLEFT", PAD, -32)
-subtitle:SetText("Every run Run History keeps, by class and by map.")
+subtitle:SetText(SurvivorUI_T("Every run Run History keeps, by class and by map."))
 
 local function TextButton(label, width, onClick)
 	local button = CreateFrame("Button", nil, window)
@@ -118,7 +118,7 @@ local function TextButton(label, width, onClick)
 	return button
 end
 
-local close = TextButton("x", 18, function() window:Hide() end)
+local close = TextButton(SurvivorUI_T("x"), 18, function() window:Hide() end)
 close:SetPoint("TOPRIGHT", window, "TOPRIGHT", -6, -7)
 -- Back to the runs, in the same place: Run History's gold button with its
 -- hourglass, the one by the minimap (RunHistory.lua's SurvivorUI_GoldButton).
@@ -142,7 +142,7 @@ if SurvivorUI_GoldButton then
 	runs.tipText = "Back to the runs, one by one."
 	runs:SetScript("OnClick", BackToRuns)
 else
-	runs = TextButton("Runs", 50, BackToRuns)
+	runs = TextButton(SurvivorUI_T("Runs"), 50, BackToRuns)
 end
 runs:SetPoint("RIGHT", close, "LEFT", -10, 0)
 
@@ -199,7 +199,7 @@ local function Head(index)
 	for column = 1, table.getn(COLUMNS) do
 		local cell = Font(head, 8, MUTED, "RIGHT")
 		cell:SetPoint("BOTTOMRIGHT", head, "BOTTOMLEFT", COLUMNS[column][2] - 4, 2)
-		cell:SetText(string.upper(COLUMNS[column][1]))
+		cell:SetText(string.upper(SurvivorUI_T(COLUMNS[column][1])))
 		head.cells[column] = cell
 	end
 	head.rule = head:CreateTexture(nil, "BORDER")
@@ -215,7 +215,7 @@ end
 local total = Font(window, 10, WHITE)
 total:SetWidth(INNER)
 local empty = Font(window, 10, MUTED)
-empty:SetText("No run kept yet: play one, and it shows here.")
+empty:SetText(SurvivorUI_T("No run kept yet: play one, and it shows here."))
 
 ------------------------------------------------------------------------------
 -- Adding the runs up.
@@ -308,7 +308,7 @@ local function Draw()
 	for index = 1, table.getn(sections) do
 		local section = sections[index]
 		local head = Head(index)
-		head.title:SetText(section[1])
+		head.title:SetText(SurvivorUI_T(section[1]))
 		head:ClearAllPoints()
 		head:SetPoint("TOPLEFT", window, "TOPLEFT", PAD, -y)
 		head:Show()
@@ -324,7 +324,7 @@ local function Draw()
 					r, g, b = SurvivorUI_ClassColor(group.key)
 				end
 				color = { r, g, b }
-				line.name:SetText(group.class or group.key)
+				line.name:SetText(SurvivorUI_T(group.class or group.key))
 				local texture, coords = nil, nil
 				if SurvivorUI_ClassIcon then
 					texture, coords = SurvivorUI_ClassIcon(group.key)
@@ -373,10 +373,11 @@ local function Draw()
 	end
 	empty:Hide()
 	-- Two lines: the runs and how they ended; what they did.
-	total:SetText("In all:  "..all.runs..(all.runs == 1 and " run" or " runs")
-		.."  \194\183  |cff59e566"..all.won.." won|r  \194\183  |cffff6152"..all.fell.." fallen|r  \194\183  |cff9ed1ff"..all.left.." left|r\n"
-		..Clock(all.time).." played  \194\183  "..Short(all.kills).." kills  \194\183  "..Short(all.dealt).." damage"
-		.."  \194\183  "..Short(all.gold).." gold  \194\183  +"..Short(all.talent).." talent experience")
+	-- Each line one sentence, the colors given with the numbers.
+	total:SetText(SurvivorUI_TF("In all:  {1}  \194\183  {2} won|r  \194\183  {3} fallen|r  \194\183  {4} left|r",
+			SurvivorUI_TF(all.runs == 1 and "{1} run" or "{1} runs", all.runs), "|cff59e566"..all.won, "|cffff6152"..all.fell, "|cff9ed1ff"..all.left)
+		.."\n"..SurvivorUI_TF("{1} played  \194\183  {2} kills  \194\183  {3} damage  \194\183  {4} gold  \194\183  +{5} talent experience",
+			Clock(all.time), Short(all.kills), Short(all.dealt), Short(all.gold), Short(all.talent)))
 	total:ClearAllPoints()
 	total:SetPoint("TOPLEFT", window, "TOPLEFT", PAD, -y - 4)
 	total:Show()

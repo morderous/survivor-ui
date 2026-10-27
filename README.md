@@ -55,6 +55,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui chat 10` | Chat text size, 8 to 18 |
 | `/splates all` | Plates on every enemy, or only on elites, guardians and bosses |
 | `/splates names` | Names only on elites, guardians and bosses, or on every plate |
+| `/splates click` | Clicks go through the plates (the default), or a click on one targets it |
 | `/splates none` | No nameplates (the default), or back |
 | `/splates party` | Plates on your co-op friends, in their class color (also `pets`, `totems`) |
 | `/splates suggested` | The suggested setup: friendly plates on, enemy plates off |
@@ -81,6 +82,7 @@ Commands:
 | `/splates none` | Switches between no nameplates (the default) and nameplates |
 | `/splates all` | Switches between plates on every enemy and plates only on elites, guardians and bosses |
 | `/splates names` | Switches between names only on elites, guardians and bosses (the default) and names on every plate |
+| `/splates click` | Switches between clicks going through the plates, the camera turning from over them (the default), and plates you click to target |
 | `/splates totems`, `/splates pets`, `/splates party` | Each friendly kind on or off: your totems, your pets and summons, your co-op friends |
 | `/splates suggested` | The suggested setup: your totems, pets and summons and co-op friends' plates on, every enemy's off (the boss bars follow bosses, elites and guardians) |
 | `/splates scale 1.3` | Plate size, 0.6 to 2 |
@@ -164,7 +166,9 @@ Click the meter's title for its menu: **Damage Done** (the run's damage, with ea
 
 The interface uses the game's **Friz Quadrata**. Prefer **Expressway**, the face of many retail UIs? It cannot be shipped with the addon, but if you have it (it comes with EllesmereUI and ElvUI, for one), copy it as `SurvivorUI\Fonts\Expressway.ttf` and restart the game: the addon picks it up on its own.
 
-Each piece can wear a font of its own, on its card in move mode: the game's (Friz Quadrata, Arial Narrow, Morpheus) or one of five free faces that come with the addon in `SurvivorUI\Fonts`: **Fira Sans**, **Noto Sans**, **Exo**, **Russo One** and **Cinzel Decorative**. Exo and Cinzel Decorative have no Cyrillic, Russo One no Romanian ț, and none of the five has Chinese, Korean or Japanese, so the card offers each only where it can write the game's language. The **global font** (`/sui opt`, Global) puts one of them on every text of the addon's at once; a piece's own font stays its own.
+Each piece can wear a font of its own, on its card in move mode: the game's (Friz Quadrata, Arial Narrow, Morpheus) or one of eight free faces that come with the addon in `SurvivorUI\Fonts`: **Fira Sans**, **Noto Sans**, **Exo**, **Russo One**, **Cinzel Decorative**, **Barlow Semi Condensed**, **Barlow Condensed** and **Noto Sans SC**. Exo, Cinzel Decorative and the two Barlows have no Cyrillic, Russo One no Romanian ț, Noto Sans SC no Czech, Polish, Romanian, Turkish, Ukrainian or Korean letters, so the card offers each only where it can write the game's language. The **global font** (`/sui opt`, Global) puts one of them on every text of the addon's at once; a piece's own font stays its own.
+
+With the game in **Chinese or Japanese**, the addon writes in Noto Sans SC, a font that has those letters. A font without them would take them from the game's font as it draws, and the game then mixes them up with its letters (an English letter drawn as a Chinese character, or the other way round). The font you chose is kept for a game in another language.
 
 ### The game's addon API
 
@@ -215,17 +219,34 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
-### Azeroth SurvivorUI Launcher 1.5.4 (beta), in progress
+### Azeroth SurvivorUI Launcher 1.5.4 (beta), 2026-10-27
 
 - **Your victories and endless runs, kept for good**: Survivor UI's Run History keeps 100 runs at most. Each victory and endless run the Run History tab reads is now copied into the launcher's own archive (`run-archive.lua` in `%APPDATA%\SurvivorUIInstaller`, without the tooltips' photos: some 8 kB a run), never trimmed; an endless run gone on is copied again. The tab shows the archive's runs with the game's, newest first: a date in gold is a run gone from the game's Run History, kept here. The tick beside the list is now **Only victories and endless**, a filter.
+- **Close to the tray** (new, on by default, Play tab and the tray's menu): on, the window's close button puts the launcher in the tray, as before, where it keeps looking for updates and backs up your save as the game closes; off, the close button quits it.
 - **Total playtime on the Play tab**: a **Total** card beside **Today**, all the playtime the launcher has seen (the Statistics tab's Playtime).
 
-### v3.0.36, in progress
+### v3.0.36, 2026-10-27
+
+Survivor UI in Chinese; the options window's new sidebar with a search, and its first reworked tabs; two Barlow fonts; a card for each side of the XP bar; clicks through the nameplates; and fixes.
 
 **Survivor UI**
+- **The options window, reworked (its first part): a new sidebar**: a search box on top (crit, size, sound...) that finds any setting of any tab by its name or its note and opens its tab with the setting lit; Enter opens the first one found, Escape empties it. Under it the five groups, one open at a time with its tabs, each with how many it holds. Move UI and Donate at the sidebar's foot.
+- **The pages made of one kit**, the same on every reworked tab: a head with the part's switch (On, Off), The game's beside it where the game has its own, and Back to its place; a **live preview** where there is something to see, drawn as you change things; choices as segments and as pictures; things on or off as chips (hover one for what it does); a size as S, M, L and a bar for any size between; a number a step at a time with - and +; a "?" for help; the fine settings in an **Advanced** box (Simple or Advanced at the window's top right, kept for every tab); **Reset this page** and the page's own button at its foot, beside Save & Close.
+- **The first tabs reworked**: Combat text (its preview: the hero and the numbers about it in their sizes, colors and icons, beside the hero or over the enemies), Boss bars (its preview: a boss's, a guardian's and an elite's bar at their size and text size) and Chat (its two looks as pictures, its filter as chips). The other tabs keep their pieces for now, and the search finds theirs too.
+- The options window is a little wider, to give the pages room.
 - **Always keep Victory & Endless** in the Run History (on by default, at the window's foot beside Delete, and in the Run History tab): once the runs kept are full, a new run makes the oldest Fallen or Left one go; a Victory or an Endless run goes only when no other can. Pinned runs, and the 10 longest when kept, never go.
 - **The game's buff notices hidden**: the "<Power Word: Shield>" floating over the fight as a buff or debuff comes, and its notice as it fades, now stay away. Combat text tab, **Buffs gaining and fading**, to have them back.
+- **Survivor UI in Chinese** (new, asked on Discord by Jormungandrr): with the game set to Simplified Chinese, the addon speaks it too: This Run and Biggest Crits, the damage meter and its windows, the build list and its jewelry, the run tracker and the guardians, the XP bar and its luck card, the Level Up! button, the stats, the Jewelry Collection, the kill pace, Run History and Career, move mode, the boss bars, the loot, the party and revive bars, the summons, the map pins, the minimap button, the chat's tabs and `/sui`'s help. The game's terms are the game's own words (暴击, 急速, 传说...), every spell, pet and piece of jewelry is named as the game names it, and the rest is translated for the addon; anything not translated yet stays English, and so does the options window for now. Chinese players: tell us on Discord what reads wrong.
+- **Names kept from a game in another language** (a pet's best crit, a run played in Chinese) now show in the language of the moment; they showed as empty space.
+- **Chinese and Japanese drawn right** (Chinese asked about on Discord by Jormungandrr): with the game in one of them, any font without those letters took them from the game's own font, and the game then mixed letters up: a Chinese character in place of an English letter or the other way round ("e克pty slot", "拉m佐", "エTウィン"), on any text, numbers included. The addon now switches by itself to **Noto Sans SC**, new with the addon, which has them (Japanese's kanji drawn the Chinese way). The font you chose is kept for a game in another language, and the Global tab says so in red. Noto Sans SC can be picked in English, German, Spanish, French, Portuguese and Russian too. Korean has the same trouble and no such font yet.
+- **Two new free fonts**: **Barlow Semi Condensed** and **Barlow Condensed**, both SemiBold, condensed faces close to the look of many retail UIs, to pick as the global font (`/sui opt`, Global) or a piece's own (its card in move mode). Barlow reads a little smaller than other faces at the same size: a step up on a piece's card evens it.
+- **A card for each side of the XP bar**: with The odds beside the bar on, hovering the spells' and jewelry's odds shows their card alone (their column, a legendary among a level-up's 3 cards), and the amulets' odds theirs (their column, and that an amulet rolls with +50% luck of its own); the bar keeps the whole card.
+- **The odds' ribbon under the XP bar is off by default**; XP bar tab, **The odds' ribbon under the bar**, to have it back.
+- **Move mode's size slider no longer runs away** (reported on Discord by Mistrick): dragging a piece's size on its card made the piece grow, the card beside it move, and the slider with it out from under the cursor, so one push went from 50% to 200%. The card now stays where it is while the slider is dragged, and goes back beside the piece when let go.
 - **Armor is now called Dmg Reduction** in the stats (the character pane, the Stats panel, its options and the Run History), as that is what it is: the damage you take is reduced by that much, 60% at most. The game's own pane still calls it Armor, and the tooltip says so. Its place and whether it shows are kept.
+
+**Survivor Plates**
+- **Clicks go through the plates** (new, on by default; reported on Discord by Chunn): with the mouse over a plate, holding a button turned no camera, as the plate took the click. The plates no longer take the mouse: the camera turns from over them, and a click lands in the world, where clicking an enemy still targets it. A click on a plate no longer targets; `/splates click`, or Click through the plates in the options' Nameplates tab, makes them clickable again. The game lets no addon pass one mouse button through and not the other.
 
 ### v3.0.35, 2026-10-26
 
@@ -1030,4 +1051,4 @@ GNU General Public License v3.0 (GPL-3.0), from v2.7 on: you may use, change and
 
 The launcher's art (`installer/art`) is from "Assets: UI RPG Game Interface" by Wenrexa ([wenrexa.itch.io/werdanta03](https://wenrexa.itch.io/werdanta03)), under Creative Commons Zero v1.0 (public domain), with thanks; `installer/art/CREDITS.txt` says which pieces and how two were made from them. The launcher's title font is Cinzel Decorative, as below.
 
-The fonts in `SurvivorUI/Fonts` are not the addon's: Fira Sans (The Mozilla Foundation and Telefonica S.A.), Noto Sans (The Noto Project Authors), Exo (The Exo Project Authors), Russo One (Jovanny Lemonad) and Cinzel Decorative (Natanael Gama) are each under the SIL Open Font License 1.1, its text beside each one (`OFL-*.txt`), shipped unchanged.
+The fonts in `SurvivorUI/Fonts` are not the addon's: Fira Sans (The Mozilla Foundation and Telefonica S.A.), Noto Sans (The Noto Project Authors), Exo (The Exo Project Authors), Russo One (Jovanny Lemonad) and Cinzel Decorative (Natanael Gama) are each under the SIL Open Font License 1.1, its text beside each one (`OFL-*.txt`), shipped unchanged. Barlow Semi Condensed and Barlow Condensed (The Barlow Project Authors), at their SemiBold weight, are under it too (`OFL-Barlow.txt`), shipped unchanged. Noto Sans SC (Adobe, with Reserved Font Name 'Source') is under the same license (`OFL-NotoSansSC.txt`), cut at its Medium weight (500) from the variable font Google Fonts publishes, otherwise unchanged.

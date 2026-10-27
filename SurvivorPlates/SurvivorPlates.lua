@@ -45,6 +45,7 @@
 --   /splates target     the target's plate though its kind is left out (default), or not
 --   /splates names      names only on elites, guardians and bosses (default), or on every plate
 --   /splates keys       V and Shift+V ignored (default), or let them work as the game has them
+--   /splates click      clicks go through the plates (default), or a click on one targets it
 --   /splates count      the plates on screen now, by kind (a check)
 --   /splates scale N    plate size, 0.5 to 2 (default 1)
 --
@@ -279,6 +280,10 @@ local function Settings()
 	-- The companions had plates of their own for a day: the game gives them none.
 	db.show.companion = nil
 	db.scale = db.scale or 1
+	-- From v3.0.36 clicks go through the plates, as asked on Discord.
+	if db.clickThrough == nil then
+		db.clickThrough = true
+	end
 	return db
 end
 
@@ -796,6 +801,25 @@ guard:SetScript("OnUpdate", function()
 	ApplyShown()
 end)
 
+-- Clicks through the plates (the default from v3.0.36): the camera turns
+-- from over a plate, and a click goes to the world, where it targets what
+-- it lands on; a click on a plate no longer targets. The client lets no
+-- addon start the camera's turn (TurnOrActionStart is its own) nor let
+-- one button through and not the other, and it gives every plate its
+-- mouse back as a camera turn ends: taken away again every frame.
+local mouseWatch = CreateFrame("Frame")
+mouseWatch:SetScript("OnUpdate", function()
+	if not Settings().clickThrough then
+		return
+	end
+	for index = 1, table.getn(overlays) do
+		local plate = overlays[index].plate
+		if plate:IsMouseEnabled() then
+			plate:EnableMouse(false)
+		end
+	end
+end)
+
 local function Restyle()
 	for index = 1, table.getn(overlays) do
 		ApplyKind(overlays[index], overlays[index].kind or "normal")
@@ -846,6 +870,17 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 			or "V and Shift+V ignored: the plates stay as chosen here.")
 		ApplyShown()
 		return
+	elseif command == "click" then
+		settings.clickThrough = not settings.clickThrough
+		-- Off: each plate takes the mouse again at once.
+		if not settings.clickThrough then
+			for index = 1, table.getn(overlays) do
+				overlays[index].plate:EnableMouse(true)
+			end
+		end
+		Say(settings.clickThrough and "clicks go through the plates: the camera turns from over one, and a click on one goes to the world."
+			or "a click on a plate targets its enemy again; the camera does not turn from over one.")
+		return
 	elseif command == "count" then
 		-- The plates the client has on screen now, by kind, and how many of them
 		-- are drawn: a check of whether it holds back plates past some number.
@@ -883,7 +918,7 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		settings.scale = math.max(0.5, math.min(2, number))
 		Say("scale "..settings.scale..".")
 	else
-		Say("/splates none | normal | elites | guardians | bosses | pets | totems | party | suggested | target | names | keys | count | scale 0.5-2")
+		Say("/splates none | normal | elites | guardians | bosses | pets | totems | party | suggested | target | names | keys | click | count | scale 0.5-2")
 		return
 	end
 	Restyle()
@@ -906,6 +941,10 @@ end
 
 function SurvivorPlates_KeysAllowed()
 	return Settings().keysAllowed == true
+end
+
+function SurvivorPlates_ClickThrough()
+	return Settings().clickThrough == true
 end
 
 function SurvivorPlates_GetScale()

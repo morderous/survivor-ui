@@ -308,7 +308,7 @@ driver:SetScript("OnUpdate", function()
 		this:Hide()
 		GiveBack()
 		layer:Hide()
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the cursor's picture did not load.")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: the cursor's picture did not load."))
 		return
 	end
 	handed = true

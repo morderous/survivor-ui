@@ -201,7 +201,7 @@ meter.title = titleButton:CreateFontString(nil, "OVERLAY")
 meter.title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 meter.title:SetPoint("LEFT", titleButton, "LEFT", 3, 0)
 meter.title:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-meter.title:SetText("Damage Done")
+meter.title:SetText(SurvivorUI_T("Damage Done"))
 
 -- The caret: three flat lines, five, three and one pixel wide, a small
 -- triangle pointing down.
@@ -262,7 +262,7 @@ local function SetView(index, passing)
 	if not passing then
 		Settings().meterView = VIEWS[index].key
 	end
-	meter.title:SetText(VIEWS[index].title)
+	meter.title:SetText(SurvivorUI_T(VIEWS[index].title))
 	FitTitle()
 end
 
@@ -309,7 +309,7 @@ for index = 1, table.getn(VIEWS) do
 	row.text = row:CreateFontString(nil, "OVERLAY")
 	row.text:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
 	row.text:SetPoint("LEFT", row, "LEFT", 8, 0)
-	row.text:SetText(VIEWS[index].title)
+	row.text:SetText(SurvivorUI_T(VIEWS[index].title))
 
 	row:SetScript("OnEnter", function()
 		this.hot = true
@@ -437,25 +437,26 @@ end
 
 local function SetCell(index, label, value, color)
 	local cell = strip.cells[index]
-	cell.label:SetText(label)
+	cell.label:SetText(SurvivorUI_T(label))
 	cell.value:SetText(value)
 	cell.value:SetTextColor(color[1], color[2], color[3])
 end
 
 strip:SetScript("OnEnter", function()
 	local healing = this.view == "healing"
-	local what = healing and "healing" or "damage"
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
 	local titles = { healing = "Healing Done", boss = "Boss Damage", party = "Party Damage" }
-	GameTooltip:SetText(titles[this.view] or "Damage Done", 1, 0.82, 0)
+	GameTooltip:SetText(SurvivorUI_T(titles[this.view] or "Damage Done"), 1, 0.82, 0)
 	if NowOn() then
-		GameTooltip:AddDoubleLine("NOW", "a second over the last "..NOW_WINDOW.." seconds", NOW_UP[1], NOW_UP[2], NOW_UP[3], 0.8, 0.8, 0.8)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("NOW"), SurvivorUI_TF("a second over the last {1} seconds", NOW_WINDOW), NOW_UP[1], NOW_UP[2], NOW_UP[3], 0.8, 0.8, 0.8)
 	end
-	GameTooltip:AddDoubleLine(healing and "HPS" or "DPS", "a second on average", GOLD[1], GOLD[2], GOLD[3], 0.8, 0.8, 0.8)
-	local whose = (this.view == "boss" and "last boss fight's") or (this.view == "party" and "party's") or "run's"
-	GameTooltip:AddDoubleLine("TOTAL", "the "..whose.." "..what..(this.view == "damage" and ", since Reset" or ""), 1, 1, 1, 0.8, 0.8, 0.8)
+	GameTooltip:AddDoubleLine(healing and "HPS" or "DPS", SurvivorUI_T("a second on average"), GOLD[1], GOLD[2], GOLD[3], 0.8, 0.8, 0.8)
+	-- The whole phrase a piece, for a language with its own order.
+	local total = (this.view == "boss" and "the last boss fight's damage") or (this.view == "party" and "the party's damage")
+		or (healing and "the run's healing") or "the run's damage, since Reset"
+	GameTooltip:AddDoubleLine(SurvivorUI_T("TOTAL"), SurvivorUI_T(total), 1, 1, 1, 0.8, 0.8, 0.8)
 	if NowOn() then
-		GameTooltip:AddLine("NOW is green while above the average, orange while below.", 0.6, 0.6, 0.65, 1)
+		GameTooltip:AddLine(SurvivorUI_T("NOW is green while above the average, orange while below."), 0.6, 0.6, 0.65, 1)
 	end
 	GameTooltip:Show()
 end)
@@ -482,8 +483,8 @@ more.text:SetTextColor(0.6, 0.6, 0.6)
 more:SetScript("OnEnter", function()
 	this.text:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
 	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
-	GameTooltip:SetText("Another meter window", 1, 1, 1)
-	GameTooltip:AddLine("Opens a window of its own on a page this one does not show: the party's damage in a co-op run, else the healing or the boss fight. Its title switches its page, its - closes it. "..SurvivorUI_MoveHint(" it"), 0.7, 0.7, 0.7, 1)
+	GameTooltip:SetText(SurvivorUI_T("Another meter window"), 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Opens a window of its own on a page this one does not show: the party's damage in a co-op run, else the healing or the boss fight. Its title switches its page, its - closes it.").." "..SurvivorUI_MoveHint(" it"), 0.7, 0.7, 0.7, 1)
 	GameTooltip:Show()
 end)
 more:SetScript("OnLeave", function()
@@ -503,13 +504,13 @@ reset:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -20, -5)
 reset.text = reset:CreateFontString(nil, "OVERLAY")
 reset.text:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 reset.text:SetPoint("RIGHT", reset, "RIGHT", 0, 0)
-reset.text:SetText("Reset")
+reset.text:SetText(SurvivorUI_T("Reset"))
 reset.text:SetTextColor(0.6, 0.6, 0.6)
 reset:SetScript("OnEnter", function()
 	this.text:SetTextColor(1, 1, 1)
 	GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
-	GameTooltip:SetText("Starts the meter over from now.", 1, 1, 1)
-	GameTooltip:AddLine("Damage, damage per second and shares count from here, and the crits are cleared. The run panel keeps the whole run's numbers.", 0.7, 0.7, 0.7, 1)
+	GameTooltip:SetText(SurvivorUI_T("Starts the meter over from now."), 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Damage, damage per second and shares count from here, and the crits are cleared. The run panel keeps the whole run's numbers."), 0.7, 0.7, 0.7, 1)
 	GameTooltip:Show()
 end)
 reset:SetScript("OnLeave", function()
@@ -848,7 +849,7 @@ function SurvivorUI_RankText(number, bare)
 	if SurvivorUIDB and SurvivorUIDB.romanRanks then
 		return Roman(number)
 	end
-	return bare and tostring(number) or "Rank "..number
+	return bare and tostring(number) or SurvivorUI_TF("Rank {1}", number)
 end
 
 -- The same icon for a source anywhere in the interface (the Biggest Crits box).
@@ -983,7 +984,7 @@ local function MakeBar(parent)
 	bar.tag = bar:CreateFontString(nil, "OVERLAY")
 	bar.tag:SetFont(SurvivorUI_FONT, 7 + FONT_BUMP, "OUTLINE")
 	bar.tag:SetTextColor(0.78, 0.91, 1)
-	bar.tag:SetText("(proc)")
+	bar.tag:SetText(SurvivorUI_T("(proc)"))
 	bar.tag:Hide()
 
 	bar.value = bar:CreateFontString(nil, "OVERLAY")
@@ -1008,12 +1009,12 @@ local function MakeBar(parent)
 			GameTooltip:SetText(this.line.name, this.color[1], this.color[2], this.color[3])
 			local word = (this.view == "healing" and "Healing") or (this.view == "party" and "Damage") or "Damage to bosses"
 			GameTooltip:AddDoubleLine(word, Short(this.line.dmg), 0.8, 0.8, 0.8, 1, 1, 1)
-			GameTooltip:AddDoubleLine("Share", math.floor(this.line.share * 100 + 0.5).."%", 0.8, 0.8, 0.8, 1, 1, 1)
+			GameTooltip:AddDoubleLine(SurvivorUI_T("Share"), math.floor(this.line.share * 100 + 0.5).."%", 0.8, 0.8, 0.8, 1, 1, 1)
 			-- A hero of the party: the damage a second, the spell that dealt the most.
 			if this.view == "party" then
-				GameTooltip:AddDoubleLine("Damage per second", Short(this.line.dps), 0.8, 0.8, 0.8, 1, 1, 1)
+				GameTooltip:AddDoubleLine(SurvivorUI_T("Damage per second"), Short(this.line.dps), 0.8, 0.8, 0.8, 1, 1, 1)
 				if this.line.top then
-					GameTooltip:AddDoubleLine("Top spell", this.line.top.."  ("..Short(this.line.topdps).." dps)", 0.8, 0.8, 0.8, 1, 0.82, 0)
+					GameTooltip:AddDoubleLine(SurvivorUI_T("Top spell"), SurvivorUI_TF("{1}  ({2} dps)", this.line.top, Short(this.line.topdps)), 0.8, 0.8, 0.8, 1, 0.82, 0)
 				end
 			end
 			GameTooltip:Show()
@@ -1228,8 +1229,8 @@ local function Draw()
 	reset:SetAlpha(key == "damage" and 1 or 0)
 	reset:EnableMouse(key == "damage")
 	if table.getn(lines) == 0 then
-		meter.empty:SetText((key == "boss" and "No boss fight yet.") or (key == "healing" and "No healing yet.")
-			or (key == "party" and "No party damage yet.") or "")
+		meter.empty:SetText(SurvivorUI_T((key == "boss" and "No boss fight yet.") or (key == "healing" and "No healing yet.")
+			or (key == "party" and "No party damage yet.") or ""))
 		meter.empty:Show()
 	else
 		meter.empty:Hide()

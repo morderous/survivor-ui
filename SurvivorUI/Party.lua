@@ -197,20 +197,20 @@ local function Tip(row)
 		GameTooltip:AddLine(kind, 0.8, 0.8, 0.8)
 	end
 	if not row.sample then
-		GameTooltip:AddDoubleLine("Health", Short(UnitHealth(unit)).." / "..Short(UnitHealthMax(unit)), 0.8, 0.8, 0.8, 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Health"), Short(UnitHealth(unit)).." / "..Short(UnitHealthMax(unit)), 0.8, 0.8, 0.8, 1, 1, 1)
 	end
 	local line = row.sample or LineOf(name)
 	if line and line.dmg then
-		GameTooltip:AddDoubleLine("Damage this run", Short(line.dmg).."  ("..Percent(line.share)..")", 0.8, 0.8, 0.8, 1, 1, 1)
-		GameTooltip:AddDoubleLine("Damage per second", Short(line.dps), 0.8, 0.8, 0.8, 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Damage this run"), Short(line.dmg).."  ("..Percent(line.share)..")", 0.8, 0.8, 0.8, 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Damage per second"), Short(line.dps), 0.8, 0.8, 0.8, 1, 1, 1)
 		if Named(line.top) then
-			GameTooltip:AddDoubleLine("Top spell", line.top.."  ("..Short(line.topdps).." dps)", 0.8, 0.8, 0.8, 1, 0.82, 0)
+			GameTooltip:AddDoubleLine(SurvivorUI_T("Top spell"), SurvivorUI_TF("{1}  ({2} dps)", SurvivorUI_Native(line.top), Short(line.topdps)), 0.8, 0.8, 0.8, 1, 0.82, 0)
 		end
 	end
 	if row.sample then
-		GameTooltip:AddLine("A sample: your friends show here in a party.", 0.6, 0.6, 0.65, 1)
+		GameTooltip:AddLine(SurvivorUI_T("A sample: your friends show here in a party."), 0.6, 0.6, 0.65, 1)
 	else
-		GameTooltip:AddLine("Click to target.", 0.6, 0.6, 0.65)
+		GameTooltip:AddLine(SurvivorUI_T("Click to target."), 0.6, 0.6, 0.65)
 	end
 	GameTooltip:Show()
 end
@@ -557,17 +557,17 @@ local function DrawBar(revive)
 	if down then
 		share = Num(revive.share)
 		local by = Named(revive.by)
-		title, titleColor, fill = "YOU ARE DOWN", DOWN_TEXT, REVIVE_FILL
+		title, titleColor, fill = SurvivorUI_T("YOU ARE DOWN"), DOWN_TEXT, REVIVE_FILL
 		if by then
-			text = by.." is bringing you back  "..Percent(share)
+			text = SurvivorUI_TF("{1} is bringing you back  {2}", by, Percent(share))
 		elseif share > 0 then
-			text = "Being brought back  "..Percent(share)
+			text = SurvivorUI_TF("Being brought back  {1}", Percent(share))
 		else
-			text = "A friend must stand next to you"
+			text = SurvivorUI_T("A friend must stand next to you")
 		end
 	elseif rescuing then
 		share = Num(revive.rshare)
-		title, titleColor, fill = "BRINGING "..string.upper(rescuing).." BACK", RESCUE_FILL, RESCUE_FILL
+		title, titleColor, fill = SurvivorUI_TF("BRINGING {1} BACK", string.upper(rescuing)), RESCUE_FILL, RESCUE_FILL
 		text = Percent(share)
 	else
 		bar:Hide()

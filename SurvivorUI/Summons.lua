@@ -83,44 +83,41 @@ local function Tooltip(icon)
 		return
 	end
 	GameTooltip:SetOwner(icon, "ANCHOR_TOPLEFT")
-	GameTooltip:AddLine(group.name or group.key or "?", 1, 0.82, 0)
+	GameTooltip:AddLine(SurvivorUI_Native(group.name or group.key or "?"), 1, 0.82, 0)
 	-- A talent's clock: its next one, or its cooldown.
 	if group.cooldown then
-		GameTooltip:AddLine(group.next > 0 and ("Ready in "..TimeText(group.next).." sec") or "Ready", 1, 1, 1)
-		GameTooltip:AddLine("Every "..TimeText(group.wait).." sec at most", 0.7, 0.7, 0.7)
+		GameTooltip:AddLine(group.next > 0 and SurvivorUI_TF("Ready in {1} sec", TimeText(group.next)) or SurvivorUI_T("Ready"), 1, 1, 1)
+		GameTooltip:AddLine(SurvivorUI_TF("Every {1} sec at most", TimeText(group.wait)), 0.7, 0.7, 0.7)
 		GameTooltip:Show()
 		return
 	end
 	if group.next then
-		GameTooltip:AddLine("Next one in "..TimeText(group.next).." sec, every "..TimeText(group.wait).." sec ("..group.timer..")",
+		GameTooltip:AddLine(SurvivorUI_TF("Next one in {1} sec, every {2} sec ({3})", TimeText(group.next), TimeText(group.wait), SurvivorUI_Native(group.timer)),
 			NEXT_COLOR[1], NEXT_COLOR[2], NEXT_COLOR[3])
 	end
 	if group.waiting then
-		GameTooltip:AddLine("None out yet", 0.7, 0.7, 0.7)
+		GameTooltip:AddLine(SurvivorUI_T("None out yet"), 0.7, 0.7, 0.7)
 		GameTooltip:Show()
 		return
 	end
 	if group.stays then
-		GameTooltip:AddLine(group.count == 1 and "Stays the whole run" or group.count.." out, the whole run", 1, 1, 1)
+		GameTooltip:AddLine(group.count == 1 and SurvivorUI_T("Stays the whole run") or SurvivorUI_TF("{1} out, the whole run", group.count), 1, 1, 1)
 	else
-		local line = group.count.." out"
-		if group.limit then
-			line = line.." of "..group.limit
-		end
+		local line = group.limit and SurvivorUI_TF("{1} out of {2}", group.count, group.limit) or SurvivorUI_TF("{1} out", group.count)
 		GameTooltip:AddLine(line, 1, 1, 1)
 	end
 	-- The gate's demons by kind.
 	if group.kinds then
 		for index = 1, table.getn(group.kinds) do
 			local kind = group.kinds[index]
-			GameTooltip:AddLine(kind.count.."  "..(kind.name or kind.key), 0.9, 0.9, 0.9)
+			GameTooltip:AddLine(kind.count.."  "..SurvivorUI_Native(kind.name or kind.key), 0.9, 0.9, 0.9)
 		end
 	end
 	-- Each one going, the longest-lived first.
 	local shown = 0
 	for index = 1, table.getn(group.left) do
 		if shown < 8 then
-			GameTooltip:AddLine(TimeText(group.left[index]).." left", 0.7, 0.7, 0.7)
+			GameTooltip:AddLine(SurvivorUI_TF("{1} left", TimeText(group.left[index])), 0.7, 0.7, 0.7)
 			shown = shown + 1
 		end
 	end

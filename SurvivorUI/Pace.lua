@@ -156,7 +156,7 @@ local function ClassLabel(class)
 	if not class then
 		return "?"
 	end
-	return string.upper(string.sub(class, 1, 1))..string.sub(class, 2)
+	return SurvivorUI_T(string.upper(string.sub(class, 1, 1))..string.sub(class, 2))
 end
 
 ------------------------------------------------------------------------------
@@ -472,6 +472,9 @@ end
 
 -- 1st, 2nd, 3rd, 4th ... 11th, 12th, 13th, 21st.
 local function Ordinal(n)
+	if SurvivorUI_Translated() then
+		return SurvivorUI_TF("#{1}", n)
+	end
 	local tens, ones = math.mod(n, 100), math.mod(n, 10)
 	if tens >= 11 and tens <= 13 then
 		return n.."th"
@@ -519,17 +522,17 @@ end
 local function Announce(ended)
 	local count, slowest, fastest, _, place = StretchReference(ended.index, ended.kills)
 	local color = TIERS.none.color
-	local text = Thousands(ended.kills).." kills"
+	local text = SurvivorUI_TF("{1} kills", Thousands(ended.kills))
 	if count > 0 then
-		text = text.."  |cff8a8a8a/|r  "..string.format("%.0f%%", ended.kills / math.max(fastest, 1) * 100).." of your best"
-			.."  |cff8a8a8a/|r  "..(place == 1 and "your best" or Ordinal(place)).." of "..(count + 1)
+		text = text.."  |cff8a8a8a/|r  "..SurvivorUI_TF("{1} of your best", string.format("%.0f%%", ended.kills / math.max(fastest, 1) * 100))
+			.."  |cff8a8a8a/|r  "..(place == 1 and SurvivorUI_TF("your best of {1}", count + 1) or SurvivorUI_TF("{1} of {2}", Ordinal(place), count + 1))
 		if count >= MinRuns() then
 			color = TIERS[ORDER[RawTier(Score(ended.kills, slowest, fastest))]].color
 		end
 	else
-		text = text.."  |cff8a8a8a/|r  the first to compare"
+		text = text.."  |cff8a8a8a/|r  "..SurvivorUI_T("the first to compare")
 	end
-	banner.title:SetText("Up to "..(ended.name or "the boss"))
+	banner.title:SetText(SurvivorUI_TF("Up to {1}", ended.name or SurvivorUI_T("the boss")))
 	banner.line:SetText(text)
 	banner.line:SetTextColor(color[1], color[2], color[3])
 	PlaceBanner()
@@ -734,25 +737,26 @@ end)
 frame:SetScript("OnEnter", function()
 	local state = TIERS[tier]
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
-	GameTooltip:SetText("Kill pace: "..state.label, state.color[1], state.color[2], state.color[3])
+	GameTooltip:SetText(SurvivorUI_TF("Kill pace: {1}", SurvivorUI_T(state.label)), state.color[1], state.color[2], state.color[3])
 	if rate then
-		GameTooltip:AddDoubleLine("Kills a minute, last "..Window().." sec", string.format("%.0f", rate), 0.8, 0.8, 0.8, 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_TF("Kills a minute, last {1} sec", Window()), string.format("%.0f", rate), 0.8, 0.8, 0.8, 1, 1, 1)
 	else
-		GameTooltip:AddLine("Counting: a few seconds of the run first.", 0.8, 0.8, 0.8)
+		GameTooltip:AddLine(SurvivorUI_T("Counting: a few seconds of the run first."), 0.8, 0.8, 0.8)
 	end
 	if AZS_RUN and AZS_RUN.en then
-		GameTooltip:AddDoubleLine("Enemies alive now", AZS_RUN.en, 0.8, 0.8, 0.8, 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Enemies alive now"), AZS_RUN.en, 0.8, 0.8, 0.8, 1, 1, 1)
 	end
 	local coming = NextBoss()
 	if coming and lastMark and AZS_RUN and AZS_RUN.kills then
-		GameTooltip:AddDoubleLine("This stretch, to "..(coming.name or "the next boss"), Thousands(AZS_RUN.kills - lastMark).." kills", 0.8, 0.8, 0.8, 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_TF("This stretch, to {1}", coming.name or SurvivorUI_T("the next boss")),
+			SurvivorUI_TF("{1} kills", Thousands(AZS_RUN.kills - lastMark)), 0.8, 0.8, 0.8, 1, 1, 1)
 		local stretchCount, _, stretchBest, stretchAverage = StretchReference(coming.index)
 		if stretchCount > 0 then
-			GameTooltip:AddDoubleLine("  your best / average on it", Thousands(stretchBest).." / "..Thousands(stretchAverage), 0.6, 0.6, 0.62, 1, 1, 1)
+			GameTooltip:AddDoubleLine(SurvivorUI_T("  your best / average on it"), Thousands(stretchBest).." / "..Thousands(stretchAverage), 0.6, 0.6, 0.62, 1, 1, 1)
 		end
 	end
 	local slowest, count, fastest, average, slowClass, fastClass = Reference()
-	local zoneName = AZS_ZONE and AZS_ZONE.zname or "this zone"
+	local zoneName = AZS_ZONE and AZS_ZONE.zname or SurvivorUI_T("this zone")
 	-- The run's four modifiers, each on its line: as the menu has them, harder
 	-- in orange, easier in green, the others grey; the pace is held against
 	-- runs with the same.
@@ -763,7 +767,7 @@ frame:SetScript("OnEnter", function()
 	end
 	if index > 0 then
 		GameTooltip:AddLine(" ")
-		GameTooltip:AddLine("Modifiers  |cff8a8a92(held against runs with the same)|r", 1, 0.82, 0)
+		GameTooltip:AddLine(SurvivorUI_T("Modifiers  |cff8a8a92(held against runs with the same)|r"), 1, 0.82, 0)
 		for place = 1, table.getn(MOD_NAMES) do
 			local value = values[place] or 100
 			local r, g, b = 0.62, 0.62, 0.66
@@ -772,17 +776,18 @@ frame:SetScript("OnEnter", function()
 			elseif value < 100 then
 				r, g, b = 0.40, 0.95, 0.45
 			end
-			GameTooltip:AddDoubleLine("  Enemy "..MOD_NAMES[place], value.."%", 0.8, 0.8, 0.8, r, g, b)
+			GameTooltip:AddDoubleLine("  "..SurvivorUI_T("Enemy "..MOD_NAMES[place]), value.."%", 0.8, 0.8, 0.8, r, g, b)
 		end
 	end
 	local classOnly = Settings().paceClassOnly
-	local what = classOnly and ((AZS_ZONE and AZS_ZONE.cname or "this class").." runs on "..zoneName)
-		or ("runs on "..zoneName..", every class")
+	-- Each sentence whole, for a language with its own order.
+	local className = AZS_ZONE and AZS_ZONE.cname or SurvivorUI_T("this class")
 	GameTooltip:AddLine(" ")
 	if slowest then
-		GameTooltip:AddLine("Minute "..minute.." of your "..what..":", 0.8, 0.8, 0.8)
+		GameTooltip:AddLine(classOnly and SurvivorUI_TF("Minute {1} of your {2} runs on {3}:", minute, className, zoneName)
+			or SurvivorUI_TF("Minute {1} of your runs on {2}, every class:", minute, zoneName), 0.8, 0.8, 0.8)
 		if rate and fastest > 0 then
-			GameTooltip:AddDoubleLine("Share of your fastest", string.format("%.0f%%", (shown or rate) / fastest * 100), 0.8, 0.8, 0.8, 1, 1, 1)
+			GameTooltip:AddDoubleLine(SurvivorUI_T("Share of your fastest"), string.format("%.0f%%", (shown or rate) / fastest * 100), 0.8, 0.8, 0.8, 1, 1, 1)
 		end
 		local blazing, fast, steady, slow = TIERS.blazing.color, TIERS.fast.color, TIERS.steady.color, TIERS.slow.color
 		local fastText, slowText = string.format("%.0f", fastest), string.format("%.0f", slowest)
@@ -790,16 +795,19 @@ frame:SetScript("OnEnter", function()
 			fastText = fastText.."  |cff9a9a9a"..ClassLabel(fastClass).."|r"
 			slowText = slowText.."  |cff9a9a9a"..ClassLabel(slowClass).."|r"
 		end
-		GameTooltip:AddDoubleLine("Fastest", fastText, blazing[1], blazing[2], blazing[3], 1, 1, 1)
-		GameTooltip:AddDoubleLine("Average", string.format("%.0f", average), steady[1], steady[2], steady[3], 1, 1, 1)
-		GameTooltip:AddDoubleLine("Slowest", slowText, slow[1], slow[2], slow[3], 1, 1, 1)
-		GameTooltip:AddDoubleLine("Runs held against", count, 0.8, 0.8, 0.8, 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Fastest"), fastText, blazing[1], blazing[2], blazing[3], 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Average"), string.format("%.0f", average), steady[1], steady[2], steady[3], 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Slowest"), slowText, slow[1], slow[2], slow[3], 1, 1, 1)
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Runs held against"), count, 0.8, 0.8, 0.8, 1, 1, 1)
 		GameTooltip:AddLine(" ")
-		GameTooltip:AddLine("Red as slow as your slowest run at this minute, yellow in between, blue near your fastest, green as fast or faster.", MUTED[1], MUTED[2], MUTED[3], 1)
+		GameTooltip:AddLine(SurvivorUI_T("Red as slow as your slowest run at this minute, yellow in between, blue near your fastest, green as fast or faster."), MUTED[1], MUTED[2], MUTED[3], 1)
 	else
-		GameTooltip:AddLine("Held against your "..what.." at the same minute, once "..MinRuns().." of them have reached it ("..(count or 0).." so far).", MUTED[1], MUTED[2], MUTED[3], 1)
+		GameTooltip:AddLine(classOnly
+			and SurvivorUI_TF("Held against your {1} runs on {2} at the same minute, once {3} of them have reached it ({4} so far).", className, zoneName, MinRuns(), count or 0)
+			or SurvivorUI_TF("Held against your runs on {1}, every class, at the same minute, once {2} of them have reached it ({3} so far).", zoneName, MinRuns(), count or 0),
+			MUTED[1], MUTED[2], MUTED[3], 1)
 	end
-	GameTooltip:AddLine(classOnly and "This class only: /sui pace class for every class." or "Every class: /sui pace class for this class only.", MUTED[1], MUTED[2], MUTED[3], 1)
+	GameTooltip:AddLine(SurvivorUI_T(classOnly and "This class only: /sui pace class for every class." or "Every class: /sui pace class for this class only."), MUTED[1], MUTED[2], MUTED[3], 1)
 	GameTooltip:Show()
 end)
 frame:SetScript("OnLeave", function()
@@ -854,7 +862,7 @@ function SurvivorUI_TogglePace(argument)
 		local key = RunKey()
 		local list = key and settings.paceRuns[key]
 		if not list then
-			DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the kill pace forgets a zone's runs during a run there, and has none of this one's.")
+			DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: the kill pace forgets a zone's runs during a run there, and has none of this one's."))
 			return
 		end
 		-- The runs it holds against: this class's only, or the whole zone's.

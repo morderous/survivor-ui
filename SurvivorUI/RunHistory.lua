@@ -96,14 +96,14 @@ end
 local function Ago(at)
 	local seconds = time() - Num(at)
 	if seconds < 60 then
-		return "just now"
+		return SurvivorUI_T("just now")
 	elseif seconds < 3600 then
-		return math.floor(seconds / 60).." min ago"
+		return SurvivorUI_TF("{1} min ago", math.floor(seconds / 60))
 	elseif seconds < 86400 then
-		return math.floor(seconds / 3600).." h ago"
+		return SurvivorUI_TF("{1} h ago", math.floor(seconds / 3600))
 	end
 	local days = math.floor(seconds / 86400)
-	return days == 1 and "1 day ago" or days.." days ago"
+	return days == 1 and SurvivorUI_T("1 day ago") or SurvivorUI_TF("{1} days ago", days)
 end
 
 -- A moment (seconds since 1970, UTC) as the computer's date and time,
@@ -767,7 +767,7 @@ local function Go(number)
 	window.again = true
 end
 
-local close = TextButton("x", 18, function() window:Hide() end)
+local close = TextButton(SurvivorUI_T("x"), 18, function() window:Hide() end)
 close:SetPoint("TOPRIGHT", window, "TOPRIGHT", -6, -7)
 local after = TextButton(">", 18, function() Go(shown + 1) end)
 after:SetPoint("RIGHT", close, "LEFT", -10, 0)
@@ -804,8 +804,8 @@ end)
 pageButton:SetScript("OnEnter", function()
 	this:SetBackdropBorderColor(1, 1, 1, 0.6)
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
-	GameTooltip:SetText("Run "..shown.." of "..table.getn(History()), 1, 1, 1)
-	GameTooltip:AddLine("1 is the newest. Click to type a run's number, then Enter.", 0.8, 0.8, 0.8, 1)
+	GameTooltip:SetText(SurvivorUI_TF("Run {1} of {2}", shown, table.getn(History())), 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T("1 is the newest. Click to type a run's number, then Enter."), 0.8, 0.8, 0.8, 1)
 	GameTooltip:Show()
 end)
 pageButton:SetScript("OnLeave", function()
@@ -889,9 +889,9 @@ local function PhotoDone(result)
 	photo.hud = {}
 	camera:Show()
 	if result == "SCREENSHOT_SUCCEEDED" then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: Run History's page saved as a screenshot, in the game's Screenshots folder.")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: Run History's page saved as a screenshot, in the game's Screenshots folder."))
 	elseif result == "SCREENSHOT_FAILED" then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the game could not save the screenshot.")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: the game could not save the screenshot."))
 	end
 end
 
@@ -949,9 +949,9 @@ camera.icon:SetVertexColor(0.85, 0.85, 0.85)
 camera:SetScript("OnEnter", function()
 	this.icon:SetVertexColor(1, 1, 1)
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
-	GameTooltip:SetText("Photo", 1, 0.82, 0)
-	GameTooltip:AddLine("A screenshot of this page alone, to share.", 1, 1, 1, 1)
-	GameTooltip:AddLine("Saved in the game's Screenshots folder.", 0.65, 0.65, 0.7, 1)
+	GameTooltip:SetText(SurvivorUI_T("Photo"), 1, 0.82, 0)
+	GameTooltip:AddLine(SurvivorUI_T("A screenshot of this page alone, to share."), 1, 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Saved in the game's Screenshots folder."), 0.65, 0.65, 0.7, 1)
 	GameTooltip:Show()
 end)
 camera:SetScript("OnLeave", function()
@@ -1109,7 +1109,7 @@ function pick.Draw()
 		pick.rows[place]:Hide()
 	end
 	local scrolls = total > count
-	pick.more:SetText(scrolls and ((pick.offset + 1).." - "..(pick.offset + count).." of "..total.."   \194\183   the wheel scrolls") or "")
+	pick.more:SetText(scrolls and (SurvivorUI_TF("{1} - {2} of {3}", pick.offset + 1, pick.offset + count, total).."   \194\183   "..SurvivorUI_T("the wheel scrolls")) or "")
 	pick.list:SetHeight(8 + count * pick.ROW + (scrolls and 14 or 0))
 end
 
@@ -1129,8 +1129,8 @@ pick.arrow:SetScript("OnClick", function()
 end)
 pick.arrow:SetScript("OnEnter", function()
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
-	GameTooltip:SetText("Every run", 1, 0.82, 0)
-	GameTooltip:AddLine("Pick one to go to it.", 1, 1, 1, 1)
+	GameTooltip:SetText(SurvivorUI_T("Every run"), 1, 0.82, 0)
+	GameTooltip:AddLine(SurvivorUI_T("Pick one to go to it."), 1, 1, 1, 1)
 	GameTooltip:Show()
 end)
 pick.arrow:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1206,7 +1206,7 @@ end
 -- Delete still takes it. A push pin, lit while the run is pinned.
 local pinButton = SurvivorUI_GoldButton(window, 64, "Interface\\AddOns\\SurvivorUI\\Art\\Pin", nil, "Pin")
 pinButton:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", PAD, 9)
-pinButton.tipText = "A pinned run stays however many runs come after it, its tooltips too. Delete still takes it."
+pinButton.tipText = SurvivorUI_T("A pinned run stays however many runs come after it, its tooltips too. Delete still takes it.")
 pinButton:SetScript("OnClick", function()
 	local run = History()[shown]
 	if run then
@@ -1220,8 +1220,8 @@ end)
 local careerButton = SurvivorUI_GoldButton(window, 70, "Interface\\AddOns\\SurvivorUI\\Art\\LairMarks",
 	{ 0.5, 0.75, 0, 0.5 }, "Career")
 careerButton:SetPoint("LEFT", pinButton, "RIGHT", 6, 0)
-careerButton.tipTitle = "Career"
-careerButton.tipText = "Every run kept, added up by class and by map."
+careerButton.tipTitle = SurvivorUI_T("Career")
+careerButton.tipText = SurvivorUI_T("Every run kept, added up by class and by map.")
 careerButton:SetScript("OnClick", function()
 	if SurvivorUI_ShowCareer then
 		SurvivorUI_ShowCareer(window)
@@ -1245,8 +1245,8 @@ deleteButton.drop:SetVertexColor(1, 0.6, 0.55)
 deleteButton.drop:SetWidth(12)
 deleteButton.drop:SetHeight(12)
 deleteButton.drop:SetPoint("RIGHT", deleteButton, "RIGHT", -4, 0)
-deleteButton.tipTitle = "Delete"
-deleteButton.tipText = "This run, or every run kept."
+deleteButton.tipTitle = SurvivorUI_T("Delete")
+deleteButton.tipText = SurvivorUI_T("This run, or every run kept.")
 deleteButton:SetScript("OnClick", function() del.Toggle() end)
 
 -- Always keep Victory & Endless, left of Delete (on by default): past the
@@ -1267,7 +1267,7 @@ del.wins.tick:SetPoint("TOPLEFT", del.wins.edge, "TOPLEFT", 3, -3)
 del.wins.tick:SetPoint("BOTTOMRIGHT", del.wins.edge, "BOTTOMRIGHT", -3, 3)
 del.wins.text = Font(del.wins, 9, { 1, 0.88, 0.5 })
 del.wins.text:SetPoint("LEFT", del.wins.edge, "RIGHT", 5, 0)
-del.wins.text:SetText("Always keep Victory & Endless")
+del.wins.text:SetText(SurvivorUI_T("Always keep Victory & Endless"))
 del.wins:SetWidth(16 + del.wins.text:GetStringWidth())
 function del.wins:Paint()
 	if Settings().historyKeepWins ~= false then
@@ -1285,9 +1285,9 @@ del.wins:SetScript("OnShow", function() this:Paint() end)
 del.wins:SetScript("OnEnter", function()
 	this.text:SetTextColor(1, 1, 1)
 	GameTooltip:SetOwner(this, "ANCHOR_TOP")
-	GameTooltip:SetText("Always keep Victory & Endless", 1, 0.82, 0)
-	GameTooltip:AddLine("Once the runs kept are full, a new run makes the oldest Fallen or Left one go. "
-		.."A Victory or an Endless run goes only when no other can. Pinned runs never go.", 1, 1, 1, 1)
+	GameTooltip:SetText(SurvivorUI_T("Always keep Victory & Endless"), 1, 0.82, 0)
+	GameTooltip:AddLine(SurvivorUI_T("Once the runs kept are full, a new run makes the oldest Fallen or Left one go. A Victory or an Endless run goes only when no other can. Pinned runs never go."),
+		1, 1, 1, 1)
 	GameTooltip:Show()
 end)
 del.wins:SetScript("OnLeave", function()
@@ -1347,8 +1347,8 @@ function del.Toggle()
 		del.menu:Hide()
 		return
 	end
-	del.one.note:SetText("run "..shown)
-	del.all.note:SetText(total..(total == 1 and " run" or " runs"))
+	del.one.note:SetText(SurvivorUI_TF("@number:run {1}", shown))
+	del.all.note:SetText(SurvivorUI_TF(total == 1 and "{1} run" or "{1} runs", total))
 	pick.list:Hide()
 	del.menu:Show()
 end
@@ -1364,10 +1364,10 @@ function del.Ask(kind)
 	end
 	local run, index = history[shown], shown
 	SurvivorUI_Confirm({
-		title = "Delete this run?",
-		text = pick.Line(run).."  |cff9a9aa0(run "..index..", "..(run.at and Ago(run.at) or (run.when or ""))..")|r"
-			.."\n|cff9a9aa0It goes for good.|r",
-		yes = "Delete",
+		title = SurvivorUI_T("Delete this run?"),
+		text = pick.Line(run).."  |cff9a9aa0("..SurvivorUI_TF("@number:run {1}", index)..", "..(run.at and Ago(run.at) or (run.when or ""))..")|r"
+			.."\n|cff9a9aa0"..SurvivorUI_T("It goes for good.").."|r",
+		yes = SurvivorUI_T("Delete"),
 		onYes = function()
 			local list = History()
 			if list[index] == run then
@@ -1495,7 +1495,7 @@ function party.Draw(run)
 			table.insert(names, pick.Hex({ r, g, b })..(member.name or "?").."|r")
 		end
 	end
-	party.text:SetText("   |cff9a9aa2\194\183|r   |cff8fc3ffParty of "..table.getn(members)..":|r "..table.concat(names, ", "))
+	party.text:SetText("   |cff9a9aa2\194\183|r   |cff8fc3ff"..SurvivorUI_TF("Party of {1}:", table.getn(members)).."|r "..table.concat(names, ", "))
 	party.tip:Show()
 end
 
@@ -1505,16 +1505,16 @@ party.tip:SetScript("OnEnter", function()
 		return
 	end
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT")
-	GameTooltip:SetText("A co-op run, a party of "..table.getn(members), 1, 0.82, 0)
+	GameTooltip:SetText(SurvivorUI_TF("A co-op run, a party of {1}", table.getn(members)), 1, 0.82, 0)
 	for _, member in pairs(members) do
 		local r, g, b = party.Color(member)
 		local right = member.dmg and (Short(member.dmg).."   "..math.floor(Num(member.share) * 100 + 0.5).."%") or ""
-		GameTooltip:AddDoubleLine((member.name or "?")..(member.me and "  (you)" or ""), right, r, g, b, 1, 1, 1)
+		GameTooltip:AddDoubleLine((member.name or "?")..(member.me and "  "..SurvivorUI_T("(you)") or ""), right, r, g, b, 1, 1, 1)
 		if member.top then
-			GameTooltip:AddLine("    Top spell: "..member.top, 0.65, 0.65, 0.7)
+			GameTooltip:AddLine("    "..SurvivorUI_TF("Top spell: {1}", SurvivorUI_Native(member.top)), 0.65, 0.65, 0.7)
 		end
 	end
-	GameTooltip:AddLine("Each hero's damage as the game's party meter had it when the run ended.", 0.6, 0.6, 0.65, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Each hero's damage as the game's party meter had it when the run ended."), 0.6, 0.6, 0.65, 1)
 	GameTooltip:Show()
 end)
 party.tip:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1536,12 +1536,12 @@ whenTip:SetScript("OnEnter", function()
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
 	local hours = SurvivorUIDB and tonumber(SurvivorUIDB.timeZone)
 	if hours then
-		GameTooltip:SetText("Your time zone: "..(SurvivorUI_ZoneLabel and SurvivorUI_ZoneLabel(hours) or hours), 1, 1, 1)
+		GameTooltip:SetText(SurvivorUI_TF("Your time zone: {1}", SurvivorUI_ZoneLabel and SurvivorUI_ZoneLabel(hours) or hours), 1, 1, 1)
 	else
-		GameTooltip:SetText("The game's clock is in UTC", 1, 1, 1)
-		GameTooltip:AddLine("Set your time zone for your own clock's time.", 0.8, 0.8, 0.8, 1)
+		GameTooltip:SetText(SurvivorUI_T("The game's clock is in UTC"), 1, 1, 1)
+		GameTooltip:AddLine(SurvivorUI_T("Set your time zone for your own clock's time."), 0.8, 0.8, 0.8, 1)
 	end
-	GameTooltip:AddLine("/sui opt, Run History: Your time zone.", 0.6, 0.6, 0.65, 1)
+	GameTooltip:AddLine(SurvivorUI_T("/sui opt, Run History: Your time zone."), 0.6, 0.6, 0.65, 1)
 	GameTooltip:Show()
 end)
 whenTip:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1853,7 +1853,7 @@ local function SetBadge(badge, key, tipTitle, tipLine, time, moment)
 		return
 	end
 	badge.tipTitle, badge.tipLine = tipTitle, tipLine
-	badge.text:SetText(look.word)
+	badge.text:SetText(SurvivorUI_T(look.word))
 	badge.time:SetText(time or "")
 	badge:SetWidth(badge.text:GetStringWidth() + (time and badge.time:GetStringWidth() + 7 or 0) + 30)
 	badge:SetBackdropBorderColor(look.edge[1], look.edge[2], look.edge[3], 1)
@@ -1970,9 +1970,9 @@ for index = 1, 4 do
 	chip:EnableMouse(true)
 	chip:SetScript("OnEnter", function()
 		GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
-		GameTooltip:SetText("Modifiers", 1, 0.82, 0)
-		GameTooltip:AddLine("The run's Run Options: enemy density, health, damage and speed.", 1, 1, 1, 1)
-		GameTooltip:AddLine("Orange: harder than normal. Green: easier. Grey: normal.", 0.7, 0.7, 0.7, 1)
+		GameTooltip:SetText(SurvivorUI_T("Modifiers"), 1, 0.82, 0)
+		GameTooltip:AddLine(SurvivorUI_T("The run's Run Options: enemy density, health, damage and speed."), 1, 1, 1, 1)
+		GameTooltip:AddLine(SurvivorUI_T("Orange: harder than normal. Green: easier. Grey: normal."), 0.7, 0.7, 0.7, 1)
 		GameTooltip:Show()
 	end)
 	chip:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -2001,8 +2001,8 @@ local function DrawMods(label)
 			color = { 0.40, 0.95, 0.45 }
 		end
 		if count == 1 then
-			chip.name:SetText("Modifiers")
-			chip.value:SetText("normal")
+			chip.name:SetText(SurvivorUI_T("Modifiers"))
+			chip.value:SetText(SurvivorUI_T("normal"))
 		else
 			chip.name:SetText(MODS[index][2])
 			chip.value:SetText(value.."%")
@@ -2027,7 +2027,7 @@ end
 local empty = Font(window, 11, MUTED, "", "CENTER")
 empty:SetPoint("TOP", window, "TOP", 0, -100)
 empty:SetWidth(WIDTH - 120)
-empty:SetText("No run kept yet. Finish one, fallen or won, and it shows here: the run tracker as it ended, its numbers, build, damage, crits and loot.")
+empty:SetText(SurvivorUI_T("No run kept yet. Finish one, fallen or won, and it shows here: the run tracker as it ended, its numbers, build, damage, crits and loot."))
 
 ------------------------------------------------------------------------------
 -- The panels: each in a frame of its own, a gold title in its corner as the
@@ -2106,10 +2106,10 @@ tracker.timeline:SetHeight(8)
 tracker.gone = Flat(tracker, "ARTWORK")
 tracker.gone:SetHeight(8)
 tracker.guardTitle = Font(tracker, 9, DIM)
-tracker.guardTitle:SetText("Guardians")
+tracker.guardTitle:SetText(SurvivorUI_T("Guardians"))
 tracker.guardNote = Font(tracker, 9, WHITE, nil, "RIGHT")
 tracker.eliteTitle = Font(tracker, 9, DIM)
-tracker.eliteTitle:SetText("Elites")
+tracker.eliteTitle:SetText(SurvivorUI_T("Elites"))
 tracker.eliteNote = Font(tracker, 9, WHITE, nil, "RIGHT")
 tracker.level = Font(tracker, 9, WHITE, nil, "CENTER")
 tracker.xpBack = Flat(tracker, "BORDER", BACKING, 0.9)
@@ -2185,18 +2185,18 @@ local function DrawTracker(shot, result)
 		-- Left from the menu: the game passes through its fall on the way out,
 		-- so the tracker was kept "dead"; the run's result says it.
 		local edge = RESULTS.left.edge
-		table.insert(parts, string.format("|cff%02x%02x%02xLeft|r",
-			math.floor(edge[1] * 255), math.floor(edge[2] * 255), math.floor(edge[3] * 255)))
+		table.insert(parts, string.format("|cff%02x%02x%02x",
+			math.floor(edge[1] * 255), math.floor(edge[2] * 255), math.floor(edge[3] * 255))..SurvivorUI_T("Left").."|r")
 	elseif shot.phase == "victory" then
-		table.insert(parts, "|cff4dd94dVictory|r")
+		table.insert(parts, "|cff4dd94d"..SurvivorUI_T("Victory").."|r")
 	elseif shot.phase == "dead" then
-		table.insert(parts, "|cffff4040Fallen|r")
+		table.insert(parts, "|cffff4040"..SurvivorUI_T("Fallen").."|r")
 	elseif shot.endless then
-		table.insert(parts, "|cffd080ffEndless|r")
+		table.insert(parts, "|cffd080ff"..SurvivorUI_T("Endless").."|r")
 	end
 	local lives = Num(shot.lives)
 	if lives > 0 then
-		table.insert(parts, "|cffff8080"..lives..(lives == 1 and " life" or " lives").." left|r")
+		table.insert(parts, "|cffff8080"..SurvivorUI_TF(lives == 1 and "{1} life left" or "{1} lives left", lives).."|r")
 	end
 	tracker.state:SetText(table.concat(parts, "  "))
 	tracker.state:ClearAllPoints()
@@ -2303,9 +2303,9 @@ local function DrawTracker(shot, result)
 	if shot.nextBoss then
 		used = used + 1
 		local line = BossLine(used)
-		line.name:SetText(shot.nextBoss.name or "Next boss")
+		line.name:SetText(SurvivorUI_T(shot.nextBoss.name or "Next boss"))
 		line.name:SetTextColor(1, 1, 1)
-		line.time:SetText("|cffffd24din "..Clock(shot.nextBoss.left).."|r")
+		line.time:SetText("|cffffd24d"..SurvivorUI_TF("in {1}", Clock(shot.nextBoss.left)).."|r")
 		line.name:SetWidth(INNER - line.time:GetStringWidth() - 8)
 		At(line, tracker, x, y)
 	end
@@ -2324,7 +2324,7 @@ local function DrawTracker(shot, result)
 		tracker.guardNote:Show()
 		if guard.count then
 			local color = Num(guard.awake) > 0 and AWAKE or (Num(guard.alive) > 0 and SPAWNED or DIM)
-			tracker.guardNote:SetText(Num(guard.alive).." / "..table.getn(guard.lairs or {}).." alive")
+			tracker.guardNote:SetText(SurvivorUI_TF("{1} / {2} alive", Num(guard.alive), table.getn(guard.lairs or {})))
 			tracker.guardNote:SetTextColor(color[1], color[2], color[3])
 			-- The lairs' marks after the title, as the count showed them.
 			for index = 1, table.getn(guard.lairs or {}) do
@@ -2346,7 +2346,7 @@ local function DrawTracker(shot, result)
 			y = y - 6 - 12
 		else
 			local goal = guard.goalColor or DIM
-			tracker.guardNote:SetText(guard.goal or "")
+			tracker.guardNote:SetText(SurvivorUI_T(guard.goal or ""))
 			tracker.guardNote:SetTextColor(goal[1], goal[2], goal[3])
 			y = y - 6 - 12
 			local lairCount = table.getn(lairs)
@@ -2385,7 +2385,7 @@ local function DrawTracker(shot, result)
 				else
 					piece.flagGlow:Hide()
 				end
-				piece.text:SetText(lair.text or "")
+				piece.text:SetText(SurvivorUI_T(lair.text or ""))
 				At(piece, tracker, x + (index - 1) * (each + 3), y)
 			end
 			y = y - 9
@@ -2404,11 +2404,11 @@ local function DrawTracker(shot, result)
 		At(tracker.eliteTitle, tracker, x, y - 6)
 		local alive, hurt = Num(elites.total), Num(elites.hurt)
 		if alive == 0 then
-			tracker.eliteNote:SetText("|cff8a8a8anone|r")
+			tracker.eliteNote:SetText(SurvivorUI_T("|cff8a8a8anone|r"))
 		elseif hurt > 0 then
-			tracker.eliteNote:SetText("|cffffffff"..alive.." alive|r  ·  |cffff8c26"..hurt.." fighting|r")
+			tracker.eliteNote:SetText("|cffffffff"..SurvivorUI_TF("{1} alive", alive).."|r  ·  |cffff8c26"..SurvivorUI_TF("{1} fighting", hurt).."|r")
 		else
-			tracker.eliteNote:SetText("|cffffffff"..alive.." alive|r")
+			tracker.eliteNote:SetText("|cffffffff"..SurvivorUI_TF("{1} alive", alive).."|r")
 		end
 		tracker.eliteNote:ClearAllPoints()
 		tracker.eliteNote:SetPoint("TOPRIGHT", tracker, "TOPRIGHT", -6, y - 6)
@@ -2437,7 +2437,7 @@ local function DrawTracker(shot, result)
 
 	-- The level and how far to the next, at the bottom.
 	if shot.level then
-		local text = "|cffbf8cffLv. "..Num(shot.level).."|r"
+		local text = "|cffbf8cff"..SurvivorUI_TF("Lv. {1}", Num(shot.level)).."|r"
 		if Num(shot.stored) > 0 then
 			text = text.." |cffffd100+"..Num(shot.stored).."|r"
 		end
@@ -2462,7 +2462,7 @@ end
 -- The run's numbers, in This Run's look (RunPanel.lua): each row a label and
 -- a value in its color, on a faint wash of it, over a rule of it.
 
-local runBox = Box("The Run")
+local runBox = Box(SurvivorUI_T("The Run"))
 
 local function RunRow(index)
 	local row = runBox.rows[index]
@@ -2488,7 +2488,7 @@ local function RunRow(index)
 		row.more:SetPoint("RIGHT", row.value, "LEFT", -6, -1)
 		-- A personal best: "NEW BEST" in gold after its name.
 		row.best = Font(row, 7, GOLD)
-		row.best:SetText("NEW BEST")
+		row.best:SetText(SurvivorUI_T("NEW BEST"))
 		row.best:Hide()
 		row:EnableMouse(true)
 		row:SetScript("OnEnter", function() ShowKept(this, this.tip, 1) end)
@@ -2599,9 +2599,9 @@ local function DrawRun(run, base)
 		local line = lines[index]
 		local color = line[3]
 		local row = RunRow(index)
-		row.label:SetText(line[1])
+		row.label:SetText(SurvivorUI_T(line[1]))
 		row.value:SetText(line[2])
-		row.more:SetText(line[4] or "")
+		row.more:SetText(SurvivorUI_T(line[4] or ""))
 		row.tip = line[6] or (line[5] and run.rowTips and run.rowTips[line[5]]) or nil
 		row.label:SetTextColor(color[1], color[2], color[3])
 		row.value:SetTextColor(color[1], color[2], color[3])
@@ -2636,7 +2636,7 @@ local GEAR_ROW = 17
 local COLUMN_WIDTH = { rank = 24, cd = 30, range = 34 }
 local EMPTY = { 0.45, 0.45, 0.45 }
 
-local buildBox = Box("Build")
+local buildBox = Box(SurvivorUI_T("Build"))
 buildBox.head = CreateFrame("Frame", nil, buildBox)
 buildBox.head:SetPoint("TOPLEFT", buildBox, "TOPLEFT", 6, -21)
 buildBox.head:SetWidth(INNER)
@@ -2644,7 +2644,7 @@ buildBox.head:SetHeight(HEAD)
 buildBox.labels = {}
 for _, key in pairs({ "range", "cd", "rank" }) do
 	local label = Font(buildBox.head, 8, { 0.62, 0.62, 0.66 }, nil, "CENTER")
-	label:SetText(key == "range" and "Range" or (key == "cd" and "CD" or "Rank"))
+	label:SetText(SurvivorUI_T(key == "range" and "Range" or (key == "cd" and "CD" or "Rank")))
 	buildBox.labels[key] = label
 end
 -- The dividers, over the rows, from the header's top to the racial's bottom.
@@ -2660,7 +2660,7 @@ for _, key in pairs({ "range", "cd", "rank" }) do
 end
 buildBox.gearTitle = Themed("text", Font(buildBox, 9, GOLD))
 buildBox.gearTitle:SetPoint("TOPLEFT", buildBox, "TOPLEFT", 7, -GEAR_TOP)
-buildBox.gearTitle:SetText("Jewelry")
+buildBox.gearTitle:SetText(SurvivorUI_T("Jewelry"))
 buildBox.gear = {}
 
 -- The columns shown, laid out from the right edge: { [key] = { right, width,
@@ -2876,7 +2876,7 @@ local function DrawBuild(run)
 			row.icon:SetTexture(spell.icon or OWN_ICON)
 			row.icon:SetVertexColor(1, 1, 1)
 			row.icon:SetAlpha(1)
-			row.name:SetText(spell.racial and spell.name.."  |cff8a8a8a(racial)|r" or spell.name)
+			row.name:SetText(spell.racial and SurvivorUI_Native(spell.name).."  |cff8a8a8a"..SurvivorUI_T("(racial)").."|r" or SurvivorUI_Native(spell.name))
 			row.rank:SetText(spell.rank or "")
 			row.range:SetText(spell.range or "")
 			row.cd:SetText(spell.cd or "")
@@ -2886,7 +2886,7 @@ local function DrawBuild(run)
 			row.icon:SetTexture(FLAT)
 			row.icon:SetVertexColor(0.15, 0.15, 0.18)
 			row.icon:SetAlpha(0.8)
-			row.name:SetText("empty slot")
+			row.name:SetText(SurvivorUI_T("empty slot"))
 			row.rank:SetText("")
 			row.range:SetText("")
 			row.cd:SetText("")
@@ -2908,18 +2908,18 @@ local function DrawBuild(run)
 		if piece.empty then
 			line.wash:SetVertexColor(0.5, 0.5, 0.55, 0.06)
 			Tint(line.edges, { 0.5, 0.5, 0.55 }, 0.15)
-			line.label:SetText(piece.label or "")
+			line.label:SetText(SurvivorUI_GearWords(piece.label or ""))
 			line.label:SetTextColor(0.45, 0.45, 0.5)
-			FitTags(line, "empty")
+			FitTags(line, SurvivorUI_T("empty"))
 			line.tags:SetTextColor(0.4, 0.4, 0.45)
 		else
 			local color = piece.color or WHITE
 			line.color = color
 			line.wash:SetVertexColor(color[1], color[2], color[3], 0.45)
 			Tint(line.edges, color, 0.7)
-			line.label:SetText(piece.label or "")
+			line.label:SetText(SurvivorUI_GearWords(piece.label or ""))
 			line.label:SetTextColor(1, 1, 1)
-			FitTags(line, piece.tags or "-")
+			FitTags(line, SurvivorUI_GearWords(piece.tags or "-"))
 			line.tags:SetTextColor(1, 1, 1)
 		end
 		At(line, buildBox, 6, -GEAR_TOP - 15 - (index - 1) * GEAR_ROW)
@@ -2939,7 +2939,7 @@ local AMOUNT_RIGHT = SHARE_WIDTH + 6
 local NAME_ROOM = INNER - BAR - 2 - (AMOUNT_RIGHT + AMOUNT_WIDTH + 2) - 4
 local BARS_TOP = 21 + 14 + 2
 
-local damageBox = Box("Damage Done")
+local damageBox = Box(SurvivorUI_T("Damage Done"))
 damageBox.strip = CreateFrame("Frame", nil, damageBox)
 damageBox.strip:SetPoint("TOPLEFT", damageBox, "TOPLEFT", 6, -21)
 damageBox.strip:SetWidth(INNER)
@@ -2955,9 +2955,9 @@ for index = 1, 2 do
 	cell.value:SetPoint("LEFT", cell.label, "RIGHT", 4, 0)
 	damageBox.cells[index] = cell
 end
-damageBox.cells[1].label:SetText("DPS")
+damageBox.cells[1].label:SetText(SurvivorUI_T("DPS"))
 damageBox.cells[1].value:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-damageBox.cells[2].label:SetText("TOTAL")
+damageBox.cells[2].label:SetText(SurvivorUI_T("TOTAL"))
 
 local function SourceBar(index)
 	local bar = damageBox.rows[index]
@@ -2986,7 +2986,7 @@ local function SourceBar(index)
 		bar.name:SetPoint("LEFT", bar, "LEFT", BAR + 2, 0)
 		bar.name:SetHeight(12)
 		bar.tag = Font(bar, 7, { 0.78, 0.91, 1 })
-		bar.tag:SetText("(proc)")
+		bar.tag:SetText(SurvivorUI_T("(proc)"))
 		bar.value = Font(bar, 9, WHITE, nil, "RIGHT")
 		bar.value:SetPoint("RIGHT", bar, "RIGHT", -AMOUNT_RIGHT, 0)
 		bar.share = Font(bar, 8, { 0.85, 0.85, 0.85 }, nil, "RIGHT")
@@ -3050,7 +3050,7 @@ local function DrawDamage(run)
 		local room = NAME_ROOM - (source.proc and 30 or 0)
 		bar.name:SetWidth(room)
 		local ranked = rank and rank > 0 and SurvivorUI_RankText and SurvivorUIDB and SurvivorUIDB.meterRanks
-		bar.name:SetText((source.name or "?")..(ranked and "  |cffbdbdbd"..SurvivorUI_RankText(rank, true).."|r" or ""))
+		bar.name:SetText(SurvivorUI_Native(source.name or "?")..(ranked and "  |cffbdbdbd"..SurvivorUI_RankText(rank, true).."|r" or ""))
 		bar.tag:ClearAllPoints()
 		if source.proc then
 			bar.tag:SetPoint("LEFT", bar, "LEFT", BAR + 2 + math.min(bar.name:GetStringWidth(), room) + 3, 0)
@@ -3071,7 +3071,7 @@ end
 -- The biggest crits, in Biggest Crits' look (RunPanel.lua): the build list's
 -- rows, the value in a column of its own.
 
-local critBox = Box("Biggest Crits")
+local critBox = Box(SurvivorUI_T("Biggest Crits"))
 
 local function CritRow(index)
 	local row = critBox.rows[index]
@@ -3118,7 +3118,7 @@ local function DrawCrits(run)
 		row.ability = crit.ability
 		row.keptCard = run.cards and run.cards[crit.ability] or nil
 		local color = crit.color or (SurvivorUI_MeterColor and SurvivorUI_MeterColor(crit.ability)) or WHITE
-		row.label:SetText(crit.ability or "?")
+		row.label:SetText(SurvivorUI_Native(crit.ability or "?"))
 		row.value:SetText(Short(crit.amount))
 		row.wash:SetVertexColor(color[1], color[2], color[3], 0.45)
 		row.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
@@ -3143,7 +3143,7 @@ end
 -- The loot, in the loot list's look (LootLog.lua): each piece filled with
 -- its quality's color in a black edge; the run second it came.
 
-local lootBox = Box("Loot")
+local lootBox = Box(SurvivorUI_T("Loot"))
 
 local function LootRow(index)
 	local row = lootBox.rows[index]
@@ -3179,7 +3179,7 @@ local function LootRow(index)
 				if this.qualityName then
 					GameTooltip:AddLine(string.upper(string.sub(this.qualityName, 1, 1))..string.sub(this.qualityName, 2), color[1], color[2], color[3])
 				end
-				GameTooltip:AddLine("Not yet seen equipped in a run: its details show here once you have worn it in one.", 0.62, 0.62, 0.68, 1)
+				GameTooltip:AddLine(SurvivorUI_T("Not yet seen equipped in a run: its details show here once you have worn it in one."), 0.62, 0.62, 0.68, 1)
 			end
 			GameTooltip:Show()
 		end)
@@ -3203,7 +3203,7 @@ local function DrawLoot(run)
 			extra = "  x"..item.count
 		end
 		if item.new then
-			extra = extra.."  |cff7dff7dnew|r"
+			extra = extra.."  |cff7dff7d"..SurvivorUI_T("new").."|r"
 		end
 		row.extra:SetText(extra)
 		local extraWidth = extra ~= "" and row.extra:GetStringWidth() or 0
@@ -3229,7 +3229,7 @@ end
 -- bar of its share. One table for it all: the file is near Lua 5.0's 200
 -- locals.
 
-local fallen = { box = Box("Fallen to"), heads = {}, colors = {
+local fallen = { box = Box(SurvivorUI_T("Fallen to")), heads = {}, colors = {
 	["boss melee"] = { 0.72, 0.32, 1.00 }, ["boss spell"] = { 0.86, 0.52, 1.00 }, elite = { 1.00, 0.55, 0.10 },
 	["mob melee"] = { 0.80, 0.80, 0.84 }, ["mob spell"] = { 0.58, 0.74, 1.00 }, area = { 0.40, 0.86, 0.56 },
 } }
@@ -3304,7 +3304,7 @@ local function DrawFallen(run)
 	end
 	local hits = death.hits or {}
 	if table.getn(hits) > 0 then
-		Head("ITS LAST 10 SECONDS")
+		Head(SurvivorUI_T("ITS LAST 10 SECONDS"))
 		for index = 1, math.min(4, table.getn(hits)) do
 			local hit = hits[index]
 			Line(string.format("%.1fs  ", Num(hit.ago))..(hit.who or "?")..(hit.what and ("  \194\183  "..hit.what) or ""),
@@ -3317,12 +3317,12 @@ local function DrawFallen(run)
 		total = total + Num(kind.dmg)
 	end
 	if total > 0 then
-		Head("DAMAGE TAKEN, BY KIND")
+		Head(SurvivorUI_T("DAMAGE TAKEN, BY KIND"))
 		for index = 1, math.min(4, table.getn(kinds)) do
 			local kind = kinds[index]
 			local share = Num(kind.dmg) / total
 			local word = kind.source or "?"
-			Line(string.upper(string.sub(word, 1, 1))..string.sub(word, 2), math.floor(share * 100 + 0.5).."%  "..Short(kind.dmg),
+			Line(SurvivorUI_T(string.upper(string.sub(word, 1, 1))..string.sub(word, 2)), math.floor(share * 100 + 0.5).."%  "..Short(kind.dmg),
 				fallen.colors[word] or WHITE, share)
 		end
 	end
@@ -3339,7 +3339,7 @@ end
 -- in its groups and colors, every number but those at nothing (+0%, 0), each
 -- with what it means. Kept since v3.0.12. One table, for the file's locals.
 
-local statsPanel = { box = Box("Stats"), LINE = 16, HEAD = 18 }
+local statsPanel = { box = Box(SurvivorUI_T("Stats")), LINE = 16, HEAD = 18 }
 
 function statsPanel.Row(index)
 	local box = statsPanel.box
@@ -3370,9 +3370,9 @@ function statsPanel.Row(index)
 			GameTooltip:AddLine(this.tipText, 0.62, 0.62, 0.68, 1)
 			-- Its parts as the run stood: the gear worn, and the rest.
 			if this.gear then
-				GameTooltip:AddDoubleLine("Worn gear", this.gear, 0.12, 1, 0, 0.12, 1, 0)
+				GameTooltip:AddDoubleLine(SurvivorUI_T("Worn gear"), this.gear, 0.12, 1, 0, 0.12, 1, 0)
 				if this.rest then
-					GameTooltip:AddDoubleLine("Everything else", this.rest, 0.62, 0.62, 0.65, 0.85, 0.85, 0.85)
+					GameTooltip:AddDoubleLine(SurvivorUI_T("Everything else"), this.rest, 0.62, 0.62, 0.65, 0.85, 0.85, 0.85)
 				end
 			end
 			GameTooltip:Show()
@@ -3388,7 +3388,7 @@ function statsPanel.Draw(run)
 	local sections = SurvivorUI_StatList and SurvivorUI_StatList()
 	if not (kept and sections) then
 		HideRows(box, 1)
-		return Nothing(box, "Not kept for runs before v3.0.12.")
+		return Nothing(box, SurvivorUI_T("Not kept for runs before v3.0.12."))
 	end
 	Nothing(box, nil)
 	-- A number the game had not sent reads as 0, as in the Stats panel.
@@ -3425,7 +3425,7 @@ function statsPanel.Draw(run)
 				y = y + 4
 			end
 			-- The group's name, a rule of its color under it.
-			local head = Place(statsPanel.HEAD, string.upper(section.title), nil, color, nil)
+			local head = Place(statsPanel.HEAD, string.upper(SurvivorUI_T(section.title)), nil, color, nil)
 			head.wash:SetVertexColor(color[1], color[2], color[3], 0)
 			head.rule:SetVertexColor(color[1], color[2], color[3], 0.6)
 			for each = 1, table.getn(lines) do
@@ -3511,13 +3511,13 @@ local function DrawNavigation(history, total)
 	-- last, so a picture of the window tells which one took it.
 	local dot = "   \194\183   "
 	local version = GetAddOnMetadata and GetAddOnMetadata("SurvivorUI", "Version")
-	footer:SetText("|cffd9b44aRUN HISTORY|r"..dot.."|cffffffff"..total.."|r of "..most.." runs kept"
-		..(pinned > 0 and (dot.."|cffffffff"..pinned.."|r pinned") or "")
+	footer:SetText("|cffd9b44a"..SurvivorUI_T("RUN HISTORY").."|r"..dot..SurvivorUI_TF("{1} of {2} runs kept", "|cffffffff"..total.."|r", most)
+		..(pinned > 0 and (dot..SurvivorUI_TF("{1} pinned", "|cffffffff"..pinned.."|r")) or "")
 		..(version and (dot.."Survivor UI v"..version) or ""))
 	local pinnedRun = history[shown].pinned and true or false
-	pinButton.text:SetText(pinnedRun and "Pinned" or "Pin")
+	pinButton.text:SetText(SurvivorUI_T(pinnedRun and "Pinned" or "Pin"))
 	pinButton.lit = pinnedRun
-	pinButton.tipTitle = pinnedRun and "Pinned" or "Pin this run"
+	pinButton.tipTitle = SurvivorUI_T(pinnedRun and "Pinned" or "Pin this run")
 	pinButton:Light(false)
 	pinButton:Show()
 	if total > 1 then
@@ -3536,22 +3536,22 @@ local function DrawHeader(run, final, moment)
 	-- An endless run's two badges show its moments on a click; the line under
 	-- the one shown.
 	local first, second = final and "victory" or nil, final and "end" or nil
-	local pick = final and "\n|cff9a9aa0Click to show this moment.|r" or ""
+	local pick = final and "\n|cff9a9aa0"..SurvivorUI_T("Click to show this moment.").."|r" or ""
 	if run.result == "victory" then
-		SetBadge(firstBadge, "victory", "Victory", "The final boss slain at "..Clock(run.time).."."..pick, Clock(run.time), first)
+		SetBadge(firstBadge, "victory", SurvivorUI_T("Victory"), SurvivorUI_TF("The final boss slain at {1}.", Clock(run.time))..pick, Clock(run.time), first)
 	elseif run.result == "left" then
-		SetBadge(firstBadge, "left", "Left", "Left from the menu at "..Clock(run.time)..", level "..Num(run.level)..".", Clock(run.time), first)
+		SetBadge(firstBadge, "left", SurvivorUI_T("Left"), SurvivorUI_TF("Left from the menu at {1}, level {2}.", Clock(run.time), Num(run.level)), Clock(run.time), first)
 	else
-		SetBadge(firstBadge, "dead", "Fallen", "Fell at "..Clock(run.time)..", level "..Num(run.level)..".", Clock(run.time), first)
+		SetBadge(firstBadge, "dead", SurvivorUI_T("Fallen"), SurvivorUI_TF("Fell at {1}, level {2}.", Clock(run.time), Num(run.level)), Clock(run.time), first)
 	end
 	if final then
 		local after = Clock(Num(final.time) - Num(run.time))
 		if final.result == "dead" then
-			SetBadge(secondBadge, "endless", "Fallen in endless mode", "Fell at "..Clock(final.time)..", "..after.." after the victory."..pick, Clock(final.time), second)
+			SetBadge(secondBadge, "endless", SurvivorUI_T("Fallen in endless mode"), SurvivorUI_TF("Fell at {1}, {2} after the victory.", Clock(final.time), after)..pick, Clock(final.time), second)
 		elseif final.result == "left" then
-			SetBadge(secondBadge, "left", "Left in endless mode", "Left at "..Clock(final.time)..", "..after.." after the victory."..pick, Clock(final.time), second)
+			SetBadge(secondBadge, "left", SurvivorUI_T("Left in endless mode"), SurvivorUI_TF("Left at {1}, {2} after the victory.", Clock(final.time), after)..pick, Clock(final.time), second)
 		else
-			SetBadge(secondBadge, "going", "Endless mode, still going", Clock(final.time).." so far, "..after.." after the victory."..pick, Clock(final.time), second)
+			SetBadge(secondBadge, "going", SurvivorUI_T("Endless mode, still going"), SurvivorUI_TF("{1} so far, {2} after the victory.", Clock(final.time), after)..pick, Clock(final.time), second)
 		end
 	else
 		SetBadge(secondBadge, nil)
@@ -3585,7 +3585,7 @@ local function DrawHeader(run, final, moment)
 	local light = Light({ r, g, b })
 	-- The level as the run tracker and the XP bar write it, "Lv. 18", in the
 	-- line's own color (the class's, lighter).
-	heroText:SetText("Lv. "..Num(moment.level).."  "..(run.race or "").." "..(run.class or ""))
+	heroText:SetText(SurvivorUI_TF("Lv. {1}", Num(moment.level)).."  "..SurvivorUI_T(run.race or "").." "..SurvivorUI_T(run.class or ""))
 	heroText:SetTextColor(light[1], light[2], light[3])
 	party.Draw(run)
 	DrawMods(run.mods)
@@ -3703,7 +3703,7 @@ function SurvivorUI_AskClearHistory(then_)
 	local history = History()
 	local total = table.getn(history)
 	if total == 0 then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: Run History keeps no run.")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: Run History keeps no run."))
 		return
 	end
 	local pinned = 0
@@ -3713,11 +3713,12 @@ function SurvivorUI_AskClearHistory(then_)
 		end
 	end
 	SurvivorUI_Confirm({
-		title = "Clear all runs?",
-		text = "Every run kept goes for good: "..total..(total == 1 and " run" or " runs")
-			..(pinned > 0 and (", the "..pinned.." pinned too") or "")..".\n|cff9a9aa0Type|r clear |cff9a9aa0to clear them.|r",
+		title = SurvivorUI_T("Clear all runs?"),
+		text = (pinned > 0 and SurvivorUI_TF("Every run kept goes for good: {1}, the {2} pinned too.", SurvivorUI_TF(total == 1 and "{1} run" or "{1} runs", total), pinned)
+			or SurvivorUI_TF("Every run kept goes for good: {1}.", SurvivorUI_TF(total == 1 and "{1} run" or "{1} runs", total)))
+			.."\n|cff9a9aa0"..SurvivorUI_T("Type|r clear |cff9a9aa0to clear them.").."|r",
 		word = "clear",
-		yes = "Clear all",
+		yes = SurvivorUI_T("Clear all"),
 		onYes = function()
 			SurvivorUI_ClearHistory()
 			if then_ then

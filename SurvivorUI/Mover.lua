@@ -58,7 +58,7 @@ function SurvivorUI_CenterRow()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.rowX, SurvivorUIDB.rowY = nil, nil
 	Place(0, DEFAULT_Y)
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the middle of the screen is back under the hero.")
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: the middle of the screen is back under the hero."))
 end
 
 ------------------------------------------------------------------------------
@@ -235,7 +235,7 @@ local function MakeHandle(label)
 	handle.label:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 	handle.label:SetPoint("TOP", handle, "TOP", 0, -4)
 	handle.label:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
-	handle.label:SetText(label)
+	handle.label:SetText(SurvivorUI_PieceName(label))
 	handle.name = label
 
 	-- In move mode, or the piece's tab open, a click picks the piece for its
@@ -260,6 +260,16 @@ end
 -- Any piece of the interface: the outline covers frame, the drag moves mover
 -- (frame itself unless given), which must be movable; save keeps its place,
 -- default puts it back in its first one (for /sui layout).
+-- A piece's name as shown, in the game's language where the addon speaks it
+-- (Locale.lua): "Damage meter 2" its name and its number.
+function SurvivorUI_PieceName(label)
+	local _, _, base, number = string.find(label or "", "^(.-) (%d+)$")
+	if base then
+		return SurvivorUI_T(base).." "..number
+	end
+	return SurvivorUI_T(label or "?")
+end
+
 function SurvivorUI_RegisterMover(frame, label, save, mover, default)
 	mover = mover or frame
 	local handle = MakeHandle(label)
@@ -393,11 +403,11 @@ local function ApplyLink()
 	if linked then
 		middle:SetPoint("TOPLEFT", player, "TOPLEFT", -4, 4)
 		middle:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 4, -12)
-		middle.label:SetText("Action bar and frames  -  /sui center puts it back")
+		middle.label:SetText(SurvivorUI_T("Action bar and frames  -  /sui center puts it back"))
 	else
 		middle:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 4)
 		middle:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 4, -12)
-		middle.label:SetText("Action bar  -  /sui center puts it back")
+		middle.label:SetText(SurvivorUI_T("Action bar  -  /sui center puts it back"))
 	end
 	-- Handles already up follow at once.
 	for _, handle in pairs({ playerHandle, targetHandle }) do
@@ -916,7 +926,7 @@ function SurvivorUI_ResetLayout()
 	if SurvivorUI_ResetOptionsPlace then
 		SurvivorUI_ResetOptionsPlace()
 	end
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: every piece is back in its first place.")
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: every piece is back in its first place."))
 end
 
 -- The saved place comes back once the saved settings have.

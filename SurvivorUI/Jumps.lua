@@ -124,7 +124,7 @@ local function Show(count, fx)
 	notice.number:SetFont(SurvivorUI_FONT, POP_SIZE * scale + FONT_BUMP, "THICKOUTLINE")
 	notice.number:SetTextColor(1, 0.75, 0.2)
 	notice.label:SetFont(SurvivorUI_FONT, 10 * math.max(0.8, scale) + FONT_BUMP, "OUTLINE")
-	notice.label:SetText("NEW JUMP RECORD")
+	notice.label:SetText(SurvivorUI_T("NEW JUMP RECORD"))
 	notice.number:SetText(count)
 	if IconOn() then
 		notice.icon:SetWidth(26 * scale)
