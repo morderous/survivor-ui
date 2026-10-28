@@ -3699,7 +3699,18 @@ Check(page, "Talent cooldowns", OnUnlessOff("summonsTimers"), Flip("summonsTimer
 page = pages.party
 Header(page, "Party", "For co-op runs, from the game's 0.113: a frame for each friend in your party, and a bar while you are down or bring a friend back. The damage meter's title opens a Party Damage page too, and Run History names the party of a run played in one. Out of a party nothing shows; while this tab is open, a sample does.")
 PanelHead(page, FeatureOn("partyFrames"), FeatureToggle("partyFrames", true), "party", "Party frames", nil, nil, { font = false })
-Note(page, "Left of your frame, the first friend at the bottom and each next one over it. Each friend's class icon, their health in the class's color and what is left of it; DOWN in red while down, a gold fill while you bring them back, Reviving you on the one bringing you back. Hover one for their damage this run and their top spell; click to target. The game's party frames are put away while these are on.")
+Note(page, "Left of your frame, the first friend level with it and each next one over it, or under it (Order, below). Each friend's class icon, their health in the class's color and what is left of it; DOWN in red while down, a gold fill while you bring them back, Reviving you on the one bringing you back. Hover one for their damage this run and their top spell; click to target. The game's party frames are put away while these are on.")
+Inline(page, "Order", {
+	{ "up", "Bottom to top" },
+	{ "down", "Top to bottom" },
+}, function() return DB().partyDown and "down" or "up" end,
+	function(value)
+		DB().partyDown = value == "down" or nil
+		if SurvivorUI_PlacePartyFrames then
+			SurvivorUI_PlacePartyFrames()
+		end
+	end)
+Note(page, "Bottom to top, each friend who joins goes over the last; top to bottom, under it. The first friend stays where it is either way.")
 Subheader(page, "Revive bar")
 Check(page, "Revive bar", ReviveIsOn, Call("SurvivorUI_ToggleRevive"),
 	"while you are down: how far a friend has brought you back, and who; while you bring one back: how far. It puts the game's slim revive bar away (the game's 0.115 on; before it, the game's could not be put away, so ours was off unless chosen). Moved on its own: move mode, Revive bar.")
@@ -4428,6 +4439,13 @@ Inline(page, "Held to move", {
 }, function() return SurvivorUI_MoveKey and SurvivorUI_MoveKey() or "alt" end,
 	function(value) DB().moveKey = value end)
 Note(page, "The key held to see the grid and drag the pieces while you play. Another one, or none (Move UI only), when Alt is your push to talk.")
+Subheader(page, "Over the game's cards")
+Check(page, "Over the game's cards", OnUnlessOff("overCards"), function()
+	DB().overCards = DB().overCards == false
+	if SurvivorUI_PlaceOverCards then
+		SurvivorUI_PlaceOverCards()
+	end
+end, "while a level's cards or a new piece of jewelry are up, the pieces around them stay lit over the game's dark veil, and take their clicks there: the build list, This Run, the XP bar's chances, the meter, the tracker, the chat, with their tooltips. A piece in the cards' part of the screen (the action bar, the player frame) fades out while they are up, so nothing covers a card. From the game's 0.126; the next cards to open follow a change.")
 Subheader(page, "Reset")
 Button(page, "Every piece back in place", 220, 0, Asked("Every piece back in place?",
 	"Every piece you moved goes back where it first stood.", "Back in place",

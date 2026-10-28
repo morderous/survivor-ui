@@ -1,0 +1,19 @@
+{
+  "about": "Mirrors of Azeroth Survivors' full package for the launcher's Get the game (from 1.5.7), besides Aethus' own site. Each with the size and sha256 Aethus gave for the package: a file that does not match is thrown away. A mirror that asks for a login takes \"user\" and \"password\" (HTTP basic; the login its owner gave on the game's Discord, published with his ok). A url may be a page: the launcher takes the first .rar it links to.",
+  "package": [
+    {
+      "name": "Mirror by Meexa",
+      "url": "https://azerothsurvivors-mirror.sandervspl.dev/downloads/1792925574766-14929617-e3ce-4190-8591-6e5e1a4a1c59/AzerothSurvivorsWindowsNew.rar",
+      "size": 760497456,
+      "sha256": "971db7968dc37ec50b18d64a1de7f693e137f6793a7368e4d5c27bd9522eccd8"
+    },
+    {
+      "name": "Mirror by Leo",
+      "url": "https://budapestmix.hu:5000/download",
+      "size": 760497456,
+      "sha256": "971db7968dc37ec50b18d64a1de7f693e137f6793a7368e4d5c27bd9522eccd8",
+      "user": "AzerothSurvivors_uSZfhjS",
+      "password": "AzerothSurvivors_uSZfhjS"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "addons": [
+    {
+      "name": "ASBuilder",
+      "author": "cadoky",
+      "repo": "cadoky/ASBuilder",
+      "asset": "ASBuilder-*.zip",
+      "folders": ["ASBuilder"],
+      "about": "A build planner and in-run tracker: plan a build for any class before the run, then a small window tells you what to take next."
+    },
+    {
+      "name": "Azerloot",
+      "author": "Kindagrey",
+      "repo": "Kindagrey/Azerloot",
+      "asset": "Azerloot-*.zip",
+      "folders": ["Azerloot"],
+      "about": "The loot book: every boss drop, ring, trinket and amulet, a build planner, a chronicle of your runs and a wishlist that ticks itself."
+    },
+    {
+      "name": "AZSSpellMeter",
+      "author": "kex0",
+      "repo": "kex0/AZSSpellMeter",
+      "asset": "AZSSpellMeter-*.zip",
+      "folders": ["AZSSpellMeter"],
+      "about": "A per-spell damage meter: the same numbers as Damage Done, plus kills per spell and the spell a proc actually casts."
+    },
+    {
+      "name": "KeijinUI",
+      "author": "KeijinDE",
+      "repo": "KeijinDE/KeijinUI_modern-as-ui",
+      "asset": "KeijinUI-*.zip",
+      "folders": ["KeijinUI"],
+      "about": "A complete interface in one visual style, inspired by Dragonflight: it replaces the game's own HUD."
+    },
+    {
+      "name": "SurvivorsDragonUi",
+      "author": "migwynkriid",
+      "repo": "migwynkriid13/SurvivorsDragonUi",
+      "asset": "SurvivorsDragonUi.zip",
+      "sums": "SHA256SUMS.txt",
+      "folders": ["SurvivorsDragonUi"],
+      "about": "A HUD for Azeroth Survivors: run and boss bars, combat text, seven action buttons and counters for gold, kills and caches. Type /sdui in the game to set it up."
+    }
+  ]
+}

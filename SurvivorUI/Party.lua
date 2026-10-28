@@ -9,8 +9,9 @@
 --   Hover one for their damage this run (AZS_GetPartyMeter); click to
 --   target. The game's own party frames (the stock 1.12 ones) are put away
 --   while these are on. Left of your frame, party1 at the bottom and each
---   next one over it, until moved (move mode: "Party frames"). Module
---   "Party frames".
+--   next one over it, or each next one under it (the Party tab, "Order":
+--   SurvivorUIDB.partyDown), until moved (move mode: "Party frames"); the
+--   first friend stays put either way. Module "Party frames".
 -- - Revive bar: while you are down, how far a friend has brought you back
 --   and who; while you bring one back, how far. Under the hero until moved
 --   (move mode: "Revive bar"). From the game's 0.115 on by default, the
@@ -222,9 +223,7 @@ local function Row(index)
 	local row = CreateFrame("Button", nil, holder)
 	row:SetWidth(ROW_WIDTH)
 	row:SetHeight(ROW_HEIGHT)
-	-- From the bottom up: the first friend at the bottom, by your frame, each
-	-- next one over it, so a friend joining never moves the others.
-	row:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, (index - 1) * (ROW_HEIGHT + ROW_GAP))
+	row.index = index
 	row.unit = "party"..index
 
 	row.icon = CreateFrame("Frame", nil, row)
@@ -269,6 +268,27 @@ local function Row(index)
 	row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	rows[index] = row
 	return row
+end
+
+-- Top to bottom (the Party tab's Order), or bottom to top.
+local function Down()
+	return SurvivorUIDB and SurvivorUIDB.partyDown == true
+end
+
+-- The first friend by your frame, each next one over it (or under it, top to
+-- bottom), so a friend joining never moves the others.
+local function PlaceRow(row, down)
+	if row.down == down then
+		return
+	end
+	row.down = down
+	local step = (row.index - 1) * (ROW_HEIGHT + ROW_GAP)
+	row:ClearAllPoints()
+	if down then
+		row:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, -step)
+	else
+		row:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, step)
+	end
 end
 
 -- The name in the room the value leaves; too long, by its first word.
@@ -431,14 +451,22 @@ function SurvivorUI_ToggleRevive()
 	ApplyGameHud()
 end
 
+local PlaceFrames                -- the holder's place, set below
+
 local function DrawFrames(revive)
 	local count = Members()
 	local samples = count == 0 and Placing("Party frames")
 	local shown = 0
+	local down = Down()
+	if holder.down ~= down then
+		holder.down = down
+		PlaceFrames()
+	end
 	if samples then
 		for index = 1, table.getn(SAMPLES) do
 			local row = Row(index)
 			row.sample = SAMPLES[index]
+			PlaceRow(row, down)
 			Paint(row, SAMPLES[index])
 			shown = index
 		end
@@ -450,6 +478,7 @@ local function DrawFrames(revive)
 				local row = Row(shown)
 				row.sample = nil
 				row.unit = "party"..index
+				PlaceRow(row, down)
 				Paint(row, friend)
 			end
 		end
@@ -466,27 +495,49 @@ local function DrawFrames(revive)
 	end
 end
 
--- Left of your frame, its bottom level with the frame's, until moved: held by
--- its bottom, it grows upward as friends join.
-local function PlaceFrames()
+-- Left of your frame, the first friend's bottom level with the frame's, until
+-- moved: held by its bottom, it grows upward as friends join; top to bottom,
+-- held by the first friend's top, it grows downward. The place kept is the
+-- first friend's (partyBottom its bottom), so the order changes nothing else.
+PlaceFrames = function()
 	holder:ClearAllPoints()
 	local db = SurvivorUIDB
+	local down = Down()
 	if db and db.partyLeft and db.partyBottom then
-		holder:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", db.partyLeft, db.partyBottom)
+		if down then
+			holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", db.partyLeft, db.partyBottom + ROW_HEIGHT)
+		else
+			holder:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", db.partyLeft, db.partyBottom)
+		end
 		return
 	end
 	local player = getglobal("SurvivorUIPlayer")
 	if player and player:IsVisible() then
-		holder:SetPoint("BOTTOMRIGHT", player, "BOTTOMLEFT", -14, 0)
+		if down then
+			holder:SetPoint("TOPRIGHT", player, "BOTTOMLEFT", -14, ROW_HEIGHT)
+		else
+			holder:SetPoint("BOTTOMRIGHT", player, "BOTTOMLEFT", -14, 0)
+		end
+	elseif down then
+		holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", 12, 260 + ROW_HEIGHT)
 	else
 		holder:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 12, 260)
 	end
 end
 
+-- For the sizes (Mover.lua) and the Party tab's Order.
+function SurvivorUI_PlacePartyFrames()
+	PlaceFrames()
+end
+
 local function SaveFrames()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.partyLeft = math.floor(holder:GetLeft() + 0.5)
-	SurvivorUIDB.partyBottom = math.floor(holder:GetBottom() + 0.5)
+	if Down() then
+		SurvivorUIDB.partyBottom = math.floor(holder:GetTop() - ROW_HEIGHT + 0.5)
+	else
+		SurvivorUIDB.partyBottom = math.floor(holder:GetBottom() + 0.5)
+	end
 	PlaceFrames()
 end
 

@@ -274,7 +274,7 @@ function SurvivorUI_RegisterMover(frame, label, save, mover, default)
 	mover = mover or frame
 	local handle = MakeHandle(label)
 	handle.default = default
-	handle.mover, handle.save = mover, save
+	handle.frame, handle.mover, handle.save = frame, mover, save
 	handle:SetAllPoints(frame)
 	handle:SetScript("OnDragStart", function()
 		if SurvivorUI_EditBefore then
@@ -590,8 +590,10 @@ local PARTS = {
 	{ key = "guardians", section = "Run", label = "Guardians", frames = { "SurvivorUIGuardians" },
 		places = { { "guardiansLeft", "guardiansTop", "TOPLEFT" } } },
 	-- A co-op run's (Party.lua): the friends' frames, and the revive bar.
+	-- Placed by Party.lua again after: top to bottom, it hangs by its top.
 	{ key = "party", section = "Combat", label = "Party frames", frames = { "SurvivorUIParty" },
-		places = { { "partyLeft", "partyBottom", "BOTTOMLEFT" } } },
+		places = { { "partyLeft", "partyBottom", "BOTTOMLEFT" } },
+		restore = function() if SurvivorUI_PlacePartyFrames then SurvivorUI_PlacePartyFrames() end end },
 	{ key = "revive", section = "Combat", label = "Revive bar", frames = { "SurvivorUIRevive" },
 		places = { { "reviveX", "reviveTop", "TOP" } } },
 	-- The whole center at once: the bar, the frames and the buffs, each still
@@ -928,6 +930,141 @@ function SurvivorUI_ResetLayout()
 	end
 	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: every piece is back in its first place."))
 end
+
+------------------------------------------------------------------------------
+-- Over the game's cards (its 0.126, AZS_SetOnTopOfScreens): while a level's
+-- cards or a new piece of jewelry are up, the game veils the screen and the
+-- interface went dark under it. Every piece clear of the cards now stays lit
+-- over the veil and takes its clicks there, with the tooltips it shows: the
+-- build list, This Run, the XP bar's chances, the meter, the tracker. A piece
+-- in the cards' part of the screen (the action bar, the player frame and the
+-- totems under the hero, or any piece moved there) stays under, so it never
+-- covers a card nor takes its click; and while the cards are up it fades out
+-- whole, as the game draws a piece's art over the veil where a piece over it
+-- has the same (0.126: the player frame's bar and a totem's icon over the
+-- cards, seen 2026-10-28). The game reads its list as the cards open: the
+-- pieces are looked at once a second, as they move or show. Off with the
+-- options' Layout tab, "Over the game's cards".
+
+-- The cards' part of the screen, in its shares from the bottom left: the
+-- level's three, its title over them and its buttons under them (0.29 to
+-- 0.71 across, 0.21 to 0.79 up at 2560 by 1440), a margin round them.
+local CARDS = { left = 0.28, right = 0.72, bottom = 0.19, top = 0.80 }
+-- Over the cards with the pieces: the tooltips they show, and what goes with
+-- a piece (the chat's panel, ours, behind the game's chat).
+local OVER_TIPS = { "GameTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "SurvivorUICritTip", "SurvivorUILuckCard" }
+local OVER_WITH = { ChatFrame1 = "SurvivorUIChatPanel" }
+local over = {}                 -- [name] = true: kept over the cards by the game
+
+local function OverOn()
+	return AZS_SetOnTopOfScreens ~= nil and not (SurvivorUIDB and SurvivorUIDB.overCards == false)
+end
+
+local function KeepOver(name, on)
+	if name and (over[name] == true) ~= on then
+		over[name] = on or nil
+		AZS_SetOnTopOfScreens(name, on)
+		if OVER_WITH[name] and getglobal(OVER_WITH[name]) then
+			AZS_SetOnTopOfScreens(OVER_WITH[name], on)
+		end
+	end
+end
+
+-- Whether a frame stands clear of the cards; nil while it has no place yet.
+local function ClearOfCards(frame)
+	local left, bottom, width, height = frame:GetLeft(), frame:GetBottom(), frame:GetWidth(), frame:GetHeight()
+	local wide, high = GetScreenWidth(), GetScreenHeight()
+	if not (left and bottom and width and height and wide and wide > 0 and high > 0) then
+		return nil
+	end
+	-- Its own units to UIParent's, then shares of the screen.
+	local ratio = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	left, bottom = left * ratio / wide, bottom * ratio / high
+	local right, top = left + width * ratio / wide, bottom + height * ratio / high
+	return right <= CARDS.left or left >= CARDS.right or top <= CARDS.bottom or bottom >= CARDS.top
+end
+
+-- Each piece over the cards or under them as it stands (under: faded out
+-- while they are up); all as before while off.
+function SurvivorUI_PlaceOverCards()
+	if not AZS_SetOnTopOfScreens then
+		return
+	end
+	local on = OverOn()
+	for index = 1, table.getn(handles) do
+		local handle = handles[index]
+		local piece = handle.mover or handle.frame
+		local clear = on and piece and ClearOfCards(handle.frame or piece)
+		if clear ~= nil then
+			handle.underCards = on and not clear
+			KeepOver(piece.GetName and piece:GetName(), clear)
+		end
+	end
+	for index = 1, table.getn(OVER_TIPS) do
+		if getglobal(OVER_TIPS[index]) then
+			KeepOver(OVER_TIPS[index], on)
+		end
+	end
+end
+
+-- As the cards open, the pieces under them fade out, their own alpha kept
+-- for after; and a tooltip of the world (an enemy under the mouse) goes, as
+-- over the veil it would stay on the cards.
+local function FadeUnderCards(out)
+	for index = 1, table.getn(handles) do
+		local handle = handles[index]
+		local piece = handle.mover or handle.frame
+		if out and handle.underCards and piece and not handle.fadedFrom then
+			handle.fadedFrom = piece:GetAlpha()
+			piece:SetAlpha(0)
+		elseif not out and handle.fadedFrom then
+			piece:SetAlpha(handle.fadedFrom)
+			handle.fadedFrom = nil
+		end
+	end
+end
+
+-- The center bar says nothing while the cards are up: the action buttons, the
+-- player and target frames, the buffs (asked 2026-10-28: no tooltip by chance
+-- while picking a card). Nor a piece faded out, which still feels the mouse
+-- through the cards. Whether the mouse is over one of them.
+local CENTER_BAR = { SurvivorUIRow = true, SurvivorUIPlayer = true, SurvivorUITarget = true, SurvivorUIBuffs = true,
+	MainMenuBar = true, MainMenuExpBar = true, BonusActionBarFrame = true }
+
+local function QuietUnderMouse()
+	local frame = GetMouseFocus and GetMouseFocus()
+	while frame and frame ~= UIParent do
+		local name = frame:GetName()
+		if frame:GetAlpha() == 0 or (name and (CENTER_BAR[name] or string.find(name, "^ActionButton%d")
+			or string.find(name, "^BonusActionButton%d"))) then
+			return true
+		end
+		frame = frame:GetParent()
+	end
+end
+
+local overWait, overPhase = 0, nil
+local overWatch = CreateFrame("Frame")
+overWatch:SetScript("OnUpdate", function()
+	local phase = AZS_GetPhase and AZS_GetPhase()
+	if phase ~= overPhase then
+		overPhase = phase
+		local cards = phase == "choosing" and OverOn()
+		FadeUnderCards(cards)
+		if cards and GameTooltip:IsShown() and (GameTooltip:IsOwned(UIParent) or GameTooltip:IsOwned(WorldFrame)) then
+			GameTooltip:Hide()
+		end
+	end
+	-- Looked at every frame, so it goes the frame it comes.
+	if phase == "choosing" and GameTooltip:IsShown() and QuietUnderMouse() then
+		GameTooltip:Hide()
+	end
+	overWait = overWait + arg1
+	if overWait >= 1 then
+		overWait = 0
+		SurvivorUI_PlaceOverCards()
+	end
+end)
 
 -- The saved place comes back once the saved settings have.
 local loader = CreateFrame("Frame")

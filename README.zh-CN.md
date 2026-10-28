@@ -10,9 +10,7 @@
 
 本插件由玩家制作，与游戏及其作者无关。
 
-> 插件只是普通的 Lua 文件：从[最新版本](https://github.com/morderous/survivor-ui/releases/latest)下载 `SurvivorUI-vX.Y.zip`，解压后把 `SurvivorUI` 和 `SurvivorPlates` 两个文件夹放进游戏的 `benilla-config\AddOns` 文件夹即可（见[安装](#安装)）。
->
-> 由于游戏 Discord 上的新规定，我们的启动器已移到单独的仓库。如果想使用，请看这里：[survivor-ui-launcher](https://github.com/morderous/survivor-ui-launcher)。
+> **安装器（.exe）是可选的。** 插件只是普通的 Lua 文件：从[最新版本](https://github.com/morderous/survivor-ui/releases/latest)下载 `SurvivorUI-vX.Y.zip`，解压后把 `SurvivorUI` 和 `SurvivorPlates` 两个文件夹放进游戏的 `benilla-config\AddOns` 文件夹即可（见[手动安装](#手动安装)）。安装器只是帮你省去这些步骤，它的源代码在 [`installer/`](installer) 中，任何人都可以查看。
 
 ## 中文支持
 
@@ -21,6 +19,24 @@
 选项窗口（`/sui opt`）和聊天命令暂时仍为英文。
 
 ## 安装
+
+两种方式，结果相同：用安装器，或手动解压。
+
+### 用安装器（最简单）
+
+1. 从[最新版本](https://github.com/morderous/survivor-ui/releases/latest)下载 `SurvivorUI-Installer.zip` 并解压。
+2. 打开 `SurvivorInstaller.exe`。程序较新且没有签名，Windows 可能提示“Windows 已保护你的电脑”：点击 **更多信息**，再点击 **仍要运行**。
+3. 安装器会自己找到游戏。如果你的游戏在别处，点击 **Find game...**，选择游戏文件夹中的 `AzerothSurvivors.exe`。常见位置：
+   ```
+   C:\Git\wenilla\benilla-config\AzerothSurvivors.exe
+   ```
+4. 在 **Addons** 标签页，Survivor UI 排在第一位（推荐）：点击 **Install**，然后在 **Play** 标签页点击 **Play**。如果游戏开着，重启游戏。
+
+还没有游戏？点击 **Get the game**：它从作者 Aethus 自己的服务器（wow.aethus.pl，经他同意）或游戏 Discord 提供的镜像下载《Azeroth Survivors》，先测速并选最快的，按 Aethus 给出的大小和 sha256 校验后放到常用位置，并一起装好 Survivor UI。
+
+安装器（Azeroth SurvivorUI Launcher）还可以：启动游戏（**Play**）、在托盘中等待并每半小时检查一次更新、自我更新、备份和恢复存档（**Savegame**）、显示游戏时长与存档统计（**Statistics**）、查看 Survivor UI 的冒险历史（**Run History**），并在 **Addons** 标签页安装 morderous 检查过的其他插件，每个都取自作者自己的最新版本（只放入插件自己的文件夹和插件类文件，从不放程序）。界面为英文。
+
+### 手动安装
 
 1. 从[最新版本](https://github.com/morderous/survivor-ui/releases/latest)下载 `SurvivorUI-vX.Y.zip`。
 2. 解压到游戏的插件文件夹 `benilla-config\AddOns\`，得到 `AddOns\SurvivorPlates` 和 `AddOns\SurvivorUI`。只想用其中一个就只保留那一个。

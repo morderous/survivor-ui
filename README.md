@@ -12,9 +12,7 @@ Two interface addons for Azeroth Survivors, the Vampire Survivors-style game tha
 
 These are fan-made and not affiliated with the game or its author.
 
-> The addons are plain Lua files: download `SurvivorUI-vX.Y.zip` from the [latest release](https://github.com/morderous/survivor-ui/releases/latest), unzip it and move the `SurvivorUI` and `SurvivorPlates` folders into the game's `benilla-config\AddOns` folder ([how](#install)).
->
-> Given new rules on the game's Discord, our launcher moved to a repository of its own. If you want to use it, check it out: [survivor-ui-launcher](https://github.com/morderous/survivor-ui-launcher).
+> **The launcher (.exe) is optional.** The addons are plain Lua files: download `SurvivorUI-vX.Y.zip` from the [latest release](https://github.com/morderous/survivor-ui/releases/latest), unzip it and move the `SurvivorUI` and `SurvivorPlates` folders into the game's `benilla-config\AddOns` folder yourself ([how](#by-hand)). The launcher only saves those steps, and more ([with the launcher](#with-the-launcher-easiest)); its source code is in [`installer/`](installer) for anyone to read.
 
 Both are flat and dark, in the manner of EllesmereUI and Plater. They are written from scratch for the 1.12 addon API and share no code with those addons.
 
@@ -182,6 +180,26 @@ The run tracker, the damage meter, the boss bars and the kills and gold line put
 
 ## Install
 
+Two ways, the same result: the launcher, or the zip by hand. The launcher is optional.
+
+### With the launcher (easiest)
+
+1. Download `SurvivorUI-Installer.zip` from the [latest release](https://github.com/morderous/survivor-ui/releases/latest) and unzip it.
+2. Open `SurvivorInstaller.exe`. Windows may say it protected your PC, since the program is new and not signed: click **More info**, then **Run anyway**.
+3. No game yet? Click **Get the game**. Have it already? The launcher finds it by itself, or click **Find game...** and pick the game itself, `AzerothSurvivors.exe`. A common place is:
+   ```
+   C:\Git\wenilla\benilla-config\AzerothSurvivors.exe
+   ```
+4. In the **Addons** tab, Survivor UI is first (recommended): click **Install**, then **Play** in the Play tab. Restart the game if it was open.
+
+The **Azeroth SurvivorUI Launcher** (beta) plays the game, keeps it current, and installs and updates Survivor UI and Survivor Plates. **Play** starts the game, and the launcher steps into the tray. **Get the game** downloads Azeroth Survivors, Aethus' game, from his own servers (wow.aethus.pl, with his ok) or from the mirrors the game's Discord gave, each timed first and the fastest picked, every package checked by the size and sha256 Aethus gave; it puts the game in its usual place and installs Survivor UI with it. Leave it running: minimized or closed, it waits in the tray and asks GitHub for a new release every half hour; when one is out, a **green arrow** shows on its tray icon and a green pill at the right of its tabs. It updates itself too (untick "Update the launcher by itself" to only be told).
+
+Five tabs: **Play** (the game, your playtime and runs, the game's news, its AddOns folder), **Savegame** (your save backed up to the Desktop, a USB drive or a folder, by hand or after each game session, and put back), **Statistics** (your playtime and the save's numbers), **Run History** (Survivor UI's runs, the victories and endless runs kept for good) and **Addons**: Survivor UI and Survivor Plates first, with the release, the beta and each on or off; then more addons from a list morderous checked, each from its author's own latest release (only the addon's own folder and its kinds of files, never a program, never over Survivor UI's folders), with **Update all** and **Uninstall** to the Recycle Bin; then the ones you put in by hand.
+
+The lists it reads live beside its source, so an entry is added or changed without a new launcher: [`installer/addons.json`](installer/addons.json), the addons the Addons tab offers, and [`installer/mirrors.json`](installer/mirrors.json), the mirrors Get the game offers beside Aethus' servers. Its source is in [`installer/`](installer), built with the C# compiler that comes with Windows (`installer\build.bat`). It touches only the addons' folders it installs or you uninstall, the game's list of addons when you switch one off or on, the game's own files when it gets or updates the game for you, and your save and settings when you ask it to back them up or restore one.
+
+### By hand
+
 1. Download `SurvivorUI-vX.Y.zip` from the [latest release](https://github.com/morderous/survivor-ui/releases/latest).
 2. Unzip it into the game's addon folder, `benilla-config\AddOns\`. You should end up with `AddOns\SurvivorPlates` and `AddOns\SurvivorUI`. Keep only the one you want, or both.
 3. Restart the game.
@@ -206,6 +224,37 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.41, 2026-10-28
+
+Survivor UI over the game's cards (its 0.126), the party frames top to bottom, and the launcher back in this repository.
+
+**Survivor UI**
+- **Over the game's cards**: while a level's cards or a new piece of jewelry are up, the game veils the screen, and the interface went dark under it. The pieces around the cards now stay lit over the veil, with their tooltips, and take their clicks there: the build list, This Run, the Stats, the Biggest Crits, the XP bar's chances, the damage meter, the run tracker, the minimap and the chat. The pieces in the cards' part of the screen (the action bar, the player frame, the totems, the buffs) fade out while the cards are up, so nothing covers a card, and come back as one is picked; a piece you moved there does the same. Layout tab, **Over the game's cards**, on by default.
+- **No tooltip by chance while you pick a card**: the center bar (the action buttons, the player and target frames, the buffs) shows none while the cards are up, nor does an enemy left under the mouse as they open.
+- **Party frames top to bottom** (Party tab, **Order**): each friend who joins goes under the last one instead of over it. The first friend stays level with your frame either way.
+
+### Azeroth SurvivorUI Launcher 1.6.1 (beta), 2026-10-28
+
+- **Back in Survivor UI's repository**: the launcher's source is in [`installer/`](installer) again, and it updates itself from this repository's releases, as it did up to 1.5.6. Launchers 1.5.7 to 1.6.0 take 1.6.1 from [survivor-ui-launcher](https://github.com/morderous/survivor-ui-launcher), where they looked, and follow this repository from then on. The Addons tab's list and Get the game's mirrors are read from `installer/addons.json` and `installer/mirrors.json` here.
+
+### Azeroth SurvivorUI Launcher 1.6.0 (beta), 2026-10-28
+
+- **The Addons tab**: Survivor UI and Survivor Plates first, recommended (the release, the beta, What's new, each on or off), the Survivor UI tab folded into it; then the addons from `addons.json` (ASBuilder, Azerloot, AZSSpellMeter, KeijinUI, SurvivorsDragonUi, thanks to their authors), each from its author's latest release, checked by its size and its author's sha256 where there is one; then the ones put in by hand.
+- **Install, Update all, Uninstall, On or off**: only an addon's own folder and kinds of files come in, never a program (such as an auto-updater a release may carry beside the addon), never over Survivor UI's folders; Uninstall sends it to the Recycle Bin, its settings kept. Installed, Not installed or Outdated in the list; an addon off greyed.
+- **The game's AddOns folder** and Check folder and move if necessary on the Play tab.
+- **Credits and feedback** under every tab: Azeroth Survivors by Aethus, the launcher by morderous, and Feedback on Discord.
+
+### Azeroth SurvivorUI Launcher 1.5.8 (beta), 2026-10-28
+
+- **Get the game from the mirrors too**: the game's package also comes from the mirrors the game's Discord gave (thanks to Meexa and Leo), beside Aethus' own servers. Each is timed first and offered in a list with its speed, the fastest picked; or a package you downloaded already (.rar).
+- **Checked before it is used**: a mirror's package only with the size and sha256 Aethus gave.
+- **A broken download goes on where it stopped**, on a source that allows it, up to five breaks.
+- **Try another source**: while it downloads, the Play button goes on with the next source; and a source that would finish three times later than another, for ten seconds in a row, is left for it by itself.
+
+### Azeroth SurvivorUI Launcher 1.5.7 (beta), 2026-10-28
+
+- Updated itself from a repository of its own, [survivor-ui-launcher](https://github.com/morderous/survivor-ui-launcher), for a while; Survivor UI's updates still came from here. Nothing else changed from 1.5.6.
+
 ### v3.0.40, 2026-10-28
 
 New best crits that rise over the newest instead of making way, and No effect for the records, the new default.
@@ -224,10 +273,14 @@ The run tracker's affixes and the totem counter as the game tells them, with its
 
 ### v3.0.38, 2026-10-27
 
-A hotfix: Run History says a Heroic run's affixes.
+A hotfix: Run History and the launcher say a Heroic run's affixes.
 
 **Survivor UI**
 - **Run History says a run's affixes**: each run now keeps its affixes with it, and its head shows them as red chips beside its **Difficulty** (Heroic V, Sanguine, Explosive), each with what it does under the mouse. A run kept with v3.0.37 shows the ones its tracker had.
+
+### Azeroth SurvivorUI Launcher 1.5.6 (beta), 2026-10-27
+
+- **A Heroic run's affixes in Run History**: its head line says them after its level, "Heroic V (Sanguine, Explosive)".
 
 ### v3.0.37, 2026-10-27
 
@@ -251,6 +304,16 @@ Heroic difficulty and the week's affixes in the run tracker, its head and timeli
 - **The XP bar's lines under it, each on its own** (XP bar tab): **Time to the next level** and **Experience a minute** show or hide apart (one choice before; whoever had it off keeps both away).
 - **The XP bar says only how far into the level**, as a share (35%): the experience itself (766 / 2.22k), in the thousands late in a run, ran into the luck over the bar.
 - **Item tooltips: the game's own for everyone**, in the flat look; the choice (Modules, and the Tooltips tab) is gone. The spells' tooltips are still laid out by Survivor UI.
+
+### Azeroth SurvivorUI Launcher 1.5.5 (beta), 2026-10-27
+
+- **Heroic in Run History**: a Heroic run (the game's 0.121) says its level after its zone in the list ("· H III") and in its head line.
+
+### Azeroth SurvivorUI Launcher 1.5.4 (beta), 2026-10-27
+
+- **Your victories and endless runs, kept for good**: Survivor UI's Run History keeps 100 runs at most. Each victory and endless run the Run History tab reads is now copied into the launcher's own archive (`run-archive.lua` in `%APPDATA%\SurvivorUIInstaller`, without the tooltips' photos: some 8 kB a run), never trimmed; an endless run gone on is copied again. The tab shows the archive's runs with the game's, newest first: a date in gold is a run gone from the game's Run History, kept here. The tick beside the list is now **Only victories and endless**, a filter.
+- **Close to the tray** (new, on by default, Play tab and the tray's menu): on, the window's close button puts the launcher in the tray, as before, where it keeps looking for updates and backs up your save as the game closes; off, the close button quits it.
+- **Total playtime on the Play tab**: a **Total** card beside **Today**, all the playtime the launcher has seen (the Statistics tab's Playtime).
 
 ### v3.0.36, 2026-10-27
 
@@ -301,6 +364,35 @@ Friendly plates only, suggested with a button; the target's plate with every ene
 - **Your target always, with every enemy kind off**: the target's plate did not show, the game's enemy plates being off as a whole. They now come on while an enemy is your target (its plate alone shows, the other enemies' kinds being off) and go off again as the target goes.
 - **Plates missing as the game opens**: with plates chosen, a game just opened could show none until a setting was switched off and on. The game has no way to tell an addon whether its plates are on, and it clears them itself as the world is entered, after the addon had put them on; the plates are now put as chosen every half second (with V and Shift+V ignored, the default).
 
+### Azeroth SurvivorUI Launcher 1.5.3 (beta), 2026-10-26
+
+- **The game's log, kept**: Play starts the game with its output, its log, going to `game-log.txt` in the launcher's folder (`%APPDATA%\SurvivorUIInstaller`; the one before is kept as `game-log-before.txt`). When the game closes as it starts without a crash report, the launcher shows the log's last lines, how far the game got, with a button to the file to share in the game's Discord.
+- **Set to run as an administrator**: a game whose exe is set to run as an administrator (its Properties, Compatibility) could not be started with graphics picked ("The requested operation requires elevation"). It now starts through Windows, which asks its leave as before; the graphics and the log need that tick off, and the launcher says so if the game then closes.
+
+### Azeroth SurvivorUI Launcher 1.5.2 (beta), 2026-10-26
+
+- **The game's graphics, and a second try by itself**: the Play tab has a **Graphics** choice: **Auto** (the game's own choice), **DirectX 12** or **Vulkan**. On some PCs the game closes as it starts, the graphics driver failing the renderer the game picks (an access violation, 0xC0000005); the game's own FAQ answers with a .bat that starts it with DirectX 12. The launcher does it by itself now: on Auto, when the game closes as it starts, it starts it again at once with DirectX 12, and when the game then stays up, it keeps DirectX 12 for that PC (and says so). If it closes with both, or with the graphics picked by hand, the launcher says so and what to try.
+- **Donate**: the coffee cup in the header is now a light blue **Donate** button, "if you like my work" under it, a glint crossing it now and then; it still opens the [Ko-fi](https://ko-fi.com/morderous).
+
+### Azeroth SurvivorUI Launcher 1.5.1 (beta), 2026-10-26
+
+- **When the game closes as it starts, the launcher says why**: after Play it watches the game for a minute. If the game closes in that time, the launcher comes back from the tray and says what it can tell: Windows lacks Microsoft's Visual C++ runtime, a part the game needs to load (with a button to Microsoft's download, vc_redist.x64.exe); or the game left a crash report (its reason, and a button to the report, to share in the game's Discord); or else the game's exit code. Before, it said "Starting the game..." while nothing opened.
+
+### Azeroth SurvivorUI Launcher 1.5.0 (beta), 2026-10-26
+
+- **A new name, a beta**: the launcher is now the **Azeroth SurvivorUI Launcher**, a beta for now, as its version line and window title say.
+- **Updates told in the window**: when a new launcher, Survivor UI or game is out, a green pill breathes at the right of the tabs (such as "Game 0.120.0 is out", or how many wait); a click takes you to it (the launcher updates itself; Survivor UI's tab; Play for the game), and a green dot marks the tab. The launcher looks as it opens, every half hour while it runs (in the tray too) and at Check for updates. Its versions at the top right are a brighter yellow, green while an update waits.
+
+- **Five tabs**: **Play** (the game, Play, your numbers and the game's news), **Survivor UI** (the addons), **Savegame**, **Statistics** and **Run History**. The launcher opens on the tab you left it on.
+- **Larger, in a look of its own**: the window is up to 40% larger, as much as your screen allows, and dressed as a fantasy RPG's panel, in Wenrexa's "UI RPG Game Interface" art (CC0): its frame round the window, which no longer wears Windows' border (drag it by its header; minimize and close at its top right), red and stone buttons, tabs as stone plates (the open one red), switches for the ticks, the title on its plaque in Cinzel Decorative, its dark cards for the numbers, its inner frames round the lists and charts, drop-downs in its stone field, its own scroll bars, and its frame for the tooltips and every message the launcher shows. The stone of the header and the coffee cup are drawn by the launcher.
+- **Buy me a coffee**: a steaming cup in the header opens the [Ko-fi](https://ko-fi.com/morderous), for whoever likes what Survivor UI does. Hover it and it says how long you have played with it so far.
+- **Play**: beside the Play button, today's playtime, the last time you played, and your runs and wins. Under it, the game's own news: Aethus' notes for the newest Azeroth Survivors, and a button to the game's Discord.
+- **Each addon on or off**: Survivor UI and Survivor Plates each have a tick in the Survivor UI tab. Off, the game skips it from its next start (the game's own list of addons, `AddOns\account.txt`); nothing is deleted, and a tick brings it back. So the launcher also serves a player who wants the game without our addons: with Survivor UI off, it no longer tells of its updates.
+- **Your save, kept**: **Back up now** zips your heroes, their gear, talents and unlocks (the game keeps them in `%APPDATA%\wenilla-rogue`, sealed the same on every PC), with the game's settings and the addons' (key bindings, chat windows, camera, layout, options, Run History), as `AzerothSurvivors-save-<date>.zip`, to the place you pick: the Desktop, a USB drive (each one plugged in is listed, with its free space) or a folder of your own. To keep, or to take to another PC. **Restore save...** puts one in the game: the zip checked first (the game's own sealed save inside, nothing that climbs out of its folder), your save as it is then kept on the Desktop (`AzerothSurvivors-save-before-restore-<date>.zip`), and its settings only if you say so. Both only with the game closed. The AddOns, the game's data, logs and caches stay out of the zip.
+- **Backed up by itself**: tick **Back up after each game session** and each time the game closes, a backup goes to `Documents\Azeroth Survivors saves` (and to a USB drive when one is plugged in, if you tick that too), the last 5, 10, 20 or 50 kept. Only the oldest automatic ones are removed, never the ones you make yourself. The launcher must be running, open or in the tray, as the game closes. **Your backups** lists them all, newest first: double click one, or **Restore this one**.
+- **Statistics**: your playtime (the time the game ran while the launcher was open or in the tray; on its first start, 1.5 counts in the game time of the runs already in your Run History) with a bar a day for the last 14 days; your runs, wins, kills, gold, bosses, guardians and caches; your achievements with their dates, newest first; a row for each class with the zones whose final boss fell to it and the talent points it has spent; and your collection (gear, jewels seen in the codex, pets, tabards). Read from the game's save, which the launcher never writes.
+- **Run History**: Survivor UI's runs in the launcher, newest first, by class and by result: when, hero, class (these three on a bar of the class's colour), zone, result (on a bar of its own colour), time, kills, DPS and level. A run won and gone on in endless mode shows as Endless, with its end's time. Pick one to see it whole: its numbers, its damage by spell, its jewelry, its bosses and when each fell (in green), and how it ended (the blows before a death, the party's damage in co-op, its biggest hits); the damage, the jewelry, the build and the biggest hits in their own colours, as the game's Run History paints them. For an endless run, **Victory** and **Endless** show each moment on its own: the run as it stood at the victory, or the whole run as it ended, with what the endless part added beside its numbers. Every column scrolls with the mouse wheel when it holds more than fits, and so do the achievements in Statistics, all of them now, newest first. Its **Stats** tab shows the run's numbers as the game's Stats panel groups them (offense, defense, reach, utility, damage over time, bonus damage), each with what the gear gave, only the ones above 0. Its **Build** tab shows the run's build as the build list had it: each spell with its rank, cooldown and range, the racial marked, the talent experience the run gave, and its jewelry. Read from Survivor UI's saved settings, which the game writes as it goes back to the character screen or closes. **Keep only victories and endless** is the launcher's own: its list then holds only your victories and the runs gone on in endless mode. The game's Run History keeps what its own options say (Survivor UI's Options, Run History); the two are separate.
+
 ### v3.0.33, 2026-10-26
 
 Coins that drop and rain as your gold pays for a cache, the jump record at checkpoints, record effects for each class, the Stats panel without its zeros, and Donate.
@@ -324,7 +416,7 @@ Text sizes steady again on the game's 0.116, the spell-to-button map reverted an
 - **The spell-to-button map is gone**: since v3.0.23 the addon read every action button's tooltip every few seconds to follow a spell dragged to another button, and the reading confused a spell's icon now and then (reported on Discord by Amarolk). The spells are taken where the game lays them again, button 1 to 6 and the racial on =, and **the bar is locked** against moving them (Frames & bar, **Spells locked on the bar**, on): a drag or a shift-click off a button does nothing, and the chat says why once. Unlocked, a spell dragged elsewhere wears the icon of the one that was there until the game lays the bar out again.
 - **Raid marks in a tab of their own** (Interface, Raid marks), out of the Nameplates tab, with an **Uncheck all** button: every row off and without a mark, and the marks taken off the heroes and your target.
 - **A mark for each hero of a co-op party** (asked for on Discord by Towneh, who marked his friends to find them in the horde): Raid marks, **Each hero a mark**, off by default, and a mark picked for each of Hero 1 to 5. The heroes take them by their names in alphabetical order, so every Survivor UI in the party gives the same, and a hero already marked keeps that mark. Every mark belongs to one row: picked for a hero or a kind of enemy, it leaves the other rows, and the last box of a row, a dash, leaves it with no mark (a row on with no mark marks nothing).
-- **Run History survives a missing art file**: with Art\DropArrow.tga gone from an install, Run History failed at load ("RunHistory.lua:1024: attempt to index a nil value", reported on Discord by Fedda) and nothing of it was made; the arrow goes untinted instead. The pins on the minimap are art files too (Art\PinCache and PinLair): with the folder short of them the minimap shows none, so an install missing them wants the update again.
+- **Run History survives a missing art file**: with Art\DropArrow.tga gone from an install, Run History failed at load ("RunHistory.lua:1024: attempt to index a nil value", reported on Discord by Fedda) and nothing of it was made; the arrow goes untinted instead. The pins on the minimap are art files too (Art\PinCache and PinLair): with the folder short of them the minimap shows none, so an install missing them wants the launcher's update again.
 - **Text no longer grows or shrinks on its own** (reported on Discord by Zitten, Squezy, Setoz, Klopp and 문핼이 after the game's 0.116): a piece with a text size step of its own (its card's A- or A+) had its step added again every second and a half, bigger and bigger with a + step, smaller with a -, since the game's new engine answers a font's size a hair off whole and the addon no longer recognised the size it had set. Sizes are read rounded now. A step of 0 was never affected.
 - **The extra damage meter windows in the main one's font and text size**: a face or a text size chosen on the main meter's card (move mode) is theirs too, at once, and a change on any of them changes all. They were drawn in the default font and size (reported by Lucas).
 
@@ -384,6 +476,12 @@ Ready for the game's co-op runs (its 0.113): your party in Survivor UI's look.
 **Survivor UI**
 - **The racial's icon on a spell in the damage meter**: since v3.0.23 a spell learned in the run could take the racial's icon in the meter for the whole run (Eviscerate with Perception's, Searing Pain with a gnome's, Chain Lightning with an orc's). The buttons' reading was kept by place in the game's spell list, and a new spell moves the racial, always last, one place down: for an instant the new spell got the racial's button, and the meter kept the icon it read then. The reading is kept by spell now, and the meter reads a spell's icon off its button every time.
 
+### Survivor UI Launcher 1.4.4, 2026-10-23
+
+- **Ready for the game's 0.112.5**: from it the game keeps your AddOns, settings and options in a `benilla-config` folder beside its exe (for the usual install, `C:\Git\wenilla\benilla-config\benilla-config`), and the first time it starts it brings everything along from the older folders. The launcher installs there from 0.112.5 on (read in the game itself, as before), keeps the build's folder for 0.112.0 to 0.112.4, and the old one before them.
+- **The game's own move left to it**: the game copies the older folders only while its new folder is not there yet, so until the game has started once, the launcher makes nothing there: Install, Update game and "Check folder and move if necessary" say to click Play once first, and nothing is lost.
+- The AddOns folder follows the game when it updates itself while the launcher is open, and the folders' button also looks in the older folders the game knows.
+
 ### v3.0.26, 2026-10-23
 
 **Survivor UI**
@@ -392,10 +490,18 @@ Ready for the game's co-op runs (its 0.113): your party in Survivor UI's look.
 
 ### v3.0.25, 2026-10-23
 
-The combat numbers back in the middle at any UI scale.
+The game's 0.112 moved its folder: the launcher follows it and moves your things there. And the combat numbers back in the middle at any UI scale.
 
 **Survivor UI**
 - **The combat numbers in the middle at any UI scale**: their columns (Damage numbers, Crit numbers, Healing, Damage taken) took the screen's middle from `UIParent:GetWidth()`, which leaves the UI scale out, so at a scale other than 1 they stood off center, down and to the left (the game's default is 0.9: a fresh game folder, as 0.112's, has it). The screen's size is now read with the scale in, everywhere: the columns, the numbers around the hero, the new best crit's side, Move UI's grid (it reaches the edges now), the piece cards and the options window's check that it is on screen. Columns you moved keep their place.
+
+**Survivor UI Launcher 1.4.3**
+
+- **The game's own folder, wherever it moved**: the game keeps its AddOns, saved settings and options in the folder its exe was built from, a path the exe carries, and the game's 0.112 build was made from another folder on Aethus' PC, so it moved them for every player to `C:\Git\wenilla\.claude\worktrees\release-gaze\benilla-config` (the launcher kept installing in the old one, and the settings looked gone). The launcher now reads that folder in the game's exe, as the game does, and installs the addons there, whatever folder the next build names.
+- **Check folder and move if necessary**: a button of its own under the AddOns folder, steel blue; green while your things are still in an older folder of the game, the status line saying so. Its tooltip tells why: the game keeps your things in a folder its exe names, and if Aethus' build changes it, the launcher makes a backup and moves your data to the new place. A click shows both folders and when each last saved settings, and moves your AddOns, saved settings (the account's and each hero's), key bindings and options into the game's folder: what the game had made there under the same names is kept in `before-move-<time>` there, and the originals in `moved-<time>` where they were. Nothing is deleted; the game itself, its data, logs and pictures stay where they are, and your progress (`%APPDATA%\wenilla-rogue`) is never touched. The game must be closed.
+- **In any order**: an addon the game's folder has already (Survivor UI installed there before the move) is kept as it is, and only the addons it lacks come over. The button turns green while the old folder holds an addon, or an addon's settings, that the game's folder lacks; folders already copied by hand are not flagged again, and a click still checks.
+- "Up to date; so is Survivor UI" no longer said with Survivor UI missing from the game's folder.
+- The game is remembered on its own, apart from the AddOns folder, which no longer sits beside it: Play, the game's version and Update game go by it.
 
 ### v3.0.24, 2026-10-22
 
@@ -607,6 +713,36 @@ A warlock's update: the soul shards on screen, and the demons named and drawn as
 - **New first places**, as the layout settled: the boss bars left of the run tracker a little under its top, the Stats panel at the top of the screen right of This Run, the chat low in the bottom left corner, and the new best crit right beside Biggest Crits near its top. A piece already moved stays where it is; Reset on its card, or Back to its place, takes it to the new one.
 - Fixed: a long name with `(proc)` on the meter ran its tag past the numbers and out of the meter; the name now ends in "..." first. The build list's **Rank** header broke in two lines. The run tracker's level sat right against the guardians' bar over it.
 
+### Survivor UI Launcher 1.4.2, 2026-10-19
+
+- **The game kept current**: under the AddOns folder, the game's version (read in its exe) and whether a newer one is out, asked of wow.aethus.pl as the launcher opens and with each look at GitHub: "Azeroth Survivors 0.101.0 · 0.102.0 is out: click Update game". Then Play turns to **Update game**: it asks first, with the size, then takes the newest exe and data patches the way Get the game does, each checked by its sha256; the tray says so once too. The game would also update itself as it starts: this is to know, and to have it ready.
+- **The game's own notes**: while a newer game is out, What's new opens on Aethus' notes for it, from the game's server, then Survivor UI's.
+- **Check version**, a small button under the AddOns folder: asks wow.aethus.pl again at once, the line beside it and the status line saying whether a newer game is out.
+- **The game's version on the green button**, small under its words: "Ver. 0.102.0" to play, "Ver. 0.101.0 → 0.102.0" to update.
+- **The versions together at the top right**: "Launcher ver. 1.4.2" and "Survivor UI ver. 3.0.9" (a newer one out: "→ 3.0.10", in green), Check for updates under them; the Installed and Latest line is gone, the install button saying the latest.
+- The install button in a deeper gold with white words, the beta button in lavender (both readable while they wait, no longer the system's dark grey), and the two ticks (Start with Windows, Update the launcher by itself) told at a glance: on, a box filled gold with a dark check and gold words; off, an empty dark box and grey words.
+- At the bottom, whose game it is on the left and his site, wow.aethus.pl, in the other corner.
+- **No game found, the way to it**: the status line opens on "No game found: click Get the game, or Find game... if yours is somewhere else", or, with the game's exe and no data, "The game's data is missing: click Get the game to fill it in". It sent a new player to Find game... before, with Get the game right beside it.
+
+### Survivor UI Launcher 1.4.1, 2026-10-18
+
+- **Get the game gets all of it**: the game's base data (`Data\patch.MPQ`, 1.28 GB) is in none of the indexes the game updates itself by, so 1.4.0 left a new player with the game's exe alone, and a game with no text nor world. Now it takes, each only when missing: the full package Aethus' site offers, for the base data (unpacked by Windows' own tar), the newest game, and its newest updates, each checked; about 800 MB in all, asked first with the sizes, and the room on the disk checked before.
+- **An install from 1.4.0 mended**: a game with its exe but no base data counts as missing, so Get the game shows again and fills in what is not there.
+
+### Survivor UI Launcher 1.4.0, 2026-10-18
+
+- **Get the game**: with no Azeroth Survivors found, the Play button turns to **Get the game**. It asks first (the version, the size, where it goes), then downloads the game from Aethus' own servers, the same way the game updates itself, checks it against the game's own sha256, puts it in its usual place (`C:\Git\wenilla\benilla-config`) and installs Survivor UI with it. With Aethus' ok; nothing is hosted anywhere else.
+- **The game found in its usual place by itself**, on a first start, with no "Find game..." needed.
+- **Whose game it is**, at the bottom of the window: Azeroth Survivors is a game by Aethus, with a link to wow.aethus.pl.
+
+### Survivor UI Launcher 1.3.1, 2026-10-18
+
+The installer is now the **Survivor UI Launcher**: it plays the game and keeps Survivor UI current. Its file stays `SurvivorInstaller.exe` (in `SurvivorUI-Installer.zip`), so the launchers out there find and take it.
+- **A new emblem**: the golden S on a shield, on the exe, the window, the taskbar and the tray (the green arrow on it while an update waits).
+- **The release and the beta as two buttons**, each with its version: the release large and gold (`Install v3.0.5`, `Update to v3.0.5`, `Back to stable v3.0.5`, or `Up to date · v3.0.5`), the beta under it, smaller and orange (`Install beta v3.0.6-beta.1`), when one newer than the release is out, with its warning first. The Beta builds tick goes: a beta installed follows the betas, and the gold button takes you back.
+- **Its own version at the top right**, with **Check for updates**; a newer launcher out lights a green arrow there, and the button turns to it, green.
+- Fixed: the "Open folder" link over the hint's last word; "Installed" left as it was once Survivor UI changed while the launcher stayed open.
+
 ### v3.0.5, 2026-10-18
 
 **Survivor UI**
@@ -627,6 +763,12 @@ A warlock's update: the soul shards on screen, and the demons named and drawn as
 
 Note: from the game's 0.98, the harder zones' last minutes are tougher (Gurubashi Arena on: the horde gains health as the run goes). Your runs there from before it were faster at the end, so the kill pace orb reads slower late in a run until newer runs replace them: the Kill pace tab's **Forget this zone's runs**, in each of those zones, starts them over.
 
+**Installer 1.3**
+- **Play**: a button beside Install, and an item in the tray's menu, that starts the game (the one by the AddOns folder); the installer steps into the tray. It waits while an install runs, and says so when the game is open already.
+- **It updates itself**: a newer installer out lights a green **Launcher update** button at the top of its window, breathing so it is seen, and an item in the tray's menu; with **Update the installer by itself** ticked (the default), it takes it at once and starts again, in the tray if it was there. The installer 1.2 and older cannot: download this one by hand once.
+- **Closing keeps it in the tray**: the window's close button puts it there, like minimizing, still looking for updates. To quit it, right click its tray icon and choose **Exit**; the first time it says so.
+- **Beta builds** (since 1.2): a tick in the window and in the tray's menu for the test builds that come before a release (GitHub's pre-releases), with a warning first: more bugs than usual, updated more often. Ticked, it installs the latest beta and follows the betas from then on; unticked, it offers the release again ("Back to"). A version with `-beta` is read right: the release stands above its betas.
+
 ### v3.0.4, 2026-10-18
 
 **Survivor UI**
@@ -639,6 +781,18 @@ Note: from the game's 0.98, the harder zones' last minutes are tougher (Gurubash
 
 **Survivor UI**
 - **The kills and gold line stays centred once moved:** a line moved by hand was kept by its left edge, so, as wide as its numbers since v3.0.2, it drifted to the right as they grew (reported by Amarolk). It is kept by its middle now; a place saved before is read once as its middle.
+
+**Installer 1.1.1**
+- Unzips only the `SurvivorUI` and `SurvivorPlates` folders, as it says: the release zip's license, at its top, was left loose in the `AddOns` folder.
+
+### Installer 1.1, 2026-10-17
+
+- **Waits in the tray and tells of updates**: minimized, the installer goes to the tray by the clock instead of the taskbar, and asks GitHub for a new release every half hour. When one newer than the installed addons is out, a green arrow shows on its tray icon and on its taskbar button's corner, and a note says so once; a click on the note or the icon opens it, ready to update. Right click the tray icon for Open, Check for updates now (which brings it forward and installs a newer release at once), Install and Exit. With the latest installed, a green "Up to date" badge stands where the install button was. Opened again while it runs, the one running comes forward.
+- **Start with Windows, in the tray**: a tick in the window, beside the install button, and the same in the tray's menu; on, it starts with Windows straight into the tray and looks for an update. It writes one line in your own startup list (the Run key of your user), and takes it away when unticked.
+- **Open folder** is now a link under "Find game...", by the folder it opens, in place of the button beside Install.
+- **Read larger**, by "What's new": the latest release's notes in a large window that reads well, the headings in gold, a bullet for each item.
+- The window's title is Survivor UI alone.
+- **Its own icon**: the addons' gold S, on the exe, the window and the tray.
 
 ### v3.0.2, 2026-10-17
 
@@ -761,6 +915,11 @@ Note: from the game's 0.98, the harder zones' last minutes are tougher (Gurubash
 **Survivor Plates**
 - **No nameplates by default:** the boss bars show every boss, guardian and elite already. Turn them back on in `/sui opt`, Nameplates, or `/splates none`.
 - A plate size slider in the options.
+
+### v2.7.1, 2026-10-15
+
+**Installer**
+- Recommends where the game should be: `AzerothSurvivors.exe` inside the game's `benilla-config` folder, usually `C:\Git\wenilla\benilla-config`. The hint sits under the folder box, "Find game..." opens there, and picking the game anywhere else asks first, showing where the addons would go.
 
 ### v2.7, 2026-10-15
 
@@ -979,5 +1138,7 @@ If you use, adapt or build on this code, please credit Survivor UI and link the 
 Copyright (C) 2026 morderous.
 
 GNU General Public License v3.0 (GPL-3.0), from v2.7 on: you may use, change and share the addons, as long as what you share stays under the same license, with its source and this credit. See [LICENSE](LICENSE). Versions up to v2.6 were released under the MIT license.
+
+The launcher's art (`installer/art`) is from "Assets: UI RPG Game Interface" by Wenrexa ([wenrexa.itch.io/werdanta03](https://wenrexa.itch.io/werdanta03)), under Creative Commons Zero v1.0 (public domain), with thanks; `installer/art/CREDITS.txt` says which pieces and how two were made from them. The launcher's title font is Cinzel Decorative, as below.
 
 The fonts in `SurvivorUI/Fonts` are not the addon's: Fira Sans (The Mozilla Foundation and Telefonica S.A.), Noto Sans (The Noto Project Authors), Exo (The Exo Project Authors), Russo One (Jovanny Lemonad) and Cinzel Decorative (Natanael Gama) are each under the SIL Open Font License 1.1, its text beside each one (`OFL-*.txt`), shipped unchanged. Barlow Semi Condensed and Barlow Condensed (The Barlow Project Authors), at their SemiBold weight, are under it too (`OFL-Barlow.txt`), shipped unchanged. Noto Sans SC (Adobe, with Reserved Font Name 'Source') is under the same license (`OFL-NotoSansSC.txt`), cut at its Medium weight (500) from the variable font Google Fonts publishes, otherwise unchanged.
