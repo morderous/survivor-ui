@@ -26,6 +26,7 @@ DotCounter.lua
 SoulShards.lua
 Summons.lua
 Party.lua
+PartyBuilds.lua
 Effects.lua
 Jumps.lua
 Marks.lua

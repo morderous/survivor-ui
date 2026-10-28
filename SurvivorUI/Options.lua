@@ -3700,6 +3700,9 @@ page = pages.party
 Header(page, "Party", "For co-op runs, from the game's 0.113: a frame for each friend in your party, and a bar while you are down or bring a friend back. The damage meter's title opens a Party Damage page too, and Run History names the party of a run played in one. Out of a party nothing shows; while this tab is open, a sample does.")
 PanelHead(page, FeatureOn("partyFrames"), FeatureToggle("partyFrames", true), "party", "Party frames", nil, nil, { font = false })
 Note(page, "Left of your frame, the first friend at the bottom and each next one over it. Each friend's class icon, their health in the class's color and what is left of it; DOWN in red while down, a gold fill while you bring them back, Reviving you on the one bringing you back. Hover one for their damage this run and their top spell; click to target. The game's party frames are put away while these are on.")
+Note(page, "A friend playing with Survivor UI too has its icon beside their frame: click it for their build and their best run, as their Survivor UI sends it (the game tells addons nothing of a friend's build): their spells as the damage meter has them, with their ranks, damage, share and biggest crit, their jewelry, what they wear and their numbers. A click anywhere else closes it. It opens beside the icon until dragged elsewhere, by any of it. Yours goes to theirs the same way. While this tab is open, two of the samples have a build behind their icon, made up, and the third none, as a friend without Survivor UI.")
+Check(page, "Share my build with the party", OnUnlessOff("shareBuild"), Flip("shareBuild"),
+	"your spells, gear, numbers and best run go to your friends' Survivor UI, behind an icon by your frame there; not your talents, which the game shares with no addon. Off, they get nothing (what they had is taken back) and see no icon for you.")
 Subheader(page, "Revive bar")
 Check(page, "Revive bar", ReviveIsOn, Call("SurvivorUI_ToggleRevive"),
 	"while you are down: how far a friend has brought you back, and who; while you bring one back: how far. It puts the game's slim revive bar away (the game's 0.115 on; before it, the game's could not be put away, so ours was off unless chosen). Moved on its own: move mode, Revive bar.")
@@ -3932,6 +3935,18 @@ Check(page, "Run History button", OnUnlessOff("historyMapButton"), function()
 		SurvivorUI_PlaceMapButtons()
 	end
 end, "the hourglass over the [S], opening Run History")
+Check(page, "Spell effects button", OnUnlessOff("effectsMapButton"), function()
+	DB().effectsMapButton = DB().effectsMapButton == false
+	if SurvivorUI_PlaceMapButtons then
+		SurvivorUI_PlaceMapButtons()
+	end
+end, "sparkles over the hourglass: the game's No Spell Effects on or off in a click")
+Check(page, "Sound effects button", OnUnlessOff("soundMapButton"), function()
+	DB().soundMapButton = DB().soundMapButton == false
+	if SurvivorUI_PlaceMapButtons then
+		SurvivorUI_PlaceMapButtons()
+	end
+end, "a speaker over them: the game's sound effects muted or back in a click, the music and the ambience kept. The game keeps no sound of the spells apart: the hits and the clicks go with them.")
 Check(page, "Clock and FPS", OnUnlessOff("minimapClock"), Flip("minimapClock"),
 	"along its bottom: your time (the time zone in This Run) and the frames a second")
 Inline(page, "Clock", { { "24", "24 hours" }, { "12", "12 hours" } },
