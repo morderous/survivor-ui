@@ -182,8 +182,10 @@ local function Snapshot(phase)
 		classKey = classKey,
 		zone = zone.zname or GetZoneText(),
 		mods = SurvivorUI_ModsLabel and SurvivorUI_ModsLabel(zone.mods) or nil,
-		-- From the game's 0.121, the run's Heroic level (0 the normal one).
+		-- From the game's 0.121, the run's Heroic level (0 the normal one), and
+		-- its affixes by name (Affixes.lua).
 		heroic = tonumber(zone.heroic),
+		affixes = SurvivorUI_RunAffixNames and SurvivorUI_RunAffixNames() or nil,
 		time = seconds,
 		level = Num(run.lvl),
 		kills = Num(run.kills),
@@ -1961,6 +1963,7 @@ rule:SetPoint("TOPRIGHT", window, "TOPRIGHT", -PAD, -62)
 -- "normal"), read back here.
 local MODS = { { "density", "Density" }, { "health", "Health" }, { "damage", "Damage" }, { "speed", "Speed" } }
 local modChips = {}
+local AFFIX_COLOR = { 1.00, 0.35, 0.29 }
 for index = 1, 4 do
 	local chip = CreateFrame("Frame", nil, window)
 	chip:SetHeight(16)
@@ -1972,6 +1975,16 @@ for index = 1, 4 do
 	chip:EnableMouse(true)
 	chip:SetScript("OnEnter", function()
 		GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
+		-- An affix's chip: its name and what it does.
+		if this.affix then
+			local info = SurvivorUI_AffixInfo and SurvivorUI_AffixInfo(this.affix)
+			GameTooltip:SetText(SurvivorUI_T(this.affix), AFFIX_COLOR[1], AFFIX_COLOR[2], AFFIX_COLOR[3])
+			if info then
+				GameTooltip:AddLine(SurvivorUI_T(info.text), 1, 1, 1, 1)
+			end
+			GameTooltip:Show()
+			return
+		end
 		if this.heroic then
 			GameTooltip:SetText(SurvivorUI_T("Difficulty"), 1, 0.82, 0)
 			GameTooltip:AddLine(SurvivorUI_T("The run's Heroic level, I to V, or Normal."), 1, 1, 1, 1)
@@ -1988,27 +2001,63 @@ for index = 1, 4 do
 	modChips[index] = chip
 end
 
-local function DrawMods(label, heroic)
+-- A chip in its words and colors; its width comes back.
+local function PaintChip(chip, name, value, color)
+	chip.name:SetText(name)
+	chip.value:SetText(value)
+	chip.value:SetTextColor(color[1], color[2], color[3])
+	chip:SetBackdropColor(color[1] * 0.14, color[2] * 0.14, color[3] * 0.14, 0.85)
+	chip:SetBackdropBorderColor(color[1] * 0.6, color[2] * 0.6, color[3] * 0.6, 1)
+	local width = chip.value:GetStringWidth() + 16 + (name ~= "" and chip.name:GetStringWidth() + 4 or 0)
+	chip:SetWidth(width)
+	return width
+end
+
+local function DrawMods(label, heroic, affixes)
 	for _, chip in pairs(modChips) do
 		chip:Hide()
-		chip.heroic = nil
+		chip.heroic, chip.affix = nil, nil
 	end
-	-- A run from the game's 0.121 on: its Heroic level, one chip, orange
-	-- for a Heroic one, grey for the normal one.
+	-- A run from the game's 0.121 on: its Heroic level, a chip in orange for
+	-- a Heroic one, grey for the normal one; then its affixes, a red chip
+	-- each, all in the middle under the badges.
 	if heroic then
-		local chip = modChips[1]
 		local color = heroic > 0 and { 1.00, 0.58, 0.25 } or { 0.62, 0.62, 0.66 }
-		chip.heroic = true
-		chip.name:SetText(SurvivorUI_T("Difficulty"))
-		chip.value:SetText(SurvivorUI_HeroicName(heroic))
-		chip.value:SetTextColor(color[1], color[2], color[3])
-		chip:SetBackdropColor(color[1] * 0.14, color[2] * 0.14, color[3] * 0.14, 0.85)
-		chip:SetBackdropBorderColor(color[1] * 0.6, color[2] * 0.6, color[3] * 0.6, 1)
-		chip:SetWidth(chip.name:GetStringWidth() + chip.value:GetStringWidth() + 16)
-		chip:ClearAllPoints()
-		chip:SetPoint("TOPLEFT", window, "TOP", -math.floor(chip:GetWidth() / 2 + 0.5), -40)
-		chip:Show()
+		modChips[1].heroic = true
+		local widths = { PaintChip(modChips[1], SurvivorUI_T("Difficulty"), SurvivorUI_HeroicName(heroic), color) }
+		local total = widths[1]
+		affixes = affixes or {}
+		for each = 1, math.min(table.getn(affixes), table.getn(modChips) - 1) do
+			local chip = modChips[each + 1]
+			chip.affix = affixes[each]
+			widths[each + 1] = PaintChip(chip, "", SurvivorUI_T(affixes[each]), AFFIX_COLOR)
+			total = total + widths[each + 1] + 4
+		end
+		local x = -math.floor(total / 2 + 0.5)
+		for each = 1, table.getn(widths) do
+			local chip = modChips[each]
+			chip.name:ClearAllPoints()
+			if chip.affix then
+				chip.value:ClearAllPoints()
+				chip.value:SetPoint("CENTER", chip, "CENTER", 0, 0)
+			else
+				chip.name:SetPoint("LEFT", chip, "LEFT", 6, 0)
+				chip.value:ClearAllPoints()
+				chip.value:SetPoint("LEFT", chip.name, "RIGHT", 4, 0)
+			end
+			chip:ClearAllPoints()
+			chip:SetPoint("TOPLEFT", window, "TOP", x, -40)
+			chip:Show()
+			x = x + widths[each] + 4
+		end
 		return
+	end
+	-- Before the game's 0.121 its Run Options: the chips' words in their places.
+	for _, chip in pairs(modChips) do
+		chip.name:ClearAllPoints()
+		chip.name:SetPoint("LEFT", chip, "LEFT", 6, 0)
+		chip.value:ClearAllPoints()
+		chip.value:SetPoint("LEFT", chip.name, "RIGHT", 4, 0)
 	end
 	if not label then
 		return
@@ -3689,7 +3738,15 @@ local function DrawHeader(run, final, moment)
 	heroText:SetText(SurvivorUI_TF("Lv. {1}", Num(moment.level)).."  "..SurvivorUI_T(run.race or "").." "..SurvivorUI_T(run.class or ""))
 	heroText:SetTextColor(light[1], light[2], light[3])
 	party.Draw(run)
-	DrawMods(run.mods, run.heroic)
+	-- Its affixes as kept (v3.0.37 on, the record's), else its tracker's.
+	local affixes = run.affixes
+	if not affixes and run.tracker and run.tracker.affixes then
+		affixes = {}
+		for each = 1, table.getn(run.tracker.affixes) do
+			table.insert(affixes, run.tracker.affixes[each].name)
+		end
+	end
+	DrawMods(run.mods, run.heroic, affixes)
 end
 
 -- The panels in their four columns, the window's height to hold them.

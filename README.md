@@ -219,6 +219,17 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.38, 2026-10-27
+
+A hotfix: Run History and the launcher say a Heroic run's affixes.
+
+**Survivor UI**
+- **Run History says a run's affixes**: each run now keeps its affixes with it, and its head shows them as red chips beside its **Difficulty** (Heroic V, Sanguine, Explosive), each with what it does under the mouse. A run kept with v3.0.37 shows the ones its tracker had.
+
+### Azeroth SurvivorUI Launcher 1.5.6 (beta), 2026-10-27
+
+- **A Heroic run's affixes in Run History**: its head line says them after its level, "Heroic V (Sanguine, Explosive)".
+
 ### v3.0.37, 2026-10-27
 
 Heroic difficulty and the week's affixes in the run tracker, its head and timeline drawn again, endless mode's bosses kept apart, the guardians' respawn timers, the XP bar's odds as bars, every talent's icon and tag in the meter, and fixes.

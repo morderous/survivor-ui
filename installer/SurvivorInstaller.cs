@@ -91,7 +91,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.5.5.0")]
+[assembly: System.Reflection.AssemblyVersion("1.5.6.0")]
 
 namespace SurvivorInstaller
 {
@@ -3753,6 +3753,33 @@ namespace SurvivorInstaller
             return TextColor;
         }
 
+        // A run's affixes (the game's 0.121): their names as the run kept them
+        // (Survivor UI v3.0.38 on), else as its tracker's photo had them;
+        // "" for none.
+        static string AffixNames(RunRecord run)
+        {
+            List<string> names = new List<string>();
+            Dictionary<object, object> kept = run.Table("affixes");
+            if (kept != null)
+            {
+                for (double i = 1; ; i++)
+                {
+                    object value;
+                    if (!kept.TryGetValue(i, out value) || !(value is string)) break;
+                    names.Add((string)value);
+                }
+            }
+            if (names.Count == 0)
+            {
+                foreach (Dictionary<object, object> entry in RunRecord.List(RunRecord.Field(run.Table("tracker"), "affixes")))
+                {
+                    string name = RunRecord.Field(entry, "name") as string;
+                    if (!string.IsNullOrEmpty(name)) names.Add(name);
+                }
+            }
+            return string.Join(", ", names.ToArray());
+        }
+
         // A Heroic level as the game writes it: I to V.
         static string Numeral(int level)
         {
@@ -4071,7 +4098,8 @@ namespace SurvivorInstaller
                 // The run's difficulty: its Heroic level from the game's 0.121, else
                 // its Run Options before it, unless normal.
                 int level = (int)run.Num("heroic");
-                string mods = level > 0 ? "Heroic " + Numeral(level) : run.Str("mods");
+                string affixes = AffixNames(run);
+                string mods = level > 0 ? "Heroic " + Numeral(level) + (affixes != "" ? " (" + affixes + ")" : "") : run.Str("mods");
                 string who = "Level " + (int)view.Num("level") + " " + run.Str("race") + " " + run.Str("class") + "  ·  " + run.Str("zone") +
                     (mods != "" && mods != "normal" ? "  ·  " + mods : "");
                 Txt(g, who, BaseFont, new Rectangle(x, 9, width - x - 190, 18), Muted, TextOnly | TextFormatFlags.EndEllipsis);

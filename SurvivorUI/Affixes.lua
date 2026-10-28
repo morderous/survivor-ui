@@ -193,6 +193,29 @@ function SurvivorUI_RunAffixes()
 	return list
 end
 
+-- The run's affixes by name ("Sanguine", "Explosive"), for Run History to
+-- keep with the run; nil with none.
+function SurvivorUI_RunAffixNames()
+	local list = SurvivorUI_RunAffixes()
+	if not list or table.getn(list) == 0 then
+		return nil
+	end
+	local names = {}
+	for each = 1, table.getn(list) do
+		table.insert(names, list[each].name)
+	end
+	return names
+end
+
+-- An affix by its name: { name, text, symbol }, or nil.
+function SurvivorUI_AffixInfo(name)
+	for index = 1, table.getn(AFFIXES) do
+		if AFFIXES[index].name == name then
+			return AFFIXES[index]
+		end
+	end
+end
+
 -- An affix's tag: its description under the mouse, the level it comes from
 -- this week, and whether the run has shown it.
 function SurvivorUI_AffixTip(tag)
