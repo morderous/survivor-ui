@@ -3527,6 +3527,10 @@ Inline(page, "A best is", {
 	{ "ability", "per ability" },
 	{ "run", "the run's biggest" },
 }, CTGet("ctRecordKind"), CTSet("ctRecordKind"))
+Check(page, "In a list", CTGet("ctRecordList"), CTToggle("ctRecordList"),
+	"the last ones climb over the newest instead of making way")
+Check(page, "Sparks and shine", CTGet("ctRecordFx"), CTToggle("ctRecordFx"),
+	"the effect behind it, picked below; off, the number alone")
 FxRow("crit", ShowCrit)
 Slider(page, "Stays", 1, 4, 0.1, CTGet("ctRecordHold"), CTSet("ctRecordHold"), "%.1f s")
 Slider(page, "Size", 0.6, 1.6, 0.05, CTGet("ctRecordSize"), CTSet("ctRecordSize"))
