@@ -1,5 +1,7 @@
 # Survivor UI and Survivor Plates
 
+English | [简体中文](README.zh-CN.md)
+
 [![Latest release](https://img.shields.io/github/v/release/morderous/survivor-ui?label=download&color=2ea44f)](https://github.com/morderous/survivor-ui/releases/latest) [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/morderous)
 
 ![Survivor UI in a run: the run tracker, the build list with its jewelry and the damage meter on the right, This Run and Biggest Crits on the left, the loot list at the top, boss bars, the action bar with the unit frames, and the damage numbers beside the hero with their spells' icons](docs/screenshot.jpg)
