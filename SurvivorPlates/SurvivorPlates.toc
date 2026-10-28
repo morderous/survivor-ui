@@ -3,7 +3,7 @@
 ## Author: morderous
 ## X-License: GPL-3.0
 ## X-Website: https://github.com/morderous/survivor-ui
-## Version: 3.0.41
+## Version: 3.0.42
 ## Notes: Flat, Plater-style nameplates for Azeroth Survivors: health percent, execute marker, elite and boss styles.
 ## SavedVariables: SurvivorPlatesDB
 SurvivorPlates.lua

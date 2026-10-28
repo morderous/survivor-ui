@@ -1,0 +1,8 @@
+<Bindings>
+	<Binding name="SURVIVORUI_SPELLEFFECTS" header="SURVIVORUI">
+		SurvivorUI_ToggleSpellEffects()
+	</Binding>
+	<Binding name="SURVIVORUI_SOUNDEFFECTS">
+		SurvivorUI_ToggleSoundEffects()
+	</Binding>
+</Bindings>

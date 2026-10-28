@@ -843,22 +843,27 @@ local before = TextButton("<", 18, function() Go(shown - 1) end)
 before:SetPoint("RIGHT", pageButton, "LEFT", -6, 0)
 
 ------------------------------------------------------------------------------
--- A photo of the page, to share: for a moment the rest of the interface put
--- away (UIParent hidden, the window lent to the world's frame meanwhile, and
--- the game's own HUD parts that show); the game's Screenshot taken (its
--- Screenshots folder); then all as it was. The game's Screenshot takes the
--- whole screen and an addon cannot cut a picture, so the page is the whole
--- screen instead: as large as it goes whole, in front of all and solid, its
--- backing and its edge stretched to the screen's edges, no band at its
--- sides. The game's own words over the world ("Move to begin.", as a run
--- waits) are drawn over any addon still.
+-- A photo of the page, to share. The game's Screenshot takes the whole screen
+-- and an addon cannot cut a picture, so for a moment the page is the whole
+-- screen (from tomlrd's pull request): the rest of the interface put away
+-- (UIParent hidden, and the game's own HUD parts that show), the window lent
+-- to the world's frame, in its middle, as large as it goes whole, solid and
+-- in front of all (the plates are the world's too), its backing and its edge
+-- drawn out to the screen's edges so no band of the world shows at its
+-- sides; the game's Screenshot taken (its Screenshots folder); then all as it
+-- was. The game's own words over the world ("Move to begin." as a run waits)
+-- are drawn over any addon still.
 
 local HUD_PARTS = { "clock", "bosses", "tally", "build", "banners", "loot", "meter", "levels", "flag" }
 
--- The page's backing and edge, the whole screen, behind it.
+-- The page's backing out to the screen's edges, and its edge round them.
 local shade = CreateFrame("Frame", nil, WorldFrame)
 shade:SetAllPoints(WorldFrame)
 shade:SetFrameStrata("BACKGROUND")
+shade.fill = shade:CreateTexture(nil, "BACKGROUND")
+shade.fill:SetTexture(FLAT)
+shade.fill:SetAllPoints(shade)
+shade.edges = Edges(shade, "BORDER")      -- top, bottom, left, right
 shade:Hide()
 
 local photo = CreateFrame("Frame")
@@ -867,9 +872,9 @@ photo.hud = {}
 
 local camera
 
--- The window on the world's frame, in its middle, as large as the screen
--- lets it whole, solid; its edge drawn on the screen's edges instead, as
--- thick as the page's. Its place, scale and colors kept, to put it back after.
+-- The window on the world's frame, in its middle, as large as the screen lets
+-- it whole, its backing solid and its edge on the screen's, as thick as the
+-- window's own at that size; its place, size and colors kept for after.
 local function Enlarge()
 	photo.left, photo.top, photo.scale = window:GetLeft(), window:GetTop(), window:GetScale()
 	photo.back, photo.edge = { window:GetBackdropColor() }, { window:GetBackdropBorderColor() }
@@ -880,25 +885,32 @@ local function Enlarge()
 	window:SetPoint("CENTER", WorldFrame, "CENTER", 0, 0)
 	window:SetBackdropColor(photo.back[1], photo.back[2], photo.back[3], 1)
 	window:SetBackdropBorderColor(0, 0, 0, 0)
-	local edge = math.max(1, math.floor(fit + 0.5))
-	shade:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = edge,
-		insets = { left = edge, right = edge, top = edge, bottom = edge } })
-	shade:SetBackdropColor(photo.back[1], photo.back[2], photo.back[3], 1)
-	shade:SetBackdropBorderColor(photo.edge[1], photo.edge[2], photo.edge[3], photo.edge[4])
+	shade.fill:SetVertexColor(photo.back[1], photo.back[2], photo.back[3], 1)
+	local thick = math.max(1, math.floor(fit + 0.5))
+	shade.edges[1]:SetHeight(thick)
+	shade.edges[2]:SetHeight(thick)
+	shade.edges[3]:SetWidth(thick)
+	shade.edges[4]:SetWidth(thick)
+	Tint(shade.edges, photo.edge, photo.edge[4] or 1)
 end
 
-local function PhotoDone(result)
-	photo:Hide()
-	photo:UnregisterAllEvents()
-	shade:Hide()
+-- The window back under UIParent, where it was, in its size and colors.
+local function PutBack()
 	window:SetParent(UIParent)
 	window:SetScale(photo.scale)
 	if photo.left and photo.top then
 		window:ClearAllPoints()
 		window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", photo.left, photo.top)
 	end
-	window:SetBackdropColor(photo.back[1], photo.back[2], photo.back[3], photo.back[4])
-	window:SetBackdropBorderColor(photo.edge[1], photo.edge[2], photo.edge[3], photo.edge[4])
+	window:SetBackdropColor(unpack(photo.back))
+	window:SetBackdropBorderColor(unpack(photo.edge))
+end
+
+local function PhotoDone(result)
+	photo:Hide()
+	photo:UnregisterAllEvents()
+	shade:Hide()
+	PutBack()
 	window:SetFrameStrata("DIALOG")
 	UIParent:Show()
 	for _, part in pairs(photo.hud) do

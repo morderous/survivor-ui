@@ -4,10 +4,10 @@
 -- tinted), that opens the options (each tab's pieces movable while it is
 -- open); a right click moves the whole UI (the grid laid out, every piece
 -- unlocked). Over it, Run History's, in the same square: an hourglass; over
--- that, two switches: the game's spell effects (sparkles) and its sound
--- effects (a speaker), on or off. Other minimap buttons stack over them,
--- upward, in the same square look: the game's battleground button (the
--- crossed swords).
+-- that, two switches with a key each: the game's spell effects (sparkles)
+-- and its sound effects (a speaker), on or off. Other minimap buttons stack
+-- over them, upward, in the same square look: the game's battleground button
+-- (the crossed swords).
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIconWhite"
@@ -167,44 +167,42 @@ local function HistoryShown()
 	return not (SurvivorUIDB and SurvivorUIDB.historyMapButton == false)
 end
 
--- Run History's when it shows, else ours: the note's level (below).
+-- Run History's when it shows, else ours: the note's level (below), and the
+-- switches' foot.
 local function HistoryTop()
 	return HistoryShown() and historyButton or button
 end
 
 ------------------------------------------------------------------------------
--- Two of the game's own settings in a click, the same square over Run
--- History's (or ours), one over the other, each its icon drawn as Run
--- History's (Art\EffectsIconWhite, Art\SoundIconWhite), tinted as ours; while
--- off, struck through (their Off twins) and dimmed:
--- - the spell effects': the game's No Spell Effects (its Interface page, the
+-- Two of the game's own settings in a click (from tomlrd's pull request),
+-- each in the same square over Run History's, its icon drawn as Run
+-- History's (Art\EffectsIconWhite, Art\SoundIconWhite, tinted as ours);
+-- while off, struck through (their Off twins) and dimmed:
+-- - the spell effects: the game's No Spell Effects (its Graphics page, the
 --   noSpellEffects setting): no explosions, missiles, glows or beams;
--- - the sound effects': the game's Sound Volume (its Sound page) down to
---   nothing, and back to where it was. The game keeps no sound of the spells
---   apart: the hits and the clicks go with them; the music and the ambience
---   stay.
--- The game's pages switch them too: each read again twice a second. Off with
+-- - the sound effects: the game's Sound Volume down to nothing, and back to
+--   where it was. The game keeps no sound of the spells apart, so the hits
+--   and the clicks go with them; the music and the ambience stay.
+-- A key each too (Bindings.xml; the options' Minimap tab sets them). The
+-- game's pages switch them as well: each read again twice a second. Off with
 -- "Spell effects button" and "Sound effects button" (the options' Minimap
--- tab); with a game without the setting, never shown.
+-- tab).
 
-local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
+local SWITCH_ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local switches = {}
 
--- No Spell Effects: on (effects drawn) unless "1"; nil with a game without it.
+-- No Spell Effects: on (effects drawn) unless "1".
 local function EffectsOn()
-	local ok, value = pcall(GetCVar, "noSpellEffects")
-	if ok and value ~= nil then
-		return value ~= "1"
-	end
+	return GetCVar("noSpellEffects") ~= "1"
 end
 
 -- The sound effects' volume: on above nothing.
 local function SoundOn()
-	local ok, value = pcall(GetCVar, "SoundVolume")
-	value = ok and tonumber(value)
-	if value then
-		return value > 0
-	end
+	return (tonumber(GetCVar("SoundVolume")) or 1) > 0
+end
+
+local function FlipEffects()
+	SetCVar("noSpellEffects", EffectsOn() and "1" or "0")
 end
 
 -- Muted, the volume it had is kept for the way back.
@@ -220,44 +218,41 @@ local function FlipSound()
 end
 
 local function PaintSwitch(switch)
-	local on = switch.read() ~= false
+	local on = switch.read()
 	if switch.shownOn ~= on then
 		switch.shownOn = on
-		switch.icon:SetTexture(ART..switch.art..(on and "IconWhite" or "OffIconWhite"))
+		switch.icon:SetTexture(SWITCH_ART..switch.art..(on and "IconWhite" or "OffIconWhite"))
 	end
 	local dim = on and 1 or 0.55
 	switch.icon:SetVertexColor(ACCENT[1] * dim, ACCENT[2] * dim, ACCENT[3] * dim)
 end
 
 local function SwitchTip(switch)
+	local on = switch.read()
 	GameTooltip:SetOwner(switch, "ANCHOR_LEFT")
 	GameTooltip:SetText(SurvivorUI_T(switch.title), ACCENT[1], ACCENT[2], ACCENT[3])
-	local lines = switch.read() == false and switch.whenOff or switch.whenOn
-	GameTooltip:AddLine(SurvivorUI_T(lines[1]), 0.7, 0.7, 0.7)
-	GameTooltip:AddLine(SurvivorUI_T(lines[2]), 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T(on and switch.onLine or switch.offLine), 1, 1, 1)
+	local key = GetBindingKey and GetBindingKey(switch.binding)
+	GameTooltip:AddLine(key and SurvivorUI_TF("Key: {1}", key) or SurvivorUI_T("A key for it: options, Minimap"), 0.7, 0.7, 0.7)
 	if switch.note then
 		GameTooltip:AddLine(SurvivorUI_T(switch.note), 0.6, 0.6, 0.65, 1)
 	end
 	GameTooltip:Show()
 end
 
--- One switch: its setting read (true, false, or nil without it) and flipped,
--- its option, its tooltip's words while on and while off.
-local function Switch(name, art, option, read, flip, title, whenOn, whenOff, note)
-	local switch = CreateFrame("Button", name, Minimap or UIParent)
+-- One switch: its setting read and flipped, its option and key, its words.
+local function Switch(spec)
+	local switch = CreateFrame("Button", spec.name, Minimap or UIParent)
 	switch:SetFrameStrata("MEDIUM")
 	switch:SetFrameLevel((Minimap and Minimap:GetFrameLevel() or 1) + 5)
-	switch:SetPoint("BOTTOM", HistoryTop(), "TOP", 0, 5)
 	switch.icon = switch:CreateTexture(nil, "ARTWORK")
 	switch.ownIcon = switch.icon
 	Square(switch, switch.icon)
-	switch.art, switch.option, switch.read, switch.title = art, option, read, title
-	switch.whenOn, switch.whenOff, switch.note = whenOn, whenOff, note
+	for key, value in pairs(spec) do
+		switch[key] = value
+	end
 	switch:SetScript("OnClick", function()
-		if this.read() == nil then
-			return
-		end
-		flip()
+		this.flip()
 		PaintSwitch(this)
 		SwitchTip(this)
 	end)
@@ -269,24 +264,26 @@ local function Switch(name, art, option, read, flip, title, whenOn, whenOff, not
 		Lit(this, false)
 		GameTooltip:Hide()
 	end)
+	switch.wait = 0
 	switch:SetScript("OnUpdate", function()
-		this.wait = (this.wait or 0) + arg1
+		this.wait = this.wait + arg1
 		if this.wait >= 0.5 then
 			this.wait = 0
 			PaintSwitch(this)
 		end
 	end)
+	PaintSwitch(switch)
 	table.insert(switches, switch)
+	return switch
 end
 
-Switch("SurvivorUIEffectsButton", "Effects", "effectsMapButton", EffectsOn,
-	function() SetCVar("noSpellEffects", EffectsOn() and "1" or "0") end,
-	"Spell effects", { "Shown.", "Click: hide them (no explosions, missiles, glows or beams)" },
-	{ "Hidden.", "Click: show them" })
-Switch("SurvivorUISoundButton", "Sound", "soundMapButton", SoundOn, FlipSound,
-	"Sound effects", { "On.", "Click: mute them, the music and the ambience kept" },
-	{ "Muted.", "Click: back to their volume" },
-	"The game keeps no sound of the spells apart: the hits and the clicks go with them.")
+local effectsSwitch = Switch({ name = "SurvivorUIEffectsButton", art = "Effects", option = "effectsMapButton",
+	binding = "SURVIVORUI_SPELLEFFECTS", read = EffectsOn, flip = FlipEffects, title = "Spell effects",
+	onLine = "Shown. Click: hide them (no explosions, missiles, glows or beams)", offLine = "Hidden. Click: show them" })
+local soundSwitch = Switch({ name = "SurvivorUISoundButton", art = "Sound", option = "soundMapButton",
+	binding = "SURVIVORUI_SOUNDEFFECTS", read = SoundOn, flip = FlipSound, title = "Sound effects",
+	onLine = "On. Click: mute them, the music and the ambience kept", offLine = "Muted. Click: back to their volume",
+	note = "The game keeps no sound of the spells apart: the hits and the clicks go with them." })
 
 if SurvivorUI_OnAccent then
 	SurvivorUI_OnAccent(function()
@@ -296,9 +293,29 @@ if SurvivorUI_OnAccent then
 	end)
 end
 
--- Shown by its option, and only with a game that has its setting.
 local function SwitchShown(switch)
-	return switch.read() ~= nil and not (SurvivorUIDB and SurvivorUIDB[switch.option] == false)
+	return not (SurvivorUIDB and SurvivorUIDB[switch.option] == false)
+end
+
+-- The keys (Bindings.xml): each switch as its click, said in the chat, as a
+-- key gives no other sign of it.
+local function KeyFlip(switch)
+	switch.flip()
+	PaintSwitch(switch)
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_TF("Survivor UI: {1} {2}.", SurvivorUI_T(switch.title),
+		SurvivorUI_T(switch.read() and "on" or "off")))
+end
+
+BINDING_HEADER_SURVIVORUI = "Survivor UI"
+BINDING_NAME_SURVIVORUI_SPELLEFFECTS = "Spell effects on or off"
+BINDING_NAME_SURVIVORUI_SOUNDEFFECTS = "Sound effects on or off"
+
+function SurvivorUI_ToggleSpellEffects()
+	KeyFlip(effectsSwitch)
+end
+
+function SurvivorUI_ToggleSoundEffects()
+	KeyFlip(soundSwitch)
 end
 
 -- The top of the stack: the last switch shown, else Run History's, else ours.
@@ -327,7 +344,7 @@ local function RestyleBattlefield()
 		border:SetAlpha(0)
 	end
 	Square(frame, getglobal("MiniMapBattlefieldIcon"))
-	-- Over ours (and Run History's, the switches), in the stack outside the minimap.
+	-- Over ours (and Run History's), in the stack outside the minimap.
 	frame:ClearAllPoints()
 	frame:SetPoint("BOTTOM", StackTop(), "TOP", 0, 5)
 	if not frame.squareHooked then
@@ -348,8 +365,8 @@ local function RestyleBattlefield()
 	end
 end
 
--- The stack laid out again: Run History's shown or not, the switches shown over
--- it, the battleground's over the top. For the options' Minimap tab too.
+-- The stack laid out again: Run History's shown or not, the switches shown
+-- over it, the battleground's over the top. For the options' Minimap tab too.
 function SurvivorUI_PlaceMapButtons()
 	if HistoryShown() then
 		historyButton:Show()
@@ -362,7 +379,6 @@ function SurvivorUI_PlaceMapButtons()
 		switch:ClearAllPoints()
 		switch:SetPoint("BOTTOM", under, "TOP", 0, 5)
 		if SwitchShown(switch) then
-			PaintSwitch(switch)
 			switch:Show()
 			under = switch
 		else

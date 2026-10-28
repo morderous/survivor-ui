@@ -224,6 +224,16 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.42, 2026-10-28
+
+Spell effects and sound effects on or off from the minimap or a key, Run History's photo filling the screen, and the party frames top to bottom from the top of the party's place.
+
+**Survivor UI**
+- **Two switches by the minimap** (from tomlrd's pull request; new art, restart the game once): over Run History's hourglass, the game's **No Spell Effects** (no explosions, missiles, glows or beams) and its **sound effects**, muted and back to their volume, each in a click. The game keeps no sound of the spells apart, so the hits and the clicks go with them; the music and the ambience stay. Each is struck through and dimmed while off, follows the game's own pages, and has its option and **a key of its own** (Minimap tab, **Spell effects key** and **Sound effects key**, none by default; Key Bindings in the game's menu lists them too).
+- **Run History's photo fills the screen** (from tomlrd's pull request): the game's screenshot takes the whole screen, so the page now does too, as large as it goes whole, in front of all, its backing and edge drawn out to the screen's edges.
+- **Party frames top to bottom start at the top**: the first friend stands where the fourth stands bottom to top, and the others come down under it, so a full party takes the same place in either order.
+- The pull request also brought a friend's build from their own Survivor UI, behind an icon by their party frame. It is not in: in a co-op run the game passes no addon's message from one player to another (tried with two games on its 0.126), so one Survivor UI cannot reach a friend's yet.
+
 ### v3.0.41, 2026-10-28
 
 Survivor UI over the game's cards (its 0.126), the party frames top to bottom, and the launcher back in this repository.

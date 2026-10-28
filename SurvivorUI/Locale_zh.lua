@@ -607,6 +607,21 @@ SurvivorUI_WORDS.zh = {
 	["Right click: move the whole UI"] = "右键：移动整个界面",
 	["Click: your runs, each as it ended"] = "点击：你的冒险，每次结束时的样子",
 	["Last run summary is available!"] = "上次冒险的总结已可查看！",
+	-- The minimap's two switches (MinimapButton.lua), in the game's words for
+	-- its settings (关闭法术特效, 音效音量); their titles and lines come
+	-- through a table.
+	["Spell effects"] = "法术特效",
+	["Sound effects"] = "音效",
+	["Shown. Click: hide them (no explosions, missiles, glows or beams)"] = "显示中。点击：隐藏（没有爆炸、飞弹、光效或光束）",
+	["Hidden. Click: show them"] = "已隐藏。点击：显示",
+	["On. Click: mute them, the music and the ambience kept"] = "开启中。点击：静音，保留音乐和环境音",
+	["Muted. Click: back to their volume"] = "已静音。点击：恢复原来的音量",
+	["The game keeps no sound of the spells apart: the hits and the clicks go with them."] = "游戏没有单独的法术音效：打击声和点击声也会一起静音。",
+	["Key: {1}"] = "按键：{1}",
+	["A key for it: options, Minimap"] = "设置按键：选项，Minimap",
+	["Survivor UI: {1} {2}."] = "Survivor UI：{1}：{2}。",
+	["on"] = "开",
+	["off"] = "关",
 	["Selected: Ctrl+C copies it. Drag over a part to copy just that."] = "已选中：Ctrl+C复制。拖动选择一部分只复制该部分。",
 	["Copy chat: {1}"] = "复制聊天：{1}",
 	["Copy chat"] = "复制聊天",

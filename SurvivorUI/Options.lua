@@ -1260,6 +1260,112 @@ local function Button(page, text, width, x, onClick, color)
 	return button
 end
 
+-- A key of the game's bindings (Key Bindings in the game's menu lists it too):
+-- click, then press the key, Alt, Ctrl or Shift with it if wanted (Escape
+-- leaves it as it was); a right click clears it.
+local keyCapture = CreateFrame("Frame", nil, UIParent)
+keyCapture:SetFrameStrata("TOOLTIP")
+keyCapture:EnableKeyboard(true)
+keyCapture:Hide()
+keyCapture:SetScript("OnKeyDown", function()
+	local key = arg1
+	if key == "LSHIFT" or key == "RSHIFT" or key == "LCTRL" or key == "RCTRL" or key == "LALT" or key == "RALT"
+		or key == "UNKNOWN" then
+		return
+	end
+	this:Hide()
+	local command = this.command
+	if key ~= "ESCAPE" and SetBinding then
+		if IsShiftKeyDown() then
+			key = "SHIFT-"..key
+		end
+		if IsControlKeyDown() then
+			key = "CTRL-"..key
+		end
+		if IsAltKeyDown() then
+			key = "ALT-"..key
+		end
+		local old = GetBindingKey(command)
+		if old then
+			SetBinding(old)
+		end
+		SetBinding(key, command)
+		SaveBindings(GetCurrentBindingSet())
+	end
+	RefreshAll()
+end)
+
+local function KeyButton(page, label, command, note)
+	local text = Text(page, 10, TEXT)
+	text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 5)
+	text:SetText(label)
+	local button = CreateFrame("Button", nil, page)
+	button:SetWidth(150)
+	button:SetHeight(ROW)
+	button:SetPoint("TOPLEFT", page, "TOPLEFT", 140, page.y)
+	button.edge = Fill(button, "BORDER", 0.3, 0.3, 0.35, 1)
+	button.edge:SetAllPoints(button)
+	button.fill = Fill(button, "ARTWORK", 0.06, 0.06, 0.08, 1)
+	button.fill:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+	button.fill:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+	button.label = Text(button, 10, TEXT)
+	button.label:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	button:SetScript("OnClick", function()
+		if arg1 == "RightButton" then
+			local old = GetBindingKey and GetBindingKey(command)
+			if old then
+				SetBinding(old)
+				SaveBindings(GetCurrentBindingSet())
+			end
+			keyCapture:Hide()
+		else
+			keyCapture.command = command
+			keyCapture:Show()
+		end
+		RefreshAll()
+	end)
+	button:SetScript("OnEnter", function()
+		this.hot = true
+		this:Refresh()
+		GameTooltip:SetOwner(this, "ANCHOR_TOP")
+		GameTooltip:SetText(label, 1, 1, 1)
+		if note then
+			GameTooltip:AddLine(note, 0.8, 0.8, 0.8, 1)
+		end
+		GameTooltip:AddLine("Click, then press the key (Alt, Ctrl or Shift with it if you like). Escape leaves it as it was; a right click clears it.", 0.8, 0.8, 0.8, 1)
+		GameTooltip:Show()
+	end)
+	button:SetScript("OnLeave", function()
+		this.hot = nil
+		this:Refresh()
+		GameTooltip:Hide()
+	end)
+	function button:Refresh()
+		local color = page.color
+		local waiting = keyCapture:IsShown() and keyCapture.command == command
+		local key = GetBindingKey and GetBindingKey(command)
+		if waiting then
+			self.label:SetText("Press a key...")
+			self.label:SetTextColor(color[1], color[2], color[3])
+		elseif key then
+			self.label:SetText(key)
+			self.label:SetTextColor(1, 1, 1)
+		else
+			self.label:SetText("Not set")
+			self.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+		end
+		if waiting or self.hot then
+			self.edge:SetVertexColor(color[1], color[2], color[3], 1)
+		else
+			self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+		end
+	end
+	table.insert(widgets, button)
+	side.Index(page, label, note, page.y, ROW)
+	page.y = page.y - ROW - 2
+end
+
 -- A choice from a list that drops down: Items() gives the list, each
 -- { value, name, and as wanted font (the item written in it), color, note (a
 -- muted word on its right) }; get() the value chosen, set(value) on a pick.
@@ -3699,7 +3805,7 @@ Check(page, "Talent cooldowns", OnUnlessOff("summonsTimers"), Flip("summonsTimer
 page = pages.party
 Header(page, "Party", "For co-op runs, from the game's 0.113: a frame for each friend in your party, and a bar while you are down or bring a friend back. The damage meter's title opens a Party Damage page too, and Run History names the party of a run played in one. Out of a party nothing shows; while this tab is open, a sample does.")
 PanelHead(page, FeatureOn("partyFrames"), FeatureToggle("partyFrames", true), "party", "Party frames", nil, nil, { font = false })
-Note(page, "Left of your frame, the first friend level with it and each next one over it, or under it (Order, below). Each friend's class icon, their health in the class's color and what is left of it; DOWN in red while down, a gold fill while you bring them back, Reviving you on the one bringing you back. Hover one for their damage this run and their top spell; click to target. The game's party frames are put away while these are on.")
+Note(page, "Left of your frame, the first friend level with it and each next one over it, or from the top down (Order, below). Each friend's class icon, their health in the class's color and what is left of it; DOWN in red while down, a gold fill while you bring them back, Reviving you on the one bringing you back. Hover one for their damage this run and their top spell; click to target. The game's party frames are put away while these are on.")
 Inline(page, "Order", {
 	{ "up", "Bottom to top" },
 	{ "down", "Top to bottom" },
@@ -3710,7 +3816,7 @@ Inline(page, "Order", {
 			SurvivorUI_PlacePartyFrames()
 		end
 	end)
-Note(page, "Bottom to top, each friend who joins goes over the last; top to bottom, under it. The first friend stays where it is either way.")
+Note(page, "Bottom to top, each friend who joins goes over the last; top to bottom, under it, the first one where the fourth stands bottom to top. A full party takes the same place either way.")
 Subheader(page, "Revive bar")
 Check(page, "Revive bar", ReviveIsOn, Call("SurvivorUI_ToggleRevive"),
 	"while you are down: how far a friend has brought you back, and who; while you bring one back: how far. It puts the game's slim revive bar away (the game's 0.115 on; before it, the game's could not be put away, so ours was off unless chosen). Moved on its own: move mode, Revive bar.")
@@ -3948,13 +4054,17 @@ Check(page, "Spell effects button", OnUnlessOff("effectsMapButton"), function()
 	if SurvivorUI_PlaceMapButtons then
 		SurvivorUI_PlaceMapButtons()
 	end
-end, "sparkles over the hourglass: the game's No Spell Effects on or off in a click")
+end, "sparkles over the hourglass: the game's No Spell Effects on or off in a click (no explosions, missiles, glows or beams)")
 Check(page, "Sound effects button", OnUnlessOff("soundMapButton"), function()
 	DB().soundMapButton = DB().soundMapButton == false
 	if SurvivorUI_PlaceMapButtons then
 		SurvivorUI_PlaceMapButtons()
 	end
 end, "a speaker over them: the game's sound effects muted or back in a click, the music and the ambience kept. The game keeps no sound of the spells apart: the hits and the clicks go with them.")
+KeyButton(page, "Spell effects key", "SURVIVORUI_SPELLEFFECTS",
+	"A key of your own for the spell effects, on or off, as the sparkles' button. None by default; Key Bindings in the game's menu lists it as well.")
+KeyButton(page, "Sound effects key", "SURVIVORUI_SOUNDEFFECTS",
+	"A key of your own for the sound effects, muted or back, as the speaker's button. None by default; Key Bindings in the game's menu lists it as well.")
 Check(page, "Clock and FPS", OnUnlessOff("minimapClock"), Flip("minimapClock"),
 	"along its bottom: your time (the time zone in This Run) and the frames a second")
 Inline(page, "Clock", { { "24", "24 hours" }, { "12", "12 hours" } },
@@ -4158,112 +4268,6 @@ Check(page, "Roman spell ranks (also applied to the meter)", OnlyIfOn("romanRank
 
 page = pages.plates
 Header(page, "Nameplates", "Survivor Plates: a plate over the enemies within 20 yards of the hero, and over your own totems and pets and your co-op friends, each kind as you choose (off by default: the run tracker shows the bosses, guardians and elites).")
-
--- A key of the game's bindings (Key Bindings in the game's menu lists it too):
--- click, then press the key, Alt, Ctrl or Shift with it if wanted (Escape
--- leaves it as it was); a right click clears it.
-local keyCapture = CreateFrame("Frame", nil, UIParent)
-keyCapture:SetFrameStrata("TOOLTIP")
-keyCapture:EnableKeyboard(true)
-keyCapture:Hide()
-keyCapture:SetScript("OnKeyDown", function()
-	local key = arg1
-	if key == "LSHIFT" or key == "RSHIFT" or key == "LCTRL" or key == "RCTRL" or key == "LALT" or key == "RALT"
-		or key == "UNKNOWN" then
-		return
-	end
-	this:Hide()
-	local command = this.command
-	if key ~= "ESCAPE" and SetBinding then
-		if IsShiftKeyDown() then
-			key = "SHIFT-"..key
-		end
-		if IsControlKeyDown() then
-			key = "CTRL-"..key
-		end
-		if IsAltKeyDown() then
-			key = "ALT-"..key
-		end
-		local old = GetBindingKey(command)
-		if old then
-			SetBinding(old)
-		end
-		SetBinding(key, command)
-		SaveBindings(GetCurrentBindingSet())
-	end
-	RefreshAll()
-end)
-
-local function KeyButton(page, label, command, note)
-	local text = Text(page, 10, TEXT)
-	text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 5)
-	text:SetText(label)
-	local button = CreateFrame("Button", nil, page)
-	button:SetWidth(150)
-	button:SetHeight(ROW)
-	button:SetPoint("TOPLEFT", page, "TOPLEFT", 140, page.y)
-	button.edge = Fill(button, "BORDER", 0.3, 0.3, 0.35, 1)
-	button.edge:SetAllPoints(button)
-	button.fill = Fill(button, "ARTWORK", 0.06, 0.06, 0.08, 1)
-	button.fill:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
-	button.fill:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
-	button.label = Text(button, 10, TEXT)
-	button.label:SetPoint("CENTER", button, "CENTER", 0, 0)
-	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	button:SetScript("OnClick", function()
-		if arg1 == "RightButton" then
-			local old = GetBindingKey and GetBindingKey(command)
-			if old then
-				SetBinding(old)
-				SaveBindings(GetCurrentBindingSet())
-			end
-			keyCapture:Hide()
-		else
-			keyCapture.command = command
-			keyCapture:Show()
-		end
-		RefreshAll()
-	end)
-	button:SetScript("OnEnter", function()
-		this.hot = true
-		this:Refresh()
-		GameTooltip:SetOwner(this, "ANCHOR_TOP")
-		GameTooltip:SetText(label, 1, 1, 1)
-		if note then
-			GameTooltip:AddLine(note, 0.8, 0.8, 0.8, 1)
-		end
-		GameTooltip:AddLine("Click, then press the key (Alt, Ctrl or Shift with it if you like). Escape leaves it as it was; a right click clears it.", 0.8, 0.8, 0.8, 1)
-		GameTooltip:Show()
-	end)
-	button:SetScript("OnLeave", function()
-		this.hot = nil
-		this:Refresh()
-		GameTooltip:Hide()
-	end)
-	function button:Refresh()
-		local color = page.color
-		local waiting = keyCapture:IsShown() and keyCapture.command == command
-		local key = GetBindingKey and GetBindingKey(command)
-		if waiting then
-			self.label:SetText("Press a key...")
-			self.label:SetTextColor(color[1], color[2], color[3])
-		elseif key then
-			self.label:SetText(key)
-			self.label:SetTextColor(1, 1, 1)
-		else
-			self.label:SetText("Not set")
-			self.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
-		end
-		if waiting or self.hot then
-			self.edge:SetVertexColor(color[1], color[2], color[3], 1)
-		else
-			self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
-		end
-	end
-	table.insert(widgets, button)
-	side.Index(page, label, note, page.y, ROW)
-	page.y = page.y - ROW - 2
-end
 
 if PlatesThere() then
 	PanelHead(page, PlatesOn, function() Plates("none") end)
