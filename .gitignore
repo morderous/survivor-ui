@@ -18,5 +18,3 @@ SurvivorUI/Fonts/*
 !SurvivorUI/Fonts/OFL-Barlow.txt
 # A face kept for local development only
 SurvivorUI/Media/
-# The installer is built by installer\build.bat and attached to releases
-installer/*.exe
