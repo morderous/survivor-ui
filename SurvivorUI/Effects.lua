@@ -41,8 +41,10 @@ SurvivorUI_RECORD_FX = {
 	{ "void", "Void" },
 	{ "physical", "Physical" },
 	{ "nature", "Nature" },
+	-- The number alone (2026-10-28): the default for both records.
+	{ "none", "No effect" },
 }
-local DEFAULT_FX = { crit = "radiant", jump = "fire" }
+local DEFAULT_FX = { crit = "none", jump = "none" }
 
 -- The effects chosen for a class (asked for 2026-10-26), in
 -- SurvivorUIDB.recordFxByClass[class]: { crit, jump }; made with make. The
@@ -867,6 +869,11 @@ EFFECTS.nature = {
 local SMOKE_SIZE = { 240, 124, -2 }
 
 function SurvivorUI_RecordFxStart(host, kind, scale, numberY, life)
+	-- No effect: the number alone, the last one's effect gone with it.
+	if kind == "none" then
+		SurvivorUI_RecordFxStop(host)
+		return
+	end
 	local fx = Rig(host)
 	local effect = EFFECTS[kind] or EFFECTS.fire
 	fx.host, fx.effect = host, effect

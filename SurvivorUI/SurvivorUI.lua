@@ -2350,9 +2350,6 @@ local CT_DEFAULTS = {
 	-- The new best crit: held still, an ability's own best (or the run's
 	-- biggest), for so many seconds, at a size, over a glow.
 	ctRecord = true, ctRecordKind = "ability", ctRecordHold = 2.3, ctRecordSize = 1, ctRecordGlow = true,
-	-- The new best crits in a list, the last ones climbing over the newest
-	-- instead of making way for it; its effect behind it, or the number alone.
-	ctRecordList = false, ctRecordFx = true,
 }
 
 local function CT()
@@ -2402,14 +2399,11 @@ local function CT()
 			end
 		end
 	end
-	-- 6: the new best crits in a list, their effect on or off.
+	-- 6: a test build's tick for the record's effect gone (the effects have a
+	-- No effect of their own now).
 	if db.ctVersion < 6 then
 		db.ctVersion = 6
-		for _, key in pairs({ "ctRecordList", "ctRecordFx" }) do
-			if db[key] == nil then
-				db[key] = CT_DEFAULTS[key]
-			end
-		end
+		db.ctRecordFx = nil
 	end
 	return db
 end
@@ -2875,8 +2869,8 @@ local HEAL_TYPES = { HEAL = true, HEAL_CRIT = true, PERIODIC_HEAL = true }
 -- number climbing with the rest, it stands still a moment, larger and gold
 -- over a glow, "NEW BEST CRIT" over it, then fades. It stands beside the
 -- Biggest Crits, where the bests are listed, or where it was moved to (move
--- mode). A newer record takes its place, or, in a list (Records, In a list),
--- the last ones climb over it. /sui record shows one at once.
+-- mode). A newer record comes under it: the last ones rise over it. /sui
+-- record shows one at once.
 
 local RECORD_SIZE, RECORD_POP_SIZE, RECORD_POP = 32, 44, 0.12
 local RECORD_FADE = 0.5                     -- seconds it takes to fade, after its hold
@@ -2933,61 +2927,69 @@ recordShown.icon:SetPoint("RIGHT", recordShown.number, "LEFT", -4, 0)
 recordShown.label = recordShown:CreateFontString(nil, "OVERLAY")
 recordShown.label:SetPoint("BOTTOM", recordShown.number, "TOP", 0, 2)
 
--- In a list (Records, In a list; asked for 2026-10-28): as a newer record
--- comes, the one showing steps up over it, smaller, and those already there
--- a place higher, so a burst of records reads instead of each wiping the
--- last. Each keeps its own time and fades as it runs out; only the newest
--- wears the effect.
-
-local LIST_MAX = 5              -- the last ones kept over the newest
-local LIST_SIZE = 20            -- their number's size
-local LIST_FIRST = 40           -- the first one's middle, over the newest's
-local LIST_STEP = 24            -- from one to the next
-local LIST_SLIDE = 12           -- how fast they climb to their places
+-- The last ones over the newest (from tomlrd's pull request, 2026-10-28): as
+-- a newer record comes, the one showing does not make way. It steps up over
+-- the newest, smaller, and rises slowly, those already there a place higher,
+-- so a burst of records reads instead of each wiping the last. Each keeps its
+-- own time and fades as it runs out; only the newest wears the effect. All in
+-- one table, the file being near Lua 5.0's 200 locals.
+local recordList = {
+	MAX = 5,        -- the last ones kept over the newest
+	SIZE = 20,      -- their number's size
+	FIRST = 40,     -- the first one's middle, over the newest's
+	STEP = 24,      -- from one to the next
+	EASE = 3,       -- how quickly one moves up to its place: slowly
+	RISE = 10,      -- and the pixels a second it goes on rising from there
+	texts = {},
+	live = 0,
+}
 
 -- Their numbers, a level over the newest's effect (Effects.lua: its smoke
 -- reaches up behind them), as the jump record's are over its own.
-local listLayer = CreateFrame("Frame", nil, damageLayer)
-listLayer:SetAllPoints(recordShown)
-listLayer:SetFrameLevel(recordShown:GetFrameLevel() + 3)
+recordList.layer = CreateFrame("Frame", nil, damageLayer)
+recordList.layer:SetAllPoints(recordShown)
+recordList.layer:SetFrameLevel(recordShown:GetFrameLevel() + 3)
 
-local listTexts = {}
-local listLive = 0
-
-local function ListText()
-	for index = 1, table.getn(listTexts) do
-		if not listTexts[index].live then
-			return listTexts[index]
+function recordList.Text()
+	local texts = recordList.texts
+	for index = 1, table.getn(texts) do
+		if not texts[index].live then
+			return texts[index]
 		end
 	end
-	local text = listLayer:CreateFontString(nil, "OVERLAY")
+	local text = recordList.layer:CreateFontString(nil, "OVERLAY")
 	-- The source's icon, left of the number, as the newest wears it.
-	text.icon = listLayer:CreateTexture(nil, "OVERLAY")
+	text.icon = recordList.layer:CreateTexture(nil, "OVERLAY")
 	text.icon:SetPoint("RIGHT", text, "LEFT", -3, 0)
 	text.icon:Hide()
-	table.insert(listTexts, text)
+	table.insert(texts, text)
 	return text
 end
 
+function recordList.Drop(text)
+	text.live = nil
+	text:Hide()
+	text.icon:Hide()
+	recordList.live = recordList.live - 1
+end
+
 -- The record showing steps up into the list: the ones there a place higher,
--- the one past the last place gone, and it climbs from where it stood.
-local function ListRecord()
-	for index = 1, table.getn(listTexts) do
-		local text = listTexts[index]
+-- the one past the last place gone, and it rises from where it stood.
+function recordList.Add()
+	local texts = recordList.texts
+	for index = 1, table.getn(texts) do
+		local text = texts[index]
 		if text.live then
 			text.place = text.place + 1
-			if text.place > LIST_MAX then
-				text.live = nil
-				text:Hide()
-				text.icon:Hide()
-				listLive = listLive - 1
+			if text.place > recordList.MAX then
+				recordList.Drop(text)
 			end
 		end
 	end
 	local ct = CT()
-	local text = ListText()
+	local text = recordList.Text()
 	local scale = recordShown.scale or 1
-	Face(text, LIST_SIZE * scale, "OUTLINE")
+	Face(text, recordList.SIZE * scale, "OUTLINE")
 	text:SetTextColor(RECORD_GOLD[1], RECORD_GOLD[2], RECORD_GOLD[3])
 	text:SetText(Amount(recordShown.amount))
 	local icon, whole = nil, false
@@ -3012,35 +3014,34 @@ local function ListRecord()
 	text.place = 1
 	text.scale = scale
 	text.age, text.life = recordShown.age, recordShown.life
+	text.listed = 0
 	text.y = 0
 	text:SetAlpha(1)
 	text:Show()
-	listLive = listLive + 1
+	recordList.live = recordList.live + 1
 end
 
-listLayer:SetScript("OnUpdate", function()
-	if listLive == 0 then
+recordList.layer:SetScript("OnUpdate", function()
+	if recordList.live == 0 then
 		return
 	end
-
-	for index = 1, table.getn(listTexts) do
-		local text = listTexts[index]
+	local texts = recordList.texts
+	for index = 1, table.getn(texts) do
+		local text = texts[index]
 		if text.live then
 			text.age = text.age + arg1
+			text.listed = text.listed + arg1
 			if text.age >= text.life then
-				text.live = nil
-				text:Hide()
-				text.icon:Hide()
-				listLive = listLive - 1
+				recordList.Drop(text)
 			else
-				-- Climbing to its place, quickly, then settling; it fades as the
-				-- newest does, over its last half second.
-				local goal = (LIST_FIRST + (text.place - 1) * LIST_STEP) * text.scale
-				text.y = text.y + (goal - text.y) * math.min(1, arg1 * LIST_SLIDE)
+				-- Up to its place, slowly, and on rising; it fades as the newest
+				-- does, over its last half second.
+				local goal = (recordList.FIRST + (text.place - 1) * recordList.STEP + text.listed * recordList.RISE) * text.scale
+				text.y = text.y + (goal - text.y) * math.min(1, arg1 * recordList.EASE)
 				local fade = text.life - RECORD_FADE
 				local alpha = text.age > fade and (1 - (text.age - fade) / RECORD_FADE) or 1
 				text:ClearAllPoints()
-				text:SetPoint("CENTER", listLayer, "CENTER", 0, text.y)
+				text:SetPoint("CENTER", recordList.layer, "CENTER", 0, text.y)
 				text:SetAlpha(alpha)
 				text.icon:SetAlpha(alpha)
 			end
@@ -3058,9 +3059,9 @@ end
 
 function ShowRecord(amount, source, fx)
 	local ct = CT()
-	-- In a list, the one showing steps up into it.
-	if ct.ctRecordList and recordShown:IsShown() and recordShown.amount then
-		ListRecord()
+	-- The one showing steps up over it.
+	if recordShown:IsShown() and recordShown.amount then
+		recordList.Add()
 	end
 	recordShown.amount, recordShown.source = amount, source
 	PlaceRecord()
@@ -3068,14 +3069,10 @@ function ShowRecord(amount, source, fx)
 	recordShown.scale = scale
 	recordShown.life = (ct.ctRecordHold or 1.7) + RECORD_FADE
 	-- Over the effect chosen for it (Effects.lua, the Records tab); the glow
-	-- it had before is the Radiant one's now. Its sparks and shine off
-	-- (Records), the number alone: the last one's effect goes with it.
+	-- it had before is the Radiant one's now. No effect (the default), the
+	-- number alone.
 	recordShown.glow:Hide()
-	if ct.ctRecordFx == false then
-		if SurvivorUI_RecordFxStop then
-			SurvivorUI_RecordFxStop(recordShown)
-		end
-	elseif SurvivorUI_RecordFxStart then
+	if SurvivorUI_RecordFxStart then
 		SurvivorUI_RecordFxStart(recordShown, fx or SurvivorUI_RecordFxKind("crit"), scale, 0, recordShown.life)
 	end
 	Face(recordShown.number, RECORD_POP_SIZE * scale, "THICKOUTLINE")

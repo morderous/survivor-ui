@@ -3450,7 +3450,7 @@ Check(page, "Jumps row", OnUnlessOff("runJumps"), Flip("runJumps"),
 -- record (Jumps.lua), each on or off and with an effect of its own.
 
 page = pages.records
-Header(page, "Records", "A moment of glory as a record falls: its number stands still a moment over an effect, each record with its own, and each class its own pick. Picking an effect shows it.")
+Header(page, "Records", "A moment of glory as a record falls: its number stands still a moment, over an effect if you pick one (No effect by default), each record with its own, and each class its own pick. Picking one shows it.")
 local FX_CHOICES = {}
 for index = 1, table.getn(SurvivorUI_RECORD_FX or {}) do
 	table.insert(FX_CHOICES, { SurvivorUI_RECORD_FX[index][1], SurvivorUI_RECORD_FX[index][2] })
@@ -3499,7 +3499,7 @@ local function ShowJump()
 	end
 end
 -- A record's class, then its effect for that class; picking one shows it.
--- Seven: in two rows, four and three.
+-- Eight, No effect the last (the default): in two rows of four.
 local function FxRow(which, show)
 	Dropdown(page, "Class", ClassItems, function() return PickedClass(which) end,
 		function(class) pickedClass[which] = class end, 160)
@@ -3527,10 +3527,6 @@ Inline(page, "A best is", {
 	{ "ability", "per ability" },
 	{ "run", "the run's biggest" },
 }, CTGet("ctRecordKind"), CTSet("ctRecordKind"))
-Check(page, "In a list", CTGet("ctRecordList"), CTToggle("ctRecordList"),
-	"the last ones climb over the newest instead of making way")
-Check(page, "Sparks and shine", CTGet("ctRecordFx"), CTToggle("ctRecordFx"),
-	"the effect behind it, picked below; off, the number alone")
 FxRow("crit", ShowCrit)
 Slider(page, "Stays", 1, 4, 0.1, CTGet("ctRecordHold"), CTSet("ctRecordHold"), "%.1f s")
 Slider(page, "Size", 0.6, 1.6, 0.05, CTGet("ctRecordSize"), CTSet("ctRecordSize"))

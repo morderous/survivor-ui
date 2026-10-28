@@ -206,6 +206,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.40, 2026-10-28
+
+New best crits that rise over the newest instead of making way, and No effect for the records, the new default.
+
+**Survivor UI**
+- **The last best crits rise over the newest** (from tomlrd's pull request): a newer best crit no longer wipes the one showing. That one steps up over the newest, smaller, and rises slowly as it fades in its own time, five at most. Early in a run nearly every crit is a new best, so they came and went before they could be read.
+- **No effect** (`/sui opt`, Records): the last of each record's effects, the crit record's and the jump record's, and their default now: the gold number alone, without the sparks and shine behind it. An effect picked for a class before stays; picking one shows it, as before.
+
 ### v3.0.39, 2026-10-28
 
 The run tracker's affixes and the totem counter as the game tells them, with its 0.124.
