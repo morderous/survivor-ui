@@ -845,18 +845,20 @@ before:SetPoint("RIGHT", pageButton, "LEFT", -6, 0)
 ------------------------------------------------------------------------------
 -- A photo of the page, to share: for a moment the rest of the interface put
 -- away (UIParent hidden, the window lent to the world's frame meanwhile, and
--- the game's own HUD parts that show), the world dimmed behind it; the
--- game's Screenshot taken (its Screenshots folder); then all as it was.
+-- the game's own HUD parts that show); the game's Screenshot taken (its
+-- Screenshots folder); then all as it was. The game's Screenshot takes the
+-- whole screen and an addon cannot cut a picture, so the page is the whole
+-- screen instead: as large as it goes whole, in front of all and solid, its
+-- backing and its edge stretched to the screen's edges, no band at its
+-- sides. The game's own words over the world ("Move to begin.", as a run
+-- waits) are drawn over any addon still.
 
 local HUD_PARTS = { "clock", "bosses", "tally", "build", "banners", "loot", "meter", "levels", "flag" }
 
+-- The page's backing and edge, the whole screen, behind it.
 local shade = CreateFrame("Frame", nil, WorldFrame)
 shade:SetAllPoints(WorldFrame)
 shade:SetFrameStrata("BACKGROUND")
-shade.fill = shade:CreateTexture(nil, "BACKGROUND")
-shade.fill:SetTexture(FLAT)
-shade.fill:SetVertexColor(0, 0, 0, 0.55)
-shade.fill:SetAllPoints(shade)
 shade:Hide()
 
 local photo = CreateFrame("Frame")
@@ -865,26 +867,38 @@ photo.hud = {}
 
 local camera
 
--- The window held at the same place on the screen, by its top left, under
--- parent: its scale set so it stays the same size there.
-local function LendTo(parent, scale)
-	local left, top = window:GetLeft(), window:GetTop()
-	local effective = window:GetEffectiveScale()
-	window:SetParent(parent)
-	window:SetScale(scale or effective / parent:GetEffectiveScale())
-	if left and top then
-		-- The same place in screen pixels, in the window's units at its new scale.
-		local ratio = effective / window:GetEffectiveScale()
-		window:ClearAllPoints()
-		window:SetPoint("TOPLEFT", parent, "BOTTOMLEFT", left * ratio, top * ratio)
-	end
+-- The window on the world's frame, in its middle, as large as the screen
+-- lets it whole, solid; its edge drawn on the screen's edges instead, as
+-- thick as the page's. Its place, scale and colors kept, to put it back after.
+local function Enlarge()
+	photo.left, photo.top, photo.scale = window:GetLeft(), window:GetTop(), window:GetScale()
+	photo.back, photo.edge = { window:GetBackdropColor() }, { window:GetBackdropBorderColor() }
+	local fit = math.min(WorldFrame:GetWidth() / window:GetWidth(), WorldFrame:GetHeight() / window:GetHeight())
+	window:SetParent(WorldFrame)
+	window:SetScale(fit)
+	window:ClearAllPoints()
+	window:SetPoint("CENTER", WorldFrame, "CENTER", 0, 0)
+	window:SetBackdropColor(photo.back[1], photo.back[2], photo.back[3], 1)
+	window:SetBackdropBorderColor(0, 0, 0, 0)
+	local edge = math.max(1, math.floor(fit + 0.5))
+	shade:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = edge,
+		insets = { left = edge, right = edge, top = edge, bottom = edge } })
+	shade:SetBackdropColor(photo.back[1], photo.back[2], photo.back[3], 1)
+	shade:SetBackdropBorderColor(photo.edge[1], photo.edge[2], photo.edge[3], photo.edge[4])
 end
 
 local function PhotoDone(result)
 	photo:Hide()
 	photo:UnregisterAllEvents()
 	shade:Hide()
-	LendTo(UIParent, photo.scale)
+	window:SetParent(UIParent)
+	window:SetScale(photo.scale)
+	if photo.left and photo.top then
+		window:ClearAllPoints()
+		window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", photo.left, photo.top)
+	end
+	window:SetBackdropColor(photo.back[1], photo.back[2], photo.back[3], photo.back[4])
+	window:SetBackdropBorderColor(photo.edge[1], photo.edge[2], photo.edge[3], photo.edge[4])
 	window:SetFrameStrata("DIALOG")
 	UIParent:Show()
 	for _, part in pairs(photo.hud) do
@@ -919,10 +933,10 @@ local function TakePhoto()
 		return
 	end
 	GameTooltip:Hide()
-	photo.scale = window:GetScale()
 	camera:Hide()
-	LendTo(WorldFrame)
-	window:SetFrameStrata("FULLSCREEN_DIALOG")
+	Enlarge()
+	window:SetFrameStrata("TOOLTIP")
+	window:Raise()
 	shade:Show()
 	UIParent:Hide()
 	if AZS_IsHudShown and AZS_SetHudShown then

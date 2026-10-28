@@ -3,9 +3,11 @@
 -- the addon's own icon in the class's color (Art\SurvivorIconWhite.tga,
 -- tinted), that opens the options (each tab's pieces movable while it is
 -- open); a right click moves the whole UI (the grid laid out, every piece
--- unlocked). Over it, Run History's, in the same square: an hourglass. Other
--- minimap buttons stack over them, upward, in the same square look: the
--- game's battleground button (the crossed swords).
+-- unlocked). Over it, Run History's, in the same square: an hourglass; over
+-- that, two switches: the game's spell effects (sparkles) and its sound
+-- effects (a speaker), on or off. Other minimap buttons stack over them,
+-- upward, in the same square look: the game's battleground button (the
+-- crossed swords).
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIconWhite"
@@ -165,9 +167,149 @@ local function HistoryShown()
 	return not (SurvivorUIDB and SurvivorUIDB.historyMapButton == false)
 end
 
--- The top of the stack: Run History's when it shows, else ours.
-local function StackTop()
+-- Run History's when it shows, else ours: the note's level (below).
+local function HistoryTop()
 	return HistoryShown() and historyButton or button
+end
+
+------------------------------------------------------------------------------
+-- Two of the game's own settings in a click, the same square over Run
+-- History's (or ours), one over the other, each its icon drawn as Run
+-- History's (Art\EffectsIconWhite, Art\SoundIconWhite), tinted as ours; while
+-- off, struck through (their Off twins) and dimmed:
+-- - the spell effects': the game's No Spell Effects (its Interface page, the
+--   noSpellEffects setting): no explosions, missiles, glows or beams;
+-- - the sound effects': the game's Sound Volume (its Sound page) down to
+--   nothing, and back to where it was. The game keeps no sound of the spells
+--   apart: the hits and the clicks go with them; the music and the ambience
+--   stay.
+-- The game's pages switch them too: each read again twice a second. Off with
+-- "Spell effects button" and "Sound effects button" (the options' Minimap
+-- tab); with a game without the setting, never shown.
+
+local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
+local switches = {}
+
+-- No Spell Effects: on (effects drawn) unless "1"; nil with a game without it.
+local function EffectsOn()
+	local ok, value = pcall(GetCVar, "noSpellEffects")
+	if ok and value ~= nil then
+		return value ~= "1"
+	end
+end
+
+-- The sound effects' volume: on above nothing.
+local function SoundOn()
+	local ok, value = pcall(GetCVar, "SoundVolume")
+	value = ok and tonumber(value)
+	if value then
+		return value > 0
+	end
+end
+
+-- Muted, the volume it had is kept for the way back.
+local function FlipSound()
+	SurvivorUIDB = SurvivorUIDB or {}
+	if SoundOn() then
+		SurvivorUIDB.soundVolume = GetCVar("SoundVolume")
+		SetCVar("SoundVolume", "0")
+	else
+		SetCVar("SoundVolume", SurvivorUIDB.soundVolume or "1")
+		SurvivorUIDB.soundVolume = nil
+	end
+end
+
+local function PaintSwitch(switch)
+	local on = switch.read() ~= false
+	if switch.shownOn ~= on then
+		switch.shownOn = on
+		switch.icon:SetTexture(ART..switch.art..(on and "IconWhite" or "OffIconWhite"))
+	end
+	local dim = on and 1 or 0.55
+	switch.icon:SetVertexColor(ACCENT[1] * dim, ACCENT[2] * dim, ACCENT[3] * dim)
+end
+
+local function SwitchTip(switch)
+	GameTooltip:SetOwner(switch, "ANCHOR_LEFT")
+	GameTooltip:SetText(SurvivorUI_T(switch.title), ACCENT[1], ACCENT[2], ACCENT[3])
+	local lines = switch.read() == false and switch.whenOff or switch.whenOn
+	GameTooltip:AddLine(SurvivorUI_T(lines[1]), 0.7, 0.7, 0.7)
+	GameTooltip:AddLine(SurvivorUI_T(lines[2]), 1, 1, 1)
+	if switch.note then
+		GameTooltip:AddLine(SurvivorUI_T(switch.note), 0.6, 0.6, 0.65, 1)
+	end
+	GameTooltip:Show()
+end
+
+-- One switch: its setting read (true, false, or nil without it) and flipped,
+-- its option, its tooltip's words while on and while off.
+local function Switch(name, art, option, read, flip, title, whenOn, whenOff, note)
+	local switch = CreateFrame("Button", name, Minimap or UIParent)
+	switch:SetFrameStrata("MEDIUM")
+	switch:SetFrameLevel((Minimap and Minimap:GetFrameLevel() or 1) + 5)
+	switch:SetPoint("BOTTOM", HistoryTop(), "TOP", 0, 5)
+	switch.icon = switch:CreateTexture(nil, "ARTWORK")
+	switch.ownIcon = switch.icon
+	Square(switch, switch.icon)
+	switch.art, switch.option, switch.read, switch.title = art, option, read, title
+	switch.whenOn, switch.whenOff, switch.note = whenOn, whenOff, note
+	switch:SetScript("OnClick", function()
+		if this.read() == nil then
+			return
+		end
+		flip()
+		PaintSwitch(this)
+		SwitchTip(this)
+	end)
+	switch:SetScript("OnEnter", function()
+		Lit(this, true)
+		SwitchTip(this)
+	end)
+	switch:SetScript("OnLeave", function()
+		Lit(this, false)
+		GameTooltip:Hide()
+	end)
+	switch:SetScript("OnUpdate", function()
+		this.wait = (this.wait or 0) + arg1
+		if this.wait >= 0.5 then
+			this.wait = 0
+			PaintSwitch(this)
+		end
+	end)
+	table.insert(switches, switch)
+end
+
+Switch("SurvivorUIEffectsButton", "Effects", "effectsMapButton", EffectsOn,
+	function() SetCVar("noSpellEffects", EffectsOn() and "1" or "0") end,
+	"Spell effects", { "Shown.", "Click: hide them (no explosions, missiles, glows or beams)" },
+	{ "Hidden.", "Click: show them" })
+Switch("SurvivorUISoundButton", "Sound", "soundMapButton", SoundOn, FlipSound,
+	"Sound effects", { "On.", "Click: mute them, the music and the ambience kept" },
+	{ "Muted.", "Click: back to their volume" },
+	"The game keeps no sound of the spells apart: the hits and the clicks go with them.")
+
+if SurvivorUI_OnAccent then
+	SurvivorUI_OnAccent(function()
+		for index = 1, table.getn(switches) do
+			PaintSwitch(switches[index])
+		end
+	end)
+end
+
+-- Shown by its option, and only with a game that has its setting.
+local function SwitchShown(switch)
+	return switch.read() ~= nil and not (SurvivorUIDB and SurvivorUIDB[switch.option] == false)
+end
+
+-- The top of the stack: the last switch shown, else Run History's, else ours.
+local function StackTop()
+	local top = HistoryTop()
+	for index = 1, table.getn(switches) do
+		if SwitchShown(switches[index]) then
+			top = switches[index]
+		end
+	end
+	return top
 end
 
 ------------------------------------------------------------------------------
@@ -185,7 +327,7 @@ local function RestyleBattlefield()
 		border:SetAlpha(0)
 	end
 	Square(frame, getglobal("MiniMapBattlefieldIcon"))
-	-- Over ours (and Run History's), in the stack outside the minimap.
+	-- Over ours (and Run History's, the switches), in the stack outside the minimap.
 	frame:ClearAllPoints()
 	frame:SetPoint("BOTTOM", StackTop(), "TOP", 0, 5)
 	if not frame.squareHooked then
@@ -206,13 +348,26 @@ local function RestyleBattlefield()
 	end
 end
 
--- The stack laid out again: Run History's shown or not, the battleground's over
--- the top. For the options' Minimap tab too.
+-- The stack laid out again: Run History's shown or not, the switches shown over
+-- it, the battleground's over the top. For the options' Minimap tab too.
 function SurvivorUI_PlaceMapButtons()
 	if HistoryShown() then
 		historyButton:Show()
 	else
 		historyButton:Hide()
+	end
+	local under = HistoryTop()
+	for index = 1, table.getn(switches) do
+		local switch = switches[index]
+		switch:ClearAllPoints()
+		switch:SetPoint("BOTTOM", under, "TOP", 0, 5)
+		if SwitchShown(switch) then
+			PaintSwitch(switch)
+			switch:Show()
+			under = switch
+		else
+			switch:Hide()
+		end
 	end
 	RestyleBattlefield()
 end
@@ -355,7 +510,7 @@ function SurvivorUI_HistoryNotice(force, look)
 	notice:SetWidth(math.max(notice.title:GetStringWidth() + 24, notice.line:GetStringWidth() + 16))
 	-- Level with Run History's button at its foot, growing up: apart from ours.
 	notice:ClearAllPoints()
-	notice:SetPoint("BOTTOMRIGHT", StackTop(), "BOTTOMLEFT", -6, 0)
+	notice:SetPoint("BOTTOMRIGHT", HistoryTop(), "BOTTOMLEFT", -6, 0)
 	notice.age = 0
 	notice:SetAlpha(0)
 	notice:Show()

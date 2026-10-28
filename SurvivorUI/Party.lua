@@ -22,7 +22,8 @@
 -- - SurvivorUI_PartySnapshot: the party as the run ended, for Run History.
 --
 -- Out of a party, or with a game before 0.113, nothing shows. Being placed
--- (move mode, Alt, the Party tab), each shows a sample.
+-- (move mode, Alt, the Party tab), each shows a sample: two of the friends
+-- with a build behind their icon, made up, the third with none.
 --
 -- In the game's 0.113, UnitIsDead throws for a party unit: every unit call
 -- here that is not the stock 1.12 set (name, class, health) goes through
@@ -39,6 +40,7 @@ local ROW_GAP = 5
 local MOST = 4                   -- party1 to party4: five heroes at most
 local ROW_WIDTH = ICON + 1 + BAR_WIDTH
 local REVIVE_WIDTH, REVIVE_HEIGHT = 240, 16
+local BUILD_ICON, BUILD_GAP = 18, 4   -- beside a friend with Survivor UI: their build
 local LEADER_ICON = "Interface\\GroupFrame\\UI-Group-LeaderIcon"
 
 local DOWN_FILL = { 0.30, 0.07, 0.07 }
@@ -258,6 +260,32 @@ local function Row(index)
 	row.name:SetJustifyH("LEFT")
 	row.value = Text(row.texts, 10, "RIGHT", -5, 0)
 
+	-- Beside it, a friend playing with Survivor UI too: its icon, in their
+	-- class's color; a click opens their build (PartyBuilds.lua).
+	row.build = CreateFrame("Button", nil, row)
+	row.build:SetWidth(BUILD_ICON)
+	row.build:SetHeight(BUILD_ICON)
+	Border(row.build)
+	row.build.icon = row.build:CreateTexture(nil, "ARTWORK")
+	row.build.icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIconWhite")
+	row.build.icon:SetAllPoints(row.build)
+	row.build:Hide()
+	row.build:SetScript("OnClick", function()
+		if SurvivorUI_TogglePartyBuild then
+			SurvivorUI_TogglePartyBuild(row.friendName, this, row.classShown, row.sample ~= nil)
+		end
+	end)
+	row.build:SetScript("OnEnter", function()
+		local r, g, b = ClassColor(row.classShown)
+		GameTooltip:SetOwner(this, "ANCHOR_NONE")
+		GameTooltip:SetPoint("BOTTOMRIGHT", this, "TOPLEFT", 0, 4)
+		GameTooltip:SetText(row.friendName or "?", r, g, b)
+		GameTooltip:AddLine(SurvivorUI_T("Click: their build, gear and numbers"), 1, 1, 1)
+		GameTooltip:AddLine(SurvivorUI_T("They play with Survivor UI too."), 0.6, 0.6, 0.65)
+		GameTooltip:Show()
+	end)
+	row.build:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
 	row:RegisterForClicks("LeftButtonUp")
 	row:SetScript("OnClick", function()
 		if not this.sample and UnitExists(this.unit) then
@@ -304,6 +332,29 @@ local function SetName(row, name, room)
 		row.name:SetText(first or name)
 	end
 	row.name:SetWidth(room)
+end
+
+-- The build's icon: shown once the friend's Survivor UI has sent theirs (a
+-- sample's made up); on the row's left, or its right by the screen's edge.
+local function PaintBuild(row, friend)
+	row.friendName = friend.name
+	if not (SurvivorUI_PartyBuildOf and SurvivorUI_PartyBuildOf(friend.name, row.sample ~= nil)) then
+		row.build:Hide()
+		return
+	end
+	local right = (holder:GetLeft() or 0) < BUILD_ICON + BUILD_GAP + 4
+	if row.build.right ~= right then
+		row.build.right = right
+		row.build:ClearAllPoints()
+		if right then
+			row.build:SetPoint("LEFT", row, "RIGHT", BUILD_GAP, 0)
+		else
+			row.build:SetPoint("RIGHT", row, "LEFT", -BUILD_GAP, 0)
+		end
+	end
+	local r, g, b = ClassColor(friend.class)
+	row.build.icon:SetVertexColor(r, g, b)
+	row.build:Show()
 end
 
 -- One friend's row: { name, class, className, health, most, down, offline,
@@ -360,6 +411,7 @@ local function Paint(row, friend)
 	else
 		row.leader:Hide()
 	end
+	PaintBuild(row, friend)
 	row:Show()
 end
 

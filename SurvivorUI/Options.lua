@@ -3943,6 +3943,18 @@ Check(page, "Run History button", OnUnlessOff("historyMapButton"), function()
 		SurvivorUI_PlaceMapButtons()
 	end
 end, "the hourglass over the [S], opening Run History")
+Check(page, "Spell effects button", OnUnlessOff("effectsMapButton"), function()
+	DB().effectsMapButton = DB().effectsMapButton == false
+	if SurvivorUI_PlaceMapButtons then
+		SurvivorUI_PlaceMapButtons()
+	end
+end, "sparkles over the hourglass: the game's No Spell Effects on or off in a click")
+Check(page, "Sound effects button", OnUnlessOff("soundMapButton"), function()
+	DB().soundMapButton = DB().soundMapButton == false
+	if SurvivorUI_PlaceMapButtons then
+		SurvivorUI_PlaceMapButtons()
+	end
+end, "a speaker over them: the game's sound effects muted or back in a click, the music and the ambience kept. The game keeps no sound of the spells apart: the hits and the clicks go with them.")
 Check(page, "Clock and FPS", OnUnlessOff("minimapClock"), Flip("minimapClock"),
 	"along its bottom: your time (the time zone in This Run) and the frames a second")
 Inline(page, "Clock", { { "24", "24 hours" }, { "12", "12 hours" } },
