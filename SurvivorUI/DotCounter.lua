@@ -15,7 +15,9 @@
 -- that time are the ones it holds. Bosses are left out: a fear does not take
 -- them.
 --
--- The totems are not written either, set down or ending: each cast is told by
+-- The totems: from the game's 0.124 it tells them (AZS_GetTotems), how many of
+-- each kind stand and when the soonest of them goes, Totemic Wrath's too.
+-- Before that they were not written, set down or ending: each cast is told by
 -- its spell's cooldown starting over (AZS_SPELLS), and counts a totem for the
 -- time its button's tooltip gives then ("Drops a totem beside you for 20
 -- sec"), by the run's clock, so a pause stops it too. The shaman's talents
@@ -244,6 +246,16 @@ local function Title(key)
 	end))
 end
 
+-- A totem the game tells, by the spell whose button it counts over: its key's
+-- ("searing_totem", Searing Totem), else the name the game gives it.
+local function TotemSpell(totem)
+	local name = totem.key and Title(totem.key)
+	if name and SurvivorUI_SpellButton and SurvivorUI_SpellButton(name) then
+		return name
+	end
+	return totem.name or name
+end
+
 -- How long a totem stands, off its button's tooltip now: "Drops a totem
 -- beside you for 20 sec". Nil for a spell that sets none.
 local function TotemTime(slot)
@@ -445,9 +457,24 @@ frame:SetScript("OnUpdate", function()
 			Light(lit, spell, table.getn(list))
 		end
 	end
-	-- The totems: the ones set down whose time has not run out.
-	WatchTotems()
-	if On("totemCounter") then
+	-- The totems: as the game tells them (0.124 on), else the ones set down
+	-- whose time has not run out.
+	if AZS_GetTotems then
+		if On("totemCounter") then
+			local all = AZS_GetTotems()
+			for each = 1, table.getn(all) do
+				local totem = all[each]
+				local count = tonumber(totem.count) or 0
+				local left = tonumber(totem.remaining) or 0
+				if count > 0 then
+					Light(lit, TotemSpell(totem), count, left > 0 and left or nil)
+				end
+			end
+		end
+	else
+		WatchTotems()
+	end
+	if not AZS_GetTotems and On("totemCounter") then
 		local runNow = RunTime()
 		for _, totem in pairs(totems) do
 			while totem.ends[1] and totem.ends[1] <= runNow do

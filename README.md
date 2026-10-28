@@ -206,6 +206,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.39, 2026-10-28
+
+The run tracker's affixes and the totem counter as the game tells them, with its 0.124.
+
+**Survivor UI**
+- **The affixes as the game names them**: from its 0.124 the game tells addons a Heroic run's affixes, so the run tracker and Run History take them from it. Until now they were worked out from the week and the zone by the rule read in the game's exe, and checked against its chat line and the Explosive Orb's banner; an older game is still read that way. An affix newer than Survivor UI shows by its name.
+- **The totem counter as the game tells it**: from its 0.124 the game tells addons how many totems of each kind stand and when the soonest goes, so the number over each totem's button and its seconds are the game's own. Until now each cast counted a totem for its tooltip's time, and Call of the Elements and Totemic Wrath were guessed from the spells a run starts with; an older game is still counted that way.
+
 ### v3.0.38, 2026-10-27
 
 A hotfix: Run History says a Heroic run's affixes.

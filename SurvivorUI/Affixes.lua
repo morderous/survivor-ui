@@ -1,7 +1,12 @@
 -- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: a Heroic run's affixes, the week's (the game's 0.121 on).
 --
--- The game does not tell addons its affixes: its zone line (AZS_ZONE) has
+-- From the game's 0.124 its zone line (AZS_ZONE) names them itself,
+-- "affixes=sanguine,explosive" (in English, in its order; empty with none),
+-- and those are the run's: the first from Heroic III, the second from V. An
+-- affix newer than this file shows by its name alone.
+--
+-- Before 0.124 the game did not tell addons its affixes: its zone line had
 -- the Heroic level only. So they are worked out as the game picks them, as
 -- read in its exe (0.121): the week, whole weeks of Unix time (it turns on
 -- Thursdays at 00:00 UTC); the zone's number; seed = the zone's number + 7 x
@@ -117,6 +122,30 @@ local function Foretold()
 	return Picked(zone.zone, heroic, runWeek)
 end
 
+-- The affixes the game names itself (0.124 on): each the number of one known
+-- here, else its name as the game sends it; nil from a game that sends none.
+local function Given()
+	local given = AZS_ZONE and AZS_ZONE.affixes
+	if given == nil then
+		return nil
+	end
+	Watch()
+	local list = {}
+	for name in string.gfind(tostring(given), "[^,]+") do
+		local found = string.gsub(name, "^%s*(.-)%s*$", "%1")
+		for index = 1, table.getn(AFFIXES) do
+			if string.lower(AFFIXES[index].name) == string.lower(found) then
+				found = index
+				break
+			end
+		end
+		if found ~= "" then
+			table.insert(list, found)
+		end
+	end
+	return list
+end
+
 -- The affixes the game told at the run's start (their numbers, in its
 -- order), kept with when: they hold for the run begun before them.
 local told, toldAt
@@ -155,11 +184,29 @@ local function FoundWrong()
 end
 
 function SurvivorUI_RunAffixes()
+	local list = {}
+	-- As the game names them (0.124 on).
+	local given = Given()
+	if given then
+		for each = 1, table.getn(given) do
+			local index = given[each]
+			local from = each == 1 and 3 or 5
+			if type(index) == "number" then
+				local affix = AFFIXES[index]
+				table.insert(list, { name = affix.name, text = affix.text, symbol = affix.symbol, from = from,
+					seen = seen[index] or nil })
+			else
+				-- An affix newer than this file: its name, capitalized.
+				local name = string.upper(string.sub(index, 1, 1))..string.sub(index, 2)
+				table.insert(list, { name = name, from = from })
+			end
+		end
+		return list
+	end
 	local picked = Foretold()
 	if not picked then
 		return nil
 	end
-	local list = {}
 	-- As the game told them, each its level from the reckoning when it agrees.
 	local said = Told()
 	if said then
@@ -227,7 +274,9 @@ function SurvivorUI_AffixTip(tag)
 		end
 		GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
 		GameTooltip:SetText(SurvivorUI_T(entry.name), 1, 0.35, 0.29)
-		GameTooltip:AddLine(SurvivorUI_T(entry.text), 1, 1, 1, 1)
+		if entry.text then
+			GameTooltip:AddLine(SurvivorUI_T(entry.text), 1, 1, 1, 1)
+		end
 		if entry.from and SurvivorUI_HeroicName then
 			GameTooltip:AddLine(SurvivorUI_TF("This week, from {1}", SurvivorUI_HeroicName(entry.from)), 0.6, 0.6, 0.65)
 		end
@@ -245,6 +294,11 @@ local function OnBanner(banner)
 	local text = string.gsub(banner.text or "", "|c%x%x%x%x%x%x%x%x", "")
 	text = string.gsub(text, "|r", "")
 	if not (ORB_BANNERS[text] or string.find(text, "Explosive Orb", 1, true)) then
+		return
+	end
+	-- Named by the game: seen, nothing to check.
+	if Given() then
+		seen[EXPLOSIVE] = true
 		return
 	end
 	local picked = Foretold()
@@ -287,6 +341,10 @@ local function OnSystem(message)
 	end
 	table.sort(order, function(a, b) return places[a] < places[b] end)
 	told, toldAt = order, time()
+	-- Named by the game (0.124 on), the rule is not checked.
+	if Given() then
+		return
+	end
 	local picked = Foretold()
 	if not picked or Broken() then
 		return

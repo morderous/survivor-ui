@@ -3672,7 +3672,7 @@ PanelHead(page, OnUnlessOff("counters"), Flip("counters"))
 Subheader(page, "What is counted")
 Check(page, "DoTs", OnUnlessOff("dotCounter"), Flip("dotCounter"), "how many of each are ticking on the enemies, by their ticks over the last two seconds; one on an enemy that dies stays up to two seconds")
 Check(page, "Fears", OnUnlessOff("fearCounter"), Flip("fearCounter"), "how many enemies each one holds; the game writes a fear's hit but not its end, so each enemy hit counts for the fear's full time")
-Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, and the seconds until the next one ends: each cast counts a totem for its tooltip's time; two with Call of the Elements, and Totemic Wrath's Searing Totem every 14 sec, told by the spells a run starts with")
+Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, and the seconds until the next one ends, as the game tells them (its 0.124 on); with an older game each cast counts a totem for its tooltip's time, two with Call of the Elements, and Totemic Wrath's Searing Totem every 14 sec, told by the spells a run starts with")
 Check(page, "Shouts", OnUnlessOff("shoutCounter"), Flip("shoutCounter"), "Demoralizing Shout: how many enemies its last cast weakened, for its time; Battle Shout: the seconds it has left")
 Check(page, "Marks", OnUnlessOff("markCounter"), Flip("markCounter"), "Faerie Fire: how many enemies carry it, bosses too; each one it hits counts for the mark's time (its tooltip's), so one hit again before it fades counts twice until it does")
 
