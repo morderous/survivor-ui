@@ -425,7 +425,7 @@ end
 -- Beside the bar, to read without the mouse (XP bar tab: The odds beside the
 -- bar): a legendary's, an epic's and a rare's chance, one under the other in
 -- their colors; the spells' and jewelry's on its left, the amulets' on its
--- right (the card's two columns), under a title in the luck's green. As
+-- right (the card's two columns), centered under a title in the luck's green. As
 -- numbers, or (XP bar tab, The odds as) each in a small bar of one size, the
 -- number inside: filled in its rarity's color as far as the chance goes
 -- (full at 40%), or in the run tracker's tag look (a thin border, a dark
@@ -532,8 +532,11 @@ local function FillSides(luck, level)
 				line:Hide()
 				PaintOddsBar(bar, value, RARITIES[SIDE_ROWS[row]].color, look)
 			else
+				-- The number centered under its title.
 				bar:Hide()
 				line:SetText(Percent(value))
+				line:SetWidth(math.max(head:GetStringWidth(), line:GetStringWidth()))
+				line:SetJustifyH("CENTER")
 				line:Show()
 			end
 		end

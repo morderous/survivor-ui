@@ -4,7 +4,8 @@
 -- A click on a piece in move mode (the S button by the minimap, or /sui opt,
 -- Move mode) opens its card beside it: its name, < and > for the next piece;
 -- its place, from the screen's middle, to type or to nudge by one; centered
--- across or up and down at a click; its own size; shown or hidden (the pieces
+-- across or up and down at a click; its own size (a damage meter window its
+-- width and lines too, and what it is linked to); shown or hidden (the pieces
 -- that can be put away); its font and the font's size; back to its first
 -- place; undo; done. The arrow keys move it by one (Shift by ten), Ctrl+Z
 -- undoes, Escape closes the card.
@@ -36,7 +37,7 @@ local PIECES = {
 	["Character pane"] = { part = "character", places = { "characterLeft", "characterTop" }, noFont = true },
 	["Run tracker"] = { part = "tracker", places = { "trackerRight", "trackerTop" }, key = "tracker", toggle = "SurvivorUI_ToggleTracker" },
 	["Build list"] = { part = "build", places = { "buildLeft", "buildTop" }, key = "buildList", toggle = "SurvivorUI_ToggleBuild" },
-	["Damage meter"] = { part = "meter", places = { "meterRight", "meterBottom" }, key = "meter", toggle = "SurvivorUI_ToggleMeter" },
+	["Damage meter"] = { part = "meter", places = { "meterRight", "meterBottom", "meterWidth", "meterLines" }, key = "meter", toggle = "SurvivorUI_ToggleMeter" },
 	["Boss bars"] = { part = "bosses", places = { "bossLeft", "bossTop" }, key = "bossBars", toggle = "SurvivorUI_BossBars" },
 	["Loot list"] = { part = "loot", places = { "lootLeft", "lootTop" }, key = "lootLog", toggle = "SurvivorUI_ToggleLoot" },
 	["This Run"] = { part = "run", places = { "runLeft", "runTop", "runBottom" }, key = "runPanel", toggle = "SurvivorUI_ToggleRun" },
@@ -575,6 +576,88 @@ local noSize = Text(card, 9, MUTED)
 noSize:SetPoint("TOPLEFT", card, "TOPLEFT", 50, -104)
 noSize:SetText(SurvivorUI_T("with the whole interface"))
 
+-- A damage meter window's own width and lines (Meter.lua, MeterWindows.lua),
+-- under the size, and what it is linked to under them; the rows after them
+-- move down to make room (Lay). Which: "main", or an extra window's 1 to 3.
+local METER_ROWS = 66
+
+local function MeterOf(name)
+	if name == "Damage meter" then
+		return "main"
+	end
+	local _, _, number = string.find(name or "", "^Damage meter (%d+)$")
+	return number and (tonumber(number) - 1) or nil
+end
+
+local function SetMeterSize(which, width, lines)
+	if which == "main" then
+		if SurvivorUI_SetMeterMainSize then
+			SurvivorUI_SetMeterMainSize(width, lines)
+		end
+	elseif SurvivorUI_SetMeterWindowSize then
+		SurvivorUI_SetMeterWindowSize(which, width, lines)
+	end
+end
+
+-- A row: its name, a slider in the size's look, its value at the right.
+local function MeterSlider(label, low, high, step, y, show, set)
+	local row = {}
+	row.name = Text(card, 10, TEXT)
+	row.name:SetPoint("TOPLEFT", card, "TOPLEFT", 12, y - 1)
+	row.name:SetText(SurvivorUI_T(label))
+	row.value = Text(card, 10, ACCENT)
+	row.value:SetPoint("TOPRIGHT", card, "TOPRIGHT", -12, y - 1)
+	local bar = CreateFrame("Slider", nil, card)
+	bar:SetOrientation("HORIZONTAL")
+	bar:SetWidth(WIDTH - 130)
+	bar:SetHeight(14)
+	bar:SetPoint("TOPLEFT", card, "TOPLEFT", 60, y)
+	bar:SetMinMaxValues(low, high)
+	bar:SetValueStep(step)
+	bar:EnableMouseWheel(true)
+	local back = bar:CreateTexture(nil, "BACKGROUND")
+	back:SetTexture(FLAT)
+	back:SetVertexColor(0.14, 0.14, 0.18, 1)
+	back:SetHeight(4)
+	back:SetPoint("LEFT", bar, "LEFT", 0, 0)
+	back:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+	local done = bar:CreateTexture(nil, "BORDER")
+	done:SetTexture(FLAT)
+	done:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.8)
+	done:SetHeight(4)
+	done:SetPoint("LEFT", bar, "LEFT", 0, 0)
+	local knob = bar:CreateTexture(nil, "OVERLAY")
+	knob:SetTexture(FLAT)
+	knob:SetVertexColor(1, 1, 1, 1)
+	knob:SetWidth(8)
+	knob:SetHeight(14)
+	bar:SetThumbTexture(knob)
+	bar:SetScript("OnValueChanged", function()
+		local value = math.floor(this:GetValue() / step + 0.5) * step
+		done:SetWidth(math.max(1, (this:GetWidth() - 8) * (value - low) / (high - low) + 4))
+		row.value:SetText(show(value))
+		if not this.quiet and selected and MeterOf(selected.name) then
+			set(MeterOf(selected.name), value)
+		end
+	end)
+	bar:SetScript("OnMouseWheel", function()
+		this:SetValue(this:GetValue() + arg1 * step)
+	end)
+	row.bar = bar
+	return row
+end
+
+local meterRows = {
+	MeterSlider("Width", 180, 400, 4, -126, function(value) return tostring(value) end,
+		function(which, value) SetMeterSize(which, value, nil) end),
+	MeterSlider("Height", 3, 20, 1, -150, function(value) return SurvivorUI_TF("{1} lines", value) end,
+		function(which, value) SetMeterSize(which, nil, value) end),
+}
+local linkText = Text(card, 9, MUTED)
+linkText:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -172)
+linkText:SetWidth(WIDTH - 24)
+linkText:SetJustifyH("LEFT")
+
 -- The font: a dropdown of the faces, each written in itself; its size a step
 -- at a time, on the row under it.
 local fontLabel = Text(card, 10, TEXT)
@@ -742,6 +825,25 @@ hint:SetText(SurvivorUI_T("Arrows move 1, Shift 10  ·  Ctrl+Z undoes  ·  Esc c
 ------------------------------------------------------------------------------
 -- Filling and placing the card.
 
+-- The rows under the size, down by extra (a meter window's own rows).
+local function Lay(extra)
+	if card.extra == extra then
+		return
+	end
+	card.extra = extra
+	local places = {
+		{ fontLabel, "TOPLEFT", 12, -127 }, { picker, "TOPLEFT", 50, -124 }, { gameFont, "TOPLEFT", 50, -128 },
+		{ stepLabel, "TOPLEFT", 12, -151 }, { stepText, "TOPRIGHT", -36, -151 }, { stepDown, "TOPRIGHT", -70, -148 },
+		{ stepUp, "TOPRIGHT", -12, -148 }, { visible, "TOPLEFT", 12, -174 }, { reset, "TOPLEFT", 12, -198 },
+		{ done, "TOPRIGHT", -12, -198 },
+	}
+	for _, place in pairs(places) do
+		place[1]:ClearAllPoints()
+		place[1]:SetPoint(place[2], card, place[2], place[3], place[4] - extra)
+	end
+	card:SetHeight(244 + extra)
+end
+
 function Fill()
 	if not selected then
 		return
@@ -754,6 +856,42 @@ function Fill()
 	end
 	if not rows.Y.focused then
 		rows.Y:SetText(y and tostring(math.floor(y + 0.5)) or "")
+	end
+	local which = MeterOf(selected.name)
+	if which and SurvivorUI_MeterMainSize then
+		local width, lines
+		if which == "main" then
+			width, lines = SurvivorUI_MeterMainSize()
+		else
+			width, lines = SurvivorUI_MeterWindowSize(which)
+		end
+		for index, value in pairs({ width, lines }) do
+			local row = meterRows[index]
+			row.bar.quiet = true
+			row.bar:SetValue(value)
+			row.bar.quiet = nil
+			row.name:Show()
+			row.value:Show()
+			row.bar:Show()
+		end
+		local linked = which ~= "main" and SurvivorUI_MeterLinkedTo and SurvivorUI_MeterLinkedTo(which)
+		if which == "main" then
+			linkText:SetText(SurvivorUI_T("Another window let go against it is linked to it."))
+		elseif linked then
+			linkText:SetText(SurvivorUI_TF("Linked to {1}: drag it away to unlink.", SurvivorUI_PieceName(linked)))
+		else
+			linkText:SetText(SurvivorUI_T("Let go against another meter window to link it."))
+		end
+		linkText:Show()
+		Lay(METER_ROWS)
+	else
+		for _, row in pairs(meterRows) do
+			row.name:Hide()
+			row.value:Hide()
+			row.bar:Hide()
+		end
+		linkText:Hide()
+		Lay(0)
 	end
 	if piece.part and SurvivorUI_GetScale then
 		slider.quiet = true
@@ -822,18 +960,23 @@ end
 -- piece it moved as the piece grew, the thumb with it, out from under the
 -- cursor, and one push went from 50% to 200% (reported on Discord). Back
 -- beside the piece when let go.
-slider:SetScript("OnMouseDown", function()
+local function Pin()
 	local left, top = card:GetLeft(), card:GetTop()
 	if left and top then
 		card:ClearAllPoints()
 		card:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
 	end
-end)
-slider:SetScript("OnMouseUp", function()
+end
+local function Unpin()
 	if selected then
 		Place()
 	end
-end)
+end
+-- A meter window's width and lines move the card as much: the same.
+for _, bar in pairs({ slider, meterRows[1].bar, meterRows[2].bar }) do
+	bar:SetScript("OnMouseDown", Pin)
+	bar:SetScript("OnMouseUp", Unpin)
+end
 
 -- The handle picked shows white; the others go back to the addon's color.
 local function Mark(handle, on)

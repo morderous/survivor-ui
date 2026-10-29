@@ -5,11 +5,14 @@
 -- AZS_GetMeter): one flat bar per source of damage, the most first, each in a
 -- color of its own, a talent's or amulet's own damage tagged as a proc. Hover a line for its card: its damage, share and damage per second,
 -- and its critical strikes and normal hits from the combat log. The title's
--- menu switches to the run's healing (AZS_GetHealing) or the last boss fight's damage
+-- menu switches to each source's damage a second (DPS, over the meter's own clock),
+-- the run's healing (AZS_GetHealing) or the last boss fight's damage
 -- to bosses (AZS_GetBossMeter), in the same bars; in a co-op run (the game's
 -- 0.113), to the party's damage (AZS_GetPartyMeter), a bar a hero in the
 -- class's color, its top spell on hover. The + at its corner opens another
--- window on another page (MeterWindows.lua), in the same bars.
+-- window on another page (MeterWindows.lua), in the same bars. The small
+-- button left of Reset folds the lines under 10% of the total (the options,
+-- Damage meter: 1 to 20%) into one, Others, in every window alike.
 --
 -- Reset starts the meter over from that moment and clears the crits; the run
 -- panel keeps the whole run. Its
@@ -24,6 +27,10 @@ local WIDTH = 228
 local BAR_HEIGHT = 18           -- as the build list's rows
 local BAR_GAP = 2
 local MAX_LINES = 10
+-- Each window's own size, set on its card in move mode: its width, and its
+-- lines (until set, as many as the layout fits).
+local WIDTH_LEAST, WIDTH_MOST = 180, 400
+local LINES_LEAST, LINES_MOST = 3, 20
 -- The bars start under the title and the strip of numbers (total, dps, now).
 local STRIP_TOP, STRIP_HEIGHT = 20, 14
 local BARS_TOP = STRIP_TOP + STRIP_HEIGHT + 2
@@ -87,6 +94,7 @@ end
 local meter = CreateFrame("Frame", "SurvivorUIMeter", UIParent)
 meter:SetWidth(WIDTH + 8)
 meter:SetHeight(BARS_TOP + 4 + MAX_LINES * (BAR_HEIGHT + BAR_GAP))
+meter.barWidth = WIDTH
 meter:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -12, 40)
 meter:SetBackdrop({ bgFile = FLAT })
 -- The right column's one shade, as the tracker and the run panel wear it.
@@ -100,13 +108,27 @@ local function SavePlace()
 	local settings = Settings()
 	settings.meterRight = math.floor(meter:GetRight() + 0.5)
 	settings.meterBottom = math.floor(meter:GetBottom() + 0.5)
+	-- Let go against another window: that one holds on to this one.
+	if SurvivorUI_MeterLinkTo then
+		SurvivorUI_MeterLinkTo("main")
+	end
+end
+
+local function MainWidth()
+	return math.max(WIDTH_LEAST, math.min(WIDTH_MOST, tonumber(Settings().meterWidth) or WIDTH))
 end
 
 local shownLines = MAX_LINES
 
+-- As many lines as given (the layout's fit), or as set on its card; as wide
+-- as set there.
 local function SetLines(count)
-	if count ~= shownLines then
+	count = math.max(LINES_LEAST, math.min(LINES_MOST, tonumber(Settings().meterLines) or count))
+	local width = MainWidth()
+	if count ~= shownLines or width ~= meter.barWidth then
 		shownLines = count
+		meter.barWidth = width
+		meter:SetWidth(width + 8)
 		meter:SetHeight(BARS_TOP + 4 + count * (BAR_HEIGHT + BAR_GAP))
 	end
 end
@@ -172,6 +194,8 @@ meter:SetScript("OnDragStop", StopMove)
 -- does not share (an older game) is greyed out there.
 local VIEWS = {
 	{ key = "damage", title = "Damage Done", get = function() return AZS_GetMeter end },
+	-- Each source's damage a second, as the strip's DPS counts it.
+	{ key = "dps", title = "DPS", get = function() return AZS_GetMeter end },
 	{ key = "healing", title = "Healing Done", get = function() return AZS_GetHealing end },
 	{ key = "boss", title = "Boss Damage", get = function() return AZS_GetBossMeter end },
 	-- A co-op run's: each hero's damage. Greyed out of a party.
@@ -416,11 +440,13 @@ strip.cells = { Cell(), Cell(), Cell() }
 
 -- Each cell in its share of the width; three with NOW, two without.
 local function LayCells(count)
-	if strip.count == count then
+	local width = meter.barWidth or WIDTH
+	if strip.count == count and strip.width == width then
 		return
 	end
-	strip.count = count
-	local each = WIDTH / count
+	strip.count, strip.width = count, width
+	strip:SetWidth(width)
+	local each = width / count
 	for index = 1, 3 do
 		local cell = strip.cells[index]
 		cell.label:ClearAllPoints()
@@ -445,6 +471,19 @@ end
 strip:SetScript("OnEnter", function()
 	local healing = this.view == "healing"
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
+	-- The DPS page: now and on average, no total.
+	if this.view == "dps" then
+		GameTooltip:SetText(SurvivorUI_T("DPS"), 1, 0.82, 0)
+		if NowOn() then
+			GameTooltip:AddDoubleLine(SurvivorUI_T("NOW"), SurvivorUI_TF("a second over the last {1} seconds", NOW_WINDOW), NOW_UP[1], NOW_UP[2], NOW_UP[3], 0.8, 0.8, 0.8)
+		end
+		GameTooltip:AddDoubleLine(SurvivorUI_T("AVG"), SurvivorUI_T("a second on average, since the run began or Reset"), GOLD[1], GOLD[2], GOLD[3], 0.8, 0.8, 0.8)
+		if NowOn() then
+			GameTooltip:AddLine(SurvivorUI_T("NOW is green while above the average, orange while below."), 0.6, 0.6, 0.65, 1)
+		end
+		GameTooltip:Show()
+		return
+	end
 	local titles = { healing = "Healing Done", boss = "Boss Damage", party = "Party Damage" }
 	GameTooltip:SetText(SurvivorUI_T(titles[this.view] or "Damage Done"), 1, 0.82, 0)
 	if NowOn() then
@@ -517,6 +556,104 @@ reset:SetScript("OnLeave", function()
 	this.text:SetTextColor(0.6, 0.6, 0.6)
 	GameTooltip:Hide()
 end)
+
+-- The fold button, left of Reset (of the -, in another window): a small
+-- glyph of two bars over three dots, gold on a soft gold wash while on. On,
+-- the lines under 10% of the total (or as the options' Damage meter tab
+-- sets it, 1 to 20%) fold into one at the bottom, Others, in every window
+-- alike (SurvivorUIDB.meterFold, meterFoldUnder). Not on the party's page.
+local OTHERS_COLOR = { 0.62, 0.62, 0.68 }
+local foldButtons = {}
+
+local function FoldOn()
+	return Settings().meterFold == true
+end
+
+-- The share under which a line folds, 0.01 to 0.20.
+local function FoldUnder()
+	return math.max(1, math.min(20, tonumber(Settings().meterFoldUnder) or 10)) / 100
+end
+
+local function PaintFold(button)
+	local on = FoldOn()
+	local r, g, b = 0.6, 0.6, 0.6
+	if button.hot then
+		r, g, b = 1, on and 0.92 or 1, on and 0.5 or 1
+	elseif on then
+		r, g, b = GOLD[1], GOLD[2], GOLD[3]
+	end
+	for index = 1, table.getn(button.parts) do
+		button.parts[index]:SetVertexColor(r, g, b, 1)
+	end
+	button.wash:SetVertexColor(1, 0.82, 0, on and 0.12 or 0)
+end
+
+local function FoldTip(button)
+	local share = math.floor(FoldUnder() * 100 + 0.5)
+	GameTooltip:SetOwner(button, "ANCHOR_TOPLEFT")
+	GameTooltip:SetText(SurvivorUI_T("Fold the small lines"), 1, 1, 1)
+	if FoldOn() then
+		GameTooltip:AddLine(SurvivorUI_TF("On: the lines under {1}% are one line, Others.", share), GOLD[1], GOLD[2], GOLD[3], 1)
+	else
+		GameTooltip:AddLine(SurvivorUI_T("Off: every line on its own."), 0.6, 0.6, 0.6, 1)
+	end
+	GameTooltip:AddLine(SurvivorUI_TF("The lines under {1}% of the total join one line at the bottom, Others, with what they add up to and their share. Hover it for each of them. Click to switch, in every meter window.", share), 0.7, 0.7, 0.7, 1)
+	GameTooltip:AddLine(SurvivorUI_T("The share can be changed, from 1 to 20%: /sui opt, Damage meter."), 0.6, 0.6, 0.65, 1)
+	GameTooltip:Show()
+end
+
+function SurvivorUI_MeterFoldButton(parent)
+	local button = CreateFrame("Button", nil, parent)
+	button:SetWidth(15)
+	button:SetHeight(14)
+	button.wash = button:CreateTexture(nil, "BACKGROUND")
+	button.wash:SetTexture(FLAT)
+	button.wash:SetAllPoints(button)
+	-- The glyph, 11 by 8: a long bar, a shorter one, three dots under them.
+	button.parts = {}
+	local shape = { { 2, -3, 11, 2 }, { 2, -6, 7, 2 }, { 2, -9, 2, 2 }, { 6, -9, 2, 2 }, { 10, -9, 2, 2 } }
+	for index = 1, table.getn(shape) do
+		local part = button:CreateTexture(nil, "OVERLAY")
+		part:SetTexture(FLAT)
+		part:SetPoint("TOPLEFT", button, "TOPLEFT", shape[index][1], shape[index][2])
+		part:SetWidth(shape[index][3])
+		part:SetHeight(shape[index][4])
+		table.insert(button.parts, part)
+	end
+	button:SetScript("OnEnter", function()
+		this.hot = true
+		PaintFold(this)
+		FoldTip(this)
+	end)
+	button:SetScript("OnLeave", function()
+		this.hot = nil
+		PaintFold(this)
+		GameTooltip:Hide()
+	end)
+	button:SetScript("OnClick", function()
+		Settings().meterFold = not FoldOn() or nil
+		for index = 1, table.getn(foldButtons) do
+			PaintFold(foldButtons[index])
+		end
+		FoldTip(this)
+		local window = this:GetParent()
+		if window.Redraw then
+			window.Redraw()
+		end
+	end)
+	table.insert(foldButtons, button)
+	PaintFold(button)
+	return button
+end
+
+-- The button on a page: away on the party's, painted as the setting stands.
+function SurvivorUI_MeterFoldShow(button, key)
+	button:SetAlpha(key == "party" and 0 or 1)
+	button:EnableMouse(key ~= "party")
+	PaintFold(button)
+end
+
+local fold = SurvivorUI_MeterFoldButton(meter)
 ------------------------------------------------------------------------------
 -- Reset: the game's numbers cover the whole run, so the meter keeps what each
 -- source stood at when Reset was pressed, and shows what came after.
@@ -924,18 +1061,22 @@ end
 local SHARE_WIDTH = 30
 local AMOUNT_WIDTH = 44
 local AMOUNT_RIGHT = SHARE_WIDTH + 6
-local NAME_ROOM = WIDTH - BAR_HEIGHT - 2 - (AMOUNT_RIGHT + AMOUNT_WIDTH + 2) - 4
+-- The name's room in a bar of a width: what the numbers' columns leave.
+local function NameRoom(width)
+	return width - BAR_HEIGHT - 2 - (AMOUNT_RIGHT + AMOUNT_WIDTH + 2) - 4
+end
 
 -- The filled part never shorter than the icon's square, so the source's
 -- color goes round its icon, as in the build list, however small its share.
-local function Filled(share)
-	return math.max(BAR_HEIGHT / WIDTH, share)
+local function Filled(share, width)
+	return math.max(BAR_HEIGHT / (width or WIDTH), share)
 end
 
 -- The edge around the bar's filled part only: its top and bottom as long as
 -- the fill, its right side at the fill's end (edges: top, bottom, left, right).
 local function PlaceEdges(bar, share)
-	local width = math.max(2, math.floor(WIDTH * Filled(share) + 0.5))
+	local barWidth = bar.width or WIDTH
+	local width = math.max(2, math.floor(barWidth * Filled(share, barWidth) + 0.5))
 	if bar.edgeWidth == width then
 		return
 	end
@@ -958,6 +1099,7 @@ end
 local function MakeBar(parent)
 	local bar = CreateFrame("StatusBar", nil, parent)
 	bar:SetWidth(WIDTH)
+	bar.width = WIDTH
 	bar:SetHeight(BAR_HEIGHT)
 	bar:SetStatusBarTexture(FLAT)
 	bar:SetMinMaxValues(0, 1)
@@ -1004,14 +1146,28 @@ local function MakeBar(parent)
 	bar.icon:SetPoint("LEFT", bar, "LEFT", 2, 0)
 	bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
+	-- Others' square: the icons of up to four of the lines folded into it,
+	-- small, two by two, the bar's grey between them.
+	bar.tiles = {}
+	local tile = math.floor((BAR_HEIGHT - 6) / 2)
+	for index = 1, 4 do
+		local texture = bar:CreateTexture(nil, "OVERLAY")
+		texture:SetWidth(tile)
+		texture:SetHeight(tile)
+		texture:SetPoint("TOPLEFT", bar.icon, "TOPLEFT", math.mod(index - 1, 2) * (tile + 2), -math.floor((index - 1) / 2) * (tile + 2))
+		texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		texture:Hide()
+		bar.tiles[index] = texture
+	end
+
 	bar.name:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 2, 0)
 	-- Room for the numbers' columns on the right.
-	bar.name:SetWidth(NAME_ROOM)
+	bar.name:SetWidth(NameRoom(WIDTH))
 	bar.name:SetHeight(12)
 	bar.name:SetJustifyH("LEFT")
 	bar.name:SetTextColor(1, 1, 1)
 
-	-- "(proc)", smaller, right after the name.
+	-- "(proc)", smaller, right after the name; Others' count in grey.
 	bar.tag = bar:CreateFontString(nil, "OVERLAY")
 	bar.tag:SetFont(SurvivorUI_FONT, 7 + FONT_BUMP, "OUTLINE")
 	bar.tag:SetTextColor(0.78, 0.91, 1)
@@ -1033,7 +1189,23 @@ local function MakeBar(parent)
 	bar:EnableMouse(true)
 	-- The damage view's lines have the crit card; the others, their numbers.
 	bar:SetScript("OnEnter", function()
-		if this.view ~= "damage" and this.line then
+		if this.line and this.line.others then
+			-- Others: each line in it, in its color, its amount and share.
+			local window = this:GetParent()
+			GameTooltip:SetOwner(window, "ANCHOR_NONE")
+			GameTooltip:SetPoint("TOPRIGHT", window, "TOPLEFT", -4, 0)
+			GameTooltip:SetText(this.line.name, OTHERS_COLOR[1], OTHERS_COLOR[2], OTHERS_COLOR[3])
+			local folded = this.line.others
+			for index = 1, table.getn(folded) do
+				local line = folded[index]
+				local color = line.color or ColorOf(line.name)
+				GameTooltip:AddDoubleLine(line.name, Short(line.dmg).."  |cffa0a0a0"..math.floor(line.share * 100 + 0.5).."%|r",
+					color[1], color[2], color[3], 1, 1, 1)
+			end
+			GameTooltip:AddLine(SurvivorUI_TF("Each under {1}% of the total. The button at the top shows them on their own again; /sui opt, Damage meter changes the share.",
+				math.floor(FoldUnder() * 100 + 0.5)), 0.6, 0.6, 0.65, 1)
+			GameTooltip:Show()
+		elseif this.view ~= "damage" and this.view ~= "dps" and this.line then
 			local window = this:GetParent()
 			GameTooltip:SetOwner(window, "ANCHOR_NONE")
 			GameTooltip:SetPoint("TOPRIGHT", window, "TOPLEFT", -4, 0)
@@ -1130,6 +1302,48 @@ local function DamageLines()
 	return shown, sum, span > 0 and sum / span or 0
 end
 
+-- The DPS page: each source's damage a second over the meter's own clock
+-- (the run's, or since Reset), as the strip's DPS counts it, so the column
+-- adds up to it; the shares are the damage's.
+local function DpsOf(lines, total, rate)
+	local per = total > 0 and rate / total or 0
+	local shown = {}
+	for index = 1, table.getn(lines) do
+		local line = lines[index]
+		table.insert(shown, { name = line.name, dmg = line.dmg * per, share = line.share, proc = line.proc })
+	end
+	return shown, total, rate
+end
+
+-- The fold button on: the lines under its share of the total, two or more,
+-- as one at the bottom, Others, with what they add up to and their share. A
+-- party's heroes stay each on their own.
+local function Folded(lines, key)
+	if not FoldOn() or key == "party" then
+		return lines
+	end
+	local under = FoldUnder()
+	local kept, small = {}, {}
+	for index = 1, table.getn(lines) do
+		local line = lines[index]
+		if line.share < under then
+			table.insert(small, line)
+		else
+			table.insert(kept, line)
+		end
+	end
+	if table.getn(small) < 2 then
+		return lines
+	end
+	local others = { name = SurvivorUI_T("Others"), dmg = 0, share = 0, color = OTHERS_COLOR, others = small }
+	for index = 1, table.getn(small) do
+		others.dmg = others.dmg + small[index].dmg
+		others.share = others.share + small[index].share
+	end
+	table.insert(kept, others)
+	return kept
+end
+
 -- A party's line: its hero's class color and icon (the character
 -- creation's, cut inside its round edge), its damage a second and top spell.
 local function PartyLine(shown, line)
@@ -1176,27 +1390,54 @@ end
 local function PaintBar(bar, line, top, key)
 	local name = line.name
 	local proc = line.proc
+	local folded = line.others
 	local color = line.color or ColorOf(name)
+	-- As wide as its window (set on its card in move mode).
+	local width = bar:GetParent().barWidth or WIDTH
+	if bar.width ~= width then
+		bar.width = width
+		bar:SetWidth(width)
+		bar.edgeWidth, bar.room = nil, nil
+	end
 	local share = top > 0 and line.dmg / top or 0
-	bar:SetValue(Filled(share))
+	bar:SetValue(Filled(share, width))
 	bar:SetStatusBarColor(color[1], color[2], color[3], 0.45)
 	for _, edge in pairs(bar.edges) do
 		edge:SetVertexColor(color[1], color[2], color[3], 0.6)
 	end
 	PlaceEdges(bar, share)
-	bar.ability = key == "damage" and name or nil
+	bar.ability = (key == "damage" or key == "dps") and not folded and name or nil
 	bar.view, bar.line = key, line
 	bar.color = color
 
 	-- A talent's or amulet's own damage says so, as the game's meter does.
 	-- The spell's rank after its name, when asked for (the options, Damage
 	-- meter): "Holy Wrath  12", or XII.
-	local rank = not line.art and RankOf(name)
+	local rank = not line.art and not folded and RankOf(name)
 	-- With no icon of its own found, the addon's (the minimap button's),
-	-- whole. A party's hero: the class's.
-	local icon = line.art or IconOf(name)
+	-- whole. A party's hero: the class's. Others: its lines' icons, small.
+	local icon = not folded and (line.art or IconOf(name))
 	bar.icon:SetVertexColor(1, 1, 1)
-	if line.coords then
+	for index = 1, 4 do
+		bar.tiles[index]:Hide()
+	end
+	if folded then
+		bar.icon:Hide()
+		-- Four, three, or two across a diagonal.
+		local count = math.min(4, table.getn(folded))
+		local spots = (count == 2 and { 1, 4 }) or (count == 3 and { 1, 2, 3 }) or { 1, 2, 3, 4 }
+		for index = 1, table.getn(spots) do
+			local tile = bar.tiles[spots[index]]
+			local art = IconOf(folded[index].name)
+			tile:SetTexture(art or OWN_ICON)
+			if art then
+				tile:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+			else
+				tile:SetTexCoord(0, 1, 0, 1)
+			end
+			tile:Show()
+		end
+	elseif line.coords then
 		bar.icon:SetTexture(icon)
 		bar.icon:SetTexCoord(line.coords[1], line.coords[2], line.coords[3], line.coords[4])
 	elseif icon then
@@ -1206,19 +1447,34 @@ local function PaintBar(bar, line, top, key)
 		bar.icon:SetTexture(OWN_ICON)
 		bar.icon:SetTexCoord(0, 1, 0, 1)
 	end
-	-- With its tag after it, "(proc)", "(talent)" or "(neck)", the name gives
-	-- it room: neither runs into the numbers, a long name ends in "..." first.
-	if proc then
-		bar.tag:SetText(SurvivorUI_ProcTag(name))
+	if not folded then
+		bar.icon:Show()
 	end
-	local room = NAME_ROOM - (proc and math.floor(bar.tag:GetStringWidth() + 6) or 0)
+	-- With its tag after it, "(proc)", "(talent)" or "(neck)", or Others'
+	-- "(5 spells)", the name gives it room: neither runs into the numbers, a
+	-- long name ends in "..." first.
+	local tagged = proc or folded
+	if folded then
+		bar.tag:SetText(SurvivorUI_TF("({1} spells)", table.getn(folded)))
+		bar.tag:SetTextColor(0.7, 0.7, 0.75)
+	elseif proc then
+		bar.tag:SetText(SurvivorUI_ProcTag(name))
+		bar.tag:SetTextColor(0.78, 0.91, 1)
+	end
+	local room = NameRoom(width) - (tagged and math.floor(bar.tag:GetStringWidth() + 6) or 0)
 	if bar.room ~= room then
 		bar.room = room
 		bar.name:SetWidth(room)
 	end
 	local ranked = rank and rank > 0 and SurvivorUIDB and SurvivorUIDB.meterRanks
 	bar.name:SetText(name..(ranked and "  |cffbdbdbd"..SurvivorUI_RankText(rank, true).."|r" or ""))
-	if proc then
+	-- Others: grey, as its bar.
+	if folded then
+		bar.name:SetTextColor(0.8, 0.8, 0.84)
+	else
+		bar.name:SetTextColor(1, 1, 1)
+	end
+	if tagged then
 		bar.tag:ClearAllPoints()
 		bar.tag:SetPoint("LEFT", bar, "LEFT", BAR_HEIGHT + 2 + math.min(bar.name:GetStringWidth(), room) + 3, 0)
 		bar.tag:Show()
@@ -1244,24 +1500,43 @@ local function Draw()
 	local lines, total, dps
 	if key == "damage" then
 		lines, total, dps = damage, damageTotal, damageRate
+	elseif key == "dps" then
+		lines, total, dps = DpsOf(damage, damageTotal, damageRate)
 	else
 		lines, total, dps = OtherLines(VIEWS[view].get)
 	end
+	lines = Folded(lines, key)
 	local nowOn = NowOn()
-	LayCells(nowOn and 3 or 2)
 	strip.view = key
 	local unit = key == "healing" and "HPS" or "DPS"
-	if nowOn then
+	if key == "dps" then
+		-- The DPS page: now and on average (AVG); its total is Damage Done's.
+		LayCells(nowOn and 2 or 1)
+		if nowOn then
+			local now = NowRate(key, total)
+			SetCell(1, "NOW", now and Short(now) or "...", not now and WHITE or (now >= dps and NOW_UP or NOW_DOWN))
+			SetCell(2, "AVG", Short(dps), GOLD)
+		else
+			SetCell(1, "AVG", Short(dps), GOLD)
+		end
+	elseif nowOn then
+		LayCells(3)
 		local now = NowRate(key, total)
 		SetCell(1, "NOW", now and Short(now) or "...", not now and WHITE or (now >= dps and NOW_UP or NOW_DOWN))
 		SetCell(2, unit, Short(dps), GOLD)
 		SetCell(3, "TOTAL", Short(total), WHITE)
 	else
+		LayCells(2)
 		SetCell(1, unit, Short(dps), GOLD)
 		SetCell(2, "TOTAL", Short(total), WHITE)
 	end
-	reset:SetAlpha(key == "damage" and 1 or 0)
-	reset:EnableMouse(key == "damage")
+	-- Reset on the damage's pages; the fold button in its place on the others.
+	local resettable = key == "damage" or key == "dps"
+	reset:SetAlpha(resettable and 1 or 0)
+	reset:EnableMouse(resettable)
+	fold:ClearAllPoints()
+	fold:SetPoint("TOPRIGHT", meter, "TOPRIGHT", resettable and -54 or -19, -3)
+	SurvivorUI_MeterFoldShow(fold, key)
 	if table.getn(lines) == 0 then
 		meter.empty:SetText(SurvivorUI_T((key == "boss" and "No boss fight yet.") or (key == "healing" and "No healing yet.")
 			or (key == "party" and "No party damage yet.") or ""))
@@ -1291,13 +1566,35 @@ local function Draw()
 		bars[index].ability = nil
 	end
 end
+meter.Redraw = Draw
 
 ------------------------------------------------------------------------------
 -- Lent to the other windows (MeterWindows.lua): the bars, the pages, the
 -- numbers.
 
 SurvivorUI_METER = { WIDTH = WIDTH, BAR_HEIGHT = BAR_HEIGHT, BAR_GAP = BAR_GAP,
-	STRIP_TOP = STRIP_TOP, STRIP_HEIGHT = STRIP_HEIGHT, BARS_TOP = BARS_TOP }
+	STRIP_TOP = STRIP_TOP, STRIP_HEIGHT = STRIP_HEIGHT, BARS_TOP = BARS_TOP,
+	WIDTH_LEAST = WIDTH_LEAST, WIDTH_MOST = WIDTH_MOST, LINES_LEAST = LINES_LEAST, LINES_MOST = LINES_MOST }
+
+-- The main window's width and lines, for its card in move mode; set, each
+-- kept (its Reset puts back the first width and the lines the layout fits).
+function SurvivorUI_MeterMainSize()
+	return meter.barWidth or WIDTH, shownLines
+end
+
+function SurvivorUI_SetMeterMainSize(width, lines)
+	local settings = Settings()
+	if width then
+		settings.meterWidth = width ~= WIDTH and width or nil
+	end
+	if lines then
+		settings.meterLines = lines
+	end
+	Fit()
+	if meter:IsShown() then
+		Draw()
+	end
+end
 
 function SurvivorUI_MeterNewBar(parent)
 	return MakeBar(parent)
@@ -1320,6 +1617,8 @@ end
 function SurvivorUI_MeterLines(key)
 	if key == "damage" then
 		return DamageLines()
+	elseif key == "dps" then
+		return DpsOf(DamageLines())
 	end
 	for index = 1, table.getn(VIEWS) do
 		if VIEWS[index].key == key then
@@ -1329,6 +1628,11 @@ function SurvivorUI_MeterLines(key)
 			return OtherLines(VIEWS[index].get)
 		end
 	end
+end
+
+-- A page's lines as the fold button has them (Others at the bottom, or not).
+function SurvivorUI_MeterFold(lines, key)
+	return Folded(lines, key)
 end
 
 -- The page the main window shows, whether it shows (a run on, the meter on),

@@ -25,7 +25,8 @@ local KINDS = {
 	final    = { order = 1, color = { 0.95, 0.25, 0.55 }, tag = "Final" },
 	boss     = { order = 2, color = { 0.72, 0.32, 1.00 } },
 	guardian = { order = 3, color = { 0.20, 0.75, 0.95 }, tag = "Guardian" },
-	elite    = { order = 4, color = { 1.00, 0.55, 0.10 } },
+	-- The item qualities' order, each a little lighter: epic, rare, uncommon.
+	elite    = { order = 4, color = { 0.35, 1.00, 0.20 } },
 }
 
 local function Settings()

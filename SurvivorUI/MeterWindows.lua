@@ -5,11 +5,14 @@
 -- show: the party's damage in a co-op run, else the healing, the boss fight
 -- or the damage, whichever no window shows yet. Up to three more. Each wears
 -- the main one's bars (lent by Meter.lua: the same colors, icons, cards and
--- numbers), its title a menu of the pages, a - at its corner to close it.
+-- numbers), its title a menu of the pages, a - at its corner to close it,
+-- and left of it the fold button (the small lines as one, Others).
 -- Hold Alt and drag to move one, or move mode ("Damage meter 2" to 4); the
--- wheel rolls its list. Each as big as the main one: its size, and as many
--- lines as it shows. Which are open, their pages and places are kept. They
--- show while the main one does: in a run, the meter on.
+-- wheel rolls its list. Each as big as the main one until its card in move
+-- mode sets its own width and lines. Let go against another window (its side
+-- or its end), it holds on to it and moves with it; moved off on its own, it
+-- lets go. Which are open, their pages, places, sizes and links are kept.
+-- They show while the main one does: in a run, the meter on.
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
@@ -21,8 +24,8 @@ local GOLD = { 1, 0.82, 0 }
 local WHITE = { 1, 1, 1 }
 local NOW_UP, NOW_DOWN = { 0.45, 0.95, 0.5 }, { 1, 0.6, 0.3 }
 -- The page a new window takes: the first of these no window shows.
-local PREFER = { "party", "healing", "boss", "damage" }
-local EMPTY = { boss = "No boss fight yet.", healing = "No healing yet.", party = "Not in a party.", damage = "No damage yet." }
+local PREFER = { "party", "healing", "boss", "damage", "dps" }
+local EMPTY = { boss = "No boss fight yet.", healing = "No healing yet.", party = "Not in a party.", damage = "No damage yet.", dps = "No damage yet." }
 
 local windows = {}
 
@@ -64,9 +67,91 @@ end
 -- A window's place: where it was moved to, else left of the main one, each
 -- next further left.
 
+-- A window's size: its own (its card in move mode), else the main one's.
+local function SizeOf(index)
+	local entry = Saved()[index] or {}
+	local width, lines = M.WIDTH, LINES
+	if SurvivorUI_MeterMainSize then
+		width, lines = SurvivorUI_MeterMainSize()
+	end
+	width = math.max(M.WIDTH_LEAST or 180, math.min(M.WIDTH_MOST or 400, tonumber(entry.width) or width))
+	lines = math.max(M.LINES_LEAST or 3, math.min(M.LINES_MOST or 20, tonumber(entry.lines) or lines))
+	return width, lines
+end
+
+local function Resize(window)
+	local width, lines = SizeOf(window.index)
+	if window.barWidth ~= width or window.lines ~= lines then
+		window.barWidth, window.lines = width, lines
+		window:SetWidth(width + 8)
+		window:SetHeight(M.BARS_TOP + 4 + lines * (M.BAR_HEIGHT + M.BAR_GAP))
+		window.strip:SetWidth(width)
+	end
+end
+
+------------------------------------------------------------------------------
+-- Linked windows: one let go against another (its side, or its end in line
+-- with it, a few units apart at most) holds on to it: kept as that one's
+-- place and its offset, so it moves with it. The main window holds on to
+-- none; let go against one, that one holds on to it. No ring: a window never
+-- holds on to one that holds on to it.
+
+local TOUCH = 10
+
+local function FrameOf(key)
+	if key == "main" then
+		return getglobal("SurvivorUIMeter")
+	end
+	return windows[key]
+end
+
+-- Whether key holds on to other, by itself or through the ones it holds on to.
+local function HoldsOn(key, other)
+	local at, steps = key, 0
+	while at and steps <= MOST do
+		if at == other then
+			return true
+		end
+		local entry = at ~= "main" and Saved()[at]
+		at = entry and entry.dock and entry.dock.to
+		steps = steps + 1
+	end
+	return false
+end
+
+-- How frame stands against target: the points and offset to hold on to it,
+-- flush; nil when not against it.
+local function Against(frame, target)
+	local l, r, t, b = frame:GetLeft(), frame:GetRight(), frame:GetTop(), frame:GetBottom()
+	local L, R, T, B = target:GetLeft(), target:GetRight(), target:GetTop(), target:GetBottom()
+	if not (l and L) then
+		return nil
+	end
+	if math.min(t, T) - math.max(b, B) > 10 then
+		if math.abs(l - R) <= TOUCH then
+			return { point = "TOPLEFT", rel = "TOPRIGHT", x = 0, y = t - T }
+		elseif math.abs(r - L) <= TOUCH then
+			return { point = "TOPRIGHT", rel = "TOPLEFT", x = 0, y = t - T }
+		end
+	end
+	if math.min(r, R) - math.max(l, L) > 10 then
+		if math.abs(t - B) <= TOUCH then
+			return { point = "TOPLEFT", rel = "BOTTOMLEFT", x = l - L, y = 0 }
+		elseif math.abs(b - T) <= TOUCH then
+			return { point = "BOTTOMLEFT", rel = "TOPLEFT", x = l - L, y = 0 }
+		end
+	end
+end
+
 local function Place(window)
 	window:ClearAllPoints()
 	local entry = Saved()[window.index]
+	local dock = entry and entry.dock
+	local target = dock and FrameOf(dock.to)
+	if target then
+		window:SetPoint(dock.point, target, dock.rel, dock.x, dock.y)
+		return
+	end
 	if entry and entry.left and entry.top then
 		window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", entry.left, entry.top)
 		return
@@ -79,12 +164,70 @@ local function Place(window)
 	end
 end
 
+-- A window let go: against one it may hold on to (the main one first), it
+-- does; else free, where it is.
+local function Link(window)
+	local entry = Saved()[window.index]
+	if not entry then
+		return
+	end
+	entry.dock = nil
+	local keys = { "main" }
+	for each = 1, MOST do
+		if each ~= window.index and Saved()[each] then
+			table.insert(keys, each)
+		end
+	end
+	for _, key in pairs(keys) do
+		local target = FrameOf(key)
+		if target and target:IsShown() and not HoldsOn(key, window.index) then
+			local dock = Against(window, target)
+			if dock then
+				dock.to = key
+				entry.dock = dock
+				break
+			end
+		end
+	end
+	Place(window)
+end
+
 local function SavePlace(window)
 	local entry = Saved()[window.index]
 	if entry and window:GetLeft() then
 		entry.left = math.floor(window:GetLeft() + 0.5)
 		entry.top = math.floor(window:GetTop() + 0.5)
 	end
+	Link(window)
+end
+
+-- Key let go (the main window): each free window against it holds on to it.
+function SurvivorUI_MeterLinkTo(key)
+	local target = FrameOf(key)
+	if not target then
+		return
+	end
+	for index = 1, MOST do
+		local entry, window = Saved()[index], windows[index]
+		if entry and window and window:IsShown() and not entry.dock and not HoldsOn(key, index) then
+			local dock = Against(window, target)
+			if dock then
+				dock.to = key
+				entry.dock = dock
+				Place(window)
+			end
+		end
+	end
+end
+
+-- What a window holds on to, for its card: "Damage meter", "Damage meter 3"; nil.
+function SurvivorUI_MeterLinkedTo(index)
+	local entry = Saved()[index]
+	local to = entry and entry.dock and entry.dock.to
+	if to == "main" then
+		return "Damage meter"
+	end
+	return to and ("Damage meter "..(to + 1)) or nil
 end
 
 ------------------------------------------------------------------------------
@@ -271,6 +414,15 @@ local function Window(index)
 		GameTooltip:Hide()
 	end)
 	close:SetScript("OnClick", function()
+		-- The ones holding on to it stay where they are, free.
+		for each = 1, MOST do
+			local other = Saved()[each]
+			if other and other.dock and other.dock.to == window.index and windows[each] and windows[each]:GetLeft() then
+				other.left, other.top = math.floor(windows[each]:GetLeft() + 0.5), math.floor(windows[each]:GetTop() + 0.5)
+				other.dock = nil
+				Place(windows[each])
+			end
+		end
 		Saved()[window.index] = nil
 		window.menu:Hide()
 		window:Hide()
@@ -279,6 +431,15 @@ local function Window(index)
 			window.handle.disabled = true
 		end
 	end)
+
+	-- Left of the -: the fold button, as the main window's.
+	if SurvivorUI_MeterFoldButton then
+		window.fold = SurvivorUI_MeterFoldButton(window)
+		window.fold:SetPoint("TOPRIGHT", window, "TOPRIGHT", -19, -3)
+	end
+	window.Redraw = function()
+		Draw(window)
+	end
 
 	-- The numbers under the title: NOW (when on), the rate, the total.
 	local strip = CreateFrame("Frame", nil, window)
@@ -299,8 +460,9 @@ local function Window(index)
 		window.handle = SurvivorUI_RegisterMover(window, "Damage meter "..(index + 1), function() SavePlace(window) end, nil, function()
 			local entry = Saved()[window.index]
 			if entry then
-				entry.left, entry.top = nil, nil
+				entry.left, entry.top, entry.dock, entry.width, entry.lines = nil, nil, nil, nil, nil
 			end
+			Resize(window)
 			Place(window)
 		end)
 	end
@@ -316,7 +478,7 @@ end
 -- The strip's cells, as many as shown, each in its share of the width.
 local function SetCells(window, cells)
 	local strip = window.strip
-	local each = M.WIDTH / table.getn(cells)
+	local each = (window.barWidth or M.WIDTH) / table.getn(cells)
 	for index = 1, 3 do
 		local cell = strip.cells[index]
 		local data = cells[index]
@@ -352,14 +514,25 @@ Draw = function(window)
 		lines, total, rate = SurvivorUI_MeterLines(key)
 	end
 	lines = lines or {}
+	if SurvivorUI_MeterFold then
+		lines = SurvivorUI_MeterFold(lines, key)
+	end
+	if window.fold and SurvivorUI_MeterFoldShow then
+		SurvivorUI_MeterFoldShow(window.fold, key)
+	end
 	local unit = key == "healing" and "HPS" or "DPS"
 	local now, nowOn = nil, false
 	if SurvivorUI_MeterNow then
 		now, nowOn = SurvivorUI_MeterNow(key, total or 0)
 	end
-	if nowOn then
+	local nowCell = { "NOW", now and Short(now) or "...", not now and WHITE or (now >= (rate or 0) and NOW_UP or NOW_DOWN) }
+	if key == "dps" then
+		-- The DPS page: now and on average (AVG); its total is Damage Done's.
+		local average = { "AVG", Short(rate or 0), GOLD }
+		SetCells(window, nowOn and { nowCell, average } or { average })
+	elseif nowOn then
 		SetCells(window, {
-			{ "NOW", now and Short(now) or "...", not now and WHITE or (now >= (rate or 0) and NOW_UP or NOW_DOWN) },
+			nowCell,
 			{ unit, Short(rate or 0), GOLD },
 			{ "TOTAL", Short(total or 0), WHITE },
 		})
@@ -483,12 +656,8 @@ watch:SetScript("OnUpdate", function()
 				window:SetScale(scale)
 				Place(window)
 			end
-			-- As many lines as the main window, so as tall.
-			local lines = SurvivorUI_MeterLineCount and SurvivorUI_MeterLineCount() or LINES
-			if window.lines ~= lines then
-				window.lines = lines
-				window:SetHeight(M.BARS_TOP + 4 + lines * (M.BAR_HEIGHT + M.BAR_GAP))
-			end
+			-- Its own size, else the main window's.
+			Resize(window)
 			if showing then
 				window:Show()
 				Draw(window)
@@ -503,3 +672,26 @@ watch:SetScript("OnUpdate", function()
 		end
 	end
 end)
+
+-- An extra window's width and lines, for its card in move mode (index 1 to
+-- 3: "Damage meter 2" to 4); set, each kept until its Reset.
+function SurvivorUI_MeterWindowSize(index)
+	return SizeOf(index)
+end
+
+function SurvivorUI_SetMeterWindowSize(index, width, lines)
+	local entry = Saved()[index]
+	if not entry then
+		return
+	end
+	if width then
+		entry.width = width
+	end
+	if lines then
+		entry.lines = lines
+	end
+	if windows[index] then
+		Resize(windows[index])
+		Draw(windows[index])
+	end
+end

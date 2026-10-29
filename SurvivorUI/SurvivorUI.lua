@@ -177,6 +177,20 @@ local function Settings()
 		SurvivorUIDB.statsDefaults = 1
 		SurvivorUIDB.statsHideZero = nil
 	end
+	-- From v3.0.43 the XP bar (XpBar.lua) as Lucas set it, once for everyone
+	-- and for a new install, kept as each one sets it after that: on, with
+	-- the time to the next level, the luck and the cards' odds beside it as
+	-- numbers; without the experience a minute and the odds' ribbon.
+	if (SurvivorUIDB.xpBarDefaults or 0) < 1 then
+		SurvivorUIDB.xpBarDefaults = 1
+		SurvivorUIDB.xpBar = true
+		SurvivorUIDB.xpBarEta = nil
+		SurvivorUIDB.xpBarRate = false
+		SurvivorUIDB.xpBarLuck = nil
+		SurvivorUIDB.xpBarRibbon = nil
+		SurvivorUIDB.xpBarOddsSide = true
+		SurvivorUIDB.xpBarOddsLook = nil
+	end
 	return SurvivorUIDB
 end
 
@@ -1570,6 +1584,14 @@ local function SquareMinimap()
 	-- A solid texture as the mask leaves the whole square visible.
 	Minimap:SetMaskTexture(FLAT)
 
+	-- The zone's name centered over the square, a little above it: the game
+	-- hangs it from the minimap's cluster, where the round map sat, off the
+	-- square's middle.
+	if MinimapZoneTextButton then
+		MinimapZoneTextButton:ClearAllPoints()
+		MinimapZoneTextButton:SetPoint("BOTTOM", Minimap, "TOP", 0, 4)
+	end
+
 	for _, name in pairs({
 		"MinimapBorder", "MinimapBorderTop", "MinimapZoomIn", "MinimapZoomOut",
 		"MinimapToggleButton", "GameTimeFrame", "MiniMapWorldMapButton",
@@ -2124,6 +2146,37 @@ local DEFAULTS = {
 	jewelryWithPane = true,     -- the Jewelry Collection beside the character pane
 }
 
+-- The game's own damage numbers (the options, Combat text: The game's): its
+-- engine draws them over the very enemy hit, at a size of its own (a share of
+-- the screen's diagonal), in the face DAMAGE_TEXT_FONT names, which it reads
+-- once as the hero enters the world: a face chosen here shows from the next
+-- run. A smaller number is one of these faces drawn smaller in the same box
+-- (Fonts\Numbers: scaled copies of the OFL fonts here, Latin letters only);
+-- the game's own face only at its own size.
+local NUMBER_FACES = {
+	barlow = { "BarlowCondensed-SemiBold", "Barlow" }, exo = { "Exo-SemiBold", "Exo" },
+	fira = { "FiraSans-Medium", "Fira" }, noto = { "NotoSans-Medium", "Noto" },
+}
+local NUMBER_SIZES = { [90] = true, [80] = true, [70] = true, [60] = true, [50] = true, [40] = true }
+local STOCK_DAMAGE_FONT = DAMAGE_TEXT_FONT
+
+function SurvivorUI_NumberFont()
+	local db = SurvivorUIDB or {}
+	local face = NUMBER_FACES[db.numberFont]
+	if not face then
+		return nil
+	end
+	local size = tonumber(db.numberFontSize)
+	if NUMBER_SIZES[size] then
+		return "Interface\\AddOns\\SurvivorUI\\Fonts\\Numbers\\"..face[2].."-"..size..".ttf"
+	end
+	return "Interface\\AddOns\\SurvivorUI\\Fonts\\"..face[1]..".ttf"
+end
+
+function SurvivorUI_ApplyNumberFont()
+	DAMAGE_TEXT_FONT = SurvivorUI_NumberFont() or STOCK_DAMAGE_FONT
+end
+
 local globalFont = CreateFrame("Frame")
 globalFont:RegisterEvent("ADDON_LOADED")
 globalFont:SetScript("OnEvent", function()
@@ -2140,8 +2193,9 @@ globalFont:SetScript("OnEvent", function()
 			buildCooldown = true, trackerCoin = true, trackerElites = false, tallyPlace = "bar",
 			lootBackground = false,
 			-- The XP bar as the author has it (v3.0.37): the odds beside it as
-			-- filled bars, the time to the next level under it, not the pace.
-			xpBarOddsSide = true, xpBarOddsLook = "fill", xpBarRate = false,
+			-- numbers (v3.0.43; filled bars before), the time to the next level
+			-- under it, not the pace.
+			xpBarOddsSide = true, xpBarRate = false,
 			paneStatsStep = 2, pinCacheSize = 12, pinLairSize = 11,
 			pieceFonts = { ["Damage meter"] = { step = -1 }, ["Jewelry"] = { step = -2 } },
 		}
@@ -2159,6 +2213,8 @@ globalFont:SetScript("OnEvent", function()
 	if settings.globalFont then
 		SurvivorUI_SetGlobalFont(settings.globalFont)
 	end
+	-- Before the engine reads it, at the end of the interface's load.
+	SurvivorUI_ApplyNumberFont()
 end)
 
 ------------------------------------------------------------------------------

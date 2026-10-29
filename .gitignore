@@ -16,6 +16,8 @@ SurvivorUI/Fonts/*
 !SurvivorUI/Fonts/BarlowSemiCondensed-SemiBold.ttf
 !SurvivorUI/Fonts/BarlowCondensed-SemiBold.ttf
 !SurvivorUI/Fonts/OFL-Barlow.txt
+# Scaled copies of the free ones, for the game's damage numbers
+!SurvivorUI/Fonts/Numbers/
 # A face kept for local development only
 SurvivorUI/Media/
 # The installer is built by installer\build.bat and attached to releases

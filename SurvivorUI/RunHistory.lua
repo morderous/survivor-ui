@@ -2191,7 +2191,7 @@ local STATE_COLORS = {
 	dead = { 0.30, 0.85, 0.35 },
 }
 local DIM = { 0.55, 0.55, 0.58 }
-local ELITE_COLOR = { 1.00, 0.55, 0.15 }
+local ELITE_COLOR = { 0.35, 1.00, 0.20 }
 local BACKING = { 0.12, 0.12, 0.15 }
 local SPAWNED = { 0.30, 1.00, 0.40 }
 local AWAKE = { 1.00, 0.55, 0.15 }
@@ -2578,7 +2578,7 @@ local function DrawTracker(shot, result)
 		if alive == 0 then
 			tracker.eliteNote:SetText(SurvivorUI_T("|cff8a8a8anone|r"))
 		elseif hurt > 0 then
-			tracker.eliteNote:SetText("|cffffffff"..SurvivorUI_TF("{1} alive", alive).."|r  ·  |cffff8c26"..SurvivorUI_TF("{1} fighting", hurt).."|r")
+			tracker.eliteNote:SetText("|cffffffff"..SurvivorUI_TF("{1} alive", alive).."|r  ·  |cff59ff33"..SurvivorUI_TF("{1} fighting", hurt).."|r")
 		else
 			tracker.eliteNote:SetText("|cffffffff"..SurvivorUI_TF("{1} alive", alive).."|r")
 		end
@@ -2704,7 +2704,7 @@ local function DrawRun(run, base)
 		{ "Level",           Num(run.level),             { 0.40, 1.00, 0.40 }, More("level", Plain), "level" },
 		{ "Kills",           Num(run.kills),             { 0.92, 0.92, 0.92 }, More("kills", Plain), "kills" },
 		{ "Kills / min",     seconds > 0 and string.format("%.0f", Num(run.kills) / seconds * 60) or "-", { 0.78, 0.80, 0.88 }, nil, "kpm" },
-		{ "Elites slain",    Num(run.elites),            { 1.00, 0.55, 0.10 }, More("elites", Plain), "elites" },
+		{ "Elites slain",    Num(run.elites),            { 0.35, 1.00, 0.20 }, More("elites", Plain), "elites" },
 		{ "Guardians slain", Num(run.guardians),         { 0.20, 0.75, 0.95 }, More("guardians", Plain), "guardians" },
 		{ "Bosses slain",    Num(run.bosses),            { 0.72, 0.32, 1.00 }, More("bosses", Plain), "bosses" },
 		{ "Damage dealt",    Short(Dealt(run)),          { 1.00, 0.76, 0.08 }, addedDealt > 0 and "+"..Short(addedDealt) or nil, "dealt", dealtTip },
@@ -3406,7 +3406,7 @@ end
 -- locals.
 
 local fallen = { box = Box(SurvivorUI_T("Fallen to")), heads = {}, colors = {
-	["boss melee"] = { 0.72, 0.32, 1.00 }, ["boss spell"] = { 0.86, 0.52, 1.00 }, elite = { 1.00, 0.55, 0.10 },
+	["boss melee"] = { 0.72, 0.32, 1.00 }, ["boss spell"] = { 0.86, 0.52, 1.00 }, elite = { 0.35, 1.00, 0.20 },
 	["mob melee"] = { 0.80, 0.80, 0.84 }, ["mob spell"] = { 0.58, 0.74, 1.00 }, area = { 0.40, 0.86, 0.56 },
 } }
 

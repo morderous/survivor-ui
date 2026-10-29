@@ -3087,7 +3087,7 @@ function Paint.Bosses(self)
 		{ { 0.20, 0.75, 0.95 }, "Lair guardian", 640000, 1500000 },
 	}
 	if DB().bossBarsElites then
-		table.insert(bars, { { 1.00, 0.55, 0.10 }, "Elite", 90000, 120000 })
+		table.insert(bars, { { 0.35, 1.00, 0.20 }, "Elite", 90000, 120000 })
 	end
 	local x = math.floor((PAGE_WIDTH - width) / 2)
 	local y = -math.floor((self:GetHeight() - table.getn(bars) * (height + 4)) / 2) - 4
@@ -3371,8 +3371,9 @@ function Paint.Combat(self)
 		end
 	end
 	if mode == "game" then
-		-- The game's own: plain numbers over the enemies, in its font.
-		local font = "Fonts\\FRIZQT__.TTF"
+		-- The game's own: plain numbers over the enemies, in its font or the
+		-- one chosen below (smaller faces draw smaller at the same size).
+		local font = SurvivorUI_NumberFont and SurvivorUI_NumberFont() or "Fonts\\FRIZQT__.TTF"
 		self:Word(font, 16, "OUTLINE", 1, 1, 1, "1234"):SetPoint("BOTTOM", self, "TOPLEFT", foes[1], middle + 6)
 		self:Word(font, 16, "OUTLINE", 1, 1, 1, "348"):SetPoint("BOTTOM", self, "TOPLEFT", foes[2], middle + 14)
 		self:Word(font, 24, "OUTLINE", 1, 1, 1, "12960"):SetPoint("BOTTOM", self, "TOPLEFT", foes[3], middle + 6)
@@ -3450,6 +3451,33 @@ Kit.Segments(page, { { "survivor", "SurvivorUI's" }, { "game", "The game's" }, {
 Kit.Right(page)
 Kit.Size(page, "Size", 0.5, 1.5, 0.05, CTGet("ctSize"), CTSet("ctSize"), { { "S", 0.7 }, { "M", 0.85 }, { "L", 1.1 } })
 Kit.Join(page)
+
+-- The game's own numbers' face and size (SurvivorUI.lua: DAMAGE_TEXT_FONT).
+-- A face or a size picked: the game's numbers in place of ours.
+local function NumberFontSet(key, value, plain)
+	return function(choice)
+		DB()[key] = choice ~= plain and choice or nil
+		if SurvivorUI_ApplyNumberFont then
+			SurvivorUI_ApplyNumberFont()
+		end
+		if SurvivorUI_DamageMode and SurvivorUI_DamageMode() ~= "game" and SurvivorUI_SetDamageMode then
+			SurvivorUI_SetDamageMode("game")
+		end
+	end
+end
+Kit.Section(page, "The game's numbers", "The game's own numbers, always over the very enemy hit, in the face and size picked here; picking one turns ours off for them. "
+	.."The game reads the face as it enters the world, so a change shows from your next run. Its own face comes at its own size only; "
+	.."the other four carry Latin letters only.")
+Kit.Segments(page, { { "game", "The game's" }, { "barlow", "Barlow" }, { "exo", "Exo" }, { "fira", "Fira" }, { "noto", "Noto" } },
+	function() return DB().numberFont or "game" end, NumberFontSet("numberFont", nil, "game"))
+Kit.Segments(page, { { 100, "100%" }, { 90, "90%" }, { 80, "80%" }, { 70, "70%" }, { 60, "60%" }, { 50, "50%" }, { 40, "40%" } },
+	function() return DB().numberFont and tonumber(DB().numberFontSize) or 100 end, NumberFontSet("numberFontSize", nil, 100))
+do
+	local later = Text(page, 9, MUTED)
+	later:SetPoint("TOPLEFT", page, "TOPLEFT", Span(page), page.y + 4)
+	later:SetText("From your next run: the game reads the face as a run begins. The game's own face keeps its size.")
+	page.y = page.y - 16
+end
 
 -- The two places, each a small picture: the hero, the damage's white, the
 -- crits' gold, the heals' green, the damage taken's red; enemies dark red.
@@ -3534,6 +3562,15 @@ Kit.Foot(page, {
 page = pages.meter
 Header(page, "Damage meter", "Each source's damage and its share, its crits on hover; its title's menu for the healing or the last boss fight. Off: the game's meter.")
 PanelHead(page, OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "meter", "Damage meter", nil, GAME.meter)
+-- Others: the share under which the fold button in the meter's title folds
+-- the lines into one (Meter.lua's Folded).
+Subheader(page, "Others")
+Slider(page, "Lines under", 1, 20, 1, function() return tonumber(DB().meterFoldUnder) or 10 end,
+	function(value)
+		value = math.floor(value + 0.5)
+		DB().meterFoldUnder = value ~= 10 and value or nil
+	end, "%d%%")
+Note(page, "The button left of Reset in the meter's title folds the lines under this share of the total into one at the bottom, Others; hover it for each of them.")
 Subheader(page, "What shows")
 Check(page, "Damage a second right now", OnUnlessOff("meterNow"), Flip("meterNow"), "under the run's, over the last 5 seconds, as the game's meter has it")
 Check(page, "Spell ranks after the names", OnlyIfOn("meterRanks"), function() DB().meterRanks = not DB().meterRanks or nil end,
@@ -3768,6 +3805,8 @@ page.y = page.y - 30
 page = pages.crits
 Header(page, "Biggest Crits", "Each ability's biggest critical strike this run; hover one for its card, its Reset clears them. A new best held still in the combat numbers is set in Combat text.")
 PanelHead(page, OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"), "crits", "Biggest Crits")
+Check(page, "Damage and crits under the title", OnUnlessOff("critStats"), Flip("critStats"),
+	"your Damage, Crit and Crit Dmg, as the Stats panel has them; hover them for what each is")
 
 ------------------------------------------------------------------------------
 -- Counters: the numbers over the spells' buttons (DotCounter.lua).

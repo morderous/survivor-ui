@@ -1168,22 +1168,50 @@ local function Short(spell)
 	return spell
 end
 
+-- Never over the slot's name and rank: a point or two smaller first, down
+-- to 7; still too long (a legendary amulet's four or five), the first ones
+-- and "...+" for the rest, which the piece's tooltip shows on hover.
+local SEPARATOR = " \194\183 "
+
 local function FitTags(line, text)
 	local key = (line.label:GetText() or "").."|"..text
 	if line.tagText == key then
 		return
 	end
-	line.tags:SetText(text)
 	local labelWidth = line.label:GetStringWidth()
 	-- A label not drawn yet measures nothing: sized again next time.
 	line.tagText = labelWidth > 0 and key or nil
 	local room = WIDTH - 8 - labelWidth - 10
-	for size = 9, 6, -1 do
+	local function Fits(size, words)
 		line.tags:SetFont(SurvivorUI_FONT, size + FONT_BUMP, "OUTLINE")
-		if line.tags:GetStringWidth() <= room then
-			break
+		line.tags:SetText(words)
+		return line.tags:GetStringWidth() <= room
+	end
+	for size = 9, 7, -1 do
+		if Fits(size, text) then
+			return
 		end
 	end
+	local parts, from = {}, 1
+	while true do
+		local at = string.find(text, SEPARATOR, from, true)
+		if not at then
+			table.insert(parts, string.sub(text, from))
+			break
+		end
+		table.insert(parts, string.sub(text, from, at - 1))
+		from = at + string.len(SEPARATOR)
+	end
+	for count = table.getn(parts) - 1, 1, -1 do
+		local shown = {}
+		for index = 1, count do
+			shown[index] = parts[index]
+		end
+		if Fits(7, table.concat(shown, SEPARATOR)..SEPARATOR.."...+") then
+			return
+		end
+	end
+	Fits(6, parts[1]..SEPARATOR.."...+")
 end
 
 local function DrawGear()

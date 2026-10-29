@@ -234,7 +234,7 @@ local RUN_ROWS = {
 	{ key = "level",     label = "Level",           color = { 0.40, 1.00, 0.40 } },
 	{ key = "kills",     label = "Kills",           color = { 0.92, 0.92, 0.92 } },
 	{ key = "kpm",       label = "Kills / min",     color = { 0.78, 0.80, 0.88 }, api = true },
-	{ key = "elites",    label = "Elites slain",    color = { 1.00, 0.55, 0.10 }, plain = "Elites & guardians slain" },
+	{ key = "elites",    label = "Elites slain",    color = { 0.35, 1.00, 0.20 }, plain = "Elites & guardians slain" },
 	{ key = "guardians", label = "Guardians slain", color = { 0.20, 0.75, 0.95 }, api = true },
 	{ key = "bosses",    label = "Bosses slain",    color = { 0.72, 0.32, 1.00 } },
 	{ key = "dealt",     label = "Damage dealt",    color = { 1.00, 0.76, 0.08 } },
@@ -544,7 +544,9 @@ end
 -- rule in the ability's color, and the normal hits set apart under a heavier
 -- one.
 local TIP_WIDTH = 170
+local TIP_MOST = 300            -- as wide as a long title, up to this
 local TIP_ROW = 16
+local tipWidth = TIP_WIDTH      -- the card's width now (its title's)
 
 local critTip = CreateFrame("Frame", "SurvivorUICritTip", UIParent)
 critTip:SetFrameStrata("TOOLTIP")
@@ -601,11 +603,13 @@ local function TipLine(index, kind, label, value, color, y)
 
 	line:ClearAllPoints()
 	line:SetPoint("TOPLEFT", critTip, "TOPLEFT", 8, -y)
+	line:SetWidth(tipWidth)
+	line.text:SetWidth(tipWidth - 4)
 	if kind == "text" then
 		line.label:SetText("")
 		line.value:SetText("")
 		line.text:SetText(label)
-		local lines = math.max(1, math.ceil(line.text:GetStringWidth() / ((TIP_WIDTH - 4) * 0.92)))
+		local lines = math.max(1, math.ceil(line.text:GetStringWidth() / ((tipWidth - 4) * 0.92)))
 		line.text:SetHeight(lines * 11)
 		line.text:Show()
 		line:SetHeight(lines * 11 + 6)
@@ -768,6 +772,14 @@ local function CardOf(row, kept)
 	end
 	-- A racial with no damage of its own: no empty crits and hits.
 	local quiet = row.racial and not stats and not hits and not meter
+	-- A talent's or amulet's own copy of a spell ("Amulet of the Inferno:
+	-- Consecration"): the combat log names its hits as the spell's, so they
+	-- are counted on the spell's card. Said once, not as two empty lists.
+	local _, _, copied = string.find(ability or "", "^.-: (.+)$")
+	if not quiet and not stats and not hits and meter and Num(meter.proc) == 1 and copied then
+		Add("text", SurvivorUI_TF("The combat log names its hits {1}: its crits and hits are counted on {1}'s card.", SurvivorUI_Native(copied)))
+		return card
+	end
 	if not quiet then
 	Add("head", SurvivorUI_T("Critical strikes"), stats and stats.count or 0)
 	if stats then
@@ -804,6 +816,9 @@ local function CritTooltip(row)
 	critTip.edge:SetVertexColor(color[1], color[2], color[3], 0.8)
 	critTip.title:SetText(card.title)
 	critTip.title:SetTextColor(color[1], color[2], color[3])
+	-- As wide as its title: a talent's or amulet's long name stays inside.
+	tipWidth = math.min(TIP_MOST, math.max(TIP_WIDTH, math.ceil(critTip.title:GetStringWidth()) + 2))
+	critTip:SetWidth(tipWidth + 16)
 
 	local y = 26
 	for index = 1, table.getn(card.lines) do
@@ -1020,6 +1035,161 @@ critReset:SetScript("OnLeave", function()
 end)
 critReset:SetScript("OnClick", function() ResetCrits() end)
 
+-- Under the title, the three numbers a crit is made of (the options,
+-- Biggest Crits: on unless switched off): Damage, Crit and Crit Dmg as the
+-- Stats panel reads them, each named, in a strip as the damage meter's
+-- (NOW, DPS, TOTAL): each in its third, its name and number together; the
+-- names in the green of the XP bar's odds' titles, the numbers in the gold
+-- of the titles and of the meter's DPS.
+local STRIP_NAME = { 0.35, 0.90, 0.55 }
+-- The crits' numbers in a quieter gold: the damage's alone is bright.
+local STRIP_VALUE = { 0.86, 0.74, 0.36 }
+local TIP_VALUE = { 1, 0.82, 0 }
+-- A change of the damage: its number flashes green (red for a loss) and
+-- eases back to gold.
+local RISE, FALL = { 0.45, 1.00, 0.45 }, { 1.00, 0.40, 0.35 }
+local FLASH = 0.8
+-- The damage, the stat every other one grows from, set apart: a wider part,
+-- a bigger and brighter number, a soft gold wash with a gold edge.
+local LEAD_VALUE = { 1, 0.88, 0.25 }
+local CRIT_STATS = { { "Damage", "DMG" }, { "Crit", "CRIT" }, { "Crit Dmg", "CRIT DMG" } }
+local STRIP_SHARES = { 0.40, 0.30, 0.30 }
+local STRIP_HEIGHT = 16
+local critStrip = CreateFrame("Frame", nil, critBox)
+critStrip:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -TITLE_HEIGHT)
+critStrip:SetWidth(WIDTH)
+critStrip:SetHeight(STRIP_HEIGHT)
+critStrip:EnableMouse(true)
+critStrip.wash = critStrip:CreateTexture(nil, "BACKGROUND")
+critStrip.wash:SetTexture(FLAT)
+critStrip.wash:SetAllPoints(critStrip)
+critStrip.wash:SetVertexColor(1, 1, 1, 0.04)
+critStrip.lead = critStrip:CreateTexture(nil, "BORDER")
+critStrip.lead:SetTexture(FLAT)
+critStrip.lead:SetVertexColor(1, 0.82, 0, 0.12)
+critStrip.lead:SetPoint("TOPLEFT", critStrip, "TOPLEFT", 0, 0)
+critStrip.lead:SetPoint("BOTTOMLEFT", critStrip, "BOTTOMLEFT", 0, 0)
+critStrip.lead:SetWidth(math.floor(WIDTH * STRIP_SHARES[1]))
+critStrip.leadEdge = critStrip:CreateTexture(nil, "ARTWORK")
+critStrip.leadEdge:SetTexture(FLAT)
+critStrip.leadEdge:SetVertexColor(1, 0.82, 0, 0.9)
+critStrip.leadEdge:SetPoint("TOPLEFT", critStrip, "TOPLEFT", 0, 0)
+critStrip.leadEdge:SetPoint("BOTTOMLEFT", critStrip, "BOTTOMLEFT", 0, 0)
+critStrip.leadEdge:SetWidth(2)
+critStrip.cells = {}
+for index = 1, table.getn(CRIT_STATS) do
+	local cell = {}
+	cell.label = critStrip:CreateFontString(nil, "OVERLAY")
+	cell.label:SetFont(SurvivorUI_FONT, 7 + FONT_BUMP, "OUTLINE")
+	cell.label:SetTextColor(STRIP_NAME[1], STRIP_NAME[2], STRIP_NAME[3])
+	cell.label:SetText(SurvivorUI_T(CRIT_STATS[index][2]))
+	cell.value = critStrip:CreateFontString(nil, "OVERLAY")
+	cell.value:SetFont(SurvivorUI_FONT, (index == 1 and 13 or 10) + FONT_BUMP, "OUTLINE")
+	cell.value:SetPoint("LEFT", cell.label, "RIGHT", 4, 0)
+	critStrip.cells[index] = cell
+end
+critStrip:Hide()
+
+-- Before the run's first crit: the box shows all the same, saying so.
+critBox.empty = critBox:CreateFontString(nil, "OVERLAY")
+critBox.empty:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
+critBox.empty:SetTextColor(0.55, 0.55, 0.6)
+critBox.empty:SetText(SurvivorUI_T("No crits yet."))
+critBox.empty:Hide()
+
+local function CritStatsOn()
+	return not SurvivorUIDB or SurvivorUIDB.critStats ~= false
+end
+
+-- Each number in its part, its name and number together in the middle.
+local function PlaceCritCells()
+	local x = 0
+	for index = 1, table.getn(CRIT_STATS) do
+		local cell = critStrip.cells[index]
+		local part = WIDTH * STRIP_SHARES[index]
+		local width = cell.label:GetStringWidth() + 4 + cell.value:GetStringWidth()
+		cell.label:ClearAllPoints()
+		cell.label:SetPoint("LEFT", critStrip, "LEFT", math.floor(x + (part - width) / 2 + 0.5), 0)
+		x = x + part
+	end
+end
+
+-- The damage's flash, easing back to its gold.
+local function PulseFrame()
+	local pulse = critStrip.pulse
+	local cell = critStrip.cells[1]
+	pulse.t = pulse.t + arg1
+	if pulse.t >= FLASH then
+		critStrip.pulse = nil
+		this:SetScript("OnUpdate", nil)
+		cell.value:SetTextColor(LEAD_VALUE[1], LEAD_VALUE[2], LEAD_VALUE[3])
+		return
+	end
+	local share = pulse.t / FLASH
+	local from = pulse.color
+	cell.value:SetTextColor(from[1] + (LEAD_VALUE[1] - from[1]) * share, from[2] + (LEAD_VALUE[2] - from[2]) * share,
+		from[3] + (LEAD_VALUE[3] - from[3]) * share)
+end
+
+-- The damage as the game has it (1.89: +89%), and the run's second; a
+-- change of half a point or more, in the same run, shows (PulseFrame).
+local function WatchDamage()
+	local now = AZS_GetRunTime and AZS_GetRunTime() or 0
+	local dmg = AZS_STATS and tonumber(AZS_STATS.dmg)
+	local last = critStrip.lastDmg
+	if dmg and last and now >= (critStrip.lastAt or 0) and math.abs(dmg - last) >= 0.005 then
+		critStrip.pulse = { t = 0, color = dmg > last and RISE or FALL }
+		critStrip:SetScript("OnUpdate", PulseFrame)
+	end
+	critStrip.lastDmg, critStrip.lastAt = dmg, now
+end
+
+local function FillCritStrip()
+	for index = 1, table.getn(CRIT_STATS) do
+		local cell = critStrip.cells[index]
+		cell.value:SetText(SurvivorUI_StatText and SurvivorUI_StatText(CRIT_STATS[index][1]) or "-")
+		if index > 1 then
+			cell.value:SetTextColor(STRIP_VALUE[1], STRIP_VALUE[2], STRIP_VALUE[3])
+		elseif not critStrip.pulse then
+			cell.value:SetTextColor(LEAD_VALUE[1], LEAD_VALUE[2], LEAD_VALUE[3])
+		end
+	end
+	WatchDamage()
+	PlaceCritCells()
+end
+
+-- What the three make together: a hit on average, x its base damage (a
+-- crit past 100% adds the rest to the crit damage, as the Stats panel says).
+local function AverageHit()
+	local s = AZS_STATS
+	local dmg, crit, cm = s and tonumber(s.dmg), s and tonumber(s.crit), s and tonumber(s.cm)
+	if not (dmg and crit and cm) then
+		return nil
+	end
+	local chance = math.min(1, math.max(0, crit))
+	return dmg * (1 + chance * (cm + math.max(0, crit - 1) - 1))
+end
+
+critStrip:SetScript("OnEnter", function()
+	Beside(this, critBox)
+	GameTooltip:SetText(SurvivorUI_T("Damage and crits"), 1, 0.82, 0)
+	for index = 1, table.getn(CRIT_STATS) do
+		local label = CRIT_STATS[index][1]
+		local text = SurvivorUI_StatText and SurvivorUI_StatText(label) or "-"
+		GameTooltip:AddDoubleLine(SurvivorUI_StatName and SurvivorUI_StatName(label) or label, text,
+			STRIP_NAME[1], STRIP_NAME[2], STRIP_NAME[3], TIP_VALUE[1], TIP_VALUE[2], TIP_VALUE[3])
+	end
+	local average = AverageHit()
+	if average then
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Your average hit"), SurvivorUI_TF("x{1} its base", string.format("%.2f", average)),
+			1, 1, 1, 1, 1, 1)
+		GameTooltip:AddLine(SurvivorUI_T("Damage x (1 + Crit x (Crit Dmg - 1)): what the three make together."), 0.6, 0.6, 0.65, 1)
+	end
+	GameTooltip:AddLine(SurvivorUI_T("As the Stats panel has them: how much more damage your spells deal, the chance a spell strikes critically, and how much of a spell's damage a critical strike deals."), 0.6, 0.6, 0.65, 1)
+	GameTooltip:Show()
+end)
+critStrip:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
 local critRows = {}
 for index = 1, CRIT_ROWS do
 	-- Rows in the build list's look: the spell's icon, the row filled with its
@@ -1124,11 +1294,39 @@ local function DrawCrits()
 		end
 	end
 	local count = math.min(CRIT_ROWS, table.getn(sorted))
-	if count == 0 then
+	-- From the run's start, crits or not: "No crits yet." until the first.
+	-- A run on as the game tells it (its own clock only for a game without
+	-- the phase, so the lobby shows no empty box).
+	local running = Game() ~= nil or (not AZS_GetPhase and run.started ~= nil)
+	if count == 0 and not running then
+		critStrip.lastDmg = nil
 		critBox:Hide()
 		return
 	end
-	critBox:SetHeight(TITLE_HEIGHT + 8 + count * ROW_HEIGHT)
+	-- The strip under the title, the rows under it.
+	local strip = CritStatsOn()
+	if critStrip.on ~= strip then
+		critStrip.on = strip
+		local below = strip and STRIP_HEIGHT or 0
+		for index = 1, CRIT_ROWS do
+			critRows[index]:ClearAllPoints()
+			critRows[index]:SetPoint("TOPLEFT", critBox, "TOPLEFT", 8, -TITLE_HEIGHT - 4 - below - (index - 1) * ROW_HEIGHT)
+		end
+	end
+	if strip then
+		FillCritStrip()
+		critStrip:Show()
+	else
+		critStrip:Hide()
+	end
+	if count == 0 then
+		critBox.empty:ClearAllPoints()
+		critBox.empty:SetPoint("LEFT", critBox, "TOPLEFT", 12, -TITLE_HEIGHT - 4 - (strip and STRIP_HEIGHT or 0) - ROW_HEIGHT / 2)
+		critBox.empty:Show()
+	else
+		critBox.empty:Hide()
+	end
+	critBox:SetHeight(TITLE_HEIGHT + 8 + (strip and STRIP_HEIGHT or 0) + math.max(1, count) * ROW_HEIGHT)
 	critBox:Show()
 end
 

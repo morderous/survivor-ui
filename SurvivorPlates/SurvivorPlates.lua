@@ -80,7 +80,9 @@ local EXECUTE_RANGE = 0.30      -- the game's execute effects start below this s
 
 local KINDS = {
 	normal   = { width = 100, height = 9,  nameSize = 9,  color = { 0.84, 0.20, 0.20 } },
-	elite    = { width = 130, height = 11, nameSize = 11, color = { 1.00, 0.55, 0.10 } },
+	-- Elites, guardians and bosses in the item qualities' order, each a
+	-- little lighter: uncommon's lime (not the pets' mint), rare, epic.
+	elite    = { width = 130, height = 11, nameSize = 11, color = { 0.35, 1.00, 0.20 } },
 	guardian = { width = 150, height = 12, nameSize = 12, color = { 0.20, 0.75, 0.95 } },
 	boss     = { width = 170, height = 14, nameSize = 13, color = { 0.72, 0.32, 1.00 } },
 	-- A friend's plate, small and always named: your pets and summons green,

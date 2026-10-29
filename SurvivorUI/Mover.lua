@@ -948,8 +948,11 @@ end
 
 -- The cards' part of the screen, in its shares from the bottom left: the
 -- level's three, its title over them and its buttons under them (0.29 to
--- 0.71 across, 0.21 to 0.79 up at 2560 by 1440), a margin round them.
-local CARDS = { left = 0.28, right = 0.72, bottom = 0.19, top = 0.80 }
+-- 0.71 across, 0.21 to 0.79 up at 2560 by 1440), a margin round them; wider
+-- for a larger HUD scale (0.22 to 0.78 seen on Discord), and down to the
+-- screen's foot, where the game's row of spells, Skip and Reroll sits under
+-- them (0.16 up there), so the pieces at the bottom middle fade too.
+local CARDS = { left = 0.22, right = 0.78, bottom = 0, top = 0.80 }
 -- Over the cards with the pieces: the tooltips they show, and what goes with
 -- a piece (the chat's panel, ours, behind the game's chat).
 local OVER_TIPS = { "GameTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "SurvivorUICritTip", "SurvivorUILuckCard" }

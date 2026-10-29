@@ -670,7 +670,7 @@ local function EliteSlots()
 	return math.max(4, math.min(12, math.floor(count + 0.5)))
 end
 local ELITE_TOP, ELITE_LINE = 6, 12     -- room over the row, and its line of words
-local ELITE_COLOR = { 1.00, 0.55, 0.15 }
+local ELITE_COLOR = { 0.35, 1.00, 0.20 }
 
 local function TrackerElites()
 	return not (SurvivorUIDB and SurvivorUIDB.trackerElites == false)
@@ -785,7 +785,7 @@ local function EliteRow(y)
 	if total == 0 then
 		head.eliteCount:SetText(SurvivorUI_T("|cff8a8a8anone|r"))
 	elseif hurt > 0 then
-		head.eliteCount:SetText("|cffffffff"..SurvivorUI_TF("{1} alive", total).."|r  ·  |cffff8c26"..SurvivorUI_TF("{1} fighting", hurt).."|r")
+		head.eliteCount:SetText("|cffffffff"..SurvivorUI_TF("{1} alive", total).."|r  ·  |cff59ff33"..SurvivorUI_TF("{1} fighting", hurt).."|r")
 	else
 		head.eliteCount:SetText("|cffffffff"..SurvivorUI_TF("{1} alive", total).."|r")
 	end

@@ -238,7 +238,7 @@ function SurvivorUI_StatName(label, english)
 	return SurvivorUI_T(SHOWN_AS[label] or label)
 end
 
--- label, value(s), what it means, and for the conditional rows when to show.
+-- label, value(s), what it means.
 local SECTIONS = {
 	{ title = "Offense", color = { 1.00, 0.45, 0.25 }, rows = {
 		{ "Crit",     function(s) return string.format("%.1f%%", s.crit * 100) end, "The chance a spell strikes critically. Past 100%, the rest adds to your critical damage." },
@@ -273,13 +273,13 @@ local SECTIONS = {
 		{ "DoT Haste",  function(s) return Pct(s.doth) end, "Your damage-over-time effects tick this much faster." },
 	} },
 	{ title = "Bonus damage", color = { 1.00, 0.82, 0.00 }, rows = {
-		{ "Vs Elites",     function(s) return Pct(s.big) end,  "More damage to elites and bosses.", "big" },
-		{ "Execute",       function(s) return Pct(s.exe) end,  "More damage to enemies below 30% health.", "exe" },
-		{ "Vs Controlled", function(s) return Pct(s.cc) end,   "More damage to rooted, stunned, slowed or fleeing enemies.", "cc" },
-		{ "Vs Afflicted",  function(s) return Pct(s.dotd) end, "More damage to enemies carrying one of your damage-over-time effects.", "dotd" },
-		{ "Shielded",      function(s) return Pct(s.shd) end,  "More damage while you hold an absorb shield.", "shd" },
-		{ "Melee",         function(s) return Pct(s.auto) end, "Your melee swings deal this much more damage.", "auto" },
-		{ "Pet Damage",    function(s) return Pct(s.pet) end,  "Your pets deal this much more damage.", "pet" },
+		{ "Vs Elites",     function(s) return Pct(s.big) end,  "More damage to elites and bosses." },
+		{ "Execute",       function(s) return Pct(s.exe) end,  "More damage to enemies below 30% health." },
+		{ "Vs Controlled", function(s) return Pct(s.cc) end,   "More damage to rooted, stunned, slowed or fleeing enemies." },
+		{ "Vs Afflicted",  function(s) return Pct(s.dotd) end, "More damage to enemies carrying one of your damage-over-time effects." },
+		{ "Shielded",      function(s) return Pct(s.shd) end,  "More damage while you hold an absorb shield." },
+		{ "Melee",         function(s) return Pct(s.auto) end, "Your melee swings deal this much more damage." },
+		{ "Pet Damage",    function(s) return Pct(s.pet) end,  "Your pets deal this much more damage." },
 	} },
 }
 
@@ -532,6 +532,21 @@ end
 -- For the options: every group and its numbers, in the first order.
 function SurvivorUI_StatList()
 	return SECTIONS
+end
+
+-- A number as the Stats panel reads it ("+200%", "22.0%", "232%"), by its
+-- label, with its group's color; "-" without a run (Biggest Crits' strip).
+function SurvivorUI_StatText(label)
+	local s = Stats()
+	for index = 1, table.getn(SECTIONS) do
+		local section = SECTIONS[index]
+		for each = 1, table.getn(section.rows) do
+			if section.rows[each][1] == label then
+				return s and section.rows[each][2](s) or "-", section.color
+			end
+		end
+	end
+	return "-"
 end
 
 function SurvivorUI_StatShown(label)
@@ -875,13 +890,10 @@ local function MakeView(alone)
 			local section = ordered[index]
 			for each = 1, table.getn(section.rows) do
 				local entry = section.rows[each]
-				local relevant = not entry[4] or (s and s[entry[4]] ~= 0)
-				if (relevant or arranging) and not Hidden(entry[1]) then
+				if not Hidden(entry[1]) then
 					full = full + 1
 				end
-				if relevant and hideZero and ReadsAtMostZero(entry, s) then
-					relevant = false
-				end
+				local relevant = not (hideZero and ReadsAtMostZero(entry, s))
 				if (relevant or arranging) and not Hidden(entry[1]) then
 					table.insert(visible, entry)
 				end
@@ -1023,14 +1035,11 @@ local function MakeView(alone)
 		end
 
 		content:SetHeight(math.max(10, y))
-		-- The panel as tall as its rows (sized, no taller than its size: past
-		-- it, they scroll).
+		-- The panel as tall as its rows. Sized, they fill its size; should more
+		-- show than its size holds at their smallest, it grows to hold them all
+		-- (past its bottom they would only scroll, with nothing to say so).
 		if alone and not sizing then
-			local tall = 28 + math.max(10, y) + 6
-			if SavedSize() then
-				tall = math.min(tall, SavedSize()[2])
-			end
-			stats:SetHeight(tall)
+			stats:SetHeight(28 + math.max(10, y) + 6)
 		end
 		scrollRange = math.max(0, y - scroll:GetHeight())
 		if scrollOffset > scrollRange then

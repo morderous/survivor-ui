@@ -62,6 +62,13 @@
 //     never over Survivor UI's folders; and the ones put in by hand: each
 //     installed, updated (one, or all at once), on or off, or sent to the
 //     Recycle Bin;
+//   - adds an addon from GitHub (Addons tab, 1.7.0): its repository's link
+//     or owner/name, looked up (its newest release, a beta when it has only
+//     betas, else its source as it stands) and its zip read for its folders
+//     and .toc; it joins the list as the checked ones do, marked "added by
+//     you", under the same rules, with a warning before its first install.
+//     Kept in my-addons.json beside launcher.ini, on this PC only: the
+//     launcher sends it nowhere;
 //   - each addon on or off for the game (Addons tab), in the game's own
 //     list (AddOns\account.txt): nothing deleted, so the launcher serves a
 //     player without the addons too;
@@ -108,7 +115,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.6.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.7.0.0")]
 
 namespace SurvivorInstaller
 {
@@ -1647,6 +1654,23 @@ namespace SurvivorInstaller
                 return box.ShowDialog(this) == DialogResult.Yes ? box.Picked : -1;
         }
 
+        // The box with a line to type in: what was typed on the first button
+        // (go), null on Cancel.
+        string AskText(string text, string caption, string start, string go)
+        {
+            using (ArtBox box = new ArtBox(this, text, caption, MessageBoxButtons.OKCancel, MessageBoxIcon.Question, null, 0, start ?? "", new[] { go, "Cancel" }))
+                return box.ShowDialog(this) == DialogResult.OK ? box.Typed : null;
+        }
+
+        // The box with its buttons' own words: Yes for the first, No the
+        // second, Cancel a third.
+        DialogResult AskWith(string text, string caption, MessageBoxIcon icon, params string[] labels)
+        {
+            MessageBoxButtons buttons = labels.Length > 2 ? MessageBoxButtons.YesNoCancel : labels.Length > 1 ? MessageBoxButtons.YesNo : MessageBoxButtons.OK;
+            using (ArtBox box = new ArtBox(this, text, caption, buttons, icon, null, 0, null, labels))
+                return box.ShowDialog(this);
+        }
+
         class ArtBox : Form
         {
             readonly float k;
@@ -1658,11 +1682,24 @@ namespace SurvivorInstaller
             int hotOption = -1;
             public int Picked;
             Bitmap stone;
+            readonly TextBox inputBox;
+
+            // What was typed in its line, for a box that has one.
+            public string Typed
+            {
+                get { return inputBox != null ? inputBox.Text : null; }
+            }
 
             public ArtBox(MainForm owner, string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon)
                 : this(owner, text, caption, buttons, icon, null, 0) { }
 
             public ArtBox(MainForm owner, string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon, string[] lines, int picked)
+                : this(owner, text, caption, buttons, icon, lines, picked, null, null) { }
+
+            // Input, when given, a line to type in under the words (its text at
+            // first); labels, when given, the buttons' own words in their order.
+            public ArtBox(MainForm owner, string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon, string[] lines, int picked,
+                string input, string[] labels)
             {
                 k = owner.ui;
                 words = text ?? "";
@@ -1695,6 +1732,20 @@ namespace SurvivorInstaller
                 for (int i = 0; i < options.Length; i++)
                     optionAt[i] = new Rectangle(wordsAt.X, optionsTop + i * row, textWidth, row);
                 if (options.Length > 0) buttonsTop = Math.Max(buttonsTop, optionsTop + options.Length * row + (int)(18 * k));
+                if (input != null)
+                {
+                    inputBox = new TextBox();
+                    inputBox.Font = Font;
+                    inputBox.BackColor = Color.FromArgb(24, 23, 21);
+                    inputBox.ForeColor = Color.FromArgb(255, 244, 210);
+                    inputBox.BorderStyle = BorderStyle.FixedSingle;
+                    inputBox.Text = input;
+                    inputBox.Location = new Point(wordsAt.X, top + measured.Height + (int)(12 * k));
+                    inputBox.Width = textWidth;
+                    Controls.Add(inputBox);
+                    buttonsTop = Math.Max(buttonsTop, inputBox.Bottom + (int)(20 * k));
+                    Shown += delegate { inputBox.Focus(); inputBox.SelectAll(); };
+                }
                 MouseMove += delegate (object sender, MouseEventArgs e)
                 {
                     int over = Array.FindIndex(optionAt, at => at.Contains(e.Location));
@@ -1719,7 +1770,13 @@ namespace SurvivorInstaller
                 else choices.Add(new KeyValuePair<string, DialogResult>("OK", DialogResult.OK));
                 if (buttons == MessageBoxButtons.YesNoCancel || buttons == MessageBoxButtons.OKCancel)
                     choices.Add(new KeyValuePair<string, DialogResult>("Cancel", DialogResult.Cancel));
+                if (labels != null)
+                    for (int i = 0; i < choices.Count && i < labels.Length; i++)
+                        choices[i] = new KeyValuePair<string, DialogResult>(labels[i], choices[i].Value);
                 int buttonWidth = (int)(112 * k), between = (int)(10 * k);
+                using (Font bold = new Font("Segoe UI", 9.5f * k, FontStyle.Bold))
+                    foreach (KeyValuePair<string, DialogResult> choice in choices)
+                        buttonWidth = Math.Max(buttonWidth, TextRenderer.MeasureText(choice.Key, bold).Width + (int)(28 * k));
                 int x = width - pad - choices.Count * buttonWidth - (choices.Count - 1) * between;
                 Button first = null, last = null;
                 for (int i = 0; i < choices.Count; i++)
@@ -2681,6 +2738,7 @@ namespace SurvivorInstaller
         static readonly string[] AddonFileKinds = { ".lua", ".xml", ".toc", ".tga", ".blp", ".ttf", ".otf", ".mp3", ".ogg", ".wav", ".txt", ".md" };
         static readonly Color InstalledColor = Color.FromArgb(90, 220, 110);
         static readonly Color OutdatedColor = Color.FromArgb(240, 96, 84);
+        static readonly Color AddedColor = Color.FromArgb(120, 178, 236);
         Font addonSmall;
 
         // Survivor UI and Survivor Plates: the first rows, recommended; they
@@ -2706,6 +2764,24 @@ namespace SurvivorInstaller
             // size and sha256; or why it could not be asked.
             public string ReleaseTag, ReleaseName, ZipName, ZipUrl, Sha256, Problem;
             public long ZipSize;
+            // One its user added from GitHub (my-addons.json): Branch its
+            // repository's own, followed while it has no release; Beta its
+            // newest a beta (it has no other), FromBranch its source as it
+            // stands (ReleaseTag the commit, ReleaseName its day).
+            public bool Mine, Beta, FromBranch;
+            public string Branch;
+        }
+
+        // The setting its release installed is kept by: a checked one's by its
+        // name, one added by its repository.
+        internal static string InstalledKey(ListedAddon addon)
+        {
+            return addon.Mine ? "mine." + addon.Repo.ToLowerInvariant() : "addon." + addon.Name;
+        }
+
+        static bool SameAddon(ListedAddon a, ListedAddon b)
+        {
+            return a.Mine == b.Mine && (a.Mine ? string.Equals(a.Repo, b.Repo, StringComparison.OrdinalIgnoreCase) : a.Name == b.Name);
         }
 
         readonly ListView addonList = new ListView();
@@ -2713,8 +2789,9 @@ namespace SurvivorInstaller
         readonly Button addonInstall = new Button();
         readonly Button addonRemove = new Button();
         readonly Button addonUpdateAll = new Button();
+        readonly Button addonAdd = new Button();
         readonly CheckBox addonUse = new CheckBox();
-        LinkLabel addonPage;
+        LinkLabel addonPage, addonForget;
         List<ListedAddon> listedAddons = new List<ListedAddon>();
         DateTime addonsAsked = DateTime.MinValue;
         bool addonsAsking, addonBusy, showingAddon;
@@ -2722,7 +2799,7 @@ namespace SurvivorInstaller
         void BuildAddonsPage(Panel page)
         {
             Section(page, "Addons", 20, 10, 720);
-            Label note = Caption(page, "Survivor UI first, recommended; then addons morderous checked, and the ones put in by hand.", 20, 32);
+            Label note = Caption(page, "Survivor UI first; then addons morderous checked, yours, and the ones put in by hand.", 20, 32);
             note.Font = new Font("Segoe UI", 8f);
 
             // The list ones first, the ones put in by hand under them; one picked
@@ -2770,6 +2847,16 @@ namespace SurvivorInstaller
                     Rectangle tag = new Rectangle(words.X + name + S(5), words.Y, Math.Max(0, words.Width - name - S(5)), words.Height);
                     TextRenderer.DrawText(e.Graphics, "(recommended)", addonSmall, tag, InstalledColor, flags);
                 }
+                // One its user added: "(added by you)", small and blue.
+                ListedAddon added = e.Item.Tag as ListedAddon;
+                if (e.ColumnIndex == 0 && added != null && added.Mine)
+                {
+                    if (addonSmall == null || addonSmall.Size != addonList.Font.Size * 0.8f)
+                        addonSmall = new Font(addonList.Font.FontFamily, addonList.Font.Size * 0.8f);
+                    int name = TextRenderer.MeasureText(e.Graphics, e.SubItem.Text, addonList.Font, words.Size, TextOnly).Width;
+                    Rectangle tag = new Rectangle(words.X + name + S(5), words.Y, Math.Max(0, words.Width - name - S(5)), words.Height);
+                    TextRenderer.DrawText(e.Graphics, "(added by you)", addonSmall, tag, AddedColor, flags);
+                }
             };
             addonList.SelectedIndexChanged += delegate { ShowAddonPicked(); };
             page.Controls.Add(addonList);
@@ -2781,8 +2868,19 @@ namespace SurvivorInstaller
             addonUpdateAll.Size = new Size(150, 26);
             addonUpdateAll.Click += delegate { UpdateAll(); };
             page.Controls.Add(addonUpdateAll);
+            // Beside it: one more from GitHub, for this PC's list only.
+            Style(addonAdd, "Add from GitHub...");
+            addonAdd.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            addonAdd.Location = new Point(440, 24);
+            addonAdd.Size = new Size(144, 26);
+            addonAdd.Click += delegate { AddFromGitHub(); };
+            tips.SetToolTip(addonAdd, "An addon's repository on GitHub, added to your list here:\n" +
+                "installed and updated like the others. On this PC only.");
+            page.Controls.Add(addonAdd);
+            Wear(addonAdd, "stone");
 
             addonAbout.AutoSize = false;
+            addonAbout.AutoEllipsis = true;
             addonAbout.UseMnemonic = false;
             addonAbout.Location = new Point(20, 300);
             addonAbout.Size = new Size(720, 34);
@@ -2818,6 +2916,9 @@ namespace SurvivorInstaller
                 if (listed != null) Open("https://github.com/" + listed.Repo);
                 else if (PickedAddon() is OurAddon) Open("https://github.com/" + Repo);
             });
+            // One added by you: off your list again, at the about's right.
+            addonForget = Link(page, "Remove from my list", 610, 302, ForgetPicked);
+            addonForget.Visible = false;
 
             // The beta: lavender, its version on it; a warning first.
             betaButton.Text = "No beta right now";
@@ -2865,7 +2966,10 @@ namespace SurvivorInstaller
             List<ListedAddon> found;
             try { found = ReadAddons(Download(AddonsUrl)); }
             catch { found = BuiltInAddons(); }
-            foreach (ListedAddon addon in found)
+            List<ListedAddon> mine = Unlisted(LoadMyAddons(), found);
+            List<ListedAddon> all = new List<ListedAddon>(found);
+            all.AddRange(mine);
+            foreach (ListedAddon addon in all)
             {
                 try { AskRelease(addon); }
                 catch (Exception error) { addon.Problem = error.Message; }
@@ -2877,12 +2981,778 @@ namespace SurvivorInstaller
             }
             BeginInvoke(new Action(delegate
             {
-                listedAddons = found;
+                // Yours as the file has them now (one added or taken off
+                // meanwhile counts), each with what was just asked of it.
+                List<ListedAddon> list = new List<ListedAddon>(found);
+                foreach (ListedAddon now in Unlisted(LoadMyAddons(), found))
+                {
+                    ListedAddon asked = mine.Find(each => SameAddon(each, now)) ?? listedAddons.Find(each => SameAddon(each, now));
+                    list.Add(asked ?? now);
+                }
+                CarryOver(found);
+                listedAddons = list;
                 addonsAsked = DateTime.Now;
                 addonsAsking = false;
                 FillAddons();
                 if (told) Status("The list of addons is up to date.");
             }));
+        }
+
+        // --- Added by you -------------------------------------------------------
+
+        // The addons its user added from GitHub: my-addons.json beside
+        // launcher.ini, read and written only here, on this PC; the launcher
+        // sends it nowhere. Each as the checked ones are, its folders read in
+        // its zip as it was added and again as each release comes in.
+        static string MyAddonsFile
+        {
+            get { return Path.Combine(Path.GetDirectoryName(ConfigPath), "my-addons.json"); }
+        }
+
+        internal static List<ListedAddon> LoadMyAddons()
+        {
+            try
+            {
+                if (File.Exists(MyAddonsFile)) return ReadMyAddons(File.ReadAllText(MyAddonsFile));
+            }
+            catch { }
+            return new List<ListedAddon>();
+        }
+
+        // Written beside it first, then put in its place: a write cut short
+        // leaves the list as it was.
+        static void SaveMyAddons(List<ListedAddon> mine)
+        {
+            string fresh = MyAddonsFile + ".new";
+            File.WriteAllText(fresh, WriteMyAddons(mine), new System.Text.UTF8Encoding(false));
+            if (File.Exists(MyAddonsFile)) File.Replace(fresh, MyAddonsFile, null);
+            else File.Move(fresh, MyAddonsFile);
+        }
+
+        // {"addons": [{"name", "author", "repo", "asset"? (none: its release's
+        // source), "branch"?, "folders", "about"?}, ...]}, in the name's order.
+        internal static List<ListedAddon> ReadMyAddons(string json)
+        {
+            List<ListedAddon> list = new List<ListedAddon>();
+            Dictionary<string, object> data = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(json);
+            foreach (object item in (System.Collections.IEnumerable)data["addons"])
+            {
+                Dictionary<string, object> entry = item as Dictionary<string, object>;
+                if (entry == null) continue;
+                Func<string, string> text = name => entry.ContainsKey(name) && entry[name] != null ? Convert.ToString(entry[name]) : null;
+                ListedAddon addon = new ListedAddon
+                {
+                    Mine = true, Name = text("name"), Author = text("author"), Repo = text("repo"), Asset = text("asset"),
+                    Branch = text("branch"), About = text("about"),
+                };
+                List<string> folders = new List<string>();
+                object[] given = entry.ContainsKey("folders") ? entry["folders"] as object[] : null;
+                if (given != null)
+                    foreach (object folder in given) folders.Add(Convert.ToString(folder));
+                addon.Folders = folders.ToArray();
+                if (addon.Name != null && addon.Repo != null && ParseRepo(addon.Repo) == addon.Repo && SafeFolders(addon.Folders)
+                    && !list.Exists(each => SameAddon(each, addon)))
+                    list.Add(addon);
+            }
+            list.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            return list;
+        }
+
+        internal static string WriteMyAddons(List<ListedAddon> mine)
+        {
+            List<Dictionary<string, object>> entries = new List<Dictionary<string, object>>();
+            foreach (ListedAddon addon in mine)
+            {
+                Dictionary<string, object> entry = new Dictionary<string, object>();
+                entry["name"] = addon.Name;
+                entry["author"] = addon.Author;
+                entry["repo"] = addon.Repo;
+                if (addon.Asset != null) entry["asset"] = addon.Asset;
+                if (addon.Branch != null) entry["branch"] = addon.Branch;
+                entry["folders"] = addon.Folders;
+                if (addon.About != null) entry["about"] = addon.About;
+                entries.Add(entry);
+            }
+            Dictionary<string, object> data = new Dictionary<string, object>();
+            data["addons"] = entries;
+            return new JavaScriptSerializer().Serialize(data);
+        }
+
+        // Yours less the ones the checked list holds now (its repository, or
+        // a folder of it): the checked one stands in their place.
+        internal static List<ListedAddon> Unlisted(List<ListedAddon> mine, List<ListedAddon> listed)
+        {
+            return mine.FindAll(each => ListedAs(each.Repo, each.Folders, listed) == null);
+        }
+
+        internal static ListedAddon ListedAs(string repo, string[] folders, List<ListedAddon> listed)
+        {
+            foreach (ListedAddon addon in listed)
+            {
+                if (string.Equals(addon.Repo, repo, StringComparison.OrdinalIgnoreCase)) return addon;
+                foreach (string folder in folders ?? new string[0])
+                    if (Array.Exists(addon.Folders, its => string.Equals(its, folder, StringComparison.OrdinalIgnoreCase))) return addon;
+            }
+            return null;
+        }
+
+        // One you added that the checked list took in since: the release you
+        // installed stands as the checked one's, when it is of the same
+        // repository.
+        static void CarryOver(List<ListedAddon> listed)
+        {
+            foreach (ListedAddon mine in LoadMyAddons())
+            {
+                ListedAddon checkedOne = ListedAs(mine.Repo, mine.Folders, listed);
+                string tag = Setting(InstalledKey(mine), "");
+                if (checkedOne != null && tag != "" && string.Equals(checkedOne.Repo, mine.Repo, StringComparison.OrdinalIgnoreCase)
+                    && Setting(InstalledKey(checkedOne), "") == "")
+                    SetSetting(InstalledKey(checkedOne), tag);
+            }
+        }
+
+        // "github.com/owner/name", its link in any form (".git", a page of
+        // it, "www.", "http://") or "owner/name" alone: "owner/name"; null
+        // for anything else.
+        internal static string ParseRepo(string given)
+        {
+            string text = (given ?? "").Trim().Trim('"', '\'', '<', '>');
+            Match link = Regex.Match(text, @"^(?:git@github\.com:|(?:https?://)?(?:www\.)?github\.com/)([^/?#\s]+)/([^/?#\s]+)", RegexOptions.IgnoreCase);
+            string owner, name;
+            if (link.Success)
+            {
+                owner = link.Groups[1].Value;
+                name = link.Groups[2].Value;
+            }
+            else
+            {
+                Match plain = Regex.Match(text, @"^([^/\s]+)/([^/\s]+?)/?$");
+                if (!plain.Success || plain.Groups[1].Value.Contains(".")) return null;
+                owner = plain.Groups[1].Value;
+                name = plain.Groups[2].Value;
+            }
+            if (name.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) name = name.Substring(0, name.Length - 4);
+            if (!Regex.IsMatch(owner, @"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$")) return null;
+            if (!Regex.IsMatch(name, @"^[A-Za-z0-9._-]{1,100}$") || name == "." || name == "..") return null;
+            return owner + "/" + name;
+        }
+
+        // A zip's name as a pattern for the next releases' ones: its numbers
+        // as * ("ASBuilder-1.8.2.zip" as "ASBuilder-*.zip", "x-1.6.2-beta.1.zip"
+        // as "x-*-beta.*.zip").
+        internal static string AssetPattern(string zipName)
+        {
+            return Regex.Replace(zipName, @"\d+(\.\d+)*", "*");
+        }
+
+        // The addons in a zip: each folder holding a .toc of its own name
+        // (Name/Name.toc), wherever, or the .toc at the top of the zip (or
+        // of the one folder holding all of it, as a repository's archive
+        // has it), its name the folder's; none inside another. Several at
+        // the top (one for each game): the one named as the repository,
+        // else the shortest.
+        internal static string[] FoldersInZip(string zip, string repoName)
+        {
+            using (ZipArchive archive = ZipFile.OpenRead(zip))
+            {
+                List<string> names = new List<string>();
+                foreach (ZipArchiveEntry entry in archive.Entries) names.Add(entry.FullName.Replace('\\', '/'));
+                return FoldersIn(names, repoName);
+            }
+        }
+
+        internal static string[] FoldersIn(List<string> names, string repoName)
+        {
+            // The top: the one folder all of it is in, if any.
+            string top = null;
+            foreach (string name in names)
+            {
+                int slash = name.IndexOf('/');
+                string first = slash > 0 ? name.Substring(0, slash + 1) : "";
+                if (top == null) top = first;
+                else if (!string.Equals(top, first, StringComparison.OrdinalIgnoreCase)) top = "";
+            }
+            top = top ?? "";
+            List<KeyValuePair<string, string>> found = new List<KeyValuePair<string, string>>();   // its root in the zip, its folder
+            List<string> atTop = new List<string>();
+            foreach (string name in names)
+            {
+                if (!name.EndsWith(".toc", StringComparison.OrdinalIgnoreCase) || name.EndsWith("/")) continue;
+                int slash = name.LastIndexOf('/');
+                string prefix = name.Substring(0, slash + 1), file = name.Substring(slash + 1);
+                string toc = file.Substring(0, file.Length - 4);
+                string parent = prefix.Length > 0 ? Path.GetFileName(prefix.TrimEnd('/')) : "";
+                if (string.Equals(parent, toc, StringComparison.OrdinalIgnoreCase)) found.Add(new KeyValuePair<string, string>(prefix, parent));
+                else if (string.Equals(prefix, top, StringComparison.OrdinalIgnoreCase)) atTop.Add(toc);
+            }
+            // A .toc of the top's own name is the addon there; the others beside it are not.
+            if (atTop.Count > 0 && !found.Exists(each => string.Equals(each.Key, top, StringComparison.OrdinalIgnoreCase)))
+            {
+                string best = atTop.Find(toc => string.Equals(toc, repoName, StringComparison.OrdinalIgnoreCase));
+                if (best == null)
+                {
+                    atTop.Sort((a, b) => a.Length != b.Length ? a.Length - b.Length : string.Compare(a, b, StringComparison.OrdinalIgnoreCase));
+                    best = atTop[0];
+                }
+                found.Add(new KeyValuePair<string, string>(top, best));
+            }
+            found.Sort((a, b) => a.Key.Length != b.Key.Length ? a.Key.Length - b.Key.Length : string.Compare(a.Value, b.Value, StringComparison.OrdinalIgnoreCase));
+            List<KeyValuePair<string, string>> kept = new List<KeyValuePair<string, string>>();
+            foreach (KeyValuePair<string, string> each in found)
+                if (!kept.Exists(outer => each.Key.StartsWith(outer.Key, StringComparison.OrdinalIgnoreCase))
+                    && !kept.Exists(other => string.Equals(other.Value, each.Value, StringComparison.OrdinalIgnoreCase)))
+                    kept.Add(each);
+            return kept.ConvertAll(each => each.Value).ToArray();
+        }
+
+        // The .toc of a folder in a zip (the one PutAddon would take): its
+        // Title, Version, Author, Notes; null when there is none.
+        internal static Dictionary<string, string> TocInZip(string zip, string folder)
+        {
+            using (ZipArchive archive = ZipFile.OpenRead(zip))
+            {
+                ZipArchiveEntry best = null;
+                foreach (ZipArchiveEntry entry in archive.Entries)
+                    if (string.Equals(entry.Name, folder + ".toc", StringComparison.OrdinalIgnoreCase) && (best == null || entry.FullName.Length < best.FullName.Length))
+                        best = entry;
+                if (best == null) return null;
+                List<string> lines = new List<string>();
+                using (StreamReader reader = new StreamReader(best.Open()))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null) lines.Add(line);
+                }
+                return ReadToc(lines);
+            }
+        }
+
+        // A repository looked up to be added: GitHub's word on it (its
+        // owner, its own branch, its description), then its newest release
+        // (or its source), whose zip is downloaded to the path given and read
+        // for its folders and .toc. Pick chooses among a release's zips when
+        // there are several (their names; the one taken, -1 for none).
+        // Throws, saying why, for no repository, no addon in it, or one of
+        // Survivor UI's folders.
+        internal static ListedAddon LookUpRepo(string repo, string zip, Func<string[], int> pick)
+        {
+            ListedAddon addon;
+            try { addon = ApiElseWeb(() => RepoByApi(repo), () => RepoByWeb(repo)); }
+            catch (NotOnGitHub) { throw new Exception("GitHub has no public repository " + repo + "."); }
+            if (ParseRepo(addon.Repo) != addon.Repo) addon.Repo = repo;
+            AskMine(addon, pick);
+            using (WebClient client = Client())
+                client.DownloadFile(addon.ZipUrl, zip);
+            if (addon.ZipSize > 0 && new FileInfo(zip).Length != addon.ZipSize) throw new Exception("the download is not the size its release gives.");
+            if (addon.Sha256 != null && !string.Equals(Sha256Of(zip), addon.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new Exception("the download is not the one its author's " + addon.Sums + " gives (sha256).");
+            string[] folders;
+            try { folders = FoldersInZip(zip, addon.Repo.Substring(addon.Repo.IndexOf('/') + 1)); }
+            catch (InvalidDataException) { throw new Exception("what its " + (addon.FromBranch ? "source" : "release") + " gives is not a zip."); }
+            if (folders.Length == 0)
+                throw new Exception("its " + (addon.FromBranch ? "source" : "release") + " holds no addon: no folder with a .toc of its own name.");
+            foreach (string folder in folders)
+                foreach (string ours in AddonFolders)
+                    if (string.Equals(folder, ours, StringComparison.OrdinalIgnoreCase))
+                        throw new Exception("it holds " + ours + ", Survivor UI's own folder: Survivor UI comes from its own row.");
+            if (!SafeFolders(folders)) throw new Exception("its folders are not plain addon folders.");
+            addon.Folders = folders;
+            Dictionary<string, string> toc = TocInZip(zip, folders[0]);
+            string title = TocValue(toc, "Title");
+            addon.Name = title != "" ? (title.Length > 40 ? title.Substring(0, 40).Trim() : title) : folders[0];
+            if (TocValue(toc, "Author") != "") addon.Author = TocValue(toc, "Author");
+            if (TocValue(toc, "Notes") != "") addon.About = TocValue(toc, "Notes");
+            if (addon.Author == null) addon.Author = repo.Substring(0, repo.IndexOf('/'));
+            return addon;
+        }
+
+        // A repository as GitHub's API tells it: its name as GitHub writes it,
+        // its owner, its own branch, its description.
+        static ListedAddon RepoByApi(string repo)
+        {
+            Dictionary<string, object> data = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(AskGitHub("https://api.github.com/repos/" + repo));
+            Func<Dictionary<string, object>, string, string> text = (from, name) =>
+                from != null && from.ContainsKey(name) && from[name] != null ? Convert.ToString(from[name]) : null;
+            return new ListedAddon
+            {
+                Mine = true, Repo = text(data, "full_name") ?? repo, Branch = text(data, "default_branch"),
+                About = text(data, "description"), Author = text(data.ContainsKey("owner") ? data["owner"] as Dictionary<string, object> : null, "login"),
+            };
+        }
+
+        // The same from its own page: there (404: none), its name as the page's
+        // address writes it (a renamed one's new name), its owner; its branch
+        // and description are left to the zip's .toc and to HEAD.
+        static ListedAddon RepoByWeb(string repo)
+        {
+            string landed;
+            AskPage("https://github.com/" + repo, out landed);
+            Match match = Regex.Match(landed ?? "", @"github\.com/([^/?#]+/[^/?#]+)");
+            string name = match.Success && ParseRepo(match.Groups[1].Value) != null ? match.Groups[1].Value : repo;
+            return new ListedAddon { Mine = true, Repo = name, Author = name.Substring(0, name.IndexOf('/')) };
+        }
+
+        // A release, as the API or the pages give it: its tag and name, a beta
+        // or not, its files (name, link, size: 0 where the pages give none).
+        internal class GitRelease
+        {
+            public string Tag, Name;
+            public bool Beta;
+            public List<GitAsset> Assets = new List<GitAsset>();
+        }
+
+        internal class GitAsset
+        {
+            public string Name, Url;
+            public long Size;
+        }
+
+        static GitRelease ReleaseFromJson(Dictionary<string, object> data)
+        {
+            GitRelease release = new GitRelease { Tag = Convert.ToString(data["tag_name"]) };
+            release.Name = data.ContainsKey("name") && data["name"] != null && Convert.ToString(data["name"]) != "" ? Convert.ToString(data["name"]) : release.Tag;
+            release.Beta = data.ContainsKey("prerelease") && Convert.ToBoolean(data["prerelease"]);
+            foreach (object item in (System.Collections.IEnumerable)data["assets"])
+            {
+                Dictionary<string, object> asset = (Dictionary<string, object>)item;
+                release.Assets.Add(new GitAsset { Name = Convert.ToString(asset["name"]), Url = Convert.ToString(asset["browser_download_url"]),
+                    Size = Convert.ToInt64(asset["size"]) });
+            }
+            return release;
+        }
+
+        // One you added: its newest release, a beta only when it has no other
+        // among its last ten; null for none.
+        static GitRelease NewestByApi(string repo)
+        {
+            object[] releases = new JavaScriptSerializer().DeserializeObject(AskGitHub("https://api.github.com/repos/" + repo + "/releases?per_page=10")) as object[];
+            Dictionary<string, object> beta = null;
+            foreach (object item in releases ?? new object[0])
+            {
+                Dictionary<string, object> each = item as Dictionary<string, object>;
+                if (each == null || Convert.ToBoolean(each["draft"])) continue;
+                if (!Convert.ToBoolean(each["prerelease"])) return ReleaseFromJson(each);
+                if (beta == null) beta = each;
+            }
+            return beta != null ? ReleaseFromJson(beta) : null;
+        }
+
+        // The same from the pages: the latest (releases/latest takes to its
+        // tag, or to the releases' page when there is none), else the newest
+        // on the releases' page, a beta; null for none.
+        static GitRelease NewestByWeb(string repo)
+        {
+            GitRelease release = ReleaseByWeb(repo, null);
+            if (release != null) return release;
+            string landed;
+            Match tag = Regex.Match(AskPage("https://github.com/" + repo + "/releases", out landed), "href=\"/" + Regex.Escape(repo) + "/releases/tag/([^\"]+)\"",
+                RegexOptions.IgnoreCase);
+            if (!tag.Success) return null;
+            release = ReleaseByWeb(repo, Uri.UnescapeDataString(tag.Groups[1].Value));
+            release.Beta = true;
+            return release;
+        }
+
+        // A release from the pages: the tag given, or the latest; its name from
+        // its page's title ("Release SurvivorsDragonUi 3.2.64 · ..."), its files
+        // from its expanded_assets page. Null for no latest.
+        static GitRelease ReleaseByWeb(string repo, string tag)
+        {
+            string landed, page;
+            if (tag == null)
+            {
+                page = AskPage("https://github.com/" + repo + "/releases/latest", out landed);
+                Match at = Regex.Match(landed ?? "", @"/releases/tag/([^/?#]+)$");
+                if (!at.Success) return null;
+                tag = Uri.UnescapeDataString(at.Groups[1].Value);
+            }
+            else page = AskPage("https://github.com/" + repo + "/releases/tag/" + Uri.EscapeDataString(tag), out landed);
+            GitRelease release = new GitRelease { Tag = tag, Name = tag };
+            Match title = Regex.Match(page, @"<title>Release (.+?) · ");
+            if (title.Success) release.Name = WebUtility.HtmlDecode(title.Groups[1].Value).Trim();
+            page = AskPage("https://github.com/" + repo + "/releases/expanded_assets/" + Uri.EscapeDataString(tag), out landed);
+            foreach (Match link in Regex.Matches(page, "href=\"(/[^/\"]+/[^/\"]+/releases/download/[^\"]+)\""))
+            {
+                string path = link.Groups[1].Value;
+                string name = Uri.UnescapeDataString(path.Substring(path.LastIndexOf('/') + 1));
+                if (!release.Assets.Exists(each => each.Name == name))
+                    release.Assets.Add(new GitAsset { Name = name, Url = "https://github.com" + path });
+            }
+            return release;
+        }
+
+        // One you added, asked as each check: its newest release (a beta
+        // only when it has no other among its last ten), its zip by the name
+        // kept, else its only zip, else that release's source; no release at
+        // all, its source as it stands on its own branch, the newest commit
+        // its version. Its author's sha256 list, when the release has one
+        // naming the zip, is held to. The API first, its pages when it is out
+        // of reach.
+        internal static void AskMine(ListedAddon addon, Func<string[], int> pick)
+        {
+            addon.ReleaseTag = addon.ReleaseName = addon.ZipName = addon.ZipUrl = addon.Sha256 = addon.Sums = null;
+            addon.ZipSize = 0;
+            addon.Beta = addon.FromBranch = false;
+            string repo = addon.Repo;
+            GitRelease release = ApiElseWeb(() => NewestByApi(repo), () => NewestByWeb(repo));
+            if (release == null)
+            {
+                ApiElseWeb(() => { BranchByApi(addon); return true; }, () => { BranchByWeb(addon); return true; });
+                return;
+            }
+            addon.Beta = release.Beta;
+            addon.ReleaseTag = release.Tag;
+            addon.ReleaseName = release.Name;
+            List<GitAsset> zips = release.Assets.FindAll(asset => asset.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+            GitAsset sums = release.Assets.Find(asset => Regex.IsMatch(asset.Name, @"^(sha256sums?|checksums)(\.txt)?$", RegexOptions.IgnoreCase));
+            GitAsset zip = addon.Asset != null ? zips.Find(asset => AssetMatches(asset.Name, addon.Asset)) : null;
+            if (zip == null && zips.Count == 1) zip = zips[0];
+            if (zip == null && zips.Count > 1)
+            {
+                string[] names = zips.ConvertAll(asset => asset.Name).ToArray();
+                int picked = pick != null ? pick(names) : -1;
+                if (pick != null && picked < 0) throw new Exception("no zip was picked.");
+                if (picked < 0)
+                {
+                    // Asked as a check: the one named as the repository or a folder of it.
+                    string repoName = addon.Repo.Substring(addon.Repo.IndexOf('/') + 1);
+                    picked = Array.FindIndex(names, name => name.IndexOf(repoName, StringComparison.OrdinalIgnoreCase) >= 0
+                        || Array.Exists(addon.Folders ?? new string[0], folder => name.IndexOf(folder, StringComparison.OrdinalIgnoreCase) >= 0));
+                }
+                if (picked < 0) throw new Exception("its release holds " + names.Length + " zips, none of them " + (addon.Asset ?? "named as it"));
+                zip = zips[picked];
+            }
+            if (zip == null)
+            {
+                // No zip: the release's source, as GitHub archives it.
+                addon.ZipUrl = "https://github.com/" + addon.Repo + "/archive/refs/tags/" + Uri.EscapeDataString(addon.ReleaseTag) + ".zip";
+                return;
+            }
+            addon.ZipName = zip.Name;
+            addon.ZipUrl = zip.Url;
+            addon.ZipSize = zip.Size;
+            if (addon.Asset == null || !AssetMatches(addon.ZipName, addon.Asset)) addon.Asset = AssetPattern(addon.ZipName);
+            if (sums == null) return;
+            try { addon.Sha256 = ShaIn(Download(sums.Url), addon.ZipName); }
+            catch { }
+            if (addon.Sha256 != null) addon.Sums = sums.Name;
+        }
+
+        // An author's sha256 list (SHA256SUMS: "<sha256>  <name>" a line): the
+        // one of the name given, or null.
+        static string ShaIn(string list, string name)
+        {
+            string found = null;
+            foreach (string line in list.Split('\n'))
+            {
+                Match match = Regex.Match(line.Trim(), @"^([0-9a-fA-F]{64})\s+\*?(.+)$");
+                if (match.Success && match.Groups[2].Value.Trim() == name) found = match.Groups[1].Value.ToLowerInvariant();
+            }
+            return found;
+        }
+
+        // No release: its branch's newest commit, its source at that commit.
+        static void BranchByApi(ListedAddon addon)
+        {
+            object[] commits = new JavaScriptSerializer().DeserializeObject(AskGitHub("https://api.github.com/repos/" + addon.Repo +
+                "/commits?per_page=1" + (addon.Branch != null ? "&sha=" + Uri.EscapeDataString(addon.Branch) : ""))) as object[];
+            if (commits == null || commits.Length == 0) throw new Exception("it has no release and nothing in it yet");
+            Dictionary<string, object> commit = (Dictionary<string, object>)commits[0];
+            Dictionary<string, object> inner = commit["commit"] as Dictionary<string, object>;
+            Dictionary<string, object> committer = inner != null ? inner["committer"] as Dictionary<string, object> : null;
+            FromCommit(addon, Convert.ToString(commit["sha"]), committer != null ? Convert.ToString(committer["date"]) : null);
+        }
+
+        // The same from the branch's feed of commits (HEAD: the repository's own
+        // branch, when its name is not known).
+        static void BranchByWeb(ListedAddon addon)
+        {
+            string landed, feed;
+            try { feed = AskPage("https://github.com/" + addon.Repo + "/commits/" + Uri.EscapeDataString(addon.Branch ?? "HEAD") + ".atom", out landed); }
+            catch (NotOnGitHub) { throw new Exception("it has no release and nothing in it yet"); }
+            Match sha = Regex.Match(feed, @"/commits?/([0-9a-f]{40})");
+            if (!sha.Success) throw new Exception("it has no release and nothing in it yet");
+            Match when = Regex.Match(feed, "<updated>([^<]+)</updated>");
+            FromCommit(addon, sha.Groups[1].Value, when.Success ? when.Groups[1].Value : null);
+        }
+
+        static void FromCommit(ListedAddon addon, string sha, string date)
+        {
+            addon.FromBranch = true;
+            addon.ReleaseTag = sha;
+            DateTime when;
+            addon.ReleaseName = date != null && DateTime.TryParse(date, null, System.Globalization.DateTimeStyles.RoundtripKind, out when)
+                ? when.ToLocalTime().ToString("yyyy-MM-dd") : sha.Substring(0, Math.Min(7, sha.Length));
+            addon.ZipUrl = "https://github.com/" + addon.Repo + "/archive/" + sha + ".zip";
+        }
+
+        // GitHub's API, asked without a login: 60 asks an hour from one
+        // address (an answer unchanged since costs one too). Once GitHub says
+        // they are used up, nothing more is asked until the time it gives.
+        internal static DateTime gitHubWait = DateTime.MinValue;
+
+        internal class NotOnGitHub : Exception
+        {
+            public NotOnGitHub() : base("GitHub has no such repository now (taken down, or made private)") { }
+        }
+
+        // The API's hour of asks used up.
+        internal class ApiOut : Exception
+        {
+            public ApiOut(string message) : base(message) { }
+        }
+
+        internal static string AskGitHub(string url)
+        {
+            if (DateTime.Now < gitHubWait)
+                throw new ApiOut("GitHub's limit of 60 asks an hour is used up until " + gitHubWait.ToString("HH:mm"));
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            request.UserAgent = "SurvivorUI-Installer";
+            request.Accept = "application/vnd.github+json";
+            request.Timeout = 20000;
+            try
+            {
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                using (StreamReader reader = new StreamReader(response.GetResponseStream(), System.Text.Encoding.UTF8))
+                    return reader.ReadToEnd();
+            }
+            catch (WebException error)
+            {
+                HttpWebResponse response = error.Response as HttpWebResponse;
+                if (response == null) throw;
+                using (response)
+                {
+                    if (response.StatusCode == HttpStatusCode.NotFound) throw new NotOnGitHub();
+                    if (response.StatusCode == HttpStatusCode.Conflict) throw new Exception("the repository is empty");
+                    long reset;
+                    if (response.Headers["X-RateLimit-Remaining"] == "0" && long.TryParse(response.Headers["X-RateLimit-Reset"], out reset))
+                    {
+                        gitHubWait = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(reset).ToLocalTime();
+                        throw new ApiOut("GitHub's limit of 60 asks an hour is used up until " + gitHubWait.ToString("HH:mm"));
+                    }
+                    throw;
+                }
+            }
+        }
+
+        // GitHub's own pages, the API's spare: what a browser gets, counted in
+        // none of the API's asks. Landed: the address it ended at (a redirect
+        // followed). 404: NotOnGitHub.
+        internal static string AskPage(string url, out string landed)
+        {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            request.UserAgent = "SurvivorUI-Installer";
+            request.Timeout = 20000;
+            request.AllowAutoRedirect = true;
+            try
+            {
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                using (StreamReader reader = new StreamReader(response.GetResponseStream(), System.Text.Encoding.UTF8))
+                {
+                    landed = response.ResponseUri.AbsoluteUri;
+                    return reader.ReadToEnd();
+                }
+            }
+            catch (WebException error)
+            {
+                HttpWebResponse response = error.Response as HttpWebResponse;
+                if (response != null)
+                    using (response)
+                        if (response.StatusCode == HttpStatusCode.NotFound) throw new NotOnGitHub();
+                // GitHub closes the connection in a missing page's body: its
+                // head alone tells the 404.
+                if (response == null && Missing(url)) throw new NotOnGitHub();
+                throw;
+            }
+        }
+
+        static bool Missing(string url)
+        {
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "HEAD";
+            request.UserAgent = "SurvivorUI-Installer";
+            request.Timeout = 20000;
+            try
+            {
+                request.GetResponse().Close();
+                return false;
+            }
+            catch (WebException error)
+            {
+                HttpWebResponse response = error.Response as HttpWebResponse;
+                if (response == null) return false;
+                using (response)
+                    return response.StatusCode == HttpStatusCode.NotFound;
+            }
+        }
+
+        // The API's answer; with the API out of reach (its asks used up, or
+        // GitHub not answering it), the same from the pages. Should the pages
+        // not answer either, the API's reason is the one told; what they do
+        // answer (no such repository, nothing in it) is told as it is.
+        internal static T ApiElseWeb<T>(Func<T> api, Func<T> web)
+        {
+            try { return api(); }
+            catch (ApiOut error) { return FromPages(web, error); }
+            catch (WebException error) { return FromPages(web, error); }
+        }
+
+        static T FromPages<T>(Func<T> web, Exception apiError)
+        {
+            try { return web(); }
+            catch (WebException) { throw new Exception(apiError.Message + ", and its pages did not answer either"); }
+        }
+
+        // Add from GitHub: its link asked for (one copied is offered), checked
+        // against the list, looked up, then shown with what it holds: added,
+        // or added and installed, or not.
+        void AddFromGitHub()
+        {
+            if (addonBusy || installing) return;
+            string copied = null;
+            try { if (Clipboard.ContainsText()) copied = ParseRepo(Clipboard.GetText()); } catch { }
+            string given = AskText("The link of an addon's repository on GitHub, or just its owner/name, as in cadoky/ASBuilder.\n\n" +
+                "It joins your list on this PC only: the launcher sends it nowhere.",
+                "Add an addon from GitHub", copied != null ? "https://github.com/" + copied : "", "Look it up");
+            if (given == null || given.Trim() == "") return;
+            string repo = ParseRepo(given);
+            if (repo == null)
+            {
+                Ask(this, "\"" + given.Trim() + "\" is not a repository on GitHub: github.com/<owner>/<name>.", "Add an addon from GitHub",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (string.Equals(repo, Repo, StringComparison.OrdinalIgnoreCase))
+            {
+                Ask(this, "That is Survivor UI: its row is at the top of the list.", "Add an addon from GitHub", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                PickAddon(OurUI);
+                return;
+            }
+            ListedAddon there = listedAddons.Find(each => string.Equals(each.Repo, repo, StringComparison.OrdinalIgnoreCase));
+            if (there != null)
+            {
+                Ask(this, there.Name + " is in the list already" + (there.Mine ? ", added by you." : ", one morderous checked."),
+                    "Add an addon from GitHub", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                PickAddon(there);
+                return;
+            }
+            addonBusy = true;
+            ShowAddonPicked();
+            Status("Looking up " + repo + " on GitHub...");
+            new Thread(delegate ()
+            {
+                string zip = Path.Combine(Path.GetTempPath(), "SurvivorUI-addon-" + Guid.NewGuid().ToString("N") + ".zip");
+                ListedAddon found = null;
+                string problem = null;
+                try
+                {
+                    found = LookUpRepo(repo, zip, names => (int)Invoke(new Func<int>(delegate
+                    {
+                        return Choose(repo + "'s newest release holds " + names.Length + " zips. Which one is the addon?",
+                            "Add an addon from GitHub", names, 0);
+                    })));
+                }
+                catch (Exception error) { problem = error.Message; }
+                finally
+                {
+                    try { File.Delete(zip); } catch { }
+                }
+                BeginInvoke(new Action(delegate
+                {
+                    addonBusy = false;
+                    OfferMine(repo, found, problem);
+                }));
+            }) { IsBackground = true }.Start();
+        }
+
+        // What was found, to add: its name, author, version and folders, a
+        // word that morderous has not checked it; Add to my list, or Cancel.
+        // Installing is a step of its own, from the list, with its warning
+        // the first time.
+        void OfferMine(string repo, ListedAddon found, string problem)
+        {
+            if (found == null)
+            {
+                Status(repo + " could not be added.");
+                FillAddons();
+                Ask(this, repo + " could not be added: " + problem, "Add an addon from GitHub", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            ListedAddon clash = ListedAs(found.Repo, found.Folders, listedAddons);
+            if (clash != null)
+            {
+                Status(found.Name + " is in the list already.");
+                FillAddons();
+                Ask(this, found.Name + "'s folder" + (found.Folders.Length > 1 ? "s are " : " is ") + clash.Name + "'s, in the list already" +
+                    (clash.Mine ? ", added by you." : ", one morderous checked."), "Add an addon from GitHub", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                PickAddon(clash);
+                return;
+            }
+            Status("Found " + found.Name + " on GitHub.");
+            string from = found.FromBranch ? "No release: its source as it stands on " + (found.Branch ?? "its branch") + ", changed " + found.ReleaseName + "."
+                : found.Beta ? "Its newest release, a beta (it has no other): " + found.ReleaseName + "."
+                : "Its newest release: " + found.ReleaseName + ".";
+            string words = found.Name + ", by " + found.Author + "\n" + (found.About != null ? found.About + "\n" : "") + "\n" + from +
+                "\nIts folder" + (found.Folders.Length > 1 ? "s: " : ": ") + string.Join(", ", found.Folders) + "." +
+                "\n\nmorderous has not checked it: install only addons you trust. Added, it waits in the list: Install it there when you choose.";
+            if (AskWith(words, "Add " + found.Name + "?", MessageBoxIcon.Question, "Add to my list", "Cancel") != DialogResult.Yes) return;
+            List<ListedAddon> mine = LoadMyAddons();
+            mine.RemoveAll(each => SameAddon(each, found));
+            mine.Add(found);
+            try { SaveMyAddons(mine); }
+            catch (Exception error)
+            {
+                Ask(this, found.Name + " could not be added to your list: " + error.Message, "Add an addon from GitHub", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            List<ListedAddon> list = new List<ListedAddon>(listedAddons);
+            list.Add(found);
+            listedAddons = list;
+            FillAddons();
+            PickAddon(found);
+            Status(found.Name + " is on your list: Install it when you choose, then update and switch it as the others.");
+        }
+
+        // One of yours as it now stands (its folders, its zip's name) kept in
+        // the file, unless it was taken off meanwhile.
+        static void KeepMine(ListedAddon addon)
+        {
+            List<ListedAddon> mine = LoadMyAddons();
+            int at = mine.FindIndex(each => SameAddon(each, addon));
+            if (at < 0) return;
+            mine[at] = addon;
+            try { SaveMyAddons(mine); } catch { }
+        }
+
+        static string TrustKey(ListedAddon addon)
+        {
+            return "trusted." + addon.Repo.ToLowerInvariant();
+        }
+
+        // Remove from my list: off the list; its folder, if installed, stays,
+        // shown with the ones put in by hand.
+        void ForgetPicked()
+        {
+            ListedAddon listed = PickedAddon() as ListedAddon;
+            if (listed == null || !listed.Mine || addonBusy) return;
+            bool present = AddonPresent(folderBox.Text.Trim(), listed.Folders);
+            if (Ask(this, "Remove " + listed.Name + " from your list?" + (present ? "\n\nIts folder stays in AddOns, as one put in by hand. " +
+                "To delete it too, Uninstall first." : ""), "Remove from my list", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
+            List<ListedAddon> mine = LoadMyAddons();
+            mine.RemoveAll(each => SameAddon(each, listed));
+            try { SaveMyAddons(mine); }
+            catch (Exception error)
+            {
+                Status(listed.Name + " could not be removed from your list: " + error.Message);
+                return;
+            }
+            listedAddons = listedAddons.FindAll(each => !SameAddon(each, listed));
+            SetSetting(InstalledKey(listed), "");
+            SetSetting(TrustKey(listed), "");
+            Status(listed.Name + " is off your list.");
+            FillAddons();
         }
 
         // The ones built in, for when the list is out of reach.
@@ -2959,34 +3829,33 @@ namespace SurvivorInstaller
         }
 
         // Its release (the one pinned, else the latest): the zip's url and size,
-        // and its sha256 from the author's list beside it.
+        // and its sha256 from the author's list beside it. The API first, its
+        // pages when it is out of reach (no size there: the sha256 still holds).
         internal static void AskRelease(ListedAddon addon)
         {
+            if (addon.Mine)
+            {
+                AskMine(addon, null);
+                return;
+            }
             string url = "https://api.github.com/repos/" + addon.Repo + "/releases/" + (addon.Tag != null ? "tags/" + addon.Tag : "latest");
-            Dictionary<string, object> data = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(Download(url));
-            addon.ReleaseTag = Convert.ToString(data["tag_name"]);
-            addon.ReleaseName = data.ContainsKey("name") && data["name"] != null && Convert.ToString(data["name"]) != "" ? Convert.ToString(data["name"]) : addon.ReleaseTag;
-            string sumsUrl = null;
-            foreach (object item in (System.Collections.IEnumerable)data["assets"])
-            {
-                Dictionary<string, object> asset = (Dictionary<string, object>)item;
-                string name = Convert.ToString(asset["name"]);
-                if (addon.ZipUrl == null && AssetMatches(name, addon.Asset))
-                {
-                    addon.ZipName = name;
-                    addon.ZipUrl = Convert.ToString(asset["browser_download_url"]);
-                    addon.ZipSize = Convert.ToInt64(asset["size"]);
-                }
-                if (addon.Sums != null && name == addon.Sums) sumsUrl = Convert.ToString(asset["browser_download_url"]);
-            }
-            if (addon.ZipUrl == null) throw new Exception("its release holds no " + addon.Asset);
+            GitRelease release = ApiElseWeb(
+                () => ReleaseFromJson((Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(AskGitHub(url))),
+                () => ReleaseByWeb(addon.Repo, addon.Tag));
+            if (release == null) throw new Exception("it has no release");
+            addon.ReleaseTag = release.Tag;
+            addon.ReleaseName = release.Name;
+            addon.ZipUrl = addon.ZipName = addon.Sha256 = null;
+            addon.ZipSize = 0;
+            GitAsset zip = release.Assets.Find(asset => AssetMatches(asset.Name, addon.Asset));
+            if (zip == null) throw new Exception("its release holds no " + addon.Asset);
+            addon.ZipName = zip.Name;
+            addon.ZipUrl = zip.Url;
+            addon.ZipSize = zip.Size;
             if (addon.Sums == null) return;
-            if (sumsUrl == null) throw new Exception("its release holds no " + addon.Sums);
-            foreach (string line in Download(sumsUrl).Split('\n'))
-            {
-                Match match = Regex.Match(line.Trim(), @"^([0-9a-fA-F]{64})\s+\*?(.+)$");
-                if (match.Success && match.Groups[2].Value.Trim() == addon.ZipName) addon.Sha256 = match.Groups[1].Value.ToLowerInvariant();
-            }
+            GitAsset sums = release.Assets.Find(asset => asset.Name == addon.Sums);
+            if (sums == null) throw new Exception("its release holds no " + addon.Sums);
+            addon.Sha256 = ShaIn(Download(sums.Url), addon.ZipName);
             if (addon.Sha256 == null) throw new Exception(addon.Sums + " says nothing of " + addon.ZipName);
         }
 
@@ -3008,6 +3877,8 @@ namespace SurvivorInstaller
         // "SurvivorsDragonUi 3.2.57" as 3.2.57; else its tag, short.
         static string ShortVersion(ListedAddon addon)
         {
+            // A source as it stands: its day.
+            if (addon.FromBranch) return addon.ReleaseName;
             Match match = Regex.Match(addon.ReleaseName ?? "", @"\d+(\.\d+)+");
             if (match.Success) return match.Value;
             string tag = addon.ReleaseTag ?? "";
@@ -3020,21 +3891,23 @@ namespace SurvivorInstaller
         {
             string path = Path.Combine(folder, Path.GetFileName(folder) + ".toc");
             if (!File.Exists(path)) return null;
+            try { return ReadToc(File.ReadAllLines(path)); }
+            catch { return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
+        }
+
+        static Dictionary<string, string> ReadToc(IEnumerable<string> lines)
+        {
             Dictionary<string, string> toc = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            try
+            foreach (string line in lines)
             {
-                foreach (string line in File.ReadAllLines(path))
-                {
-                    Match match = Regex.Match(line, @"^##\s*([A-Za-z\-]+)\s*:\s*(.*)$");
-                    if (match.Success && !toc.ContainsKey(match.Groups[1].Value))
-                        toc[match.Groups[1].Value] = Regex.Replace(match.Groups[2].Value, @"\|c[0-9a-fA-F]{8}|\|r", "").Trim();
-                }
+                Match match = Regex.Match(line, @"^##\s*([A-Za-z\-]+)\s*:\s*(.*)$");
+                if (match.Success && !toc.ContainsKey(match.Groups[1].Value))
+                    toc[match.Groups[1].Value] = Regex.Replace(match.Groups[2].Value, @"\|c[0-9a-fA-F]{8}|\|r", "").Trim();
             }
-            catch { }
             return toc;
         }
 
-        static string TocValue(Dictionary<string, string> toc, string key)
+        internal static string TocValue(Dictionary<string, string> toc, string key)
         {
             string value;
             return toc != null && toc.TryGetValue(key, out value) ? value : "";
@@ -3113,13 +3986,14 @@ namespace SurvivorInstaller
             {
                 listedFolders.AddRange(addon.Folders);
                 bool present = AddonPresent(addons, addon.Folders);
-                string mine = Setting("addon." + addon.Name, "");
+                string mine = Setting(InstalledKey(addon), "");
                 Dictionary<string, string> toc = present ? TocOf(Path.Combine(addons, addon.Folders[0])) : null;
                 // Outdated: installed from the list with an older release; put in by
-                // hand, its .toc's version older than the release's.
+                // hand, its .toc's version older than the release's (a source's day
+                // is no version).
                 bool outdated = present && addon.ReleaseTag != null && (mine != "" ? mine != addon.ReleaseTag
-                    : OlderThan(TocValue(toc, "Version"), ShortVersion(addon)));
-                AddAddonRow(addon, addon.Name, addon.Author ?? "", addon.ReleaseTag != null ? ShortVersion(addon) : "...",
+                    : !addon.FromBranch && OlderThan(TocValue(toc, "Version"), ShortVersion(addon)));
+                AddAddonRow(addon, addon.Name, addon.Author ?? "", addon.ReleaseTag != null ? ShortVersion(addon) + (addon.Beta ? " beta" : "") : "...",
                     TocValue(toc, "Version"), present, outdated, present && !AllOn(addons, addon.Folders) ? Muted : Gold);
             }
             if (addons != "" && Directory.Exists(addons))
@@ -3140,7 +4014,7 @@ namespace SurvivorInstaller
             foreach (ListViewItem row in addonList.Items)
             {
                 bool same = row.Tag == picked
-                    || (picked is ListedAddon && row.Tag is ListedAddon && ((ListedAddon)picked).Name == ((ListedAddon)row.Tag).Name)
+                    || (picked is ListedAddon && row.Tag is ListedAddon && SameAddon((ListedAddon)picked, (ListedAddon)row.Tag))
                     || (picked is string && row.Tag is string && string.Equals((string)picked, (string)row.Tag, StringComparison.OrdinalIgnoreCase));
                 if (same)
                 {
@@ -3204,16 +4078,17 @@ namespace SurvivorInstaller
             }
             else if (listed != null)
             {
-                string mine = Setting("addon." + listed.Name, "");
+                string mine = Setting(InstalledKey(listed), "");
                 bool ready = listed.ZipUrl != null && (listed.Sums == null || listed.Sha256 != null);
                 addonInstall.Text = !present ? "Install"
-                    : mine == "" ? "Replace with the list's"
+                    : mine == "" ? (listed.Mine ? "Replace with GitHub's" : "Replace with the list's")
                     : listed.ReleaseTag != null && mine != listed.ReleaseTag ? "Update to " + ShortVersion(listed)
                     : "Install again";
                 Active(addonInstall, ready && !busy, Gold);
                 string about = listed.About ?? "";
                 if (listed.Problem != null) about += (about != "" ? " " : "") + "(Its release is out of reach now: " + listed.Problem + ")";
-                else if (listed.ReleaseName != null) about += (about != "" ? " " : "") + "Latest: " + listed.ReleaseName + ".";
+                else if (listed.FromBranch) about += (about != "" ? " " : "") + "No release: its source on " + (listed.Branch ?? "its branch") + ", changed " + listed.ReleaseName + ".";
+                else if (listed.ReleaseName != null) about += (about != "" ? " " : "") + "Latest: " + listed.ReleaseName + (listed.Beta ? ", a beta." : ".");
                 addonAbout.Text = about;
                 addonPage.Visible = true;
             }
@@ -3224,6 +4099,12 @@ namespace SurvivorInstaller
                 addonAbout.Text = picked is string ? "Put in the AddOns folder by hand, not from the list: on or off, or uninstalled, here." : "";
                 addonPage.Visible = false;
             }
+            // One added by you: Remove from my list at the about's right.
+            bool added = listed != null && listed.Mine;
+            addonForget.Visible = added;
+            addonForget.Enabled = !busy;
+            addonAbout.Width = S(added ? 580 : 720);
+            Active(addonAdd, !busy, Gold);
             // Survivor UI and its plates: no Uninstall (off is theirs), the beta in its place.
             addonRemove.Visible = our == null;
             betaButton.Visible = our != null && betaButton.Text != "No beta right now";
@@ -3290,7 +4171,7 @@ namespace SurvivorInstaller
                 }
             }
             ListedAddon listed = picked as ListedAddon;
-            if (listed != null) SetSetting("addon." + listed.Name, "");
+            if (listed != null) SetSetting(InstalledKey(listed), "");
             Status(name + " uninstalled: its folder is in the Recycle Bin.");
             FillAddons();
         }
@@ -3311,8 +4192,19 @@ namespace SurvivorInstaller
                 Status("The game's AddOns folder is not there: find the game first (Play, Find game...), or start it once.");
                 return;
             }
-            if (AddonPresent(addons, addon.Folders) && Setting("addon." + addon.Name, "") == "" &&
-                Ask(this, addon.Name + " is in your AddOns folder already, put there by hand.\n\nReplace it with the list's, " + ShortVersion(addon) +
+            // One added by you, the first time: a word that morderous has not checked it.
+            if (addon.Mine && Setting(TrustKey(addon), "") != "1")
+            {
+                if (Ask(this, addon.Name + " is not one morderous checked: it comes straight from github.com/" + addon.Repo +
+                    ", added by you. Install only addons you trust.\n\nThe same rules hold for it: only its own folders and an addon's kinds " +
+                    "of files come in, never a program, never over Survivor UI.\n\nInstall it?", "Get more addons",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return;
+                SetSetting(TrustKey(addon), "1");
+            }
+            if (AddonPresent(addons, addon.Folders) && Setting(InstalledKey(addon), "") == "" &&
+                Ask(this, addon.Name + " is in your AddOns folder already, put there by hand.\n\nReplace it with " +
+                    (addon.Mine ? "the one on GitHub, " : "the list's, ") + ShortVersion(addon) +
                     "? The one there goes to the Recycle Bin first; its settings stay.", "Get more addons", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
             addonBusy = true;
@@ -3338,7 +4230,7 @@ namespace SurvivorInstaller
             List<ListedAddon> due = new List<ListedAddon>();
             foreach (ListedAddon addon in listedAddons)
             {
-                string mine = Setting("addon." + addon.Name, "");
+                string mine = Setting(InstalledKey(addon), "");
                 bool ready = addon.ZipUrl != null && (addon.Sums == null || addon.Sha256 != null);
                 if (mine != "" && ready && addon.ReleaseTag != null && mine != addon.ReleaseTag && AddonPresent(addons, addon.Folders)) due.Add(addon);
             }
@@ -3361,9 +4253,24 @@ namespace SurvivorInstaller
                     using (WebClient client = Client())
                         client.DownloadFile(addon.ZipUrl, zip);
                     Status("Installing " + addon.Name + "...");
+                    // One added by you: its folders read again in this zip
+                    // (a release may bring one more), none of another's.
+                    if (addon.Mine)
+                    {
+                        string[] folders = FoldersInZip(zip, addon.Repo.Substring(addon.Repo.IndexOf('/') + 1));
+                        if (folders.Length == 0) throw new Exception("its zip holds no addon now: no folder with a .toc of its own name");
+                        if (!SafeFolders(folders)) throw new Exception("its zip now holds Survivor UI's folders, or folders that are not plain ones");
+                        ListedAddon other = ListedAs(null, folders, listedAddons.FindAll(each => !SameAddon(each, addon)));
+                        if (other != null) throw new Exception("its zip now holds " + other.Name + "'s folder");
+                        addon.Folders = folders;
+                    }
                     left += PutAddon(addons, addon, zip);
                     ListedAddon put = addon;
-                    BeginInvoke(new Action(delegate { SetSetting("addon." + put.Name, put.ReleaseTag); }));
+                    BeginInvoke(new Action(delegate
+                    {
+                        SetSetting(InstalledKey(put), put.ReleaseTag);
+                        if (put.Mine) KeepMine(put);
+                    }));
                     done.Add(addon.Name + " " + ShortVersion(addon));
                 }
                 catch (Exception error)
