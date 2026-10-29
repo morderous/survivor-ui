@@ -9,7 +9,7 @@
 -- the run's healing (AZS_GetHealing) or the last boss fight's damage
 -- to bosses (AZS_GetBossMeter), in the same bars; in a co-op run (the game's
 -- 0.113), to the party's damage (AZS_GetPartyMeter), a bar a hero in the
--- class's color, its top spell on hover. The + at its corner opens another
+-- class's color, with its damage a second, its top spell on hover. The + at its corner opens another
 -- window on another page (MeterWindows.lua), in the same bars. The small
 -- button left of Reset folds the lines under 10% of the total (the options,
 -- Damage meter: 1 to 20%) into one, Others, in every window alike.
@@ -1059,13 +1059,16 @@ function SurvivorUI_MeterShare(name)
 	return shares[name]
 end
 
--- The numbers' columns, from the bar's right end: the share, then the amount.
+-- The numbers' columns, from the bar's right end: the share, then the amount;
+-- on the party's page, a hero's damage a second left of the amount.
 local SHARE_WIDTH = 30
 local AMOUNT_WIDTH = 44
 local AMOUNT_RIGHT = SHARE_WIDTH + 6
+local RATE_WIDTH = 36
+local RATE_RIGHT = AMOUNT_RIGHT + AMOUNT_WIDTH + 6
 -- The name's room in a bar of a width: what the numbers' columns leave.
-local function NameRoom(width)
-	return width - BAR_HEIGHT - 2 - (AMOUNT_RIGHT + AMOUNT_WIDTH + 2) - 4
+local function NameRoom(width, rated)
+	return width - BAR_HEIGHT - 2 - (AMOUNT_RIGHT + AMOUNT_WIDTH + 2) - 4 - (rated and RATE_WIDTH + 6 or 0)
 end
 
 -- The filled part never shorter than the icon's square, so the source's
@@ -1137,6 +1140,14 @@ local function MakeBar(parent)
 		divider:SetPoint("TOP", bar, "TOPRIGHT", -from, 0)
 		divider:SetPoint("BOTTOM", bar, "BOTTOMRIGHT", -from, 0)
 	end
+	-- The party's page: one divider more, left of the damage a second.
+	bar.rateDivider = bar:CreateTexture(nil, "OVERLAY")
+	bar.rateDivider:SetTexture(FLAT)
+	bar.rateDivider:SetVertexColor(1, 1, 1, 0.14)
+	bar.rateDivider:SetWidth(1)
+	bar.rateDivider:SetPoint("TOP", bar, "TOPRIGHT", -(RATE_RIGHT + RATE_WIDTH + 2), 0)
+	bar.rateDivider:SetPoint("BOTTOM", bar, "BOTTOMRIGHT", -(RATE_RIGHT + RATE_WIDTH + 2), 0)
+	bar.rateDivider:Hide()
 
 	bar.name = bar:CreateFontString(nil, "OVERLAY")
 	bar.name:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
@@ -1185,6 +1196,14 @@ local function MakeBar(parent)
 	bar.share:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
 	bar.share:SetPoint("RIGHT", bar, "RIGHT", -3, 0)
 	bar.share:SetTextColor(0.85, 0.85, 0.85)
+
+	-- A hero's damage a second, on the party's page only, in the gold of the
+	-- strip's DPS.
+	bar.rate = bar:CreateFontString(nil, "OVERLAY")
+	bar.rate:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
+	bar.rate:SetPoint("RIGHT", bar, "RIGHT", -RATE_RIGHT, 0)
+	bar.rate:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
+	bar.rate:Hide()
 
 	-- The crit card sits beside the whole window, on its left, tops together.
 	bar.cardFrame = parent
@@ -1463,7 +1482,17 @@ local function PaintBar(bar, line, top, key)
 		bar.tag:SetText(SurvivorUI_ProcTag(name))
 		bar.tag:SetTextColor(0.78, 0.91, 1)
 	end
-	local room = NameRoom(width) - (tagged and math.floor(bar.tag:GetStringWidth() + 6) or 0)
+	-- A party's hero: its damage a second in a column of its own.
+	local rated = key == "party" and line.dps ~= nil
+	if rated then
+		bar.rate:SetText(Short(line.dps))
+		bar.rate:Show()
+		bar.rateDivider:Show()
+	else
+		bar.rate:Hide()
+		bar.rateDivider:Hide()
+	end
+	local room = NameRoom(width, rated) - (tagged and math.floor(bar.tag:GetStringWidth() + 6) or 0)
 	if bar.room ~= room then
 		bar.room = room
 		bar.name:SetWidth(room)

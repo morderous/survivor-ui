@@ -162,7 +162,7 @@ Commands:
 
 ### Healing and boss damage
 
-Click the meter's title for its menu: **Damage Done** (the run's damage, with each ability's crits on mouseover), **Healing Done** (the run's healing, overhealing left out), **Boss Damage** (the damage dealt to bosses in the last boss fight) or, in a co-op run, **Party Damage** (each hero's damage, in the class's color). The meter keeps the view you chose.
+Click the meter's title for its menu: **Damage Done** (the run's damage, with each ability's crits on mouseover), **Healing Done** (the run's healing, overhealing left out), **Boss Damage** (the damage dealt to bosses in the last boss fight) or, in a co-op run, **Party Damage** (each hero's damage and damage a second, in the class's color). The meter keeps the view you chose.
 
 ### Font
 
@@ -223,6 +223,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.45, 2026-10-29
+
+The addon's pictures in the game played in a browser and on the Mac, and each hero's DPS on the Party Damage page.
+
+**Survivor UI**
+- **The addon's pictures in the browser** (reported on Discord by kemot, Fulger and Floowi; kemot found the way): the minimap's cache and lair pins, the guardians' arrows, the minimap buttons and every other picture of the addon's were missing in the game played in a browser (Chrome, Brave) and in the macOS port, which read no TGA. Each now comes as a BLP too, the game's own format, which every version of the game reads first. In the Windows game nothing changes: the same pixels.
+- **Each hero's DPS on the Party Damage page**: in a co-op run, the damage meter's Party Damage page shows each hero's damage a second beside their damage, in gold, as the DPS over the bars. Before, it showed only on hover.
 
 ### v3.0.44, 2026-10-29
 
