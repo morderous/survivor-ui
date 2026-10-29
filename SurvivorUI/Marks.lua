@@ -29,6 +29,8 @@
 -- mouseover), show on Survivor UI's boss bars (SurvivorUI_RaidMarkOf), and the
 -- target's over its frame; Survivor Plates shows the client's own on a plate.
 
+if SurvivorUI_Standby then return end
+
 local ICONS = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 SurvivorUI_RAID_MARKS = {
 	{ 8, "Skull" }, { 7, "Cross" }, { 6, "Square" }, { 5, "Moon" },

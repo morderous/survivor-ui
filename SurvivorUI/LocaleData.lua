@@ -3,6 +3,8 @@
 -- (Locale.lua reads them). Written by the game's translation tables; do not
 -- edit by hand.
 
+if SurvivorUI_Standby then return end
+
 SurvivorUI_LOCALE = {
 	cs = {
 		names = {

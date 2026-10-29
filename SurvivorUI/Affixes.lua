@@ -27,6 +27,8 @@
 
 -- Each with its symbol for the tracker's short tags (Art\Affix*.tga: two
 -- chevrons up, a drop, a flame).
+if SurvivorUI_Standby then return end
+
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 -- And with its name in each of the game's languages, for the run's start
 -- line.

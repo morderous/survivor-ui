@@ -14,6 +14,8 @@
 -- The book opens from its own button on the minimap, or /sui jewelry: a slim
 -- list to read at a glance, even in a fight.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 

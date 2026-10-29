@@ -20,6 +20,8 @@
 -- and drag to move. The game's own meter is put away while this one is on;
 -- /sui meter brings it back. Needs the API; without it nothing shows.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
@@ -1780,11 +1782,20 @@ local function SaveTipAnchor()
 	settings.tipBottom = math.floor(tipAnchor:GetBottom() + 0.5)
 end
 
+-- Where it opens (the Frames & bar tab): at the anchor (nil), at the mouse
+-- ("cursor"), or where the game or another addon puts it ("game": nothing
+-- moved, and the anchor out of move mode).
 local stockDefaultAnchor = GameTooltip_SetDefaultAnchor
 if stockDefaultAnchor then
 	GameTooltip_SetDefaultAnchor = function(tooltip, parent)
 		stockDefaultAnchor(tooltip, parent)
-		if tooltip then
+		local place = Settings().tipPlace
+		if not tooltip or place == "game" then
+			return
+		end
+		if place == "cursor" then
+			tooltip:SetOwner(parent or UIParent, "ANCHOR_CURSOR")
+		else
 			PlaceTipAnchor()
 			tooltip:ClearAllPoints()
 			tooltip:SetPoint("BOTTOMRIGHT", tipAnchor, "BOTTOMRIGHT", 0, 0)
@@ -1792,15 +1803,33 @@ if stockDefaultAnchor then
 	end
 end
 
+local tipHandle
 if SurvivorUI_RegisterMover then
-	SurvivorUI_RegisterMover(tipAnchor, "Tooltip", SaveTipAnchor, nil, PlaceTipAnchor)
+	tipHandle = SurvivorUI_RegisterMover(tipAnchor, "Tooltip", SaveTipAnchor, nil, PlaceTipAnchor)
 end
+
+local function HoldTipHandle()
+	if tipHandle then
+		tipHandle.disabled = Settings().tipPlace ~= nil or nil
+	end
+end
+
+function SurvivorUI_TooltipPlace()
+	return Settings().tipPlace or "anchor"
+end
+
+function SurvivorUI_SetTooltipPlace(place)
+	Settings().tipPlace = place ~= "anchor" and place or nil
+	HoldTipHandle()
+end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", function()
 	seatedOn = nil
 	Fit()
 	ApplyGameHud()
+	HoldTipHandle()
 end)
 
 if SurvivorUI_RegisterMover then

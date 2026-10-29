@@ -1,8 +1,8 @@
 <Bindings>
 	<Binding name="SURVIVORUI_SPELLEFFECTS" header="SURVIVORUI">
-		SurvivorUI_ToggleSpellEffects()
+		if SurvivorUI_ToggleSpellEffects then SurvivorUI_ToggleSpellEffects() end
 	</Binding>
 	<Binding name="SURVIVORUI_SOUNDEFFECTS">
-		SurvivorUI_ToggleSoundEffects()
+		if SurvivorUI_ToggleSoundEffects then SurvivorUI_ToggleSoundEffects() end
 	</Binding>
 </Bindings>

@@ -13,6 +13,8 @@
 -- The game's own boss bars are put away while these are on, and come back with
 -- /sui bosses. Needs the game's addon API (AZS_UNITS); without it nothing shows.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 

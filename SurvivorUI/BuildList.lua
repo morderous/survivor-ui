@@ -19,6 +19,8 @@
 -- From the game's addon API (AZS_SPELLS); without it nothing shows. Hold Alt
 -- and drag to move; /sui build hides it.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0

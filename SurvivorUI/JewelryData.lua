@@ -8,6 +8,8 @@
 -- bonuses. The legendary amulets made for one class's spell are left out: the
 -- collection learns those as they are found.
 
+if SurvivorUI_Standby then return end
+
 SurvivorUI_JEWELRY = {
 	edition = "c.1017.m",
 	Ring = {

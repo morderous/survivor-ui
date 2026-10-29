@@ -45,6 +45,8 @@
 --
 -- Hold Alt to move it; /sui guardians hides it.
 
+if SurvivorUI_Standby then return end
+
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"

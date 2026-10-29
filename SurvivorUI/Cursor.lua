@@ -18,6 +18,8 @@
 -- a soft glow breathing round it, motes trailing off as it moves, a ring and
 -- sparks where it clicks the world.
 
+if SurvivorUI_Standby then return end
+
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local GAME = "Interface\\Cursor\\"
 local BLANK = ART.."Cursor\\Blank"

@@ -22,6 +22,8 @@
 -- kept, how many and with their tooltips: the options, Run History; a run
 -- pinned stays however many come after it.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local OWN_ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIcon"

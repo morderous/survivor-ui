@@ -13,6 +13,8 @@
 -- so the layout is redone whenever its text changes. A tooltip it cannot read
 -- is left as the game wrote it.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local DOT = " \194\183 "
 

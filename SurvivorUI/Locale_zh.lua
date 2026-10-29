@@ -7,6 +7,8 @@
 -- (|cff...|r) are kept. A text not here stays English. Before each release,
 -- bot\locale_zh_check.py lists the texts with no translation yet.
 
+if SurvivorUI_Standby then return end
+
 SurvivorUI_WORDS = SurvivorUI_WORDS or {}
 SurvivorUI_WORDS.zh = {
 	-- Words of the game's own (its Chinese tables).

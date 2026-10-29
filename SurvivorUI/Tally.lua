@@ -6,6 +6,8 @@
 -- place, under the minimap, between it and the run tracker, and the game's box
 -- is put away. /sui tally brings the game's box back.
 
+if SurvivorUI_Standby then return end
+
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local row = getglobal("SurvivorUIRow")

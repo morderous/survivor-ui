@@ -14,6 +14,8 @@
 -- marked at every 20%, and under it the time to the next level and the
 -- experience a minute. No backing: it sits on the world.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 

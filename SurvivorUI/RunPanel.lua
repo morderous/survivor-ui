@@ -18,6 +18,8 @@
 -- On the left by default, under the loot list. Hold Alt to move it; the place
 -- is kept. /sui run hides it.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 

@@ -20,6 +20,8 @@
 --
 -- A gamepad's jump may go another way than Jump(): not counted then.
 
+if SurvivorUI_Standby then return end
+
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local GAP = 0.7                 -- seconds between two counted jumps

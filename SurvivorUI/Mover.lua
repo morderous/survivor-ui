@@ -15,6 +15,8 @@
 -- let go there lands on the grid, or lines up with a neighbour's edge when one
 -- is near.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local ACCENT = SurvivorUI_ACCENT or { 1, 0.82, 0 }   -- the addon's own color, the class's
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0

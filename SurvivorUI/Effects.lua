@@ -28,6 +28,8 @@
 --   shows (holding: new pieces still come), SurvivorUI_RecordFxStop(host) as
 --   it goes. host.number, the notice's number, takes the effect's colors.
 
+if SurvivorUI_Standby then return end
+
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local PARTS = 64                -- particles at most
 local DOTS = 320                -- the lightning's dots

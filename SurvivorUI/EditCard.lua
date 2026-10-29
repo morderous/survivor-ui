@@ -13,6 +13,8 @@
 -- The fonts are the game's own (Friz Quadrata, Arial Narrow, Morpheus, and
 -- Skurri where the client has it) and five free ones that come with the addon.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 

@@ -36,6 +36,8 @@
 -- the next one ends beside it. Each counter is on or off in the options
 -- (Counters); /sui dots switches them all.
 
+if SurvivorUI_Standby then return end
+
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
 local WINDOW = 2        -- seconds of ticks a DoT's count is read over

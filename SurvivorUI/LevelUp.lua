@@ -15,6 +15,8 @@
 -- The levels waiting also show by the level, in the run tracker and on the XP
 -- bar (Tracker.lua, XpBar.lua).
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local GOLD = { 1, 0.82, 0 }

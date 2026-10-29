@@ -9,6 +9,8 @@
 -- The numbers are the game's own: its interface keeps them in the global
 -- AZS_STATS table, fed by the server. This file only reads that table.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 

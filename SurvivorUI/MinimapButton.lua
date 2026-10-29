@@ -9,6 +9,8 @@
 -- over them, upward, in the same square look: the game's battleground button
 -- (the crossed swords).
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIconWhite"
 local SIZE = 16              -- the stock 22, smaller

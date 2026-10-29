@@ -4,6 +4,8 @@
 -- meter's and Biggest Crits' icon for a talent's own damage (a proc, as
 -- Nightfall's): the client's 1.12 talents know only some of them, by chance.
 
+if SurvivorUI_Standby then return end
+
 SurvivorUI_TALENT_ICONS = {
 	["Adrenaline Rush"] = "Spell_Shadow_ShadowWordDominate",
 	["Aggression"] = "Ability_Racial_Avatar",

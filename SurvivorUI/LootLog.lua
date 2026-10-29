@@ -11,6 +11,8 @@
 -- hides it.
 -- Its tab in the options: the background behind it, how many lines.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 

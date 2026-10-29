@@ -34,6 +34,8 @@
 -- /sui pace hides it, /sui pace class holds it against this class's runs only
 -- (or every class's again), /sui pace reset forgets the runs it holds against.
 
+if SurvivorUI_Standby then return end
+
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 

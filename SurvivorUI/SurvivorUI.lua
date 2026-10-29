@@ -28,6 +28,14 @@
 -- Left click a frame to target it, right click for its menu. Alt-drag either
 -- frame to move the whole row.
 
+-- With SurvivorUI Classic chosen in its place (its choice panel), the whole
+-- addon stands aside: every file ends at its first line. SurvivorUI Classic
+-- loads first (the .toc's OptionalDeps), so its choice is known here, and
+-- without it installed nothing changes.
+SurvivorUI_CanStandBy = true
+SurvivorUI_Standby = SurvivorUIClassicDB and SurvivorUIClassicDB.use == "classic" or nil
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 -- The interface's face, shared with the addon's other files: Friz Quadrata, the
 -- game's own, unless a face is dropped in: Expressway in SurvivorUI\Fonts, or

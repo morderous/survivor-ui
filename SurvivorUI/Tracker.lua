@@ -13,6 +13,8 @@
 -- shows. Hold Alt and drag it to move it; the place is kept. /sui tracker
 -- hides it and brings the game's clock back.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 

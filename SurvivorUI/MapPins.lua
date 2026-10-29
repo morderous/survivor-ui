@@ -19,6 +19,8 @@
 -- hidden. All off with "Caches on the minimap" (Modules); /sui pins prints
 -- what the addon reads, to check it.
 
+if SurvivorUI_Standby then return end
+
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local PIN_SIZE = 16                -- a pin's size untouched; on the edge, 11 of each 16
 local EDGE_SIZE = 11

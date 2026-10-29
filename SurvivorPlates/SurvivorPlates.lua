@@ -52,6 +52,12 @@
 -- A key of one's own turns all the plates on and off as /splates none does
 -- (Key Bindings, Survivor Plates; or Survivor UI's options, Nameplates).
 
+-- With SurvivorUI Classic chosen (its choice panel), the plates stand aside
+-- with Survivor UI: the file ends here. SurvivorUI Classic loads first (the
+-- .toc's OptionalDeps), so its choice is known; without it nothing changes.
+SurvivorPlates_Standby = SurvivorUIClassicDB and SurvivorUIClassicDB.use == "classic" or nil
+if SurvivorPlates_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 -- Survivor UI's face when it is installed: a player's own Expressway, else its
 -- Barlow Condensed, else Friz Quadrata. This addon loads first, so it tries

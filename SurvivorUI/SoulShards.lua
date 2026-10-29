@@ -34,6 +34,8 @@
 -- of them flash as they are spent (Soul Fire, a finisher). Under the player
 -- frame, going with it, until moved on their own (move mode: "Class gems").
 
+if SurvivorUI_Standby then return end
+
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local SIZE = 15
 local GAP = 2

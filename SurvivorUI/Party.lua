@@ -29,6 +29,8 @@
 -- here that is not the stock 1.12 set (name, class, health) goes through
 -- pcall.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local Feature = SurvivorUI_Feature or function() return true end

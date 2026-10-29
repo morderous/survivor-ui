@@ -1,5 +1,5 @@
 <Bindings>
 	<Binding name="SURVIVORPLATES_TOGGLE" header="SURVIVORPLATES">
-		SurvivorPlates_Toggle()
+		if SurvivorPlates_Toggle then SurvivorPlates_Toggle() end
 	</Binding>
 </Bindings>

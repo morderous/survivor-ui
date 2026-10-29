@@ -13,6 +13,8 @@
 -- Anything already English, or not known, comes back as it was. The words
 -- are the game's own (LocaleData.lua, written from its translation tables).
 
+if SurvivorUI_Standby then return end
+
 local LOCALE = SurvivorUI_LOCALE or {}
 
 -- The game's language: told by the hero's race as the game names it

@@ -4,6 +4,8 @@
 -- or a tooltip belongs to. The world itself, the nameplates over it, the chat
 -- and the large windows get none. /sui hover switches it off.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local MAX_WIDTH, MAX_HEIGHT = 520, 420  -- larger than this is a window, not an item
 

@@ -13,6 +13,8 @@
 -- The runs are Run History's own (SurvivorUIDB.runHistory): as many as it
 -- keeps (the options, Run History).
 
+if SurvivorUI_Standby then return end
+
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local MAP_ICON = "Interface\\AddOns\\SurvivorUI\\Art\\MapIcon"

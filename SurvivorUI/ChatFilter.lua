@@ -17,6 +17,8 @@
 -- The loot lines are kept away by the loot list (LootLog.lua), once it has
 -- read them. What stays: a new spell, an upgrade's news, the run's end.
 
+if SurvivorUI_Standby then return end
+
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
 	return SurvivorUIDB

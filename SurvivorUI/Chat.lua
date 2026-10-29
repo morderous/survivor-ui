@@ -15,6 +15,8 @@
 -- away while the panel shows. The other look, "Text on the world", is the
 -- chat as it was (SurvivorUI.lua: StyleChat, with its Background).
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 

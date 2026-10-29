@@ -26,6 +26,8 @@
 -- Over the buffs by default, going with the player frame, until moved on
 -- its own (move mode: "Summons"). Module "Summons" (Modules, Combat).
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local SIZE = 22                 -- the buffs' icon size
 local GAP = 3

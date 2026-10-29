@@ -224,6 +224,17 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.44, 2026-10-29
+
+SurvivorUI Classic is out: a branch of Survivor UI in the game's own look. Survivor UI and Survivor Plates step aside when it is chosen. And where the tooltip opens, yours to choose.
+
+**Survivor UI**
+- **Steps aside for SurvivorUI Classic** (new: [SurvivorUI Classic](https://github.com/morderous/survivorui-classic), a branch of Survivor UI in the game's own look, also in the launcher's Addons tab): each works on its own, and neither needs the other. With both installed, SurvivorUI Classic's panel asks which of the two to use, as they change the same frames. Pick SurvivorUI Classic and, from the game's next start, Survivor UI loads nothing at all: no frames, no options, nothing of the game's put away. Pick Survivor UI and nothing changes. Without SurvivorUI Classic installed, nothing changes either.
+- **Where the tooltip opens** (asked on Discord by ProTecz): `/sui opt`, Frames & bar, Tooltip. At its anchor (beside the damage meter, or where you moved it, as before), at the mouse, or left to the game: never moved, for another addon that places the tooltips. Before, Survivor UI moved it even with every module off.
+
+**Survivor Plates**
+- **Steps aside for SurvivorUI Classic too**: with SurvivorUI Classic chosen, the plates load nothing from the game's next start, as Survivor UI; the game's own nameplates show.
+
 ### v3.0.43, 2026-10-29
 
 The game's own damage numbers in a font and size of yours; a DPS page, Others and each window its own size in the damage meter, the windows linked; damage and crits over Biggest Crits; elites in green; and launcher 1.7.0, with addons added from GitHub.

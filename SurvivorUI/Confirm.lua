@@ -13,6 +13,8 @@
 --       yes = "Clear all", onYes = function() ... end })
 --   SurvivorUI_ConfirmClose()
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local TRASH = "Interface\\AddOns\\SurvivorUI\\Art\\Trash"
 local RED = { edge = { 1, 0.40, 0.34 }, body = { 0.34, 0.08, 0.07 }, text = { 1, 0.74, 0.70 } }

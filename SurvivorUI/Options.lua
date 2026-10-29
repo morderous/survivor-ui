@@ -36,6 +36,8 @@
 -- foot. A page still made of the old pieces works as before, and every piece,
 -- old or new, is found by the search.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
@@ -4062,6 +4064,11 @@ Button(page, "Frames back in place", 200, 212, function()
 	end
 end)
 page.y = page.y - 28
+Subheader(page, "Tooltip")
+Inline(page, "Opens", { { "anchor", "At its anchor" }, { "cursor", "At the mouse" }, { "game", "Left to the game" } },
+	function() return SurvivorUI_TooltipPlace and SurvivorUI_TooltipPlace() or "anchor" end,
+	function(value) if SurvivorUI_SetTooltipPlace then SurvivorUI_SetTooltipPlace(value) end end)
+Note(page, "The units' and the world's tooltip. At its anchor: beside the damage meter, or where you moved it (move mode, Tooltip). Left to the game: never moved, for another addon that places the tooltips.")
 Subheader(page, "Size")
 SizeGrid(page, {
 	PartSize("middle", "Whole center bar"), PartSize("bar", "Action bar"),

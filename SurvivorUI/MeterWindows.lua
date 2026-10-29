@@ -14,6 +14,8 @@
 -- lets go. Which are open, their pages, places, sizes and links are kept.
 -- They show while the main one does: in a run, the meter on.
 
+if SurvivorUI_Standby then return end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local M = SurvivorUI_METER or { WIDTH = 228, BAR_HEIGHT = 18, BAR_GAP = 2, STRIP_TOP = 20, STRIP_HEIGHT = 14, BARS_TOP = 36 }
