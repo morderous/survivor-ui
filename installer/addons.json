@@ -1,6 +1,15 @@
 {
   "addons": [
     {
+      "name": "SurvivorUI Classic",
+      "author": "morderous",
+      "repo": "morderous/survivorui-classic",
+      "asset": "SurvivorUIClassic-*.zip",
+      "sums": "SHA256SUMS.txt",
+      "folders": ["SurvivorUIClassic"],
+      "about": "A branch of Survivor UI in the game's own look: everything movable, a run tracker, boss bars, a damage meter and more. Works on its own; with Survivor UI too, you pick one."
+    },
+    {
       "name": "ASBuilder",
       "author": "cadoky",
       "repo": "cadoky/ASBuilder",
