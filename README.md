@@ -224,6 +224,20 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.46, 2026-10-30
+
+Change UI: a button that picks Survivor UI or SurvivorUI Classic, and with the launcher the game restarts by itself. And no more icon on top of the level's cards.
+
+**Survivor UI**
+- **Change UI:** a button at the foot of the options' sidebar, with SurvivorUI Classic installed, opens a box with a card for each interface, the one in use marked. Pick the other one and the box offers Quit game or Later: the other one runs from the next time the game starts, as the game loads its addons only at its start. SurvivorUI Classic turned off in the game's Options, AddOns tab can't be picked; the box says where to turn it on.
+- **The same box, in the addon's look**, in place of SurvivorUI Classic's panel while Survivor UI is the one running: the first question with both installed, and `/suic`.
+- **Restart game:** with the launcher open, Quit game in that box becomes Restart game: the game closes and the launcher opens it again by itself. Without the launcher (the game opened some other way, in a browser, on a Mac) it stays Quit game, and you open the game again yourself.
+- **An icon through the level's cards** (reported on Discord by Zaynor): the first action button's spell icon could show on top of a card. The bar's buttons stayed lit under the cards while the rest of the row faded. They fade with it now.
+
+### Azeroth SurvivorUI Launcher 1.7.1 (beta), 2026-10-30
+
+- **Restarts the game when Change UI asks:** while the launcher runs, a small addon of its own, only a `.toc`, stands in the AddOns folder, so Survivor UI and SurvivorUI Classic know it is there. The game closed by Restart game, the launcher opens it again. Exit takes that addon away, and it isn't listed in the Addons tab.
+
 ### v3.0.45, 2026-10-29
 
 The addon's pictures in the game played in a browser and on the Mac, and each hero's DPS on the Party Damage page.

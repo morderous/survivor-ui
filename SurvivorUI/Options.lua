@@ -4584,6 +4584,47 @@ editButton:SetPoint("BOTTOMRIGHT", panel, "BOTTOMLEFT", SIDEBAR - 8, 46)
 editButton.glow:SetWidth(140)
 table.insert(widgets, editButton)
 
+-- Change UI: over Donate and Move UI, straight to the box that picks this
+-- addon or SurvivorUI Classic (ChangeUI.lua), with that one installed.
+if SurvivorUI_CanChangeUI and SurvivorUI_CanChangeUI() then
+	local change = CreateFrame("Button", "SurvivorUIChangeUIButton", panel)
+	change:SetWidth(SIDEBAR - 18)
+	change:SetHeight(22)
+	change:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 10, 76)
+	change:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+	change.text = Text(change, 10, TEXT)
+	change.text:SetPoint("CENTER", change, "CENTER", 0, 0)
+	change.text:SetText(SurvivorUI_T("Change UI"))
+	change:SetScript("OnClick", function()
+		panel:Hide()
+		SurvivorUI_ChangeUI()
+	end)
+	change:SetScript("OnEnter", function()
+		this.hot = true
+		this:Refresh()
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		GameTooltip:SetText(SurvivorUI_T("Change UI"), ACCENT[1], ACCENT[2], ACCENT[3])
+		GameTooltip:AddLine(SurvivorUI_T("Pick Survivor UI or SurvivorUI Classic. The other one runs from the next time the game starts."), 1, 1, 1, 1)
+		GameTooltip:Show()
+	end)
+	change:SetScript("OnLeave", function()
+		this.hot = nil
+		this:Refresh()
+		GameTooltip:Hide()
+	end)
+	function change:Refresh()
+		if self.hot then
+			self.text:SetTextColor(1, 1, 1)
+		else
+			self.text:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+		end
+		self:SetBackdropColor(0.12, 0.12, 0.15, 1)
+		self:SetBackdropBorderColor(0.4, 0.4, 0.45, self.hot and 1 or 0.8)
+	end
+	change:Refresh()
+	table.insert(widgets, change)
+end
+
 -- Save & Close: at the bottom right; Reload & Close, lit, while a look waits
 -- for a reload.
 local doneButton = CreateFrame("Button", nil, panel)

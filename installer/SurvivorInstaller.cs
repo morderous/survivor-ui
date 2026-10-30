@@ -53,6 +53,11 @@
 //     GitHub; a newer one out, Play turns to "Update game", which takes the
 //     newest exe and data patches the same way, checked (the game would also
 //     update itself as it starts), and the tray tells of it once;
+//   - restarts the game when Change UI asks (1.7.1): while it runs it keeps a
+//     small addon in the AddOns folder, SurvivorUILauncher, only a .toc, by
+//     which Survivor UI and SurvivorUI Classic offer Restart game; pressed,
+//     they keep the moment in saved\SurvivorUIClassic.lua and quit, and the
+//     game closed, the launcher starts it again. Exit takes the addon away;
 //   - in five tabs: Play, Savegame, Statistics, Run History, Addons (the
 //     Survivor UI tab folded into Addons in 1.6.0);
 //   - gets more addons (Addons tab, 1.6.0): the ones morderous checked,
@@ -115,7 +120,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.7.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.7.1.0")]
 
 namespace SurvivorInstaller
 {
@@ -4001,6 +4006,7 @@ namespace SurvivorInstaller
                 foreach (string dir in Directory.GetDirectories(addons))
                 {
                     string folder = Path.GetFileName(dir);
+                    if (string.Equals(folder, LinkAddon, StringComparison.OrdinalIgnoreCase)) continue;
                     if (listedFolders.Exists(listed => string.Equals(listed, folder, StringComparison.OrdinalIgnoreCase))) continue;
                     Dictionary<string, string> toc = TocOf(dir);
                     if (toc == null) continue;
@@ -4692,10 +4698,12 @@ namespace SurvivorInstaller
         void WatchGame()
         {
             if (GameRunning()) sessionStart = DateTime.Now;
+            KeepLink();
             gameWatch.Interval = 5000;
             gameWatch.Tick += delegate
             {
                 bool running = GameRunning();
+                if (!running) KeepLink();
                 if (running && sessionStart == DateTime.MinValue) sessionStart = DateTime.Now;
                 else if (!running && sessionStart != DateTime.MinValue)
                 {
@@ -4739,6 +4747,76 @@ namespace SurvivorInstaller
             }
             ShowStrip();
             if (currentTab == StatsTab) ShowStats();
+            RestartIfAsked();
+        }
+
+        // Change UI's Restart game. Neither the game nor an addon can start a
+        // program, so while the launcher runs it keeps this addon in the AddOns
+        // folder, nothing but a .toc: seeing it, Survivor UI and SurvivorUI
+        // Classic offer Restart game. Pressed, they keep the moment in the
+        // settings (restartAt, unix seconds; SurvivorUI Classic's, in a change of
+        // interface both are loaded) and quit; the game closed and that press a
+        // moment old, the game starts again. Exit takes the addon away.
+        const string LinkAddon = "SurvivorUILauncher";
+        const int RestartWithin = 180;
+        long restartDone;
+
+        string LinkFolder()
+        {
+            string game = GameSettingsFolder();
+            return game != null ? Path.Combine(Path.Combine(game, "AddOns"), LinkAddon) : null;
+        }
+
+        void KeepLink()
+        {
+            try
+            {
+                string folder = LinkFolder();
+                if (folder == null) return;
+                string toc = Path.Combine(folder, LinkAddon + ".toc");
+                if (File.Exists(toc)) return;
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(toc, "## Interface: 11200\r\n## Title: Survivor UI Launcher\r\n" +
+                    "## Notes: Put here by the Survivor UI launcher while it runs, so that Change UI can restart the game. It does nothing else.\r\n");
+            }
+            catch { }
+        }
+
+        void DropLink()
+        {
+            try
+            {
+                string folder = LinkFolder();
+                if (folder != null && Directory.Exists(folder)) Directory.Delete(folder, true);
+            }
+            catch { }
+        }
+
+        void RestartIfAsked()
+        {
+            long asked = 0;
+            try
+            {
+                string game = GameSettingsFolder();
+                string path = game != null ? Path.Combine(Path.Combine(game, "saved"), "SurvivorUIClassic.lua") : null;
+                if (path == null || !File.Exists(path)) return;
+                Match found = Regex.Match(File.ReadAllText(path), @"\[""restartAt""\]\s*=\s*(\d+)");
+                if (!found.Success || !long.TryParse(found.Groups[1].Value, out asked)) return;
+            }
+            catch { return; }
+            long now = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+            if (asked == restartDone || now - asked > RestartWithin) return;
+            restartDone = asked;
+            // After the save's backup, which waits for the game to be closed.
+            System.Windows.Forms.Timer wait = new System.Windows.Forms.Timer();
+            wait.Interval = Setting("autoBackup", "0") == "1" ? 6000 : 1000;
+            wait.Tick += delegate
+            {
+                wait.Stop();
+                wait.Dispose();
+                Play(null);
+            };
+            wait.Start();
         }
 
         void AutoBackup()
@@ -6485,6 +6563,7 @@ namespace SurvivorInstaller
             };
             FormClosed += delegate
             {
+                DropLink();
                 tray.Visible = false;
                 tray.Dispose();
             };

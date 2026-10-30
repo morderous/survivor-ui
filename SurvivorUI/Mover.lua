@@ -312,6 +312,9 @@ end
 local middle = MakeHandle("Action bar  -  /sui center puts it back")
 middle.name = "Action bar"
 middle.mover, middle.save = row, Save
+-- The row only seats the buttons: they stay the game's bar's, so they fade
+-- with it (the first one's icon came through the level's cards, Discord).
+middle.fadesWith = MainMenuBar
 middle.default = function()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.rowX, SurvivorUIDB.rowY = nil, nil
@@ -1022,9 +1025,16 @@ local function FadeUnderCards(out)
 		if out and handle.underCards and piece and not handle.fadedFrom then
 			handle.fadedFrom = piece:GetAlpha()
 			piece:SetAlpha(0)
+			if handle.fadesWith then
+				handle.fadesWithFrom = handle.fadesWith:GetAlpha()
+				handle.fadesWith:SetAlpha(0)
+			end
 		elseif not out and handle.fadedFrom then
 			piece:SetAlpha(handle.fadedFrom)
 			handle.fadedFrom = nil
+			if handle.fadesWith then
+				handle.fadesWith:SetAlpha(handle.fadesWithFrom or 1)
+			end
 		end
 	end
 end
