@@ -314,7 +314,14 @@ middle.name = "Action bar"
 middle.mover, middle.save = row, Save
 -- The row only seats the buttons: they stay the game's bar's, so they fade
 -- with it (the first one's icon came through the level's cards, Discord).
-middle.fadesWith = MainMenuBar
+-- Each button, not the bar: an alpha set on a frame overwrites all under it,
+-- and the bar holds what stays at 0, the game's experience bar and the micro
+-- buttons, which came back with it in v3.0.46.
+middle.fadesWith = {}
+for _, id in pairs({ 1, 2, 3, 4, 5, 6, 12 }) do
+	table.insert(middle.fadesWith, getglobal("ActionButton"..id))
+	table.insert(middle.fadesWith, getglobal("BonusActionButton"..id))
+end
 middle.default = function()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.rowX, SurvivorUIDB.rowY = nil, nil
@@ -1015,6 +1022,23 @@ function SurvivorUI_PlaceOverCards()
 	end
 end
 
+-- The frames that fade along with a piece, each with its own alpha kept.
+local function FadeAlong(handle, out)
+	local frames = handle.fadesWith
+	if not frames then
+		return
+	end
+	handle.fadesWithFrom = handle.fadesWithFrom or {}
+	for each = 1, table.getn(frames) do
+		if out then
+			handle.fadesWithFrom[each] = frames[each]:GetAlpha()
+			frames[each]:SetAlpha(0)
+		else
+			frames[each]:SetAlpha(handle.fadesWithFrom[each] or 1)
+		end
+	end
+end
+
 -- As the cards open, the pieces under them fade out, their own alpha kept
 -- for after; and a tooltip of the world (an enemy under the mouse) goes, as
 -- over the veil it would stay on the cards.
@@ -1025,16 +1049,11 @@ local function FadeUnderCards(out)
 		if out and handle.underCards and piece and not handle.fadedFrom then
 			handle.fadedFrom = piece:GetAlpha()
 			piece:SetAlpha(0)
-			if handle.fadesWith then
-				handle.fadesWithFrom = handle.fadesWith:GetAlpha()
-				handle.fadesWith:SetAlpha(0)
-			end
+			FadeAlong(handle, true)
 		elseif not out and handle.fadedFrom then
 			piece:SetAlpha(handle.fadedFrom)
 			handle.fadedFrom = nil
-			if handle.fadesWith then
-				handle.fadesWith:SetAlpha(handle.fadesWithFrom or 1)
-			end
+			FadeAlong(handle, false)
 		end
 	end
 end

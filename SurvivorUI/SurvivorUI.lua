@@ -1862,9 +1862,15 @@ local function StyleChat()
 		local name = "ChatFrame"..index
 		local chat = getglobal(name)
 		if chat then
-			Hide(name.."UpButton")
-			Hide(name.."DownButton")
-			Hide(name.."BottomButton")
+			-- A chat window's stock OnShow shows them again, at every change of
+			-- tab: kept away for good.
+			for _, button in pairs({ "UpButton", "DownButton", "BottomButton" }) do
+				local frame = getglobal(name..button)
+				if frame then
+					frame:Hide()
+					frame.Show = function() end
+				end
+			end
 
 			-- Plain text with a soft shadow in place of the stock look.
 			chat:SetFont(SurvivorUI_FONT, Settings().chatSize)

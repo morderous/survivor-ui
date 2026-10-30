@@ -1203,15 +1203,17 @@ watcher:SetScript("OnUpdate", function()
 	elseif head:IsShown() then
 		head:Hide()
 	end
-	-- One experience bar is enough: the tracker's. Away whenever the tracker
-	-- is on, before the run starts too; back only with the tracker off.
+	-- One experience bar is enough: the tracker's, or the XP bar of its own.
+	-- Away whenever one of them is on, before the run starts too; back only
+	-- with both off.
 	local bar = getglobal("MainMenuExpBar")
 	if bar then
-		local want = Settings().tracker and 0 or 1
+		local settings = Settings()
+		local want = (settings.tracker or settings.xpBar) and 0 or 1
 		if bar:GetAlpha() ~= want then
 			bar:SetAlpha(want)
 			if bar.EnableMouse then
-				bar:EnableMouse(not showing)
+				bar:EnableMouse(want == 1)
 			end
 		end
 	end

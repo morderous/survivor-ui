@@ -100,7 +100,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - Player and target frames: a health bar in the class color (red for an enemy), the name, the health, a slim power bar and a portrait.
 - The hero's buffs and debuffs above the player frame, with time left and stacks. Right click a buff to cancel it.
 - Action buttons 1 to 6 and the last button of the bar (the `=` key), with cooldown numbers. The rest of the bar and its art are put away.
-- The experience bar as a thin strip under the row.
+- The experience bar as a thin strip under the row, with the run tracker and the XP bar both off.
 - A square minimap, zoomed with the mouse wheel.
 - The micro buttons in the bottom left corner, hidden until the mouse reaches them.
 - A flat, dark chat panel without the scroll buttons, in 10 point text. The mouse wheel scrolls; Shift with the wheel jumps to the top or the bottom.
@@ -223,6 +223,15 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.47, 2026-10-30
+
+Three fixes: the experience strip under the action bar, two buttons left showing in the corner, and the chat's scroll buttons.
+
+**Survivor UI**
+- **Two experience bars** (reported on Discord by .slak): with the run tracker off, the game's experience bar came back as a thin strip under the action bar, even with the XP bar showing at the top. It can't be moved or sized, so it looked like it came from somewhere else. It now stays away while the tracker or the XP bar is on, and returns only with both off.
+- **Two buttons in the bottom left corner:** since v3.0.46, the game's Character and Talents buttons stayed on show after the first level's cards, where they should wait unseen until the mouse reaches the corner. Fading the whole game bar under the cards brought them back. Only the action buttons fade now.
+- **The chat's scroll buttons:** clicking another chat tab, such as Combat Log, brought the game's three scroll buttons back beside the chat, and they stayed. With Flat chat on, they stay away now.
 
 ### v3.0.46, 2026-10-30
 
