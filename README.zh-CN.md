@@ -34,7 +34,7 @@
 
 还没有游戏？点击 **Get the game**：它从作者 Aethus 自己的服务器（wow.aethus.pl，经他同意）或游戏 Discord 提供的镜像下载《Azeroth Survivors》，先测速并选最快的，按 Aethus 给出的大小和 sha256 校验后放到常用位置，并一起装好 Survivor UI。
 
-安装器（Azeroth SurvivorUI Launcher）还可以：启动游戏（**Play**）、在托盘中等待并每半小时检查一次更新、自我更新、备份和恢复存档（**Savegame**）、显示游戏时长与存档统计（**Statistics**）、查看 Survivor UI 的冒险历史（**Run History**），并在 **Addons** 标签页安装 morderous 检查过的其他插件，每个都取自作者自己的最新版本（只放入插件自己的文件夹和插件类文件，从不放程序）；也可以用 **Add from GitHub...** 粘贴一个 GitHub 仓库链接，把插件加入自己的列表（只保存在你的电脑上，不会发送到任何地方）。界面为英文。
+安装器（Azeroth SurvivorUI Launcher）还可以：启动游戏（**Play**）、在托盘中等待并每半小时检查一次更新、自我更新、备份和恢复存档（**Savegame**）、显示游戏时长与存档统计（**Statistics**）、查看 Survivor UI 的冒险历史（**Run History**），并在 **Addons** 标签页安装 morderous 检查过的其他插件，每个都取自作者自己的最新版本（只放入插件自己的文件夹和插件类文件，从不放程序）；也可以用 **Add from GitHub...** 粘贴一个 GitHub 仓库链接，把插件加入自己的列表（只保存在你的电脑上，不会发送到任何地方）。在从未用过本安装器的电脑上，它会在游戏就绪后自动安装 Survivor UI 和 SurvivorUI Classic；这些插件有新版本时，只要游戏已关闭就会自动更新（在 **Addons** 标签页取消勾选 **Auto Update when ready** 即可关闭）。界面为英文。
 
 ### 手动安装
 

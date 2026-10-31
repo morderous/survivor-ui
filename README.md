@@ -190,9 +190,9 @@ Two ways, the same result: the launcher, or the zip by hand. The launcher is opt
    ```
    C:\Git\wenilla\benilla-config\AzerothSurvivors.exe
    ```
-4. In the **Addons** tab, Survivor UI is first (recommended): click **Install**, then **Play** in the Play tab. Restart the game if it was open.
+4. On a PC with no launcher before it, the launcher installs Survivor UI and SurvivorUI Classic by itself once the game is there, and the game asks which of the two to use as it first starts. If you already have a launcher, in the **Addons** tab Survivor UI is first (recommended): click **Install**. Then **Play** in the Play tab. Restart the game if it was open.
 
-The **Azeroth SurvivorUI Launcher** (beta) plays the game, keeps it current, and installs and updates Survivor UI and Survivor Plates. **Play** starts the game, and the launcher steps into the tray. **Get the game** downloads Azeroth Survivors, Aethus' game, from his own servers (wow.aethus.pl, with his ok) or from the mirrors the game's Discord gave, each timed first and the fastest picked, every package checked by the size and sha256 Aethus gave; it puts the game in its usual place and installs Survivor UI with it. Leave it running: minimized or closed, it waits in the tray and asks GitHub for a new release every half hour; when one is out, a **green arrow** shows on its tray icon and a green pill at the right of its tabs. It updates itself too (untick "Update the launcher by itself" to only be told).
+The **Azeroth SurvivorUI Launcher** plays the game, keeps it current, and installs and updates Survivor UI and Survivor Plates. **Play** starts the game, and the launcher steps into the tray. **Get the game** downloads Azeroth Survivors, Aethus' game, from his own servers (wow.aethus.pl, with his ok) or from the mirrors the game's Discord gave, each timed first and the fastest picked, every package checked by the size and sha256 Aethus gave; it puts the game in its usual place and installs Survivor UI with it, then offers to move itself into the game's folder with a shortcut on your Desktop, or to add only the shortcut. Leave it running: minimized or closed, it waits in the tray and asks GitHub for a new release every half hour; when one is out, a **green arrow** shows on its tray icon and a green pill at the right of its tabs. Survivor UI and SurvivorUI Classic update by themselves when a release is out and the game is closed, unless you untick **Auto Update when ready** on their rows in the Addons tab. As its window opens, a box says what else waits. It updates itself too (untick "Update the launcher by itself" to only be told).
 
 Five tabs: **Play** (the game, your playtime and runs, the game's news, its AddOns folder), **Savegame** (your save backed up to the Desktop, a USB drive or a folder, by hand or after each game session, and put back), **Statistics** (your playtime and the save's numbers), **Run History** (Survivor UI's runs, the victories and endless runs kept for good) and **Addons**: Survivor UI and Survivor Plates first, with the release, the beta and each on or off; then more addons from a list morderous checked, each from its author's own latest release (only the addon's own folder and its kinds of files, never a program, never over Survivor UI's folders), with **Update all** and **Uninstall** to the Recycle Bin; then the ones you add yourself with **Add from GitHub...** (a repository's link, kept on your PC only), installed and updated the same way; then the ones you put in by hand.
 
@@ -223,6 +223,18 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### Azeroth SurvivorUI Launcher 1.8.0, 2026-10-30
+
+- **Out of beta:** the version line and the window's title no longer say so.
+- **Both addons on a new PC:** a launcher opened on a PC with no launcher before it installs Survivor UI and SurvivorUI Classic by itself, once the game is there (right away, or after Get the game), and says so in one box. If either addon is there already, it leaves them as they are. A launcher that was already on the PC changes nothing.
+- **Auto Update when ready:** a tick on the rows of our addons in the Addons tab, on unless you untick it. A newer release is taken by itself as soon as the game is closed, with no box. Survivor UI and Survivor Plates share one tick, as they come in one zip; SurvivorUI Classic has its own.
+- **(recommended)** by SurvivorUI Classic too.
+- **Uninstall gives the game back what our addons put away:** uninstalling Survivor UI or SurvivorUI Classic brings the game's own screens back, the red flag on the minimap among them, and its damage numbers, as those stay off in the game's `config.toml` otherwise. Survivor UI and Survivor Plates now have an Uninstall button of their own and go together, as they come together. The game must be closed.
+- **A progress bar for the game:** Get the game and Update game show a bar over the status line, on every tab, with the same words on it.
+- **What waits, as the window opens:** a box lists a newer game and each addon you installed from the list with a newer release, with **Update now** or **Later**. Anything that updates by itself stays out of it, and the same list isn't shown twice while the launcher runs. Addons put in by hand aren't in it.
+- **A safer place for the launcher:** when Get the game ends, it offers to move itself into the game's folder with a shortcut on your Desktop, or to add only the shortcut, so that it isn't left in Downloads to be deleted by accident.
+- **Update game no longer brings Survivor UI back:** before, it installed Survivor UI after an update if the folder wasn't there.
 
 ### v3.0.47, 2026-10-30
 

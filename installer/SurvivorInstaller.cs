@@ -58,6 +58,20 @@
 //     which Survivor UI and SurvivorUI Classic offer Restart game; pressed,
 //     they keep the moment in saved\SurvivorUIClassic.lua and quit, and the
 //     game closed, the launcher starts it again. Exit takes the addon away;
+//   - on a PC with no launcher before it (1.8.0, nothing in its settings
+//     folder) and neither addon in the AddOns folder, installs Survivor UI and
+//     SurvivorUI Classic by itself, once the game is there; a launcher that
+//     was here before changes nothing;
+//   - "Auto Update when ready" (1.8.0, a tick on our rows in the Addons tab, on
+//     unless unticked): a newer release of ours taken by itself, the game closed;
+//   - says what waits as its window opens (1.8.0): a newer game, and each addon
+//     installed with a newer release, with Update now or Later;
+//   - gives the game's own screens back when one of our addons is uninstalled
+//     (1.8.0): they stay put away in its config.toml otherwise, the red flag on
+//     the minimap among them;
+//   - with the game just downloaded (1.8.0), offers to move itself into the
+//     game's folder with a shortcut on the Desktop, or the shortcut alone, so
+//     it is not left where it can be deleted by accident;
 //   - in five tabs: Play, Savegame, Statistics, Run History, Addons (the
 //     Survivor UI tab folded into Addons in 1.6.0);
 //   - gets more addons (Addons tab, 1.6.0): the ones morderous checked,
@@ -120,7 +134,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.7.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.8.0.0")]
 
 namespace SurvivorInstaller
 {
@@ -133,6 +147,14 @@ namespace SurvivorInstaller
             bool inTray = Array.Exists(args, delegate (string arg) { return arg == "--tray"; });
             // Started by the installer it replaces: that one is closing.
             bool updated = Array.Exists(args, delegate (string arg) { return arg == "--updated"; });
+            // Moved into the game's folder by the one that was elsewhere: the
+            // same, and that exe goes once it has closed.
+            int moved = Array.IndexOf(args, "--moved");
+            if (moved >= 0 && moved + 1 < args.Length)
+            {
+                updated = true;
+                MainForm.MovedFrom = args[moved + 1];
+            }
             // One at a time: opened again while it waits in the tray, the one
             // running comes forward instead; just updated, it waits for the old
             // one to let go.
@@ -367,8 +389,6 @@ namespace SurvivorInstaller
         bool exiting;               // the tray's Exit: the window closes for good
         readonly ToolStripMenuItem selfItem = new ToolStripMenuItem("Update the launcher");
         static readonly Version OwnVersion = Assembly.GetExecutingAssembly().GetName().Version;
-        // This launcher is a beta: said by its version and in its window's title.
-        const string Stage = " (beta)";
         Release selfRelease;        // the release with a newer installer, while one is out
         bool selfUpdating;
         bool gettingGame;           // the game being asked for or downloaded
@@ -629,7 +649,9 @@ namespace SurvivorInstaller
         public MainForm(bool inTray, bool updated)
         {
             startHidden = inTray;
-            this.Text = "Azeroth SurvivorUI Launcher" + Stage;
+            // Before anything here writes a setting.
+            if (!updated && NewHere()) SetSetting(NewHereKey, "1");
+            this.Text = "Azeroth SurvivorUI Launcher";
             ClientSize = new Size(760, 618);
             planned = PlannedScale(ClientSize);
             FormBorderStyle = FormBorderStyle.None;
@@ -783,6 +805,12 @@ namespace SurvivorInstaller
             statusLabel.Size = new Size(720, 20);
             statusLabel.ForeColor = Muted;
             Controls.Add(statusLabel);
+            gameBar.Location = new Point(20, 560);
+            gameBar.Size = new Size(720, 22);
+            gameBar.Visible = false;
+            gameBar.Paint += PaintGameBar;
+            Controls.Add(gameBar);
+            gameBar.BringToFront();
 
             // Whose game it is, at the bottom left; his site in the other corner.
             Label credit = new Label();
@@ -859,10 +887,15 @@ namespace SurvivorInstaller
             ShowTab(currentTab, true);
 
             // Just updated: the old exe, set aside, goes once it has closed.
-            if (updated) Status("The launcher is now " + Short(OwnVersion) + ".");
+            if (MovedFrom != null) Status("The launcher is now in the game's folder.");
+            else if (updated) Status("The launcher is now " + Short(OwnVersion) + ".");
             CleanUpOld(updated);
 
-            Shown += delegate { CheckNow(); };
+            Shown += delegate
+            {
+                WindowOpened();
+                CheckNow();
+            };
             checkTimer.Interval = CheckEvery;
             checkTimer.Tick += delegate { CheckNow(); };
             checkTimer.Start();
@@ -2146,6 +2179,7 @@ namespace SurvivorInstaller
                             "\n\nA click takes you to the first. The launcher looks as it opens, every half hour and at Check for updates.");
                         foreach (Button tab in tabButtons) tab.Invalidate();
                     }
+                    SayWhatWaits();
                 }
                 if (alertPill.Visible && Visible && WindowState != FormWindowState.Minimized)
                 {
@@ -2819,11 +2853,12 @@ namespace SurvivorInstaller
             addonList.BorderStyle = BorderStyle.FixedSingle;
             addonList.Location = new Point(20, 56);
             addonList.Size = new Size(720, 236);
-            addonList.Columns.Add("Addon", 180);
-            addonList.Columns.Add("By", 150);
-            addonList.Columns.Add("Latest", 100);
-            addonList.Columns.Add("Installed", 110);
-            addonList.Columns.Add("State", 140);
+            addonList.Columns.Add("Addon", 222);
+            addonList.Columns.Add("By", 86);
+            addonList.Columns.Add("Latest", 80);
+            addonList.Columns.Add("Installed", 80);
+            addonList.Columns.Add("State", 84);
+            addonList.Columns.Add("Auto Update when ready", 150);
             addonList.OwnerDraw = true;
             typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(addonList, true, null);
             addonList.DrawColumnHeader += delegate (object sender, DrawListViewColumnHeaderEventArgs e)
@@ -2840,11 +2875,17 @@ namespace SurvivorInstaller
                 Rectangle bounds = e.Bounds;
                 if (e.ColumnIndex == 0) bounds.Width = addonList.Columns[0].Width;
                 using (Brush back = new SolidBrush(e.Item.Selected ? Color.FromArgb(62, 54, 22) : Panel)) e.Graphics.FillRectangle(back, bounds);
+                if (e.ColumnIndex == AutoColumn)
+                {
+                    if (e.SubItem.Text != "") DrawAutoTick(e.Graphics, bounds, e.SubItem.Text == "on");
+                    return;
+                }
                 Rectangle words = new Rectangle(bounds.X + S(4), bounds.Y, bounds.Width - S(8), bounds.Height);
                 TextFormatFlags flags = TextOnly | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.Left;
                 TextRenderer.DrawText(e.Graphics, e.SubItem.Text, addonList.Font, words, e.SubItem.ForeColor, flags);
-                // Survivor UI's and Survivor Plates': "(recommended)" by the name, small and green.
-                if (e.ColumnIndex == 0 && e.Item.Tag is OurAddon)
+                // Survivor UI's, Survivor Plates' and SurvivorUI Classic's: "(recommended)"
+                // by the name, small and green.
+                if (e.ColumnIndex == 0 && (e.Item.Tag is OurAddon || IsClassic(e.Item.Tag as ListedAddon)))
                 {
                     if (addonSmall == null || addonSmall.Size != addonList.Font.Size * 0.8f)
                         addonSmall = new Font(addonList.Font.FontFamily, addonList.Font.Size * 0.8f);
@@ -2864,6 +2905,12 @@ namespace SurvivorInstaller
                 }
             };
             addonList.SelectedIndexChanged += delegate { ShowAddonPicked(); };
+            addonList.MouseDown += delegate (object sender, MouseEventArgs e)
+            {
+                ListViewHitTestInfo hit = addonList.HitTest(e.Location);
+                if (hit.Item == null || hit.SubItem == null || hit.SubItem.Text == "") return;
+                if (hit.Item.SubItems.IndexOf(hit.SubItem) == AutoColumn) SwitchAuto(hit.Item.Tag);
+            };
             page.Controls.Add(addonList);
 
             // Over the list at its right: every update out, at once.
@@ -3000,6 +3047,7 @@ namespace SurvivorInstaller
                 addonsAsking = false;
                 FillAddons();
                 if (told) Status("The list of addons is up to date.");
+                TakeWhatIsDue();
             }));
         }
 
@@ -3767,6 +3815,12 @@ namespace SurvivorInstaller
             {
                 new ListedAddon
                 {
+                    Name = "SurvivorUI Classic", Author = "morderous", Repo = "morderous/survivorui-classic",
+                    Asset = "SurvivorUIClassic-*.zip", Sums = "SHA256SUMS.txt", Folders = new[] { ClassicFolder },
+                    About = "A branch of Survivor UI in the game's own look: everything movable, a run tracker, boss bars, a damage meter and more. Works on its own; with Survivor UI too, you pick one.",
+                },
+                new ListedAddon
+                {
                     Name = "ASBuilder", Author = "cadoky", Repo = "cadoky/ASBuilder", Asset = "ASBuilder-*.zip", Folders = new[] { "ASBuilder" },
                     About = "A build planner and in-run tracker: plan a build for any class before the run, then a small window tells you what to take next.",
                 },
@@ -3999,7 +4053,7 @@ namespace SurvivorInstaller
                 bool outdated = present && addon.ReleaseTag != null && (mine != "" ? mine != addon.ReleaseTag
                     : !addon.FromBranch && OlderThan(TocValue(toc, "Version"), ShortVersion(addon)));
                 AddAddonRow(addon, addon.Name, addon.Author ?? "", addon.ReleaseTag != null ? ShortVersion(addon) + (addon.Beta ? " beta" : "") : "...",
-                    TocValue(toc, "Version"), present, outdated, present && !AllOn(addons, addon.Folders) ? Muted : Gold);
+                    TocValue(toc, "Version"), present, outdated, present && !AllOn(addons, addon.Folders) ? Muted : IsClassic(addon) ? Color.FromArgb(255, 226, 120) : Gold);
             }
             if (addons != "" && Directory.Exists(addons))
             {
@@ -4056,6 +4110,7 @@ namespace SurvivorInstaller
             row.SubItems.Add(installed, TextColor, Panel, addonList.Font);
             row.SubItems.Add(!present ? "Not installed" : outdated ? "Outdated" : "Installed",
                 !present ? Muted : outdated ? OutdatedColor : InstalledColor, Panel, addonList.Font);
+            row.SubItems.Add(!present || AutoKey(tag) == null ? "" : AutoOn(tag) ? "on" : "off");
             row.Tag = tag;
             addonList.Items.Add(row);
         }
@@ -4111,9 +4166,14 @@ namespace SurvivorInstaller
             addonForget.Enabled = !busy;
             addonAbout.Width = S(added ? 580 : 720);
             Active(addonAdd, !busy, Gold);
-            // Survivor UI and its plates: no Uninstall (off is theirs), the beta in its place.
-            addonRemove.Visible = our == null;
-            betaButton.Visible = our != null && betaButton.Text != "No beta right now";
+            // Survivor UI and its plates, a beta out: its button beside Uninstall,
+            // the rest moved over.
+            bool beside = our != null && betaButton.Text != "No beta right now";
+            betaButton.Visible = beside;
+            betaButton.Location = new Point(S(272), S(338));
+            addonInstall.Bounds = new Rectangle(S(20), S(338), S(beside ? 150 : 190), S(30));
+            addonRemove.Bounds = new Rectangle(S(beside ? 176 : 220), S(338), S(beside ? 90 : 120), S(30));
+            addonUse.Location = new Point(S(beside ? 476 : 436), S(343));
             addonRemove.Enabled = present && !busy;
             addonUse.Enabled = present && !busy;
             List<ListedAddon> due = Updatable(addons);
@@ -4157,13 +4217,29 @@ namespace SurvivorInstaller
 
         void RemovePicked()
         {
-            if (!addonRemove.Enabled || addonBusy) return;
+            if (!addonRemove.Enabled || addonBusy || installing) return;
             string addons = folderBox.Text.Trim();
             object picked = PickedAddon();
             string[] folders = PickedFolders(picked);
             string name = PickedName(picked);
-            if (folders.Length == 0 || !SafeFolders(folders)) return;
-            if (Ask(this, "Uninstall " + name + "?\n\nIts folder goes to the Recycle Bin, where it can be taken back from. Its settings stay, should you install it again.",
+            // Survivor UI and its plates come in one zip: they go together.
+            bool pair = picked is OurAddon;
+            bool ours = pair || IsClassic(picked as ListedAddon);
+            if (pair)
+            {
+                folders = AddonFolders;
+                name = OurUI.Name + " and " + OurPlates.Name;
+            }
+            if (folders.Length == 0 || (!pair && !SafeFolders(folders))) return;
+            if (ours && GameRunning())
+            {
+                Ask(this, "Close the game first: it writes its settings as it closes.", "Get more addons", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (Ask(this, "Uninstall " + name + "?\n\n" +
+                (pair ? "They come together. Their folders go to the Recycle Bin, where they can be taken back from. Their settings stay, should you install them again."
+                    : "Its folder goes to the Recycle Bin, where it can be taken back from. Its settings stay, should you install it again.") +
+                (ours ? "\n\nThe game's own screens come back, the red flag on the minimap among them." : ""),
                 "Get more addons", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             foreach (string folder in folders)
             {
@@ -4178,7 +4254,12 @@ namespace SurvivorInstaller
             }
             ListedAddon listed = picked as ListedAddon;
             if (listed != null) SetSetting(InstalledKey(listed), "");
-            Status(name + " uninstalled: its folder is in the Recycle Bin.");
+            Status(name + " uninstalled: " + (pair ? "their folders are" : "its folder is") + " in the Recycle Bin.");
+            if (ours)
+            {
+                GiveBackGameScreens(Path.GetDirectoryName(addons.TrimEnd('\\')));
+                ShowUpdateState();
+            }
             FillAddons();
         }
 
@@ -4293,6 +4374,7 @@ namespace SurvivorInstaller
             {
                 addonBusy = false;
                 FillAddons();
+                ShowUpdateState();
                 string them = done.Count == 1 ? "it" : "them";
                 string loads = running ? "The game is open: restart it to load " + them + "." : "The game loads " + them + " the next time it starts.";
                 string stayed = left > 0 ? "\n\n" + left + " files of " + (done.Count == 1 ? "its zip" : "their zips") +
@@ -4300,16 +4382,18 @@ namespace SurvivorInstaller
                 if (failed.Count == 0)
                 {
                     Status((which.Count > 1 ? "Updated " : "Installed ") + string.Join(", ", done.ToArray()) + ".");
-                    Ask(this, (done.Count == 1 ? done[0] + " is installed." : "Updated: " + string.Join(", ", done.ToArray()) + ".") + "\n\n" + loads + stayed,
+                    if (quietInstalls) QuietNote(string.Join(", ", done.ToArray()) + " installed.");
+                    else Ask(this, (done.Count == 1 ? done[0] + " is installed." : "Updated: " + string.Join(", ", done.ToArray()) + ".") + "\n\n" + loads + stayed,
                         "Get more addons", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
                     Status("The install failed: " + failed[0]);
-                    Ask(this, (done.Count > 0 ? (which.Count > 1 ? "Updated: " : "Installed: ") + string.Join(", ", done.ToArray()) + ". " + loads + "\n\n" : "") +
-                        "Not installed:\n" + string.Join("\n", failed.ToArray()), "Get more addons", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    if (!quietInstalls)
+                        Ask(this, (done.Count > 0 ? (which.Count > 1 ? "Updated: " : "Installed: ") + string.Join(", ", done.ToArray()) + ". " + loads + "\n\n" : "") +
+                            "Not installed:\n" + string.Join("\n", failed.ToArray()), "Get more addons", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
-                if (selfRelease != null && selfBox.Checked) UpdateSelf();
+                NextInstall();
             }));
         }
 
@@ -4748,6 +4832,17 @@ namespace SurvivorInstaller
             ShowStrip();
             if (currentTab == StatsTab) ShowStats();
             RestartIfAsked();
+            // What waited for the game to close, after the save's backup and a
+            // restart, which leaves the game open again.
+            System.Windows.Forms.Timer due = new System.Windows.Forms.Timer();
+            due.Interval = 8000;
+            due.Tick += delegate
+            {
+                due.Stop();
+                due.Dispose();
+                TakeWhatIsDue();
+            };
+            due.Start();
         }
 
         // Change UI's Restart game. Neither the game nor an addon can start a
@@ -7062,6 +7157,7 @@ namespace SurvivorInstaller
 
         void FromTray()
         {
+            WindowOpened();
             Show();
             if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
             Activate();
@@ -7100,6 +7196,7 @@ namespace SurvivorInstaller
 
         void CheckNow()
         {
+            autoTried.Clear();
             new Thread(FetchLatest) { IsBackground = true }.Start();
             AskAddons(false);
             CheckGame();
@@ -7180,7 +7277,7 @@ namespace SurvivorInstaller
             // nor in its usual place.
             bool missing = GameMissing();
             bool behind = !missing && GameBehind();
-            bool playable = !installing && !gettingGame && GameExePath() != null;
+            bool playable = !installing && !gettingGame && !addonBusy && GameExePath() != null;
             playButton.Text = missing ? "\u2193  Get the game" : behind ? "\u2191  Update game" : "\u25B6  Play";
             playButton.Enabled = missing || behind ? !installing && !gettingGame : playable;
             tips.SetToolTip(playButton, missing
@@ -7255,7 +7352,7 @@ namespace SurvivorInstaller
                 }
                 if (current) Status("Survivor UI " + latest.Tag + " is the latest: up to date.");
             }
-            if (updateWaiting && toldOf != latest.Tag)
+            if (updateWaiting && toldOf != latest.Tag && !AutoOn(OurUI))
             {
                 toldOf = latest.Tag;
                 tray.ShowBalloonTip(6000, "Survivor UI " + latest.Tag + " is out",
@@ -7375,6 +7472,7 @@ namespace SurvivorInstaller
         {
             if (InvokeRequired) { BeginInvoke(new Action<string>(Status), text); return; }
             statusLabel.Text = text;
+            if (gameBar.Visible) gameBar.Invalidate();
         }
 
         // --- The game's AddOns folder -----------------------------------------
@@ -7976,6 +8074,7 @@ namespace SurvivorInstaller
                 try { File.WriteAllText(ConfigPath, folderBox.Text); } catch { }
                 Status("AddOns folder set.");
                 NoteFolders(true);
+                TakeWhatIsDue();
             }
         }
 
@@ -8035,6 +8134,7 @@ namespace SurvivorInstaller
                 BeginInvoke(new Action(delegate
                 {
                     installWhenNewer = false;
+                    releasesAnswered = true;
                     if (checkingByHand)
                     {
                         checkingByHand = false;
@@ -8106,12 +8206,14 @@ namespace SurvivorInstaller
             }
             bool byHand = checkingByHand;
             checkingByHand = false;
+            releasesAnswered = true;
             ShowSelfUpdate(newestInstaller);
             // Asked by hand: the answer said, for the launcher and the addons.
             if (byHand && selfRelease == null && !selfUpdating)
                 Status("The launcher " + Short(OwnVersion) + " is up to date; " +
                     (InstalledVersion(folderBox.Text) == null ? "Survivor UI is not in the game's AddOns folder yet."
                     : updateWaiting ? "Survivor UI " + latest.Tag + " is out." : "so is Survivor UI."));
+            TakeWhatIsDue();
         }
 
         // GitHub's markdown, readable as plain text.
@@ -8166,7 +8268,7 @@ namespace SurvivorInstaller
             Release pending = selfUpdating ? updatingTo : selfRelease;
             arrowMark.Visible = pending != null;
             versionLabel.Text = pending != null ? "Launcher ver. " + Short(OwnVersion) + " \u2192 " + Short(pending.InstallerVersion)
-                : "Launcher " + Short(OwnVersion) + Stage;
+                : "Launcher " + Short(OwnVersion);
             versionLabel.ForeColor = pending != null ? Color.FromArgb(110, 225, 125) : VersionYellow;
             if (pending != null)
             {
@@ -8306,7 +8408,11 @@ namespace SurvivorInstaller
                 if (updated && tries == 1 && !Visible)
                     tray.ShowBalloonTip(5000, "Azeroth SurvivorUI Launcher", "Updated to " + Short(OwnVersion) + ".", ToolTipIcon.Info);
                 bool gone = true;
-                try { if (File.Exists(OldPath)) File.Delete(OldPath); }
+                try
+                {
+                    if (File.Exists(OldPath)) File.Delete(OldPath);
+                    if (MovedFrom != null && SameExeName(MovedFrom) && File.Exists(MovedFrom)) File.Delete(MovedFrom);
+                }
                 catch { gone = false; }
                 if (gone || tries > 30) cleanup.Stop();
             };
@@ -8505,6 +8611,7 @@ namespace SurvivorInstaller
         class GamePlan
         {
             public string Folder, Version;
+            public bool Update;                     // over a game there: no first download
             public List<PackageSource> Sources = new List<PackageSource>();     // reached, the fastest first
             public List<PackageSource> Known = new List<PackageSource>();       // all, reached or not
             public PackageSource Source;        // the one picked
@@ -8868,7 +8975,7 @@ namespace SurvivorInstaller
                 string problem = null;
                 try { plan = MakePlan(folder); }
                 catch (Exception error) { problem = error.Message; }
-                BeginInvoke(new Action(delegate
+                Action answer = new Action(delegate
                 {
                     gettingGame = false;
                     ShowUpdateState();
@@ -8892,7 +8999,8 @@ namespace SurvivorInstaller
                         "Azeroth Survivors is Aethus' game. The launcher takes it from his own servers (wow.aethus.pl)" +
                         (plan.PackageSize > 0 ? ", the full package also from the mirrors his Discord gave," : "") + " and checks it:" +
                         pieces + "\n\nInto: " + plan.Folder + "\nIt needs about " + Gigabytes(RoomNeeded(plan)) + " GB free while it works." +
-                        (update ? "" : " Then it installs Survivor UI.");
+                        (update ? "" : Setting(NewHereKey, "") == "1" ? " Then it installs Survivor UI and SurvivorUI Classic." : " Then it installs Survivor UI.");
+                    plan.Update = update;
                     if (plan.PackageSize > 0)
                     {
                         // Where the full package comes from: the fastest now
@@ -8927,7 +9035,7 @@ namespace SurvivorInstaller
                             plan.PackageSize = plan.Source.Size;
                         }
                     }
-                    else if (Ask(this, words, "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                    else if (!gameAgreed && Ask(this, words, "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                     {
                         Status("");
                         return;
@@ -8935,6 +9043,12 @@ namespace SurvivorInstaller
                     gettingGame = true;
                     ShowUpdateState();
                     new Thread(delegate () { DoGetGame(plan); }) { IsBackground = true }.Start();
+                });
+                BeginInvoke(new Action(delegate
+                {
+                    answer();
+                    gameAgreed = false;
+                    if (!gettingGame) NextInstall();
                 }));
             }) { IsBackground = true }.Start();
         }
@@ -8957,6 +9071,9 @@ namespace SurvivorInstaller
                 }
             }
             catch { }
+            gameShare = done < 0 ? -1 : total > 0 ? Math.Min(1, (double)done / total) : 0;
+            gameBar.Visible = gameShare >= 0;
+            gameBar.Invalidate();
             if (done >= 0)
                 Status("Downloading " + what + ": " + Megabytes(done) + " of " + Megabytes(total) + " MB (" + (total > 0 ? done * 100 / total : 0) + "%)" + (progressTail ?? ""));
         }
@@ -9269,6 +9386,7 @@ namespace SurvivorInstaller
             string data = Path.Combine(folder, "Data");
             string staging = Path.Combine(folder, "_get-the-game");
             long total = plan.Download, done = 0;
+            GameProgress(0, total, "the game");
             try
             {
                 Directory.CreateDirectory(data);
@@ -9325,11 +9443,7 @@ namespace SurvivorInstaller
                     folderBox.Text = addons;
                     try { File.WriteAllText(ConfigPath, addons); } catch { }
                     Status("Azeroth Survivors " + plan.Version + " is ready." + (bringing ? " Click Play once." : ""));
-                    // Survivor UI next, unless it is there already.
-                    if (!bringing && stable != null && stable.ZipUrl != null && InstalledVersion(addons) == null) Install(stable);
-                    else Ask(this,
-                        "Azeroth Survivors " + plan.Version + " is ready.\n\n" + (bringing ? FirstStartNote : "Click Play."),
-                        "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    AfterGame(plan, addons, bringing);
                 }));
             }
             catch (Exception error)
@@ -9363,6 +9477,8 @@ namespace SurvivorInstaller
                     ShowUpdateState();
                     // The exe may have changed: its version read again.
                     CheckGame();
+                    TakeWhatIsDue();
+                    NextInstall();
                 }));
             }
         }
@@ -9450,7 +9566,8 @@ namespace SurvivorInstaller
                 {
                     ShowInstalled();
                     Status("Installed " + release.Tag + ".");
-                    Ask(this,
+                    if (quietInstalls) QuietNote("Survivor UI " + release.Tag + " installed.");
+                    else Ask(this,
                         "Survivor UI " + release.Tag + " is installed.\n\n" +
                         (release.Beta ? "A beta build: more bugs than usual may be in it, and it updates more often. Tell what you find on Discord.\n\n" : "") +
                         (running ? "The game is open: restart it to load the new version." : "Start the game and enjoy!") +
@@ -9463,8 +9580,9 @@ namespace SurvivorInstaller
                 Status("Install failed: " + error.Message);
                 BeginInvoke(new Action(delegate
                 {
-                    Ask(this, "The install failed:\n\n" + error.Message +
-                        "\n\nIf the game is open, close it and try again.", "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    if (!quietInstalls)
+                        Ask(this, "The install failed:\n\n" + error.Message +
+                            "\n\nIf the game is open, close it and try again.", "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }));
             }
             finally
@@ -9475,9 +9593,387 @@ namespace SurvivorInstaller
                     installing = false;
                     browseButton.Enabled = true;
                     ShowUpdateState();
-                    if (selfRelease != null && selfBox.Checked) UpdateSelf();
+                    NextInstall();
                 }));
             }
+        }
+
+        // --- By itself: both addons, the auto updates, what waits ---------------
+
+        // Several installs one after the other (a launcher new here, the auto
+        // updates, Update now): each starts as the one before it ends, with no
+        // box of its own, how each went said in the status line. Once they are
+        // done, the launcher's place after Get the game and its own update.
+        readonly Queue<Action> nextInstalls = new Queue<Action>();
+        bool quietInstalls;
+        string placeFor;            // the game just downloaded here: where the launcher may go
+
+        bool InstallsBusy()
+        {
+            return installing || addonBusy || gettingGame;
+        }
+
+        void NextInstall()
+        {
+            while (nextInstalls.Count > 0 && !InstallsBusy()) nextInstalls.Dequeue()();
+            if (nextInstalls.Count > 0 || InstallsBusy()) return;
+            quietInstalls = false;
+            if (placeFor != null)
+            {
+                string folder = placeFor;
+                placeFor = null;
+                OfferPlace(folder);
+            }
+            if (exiting) return;
+            // One answer may have come in while another install was on.
+            AutoUpdate();
+            if (!InstallsBusy() && selfRelease != null && selfBox.Checked) UpdateSelf();
+        }
+
+        // Done with the window in the tray: a note there.
+        void QuietNote(string text)
+        {
+            if (!Visible) tray.ShowBalloonTip(5000, "Azeroth SurvivorUI Launcher", text, ToolTipIcon.Info);
+        }
+
+        void InstallListed(List<ListedAddon> which)
+        {
+            string addons = folderBox.Text.Trim();
+            addonBusy = true;
+            ShowAddonPicked();
+            ShowUpdateState();
+            new Thread(delegate () { DoInstallAddons(addons, which); }) { IsBackground = true }.Start();
+        }
+
+        // GitHub has answered, or the game closed, or the game was found: what
+        // is to be taken without a click.
+        void TakeWhatIsDue()
+        {
+            FirstInstall();
+            AutoUpdate();
+        }
+
+        // A launcher new on this PC: nothing of an earlier one in its settings
+        // folder (written at the start of the window, so an update or the second
+        // start never counts). Kept in launcher.ini until the game is there.
+        const string NewHereKey = "firstInstall";
+        const string ClassicFolder = "SurvivorUIClassic";
+
+        static bool NewHere()
+        {
+            return !File.Exists(SettingsFile) && !File.Exists(ConfigPath);
+        }
+
+        internal static bool IsClassic(ListedAddon addon)
+        {
+            return addon != null && !addon.Mine && addon.Folders != null && Array.IndexOf(addon.Folders, ClassicFolder) >= 0;
+        }
+
+        // Both addons, each from its latest release, with neither there yet;
+        // the game asks which to use as it first starts. One there already: left
+        // as it is.
+        void FirstInstall()
+        {
+            if (Setting(NewHereKey, "") != "1" || InstallsBusy() || selfUpdating || nextInstalls.Count > 0) return;
+            if (GameMissing() || GameRunning() || GameWillBringAlong(GameExePath())) return;
+            ListedAddon classic = listedAddons.Find(IsClassic);
+            if (stable == null || stable.ZipUrl == null || classic == null || classic.ZipUrl == null || (classic.Sums != null && classic.Sha256 == null)) return;
+            string addons = AddonsFor(GameExePath());
+            SetSetting(NewHereKey, "");
+            if (InstalledVersion(addons) != null || AddonPresent(addons, classic.Folders)) return;
+            Release release = stable;
+            quietInstalls = true;
+            nextInstalls.Enqueue(delegate { Install(release); });
+            nextInstalls.Enqueue(delegate { InstallListed(new List<ListedAddon> { classic }); });
+            nextInstalls.Enqueue(delegate
+            {
+                if (InstalledVersion(folderBox.Text) != null && AddonPresent(folderBox.Text.Trim(), classic.Folders))
+                    Ask(this, "Survivor UI and SurvivorUI Classic are installed.\n\nThe game asks which of the two to use as it first starts. " +
+                        "Change UI, in either one's options, changes it later.", "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            });
+            NextInstall();
+        }
+
+        // "Auto Update when ready": Survivor UI's tick, Survivor Plates' the same
+        // one (they come in one zip), and SurvivorUI Classic's; on unless
+        // unticked, on the rows of ours installed.
+        const int AutoColumn = 5;
+
+        static string AutoKey(object row)
+        {
+            if (row is OurAddon) return "autoUpdate.ui";
+            return IsClassic(row as ListedAddon) ? "autoUpdate.classic" : null;
+        }
+
+        static bool AutoOn(object row)
+        {
+            string key = AutoKey(row);
+            return key != null && Setting(key, "1") != "0";
+        }
+
+        void DrawAutoTick(Graphics g, Rectangle cell, bool on)
+        {
+            int size = S(13);
+            Rectangle box = new Rectangle(cell.X + S(6), cell.Y + (cell.Height - size) / 2, size, size);
+            using (Brush well = new SolidBrush(Color.FromArgb(12, 12, 11))) g.FillRectangle(well, box);
+            using (Pen edge = new Pen(on ? TickText : TickEdge)) g.DrawRectangle(edge, box);
+            if (!on) return;
+            System.Drawing.Drawing2D.SmoothingMode smooth = g.SmoothingMode;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (Pen mark = new Pen(Gold, SF(2f)))
+                g.DrawLines(mark, new[] { new PointF(box.X + size * 0.22f, box.Y + size * 0.52f),
+                    new PointF(box.X + size * 0.42f, box.Y + size * 0.74f), new PointF(box.X + size * 0.8f, box.Y + size * 0.26f) });
+            g.SmoothingMode = smooth;
+        }
+
+        void SwitchAuto(object row)
+        {
+            bool on = !AutoOn(row);
+            SetSetting(AutoKey(row), on ? "1" : "0");
+            string name = row is OurAddon ? OurUI.Name + " and " + OurPlates.Name : PickedName(row);
+            Status(name + (on ? ": updated by itself as a new release is out, with the game closed." : ": you update by hand."));
+            BeginInvoke(new Action(delegate
+            {
+                FillAddons();
+                if (on) AutoUpdate();
+            }));
+        }
+
+        // A newer release of ours, ticked and the game closed: taken. With the
+        // game open it waits for GameClosed. Tried once for each look at GitHub:
+        // one that fails waits for the next look.
+        readonly List<string> autoTried = new List<string>();
+
+        void AutoUpdate()
+        {
+            if (InstallsBusy() || selfUpdating || nextInstalls.Count > 0 || GameRunning()) return;
+            string exe = GameExePath();
+            if (exe != null && GameWillBringAlong(exe)) return;
+            Release release = updateWaiting && AutoOn(OurUI) && !autoTried.Contains(latest.Tag) ? latest : null;
+            List<ListedAddon> due = Updatable(folderBox.Text.Trim()).FindAll(each => AutoOn(each) && !autoTried.Contains(each.ReleaseTag));
+            if (release == null && due.Count == 0) return;
+            quietInstalls = true;
+            if (release != null)
+            {
+                autoTried.Add(release.Tag);
+                nextInstalls.Enqueue(delegate { Install(release); });
+            }
+            if (due.Count > 0)
+            {
+                foreach (ListedAddon addon in due) autoTried.Add(addon.ReleaseTag);
+                nextInstalls.Enqueue(delegate { InstallListed(due); });
+            }
+            NextInstall();
+        }
+
+        // As the window opens: what waits, once the answers are in. The game and
+        // each addon installed from the list with a newer release, what updates
+        // by itself left out; the same list says nothing a second time in this
+        // run of the launcher.
+        bool windowOpened, releasesAnswered, gameAgreed;
+        DateTime openedAt;
+        string saidWaiting = "";
+
+        void WindowOpened()
+        {
+            windowOpened = true;
+            openedAt = DateTime.Now;
+        }
+
+        void SayWhatWaits()
+        {
+            if (!windowOpened || !Visible || WindowState == FormWindowState.Minimized || OwnedForms.Length > 0) return;
+            if (InstallsBusy() || selfUpdating || nextInstalls.Count > 0) return;
+            bool answered = releasesAnswered && addonsAsked != DateTime.MinValue && !addonsAsking && !checkingGame;
+            if (!answered && DateTime.Now - openedAt < TimeSpan.FromSeconds(30)) return;
+            windowOpened = false;
+            if (GameRunning()) return;
+            string addons = folderBox.Text.Trim();
+            List<string> lines = new List<string>();
+            bool gameDue = !GameMissing() && GameBehind() && game != null;
+            if (gameDue)
+                lines.Add("Azeroth Survivors " + game.Latest + (game.Version == null ? "" : game.Version == game.Latest ? ", new data" : ", you have " + game.Version));
+            Release release = updateWaiting && !AutoOn(OurUI) ? latest : null;
+            if (release != null) lines.Add("Survivor UI " + release.Tag + ", you have " + InstalledVersion(addons));
+            List<ListedAddon> due = Updatable(addons).FindAll(each => !AutoOn(each));
+            foreach (ListedAddon addon in due)
+            {
+                string have = TocValue(TocOf(Path.Combine(addons, addon.Folders[0])), "Version");
+                lines.Add(addon.Name + " " + ShortVersion(addon) + (string.IsNullOrEmpty(have) ? "" : ", you have " + have));
+            }
+            string said = string.Join("\n", lines.ToArray());
+            if (lines.Count == 0 || said == saidWaiting) return;
+            saidWaiting = said;
+            if (AskWith("Updates are out:\n\n  \u2022  " + string.Join("\n  \u2022  ", lines.ToArray()), "Updates",
+                MessageBoxIcon.Question, "Update now", "Later") != DialogResult.Yes) return;
+            quietInstalls = true;
+            if (release != null) nextInstalls.Enqueue(delegate { Install(release); });
+            if (due.Count > 0) nextInstalls.Enqueue(delegate { InstallListed(due); });
+            if (gameDue)
+                nextInstalls.Enqueue(delegate
+                {
+                    gameAgreed = true;
+                    GetGame();
+                    if (!gettingGame) gameAgreed = false;
+                });
+            NextInstall();
+        }
+
+        // The game there: Survivor UI next, unless it is there already (with
+        // SurvivorUI Classic on a launcher new here, FirstInstall as the download
+        // ends); and, the game just downloaded, where the launcher stays.
+        void AfterGame(GamePlan plan, string addons, bool bringing)
+        {
+            if (!plan.Update) placeFor = plan.Folder;
+            if (!bringing && Setting(NewHereKey, "") == "1") return;
+            if (!plan.Update && !bringing && stable != null && stable.ZipUrl != null && InstalledVersion(addons) == null)
+            {
+                // Its box said by OfferPlace's, as one would stand on the other.
+                Release release = stable;
+                quietInstalls = true;
+                nextInstalls.Enqueue(delegate { Install(release); });
+            }
+            else if (bringing || (plan.Update && !quietInstalls))
+                nextInstalls.Enqueue(delegate
+                {
+                    Ask(this, "Azeroth Survivors " + plan.Version + " is ready.\n\n" + (bringing ? FirstStartNote : "Click Play."),
+                        "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                });
+        }
+
+        // The game just downloaded, and the launcher maybe still in Downloads,
+        // where it can go with a clean-up: into the game's folder with a
+        // shortcut on the Desktop, or only the shortcut.
+        static string ShortcutPath
+        {
+            get { return Path.Combine(GameSave.Desktop(), "Azeroth SurvivorUI Launcher.lnk"); }
+        }
+
+        void OfferPlace(string folder)
+        {
+            string exe = Application.ExecutablePath;
+            if (SameFolder(Path.GetDirectoryName(exe), folder))
+            {
+                if (File.Exists(ShortcutPath))
+                    Ask(this, "Azeroth Survivors is ready.\n\nClick Play.", "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                else if (AskWith("Azeroth Survivors is ready.\n\nThe launcher is in the game's folder. Put a shortcut to it on your Desktop?", "Azeroth Survivors",
+                    MessageBoxIcon.Question, "Add a shortcut", "No thanks") == DialogResult.Yes)
+                    AddShortcut(exe);
+                return;
+            }
+            DialogResult answer = AskWith("Azeroth Survivors is ready.\n\nThe launcher is still in the folder you unzipped it to, where it could be deleted by accident. " +
+                "Move it into the game's folder, with a shortcut on your Desktop (recommended), or add only the shortcut?",
+                "Azeroth Survivors", MessageBoxIcon.Question, "Move it", "Only a shortcut", "Leave it");
+            if (answer == DialogResult.Yes) MoveTo(folder);
+            else if (answer == DialogResult.No) AddShortcut(exe);
+        }
+
+        // Windows' own shell writes the .lnk.
+        bool AddShortcut(string target)
+        {
+            try
+            {
+                Type shell = Type.GetTypeFromProgID("WScript.Shell");
+                object host = Activator.CreateInstance(shell);
+                object link = shell.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, host, new object[] { ShortcutPath });
+                Type type = link.GetType();
+                type.InvokeMember("TargetPath", BindingFlags.SetProperty, null, link, new object[] { target });
+                type.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, link, new object[] { Path.GetDirectoryName(target) });
+                type.InvokeMember("Description", BindingFlags.SetProperty, null, link, new object[] { "Azeroth SurvivorUI Launcher" });
+                type.InvokeMember("IconLocation", BindingFlags.SetProperty, null, link, new object[] { target + ",0" });
+                type.InvokeMember("Save", BindingFlags.InvokeMethod, null, link, null);
+                Status("A shortcut to the launcher is on your Desktop.");
+                return true;
+            }
+            catch (Exception error)
+            {
+                Status("The shortcut could not be made: " + error.Message);
+                return false;
+            }
+        }
+
+        // The exe copied into the game's folder and started there, this one
+        // closing; that one deletes this file once it is free (CleanUpOld) and
+        // moves the Start with Windows line after it.
+        void MoveTo(string folder)
+        {
+            string exe = Application.ExecutablePath;
+            string moved = Path.Combine(folder, Path.GetFileName(exe));
+            try
+            {
+                File.Copy(exe, moved, true);
+                AddShortcut(moved);
+                ProcessStartInfo info = new ProcessStartInfo(moved, "--moved \"" + exe + "\"" + (Visible ? "" : " --tray"));
+                info.WorkingDirectory = folder;
+                info.UseShellExecute = false;
+                Process.Start(info);
+                exiting = true;
+                Close();
+            }
+            catch (Exception error)
+            {
+                Status("The launcher could not be moved: " + error.Message);
+                Ask(this, "The launcher could not be moved:\n\n" + error.Message + "\n\nIt stays where it is, and works the same.",
+                    "Azeroth SurvivorUI Launcher", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        // Where the launcher moved from, given by the one that moved it; only
+        // an exe of its own name, never itself.
+        internal static string MovedFrom;
+
+        static bool SameExeName(string path)
+        {
+            string exe = Application.ExecutablePath;
+            return string.Equals(Path.GetFileName(path), Path.GetFileName(exe), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Path.GetFullPath(path), Path.GetFullPath(exe), StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Our addons uninstalled: what they put away in the game's settings
+        // stays put away with them gone (the game saves those settings, and
+        // takes no word of it at a close). hud* and CombatDamage set to 0 leave
+        // config.toml, so the game's own defaults rule again; an addon of ours
+        // still there puts its own away as it starts. The game is closed here.
+        internal static void GiveBackGameScreens(string settings)
+        {
+            try
+            {
+                string path = Path.Combine(settings, "config.toml");
+                if (!File.Exists(path)) return;
+                string was = File.ReadAllText(path);
+                string now = Regex.Replace(was, @"^(hud[A-Z]\w*|CombatDamage) = ""0""[ \t]*\r?\n", "", RegexOptions.Multiline);
+                if (now == was) return;
+                string fresh = path + ".new";
+                File.WriteAllText(fresh, now, new System.Text.UTF8Encoding(false));
+                File.Replace(fresh, path, null);
+            }
+            catch { }
+        }
+
+        // The download's bar, over the status line on every tab, its words on it.
+        readonly Canvas gameBar = new Canvas();
+        double gameShare = -1;
+
+        void PaintGameBar(object sender, PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Rectangle r = gameBar.ClientRectangle;
+            using (Brush back = new SolidBrush(Back)) g.FillRectangle(back, r);
+            Slice3(g, Art("bar-back"), r, 12, 12);
+            int filled = (int)Math.Round(r.Width * Math.Max(0, gameShare));
+            if (filled > 0)
+            {
+                g.SetClip(new Rectangle(0, 0, filled, r.Height));
+                Slice3(g, Art("bar-green"), Rectangle.Inflate(r, -S(2), -S(2)), 12, 12);
+                g.ResetClip();
+            }
+            Slice3(g, Art("bar-border"), r, 12, 12);
+            TextFormatFlags flags = TextOnly | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis;
+            Rectangle words = Rectangle.Inflate(r, -S(10), 0);
+            words.Offset(1, 1);
+            TextRenderer.DrawText(g, statusLabel.Text, statusLabel.Font, words, Color.Black, flags);
+            words.Offset(-1, -1);
+            TextRenderer.DrawText(g, statusLabel.Text, statusLabel.Font, words, Color.White, flags);
         }
     }
 
