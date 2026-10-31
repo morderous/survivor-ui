@@ -72,7 +72,8 @@ Nameplates.
 > Turned on, every enemy carries a plate (`/splates all` keeps them on elites, guardians and bosses only), and only elites, guardians and bosses carry a name on it (`/splates names` puts a name on every plate). Every choice is remembered.
 
 - A flat health bar with a thin border, the name above it and the unit's health on it.
-- A marker at 30% health, where execute effects start. Below it the bar turns yellow.
+- At 30% health, where execute effects start, the bar turns yellow.
+- A white line round the bar and the letters of the name of the plate under the mouse, which comes to the front and takes the click, so you can pick one out of a crowd.
 - Elites and bosses get larger plates in their own colors. A lair guardian wears its elite's plate, except as your target: then it turns blue.
 - The target's plate shows its debuffs and their stacks.
 - Friendly plates, each kind on its own and off by default: your totems (small, blue), your pets and summons (small, green, with their icon), and in a co-op run your friends, in their class's color with the class's icon and the health left.
@@ -223,6 +224,18 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.48, 2026-10-31
+
+The plate under your mouse lights up, plates can overlap, and a hunter's pets go by one name.
+
+**Survivor UI**
+- **A hunter's pets, one name everywhere:** the game's meter adds the Wolf and the Raptor up as Pets, while Biggest Crits and the combat numbers had them apart. They all say Pets now, in one color, with Call Pet's icon, the meter's line too, which had none.
+
+**Survivor Plates**
+- **Overlapping plates:** the game's new Nameplate Layout (its 0.131) is set to Overlapping once for everyone, as each plate then stays right over its enemy. **Overlapping plates**, in the options' Nameplates tab, turns it back to Stacking; the game's own option stays in step.
+- **The plate under the mouse:** a white line round its bar and the letters of its name, in front of the others. With clicks going through the plates, it is the only one that takes a click, so a click on it targets its enemy and the camera still turns from over the rest.
+- **The execute line is out:** the mark at 30% on every plate. The bar still turns yellow there.
 
 ### Azeroth SurvivorUI Launcher 1.8.0, 2026-10-30
 

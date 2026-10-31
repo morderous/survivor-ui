@@ -4347,8 +4347,12 @@ if PlatesThere() then
 	Subheader(page, "Look")
 	Check(page, "Names on every plate", function() return SurvivorPlatesDB and SurvivorPlatesDB.names == true end,
 		function() Plates("names") end, "off: only on elites, guardians, bosses and friends")
+	if SurvivorPlates_LayoutThere and SurvivorPlates_LayoutThere() then
+		Check(page, "Overlapping plates", function() return SurvivorPlates_Overlapping() end,
+			function() Plates("overlap") end, "each plate stays right over its enemy; off, they move apart in a crowd (the game's Nameplate Layout)")
+	end
 	Check(page, "Click through the plates", function() return SurvivorPlates_ClickThrough and SurvivorPlates_ClickThrough() end,
-		function() Plates("click") end, "the camera turns from over a plate; a click on one no longer targets it")
+		function() Plates("click") end, "the camera turns from over a plate; only the plate under the mouse, in its white line, takes a click")
 	Check(page, "Ignore V and Shift+V", function() return not (SurvivorPlates_KeysAllowed and SurvivorPlates_KeysAllowed()) end,
 		function() Plates("keys") end, "the game's keys for its plates: what they turn on or off goes back to the choices here")
 	KeyButton(page, "Plates on or off key", "SURVIVORPLATES_TOGGLE",

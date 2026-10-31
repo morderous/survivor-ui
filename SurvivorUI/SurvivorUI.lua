@@ -485,7 +485,45 @@ function SurvivorUI_PetCast(name)
 	end
 end
 
+-- The game's meter adds a hunter's beasts up in one line, Pets, so the rest goes
+-- by that name too: Biggest Crits, the combat numbers, their color and icon.
+-- Another class's summon joins them only if the meter has it so; a warlock's
+-- demons have a line each. Asked again every few seconds.
+local BEASTS = { ["Wolf"] = true, ["Raptor"] = true }
+local inPets, inPetsAt = {}, 0
+
+local function InPets(name)
+	if GetTime() - inPetsAt > 5 then
+		inPets, inPetsAt = {}, GetTime()
+	end
+	if inPets[name] == nil then
+		local _, class = UnitClass("player")
+		local answer = class == "HUNTER" and BEASTS[name] or false
+		if not answer then
+			local pets, own, summoned = false, false, false
+			for index = 1, table.getn(AZS_METER or {}) do
+				local lineName = AZS_METER[index].name
+				pets = pets or lineName == "Pets"
+				own = own or lineName == name
+			end
+			local groups = AZS_GetSummonGroups and AZS_GetSummonGroups() or {}
+			for index = 1, table.getn(groups) do
+				summoned = summoned or groups[index].name == name
+			end
+			answer = pets and summoned and not own
+		end
+		inPets[name] = answer and true or false
+	end
+	return inPets[name]
+end
+
 function SurvivorUI_SourceOf(name, line)
+	if name then
+		local _, _, owner = string.find(name, "^(.+)'s ")
+		if InPets(owner or name) then
+			return "Pets"
+		end
+	end
 	if name == "Attack" and line and string.find(line, " Fire damage", 1, true) and Holds("searing_totem") then
 		return "Searing Totem"
 	end

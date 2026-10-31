@@ -1,8 +1,12 @@
 -- Survivor Plates - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor Plates: nameplates in the manner of Plater, for Azeroth Survivors.
 -- A flat health bar on a dark backing with a thin black border, the name above
--- it, the unit's health on it, an execute-range marker, and a highlighted
--- target with its debuffs. Elites and bosses get larger plates in their own colors.
+-- it, the unit's health on it, a color of its own in the execute range, and a
+-- highlighted target with its debuffs. Elites and bosses get larger plates in
+-- their own colors. The plate under the mouse wears a white line round its bar
+-- and round the letters of its name, comes to the front of the others, and
+-- takes the click: with clicks going through the plates it is the only one
+-- that does.
 -- A lair guardian is an elite to the client, under its elite's name; the game
 -- tells addons which one it is only for the target, whose plate turns blue.
 --
@@ -16,7 +20,9 @@
 -- re-reads the name every frame.
 --
 -- The bars sit exactly where the client seats its plates: position and
--- stacking are the client's own.
+-- stacking are the client's own, its Nameplate Layout (the game's 0.131,
+-- Options, Nameplates) set to Overlapping once for everyone, and from then on
+-- as chosen there or here.
 --
 -- A raid mark (the game's 0.115; Survivor UI's Raid marks put them on their
 -- own) is the client's own icon, the plate's last region, left of the bar: the
@@ -45,7 +51,8 @@
 --   /splates target     the target's plate though its kind is left out (default), or not
 --   /splates names      names only on elites, guardians and bosses (default), or on every plate
 --   /splates keys       V and Shift+V ignored (default), or let them work as the game has them
---   /splates click      clicks go through the plates (default), or a click on one targets it
+--   /splates click      clicks go through the plates but the one under the mouse (default), or every plate takes them
+--   /splates overlap    plates stay right over their enemies (default), or move apart in a crowd
 --   /splates count      the plates on screen now, by kind (a check)
 --   /splates scale N    plate size, 0.5 to 2 (default 1)
 --
@@ -334,16 +341,11 @@ local function ApplyKind(overlay, kind)
 	overlay.style = style
 	overlay.bar:SetWidth(style.width * scale)
 	overlay.bar:SetHeight(style.height * scale)
-	overlay.marker:SetHeight(style.height * scale)
-	overlay.marker:SetPoint("LEFT", overlay.bar, "LEFT", style.width * scale * EXECUTE_RANGE, 0)
 	overlay.name:SetFont(SurvivorUI_FONT or FONT, style.nameSize * scale + FONT_BUMP, "OUTLINE")
 	overlay.health:SetFont(SurvivorUI_FONT or FONT, math.max(8, (style.height - 1) * scale) + FONT_BUMP, "OUTLINE")
 
 	overlay.named = settings.names or kind ~= "normal"
 	PlaceRaidIcon(overlay)
-	if FRIEND_KINDS[kind] then
-		overlay.marker:Hide()
-	end
 	if overlay.named and not overlay.put then
 		overlay.name:Show()
 	else
@@ -580,17 +582,12 @@ local function UpdatePlate()
 	end
 
 	local color = overlay.classColor or overlay.style.color
-	if FRIEND_KINDS[overlay.kind] then
-		-- No execute mark on a friend.
-	elseif share <= EXECUTE_RANGE then
+	if share <= EXECUTE_RANGE and not FRIEND_KINDS[overlay.kind] then
 		color = EXECUTE_COLOR
-		overlay.marker:Hide()
-	else
-		overlay.marker:Show()
 	end
 	overlay.bar:SetStatusBarColor(color[1], color[2], color[3], 1)
 
-	if isTarget then
+	if isTarget or overlay.lit then
 		overlay.border:SetVertexColor(1, 1, 1, 1)
 	else
 		overlay.border:SetVertexColor(0, 0, 0, 1)
@@ -666,11 +663,6 @@ local function SkinPlate(plate)
 	overlay.backing:SetVertexColor(0.10, 0.10, 0.12, 1)
 	overlay.backing:SetAllPoints(overlay.bar)
 
-	overlay.marker = overlay.bar:CreateTexture(nil, "OVERLAY")
-	overlay.marker:SetTexture(FLAT)
-	overlay.marker:SetVertexColor(1, 1, 1, 0.7)
-	overlay.marker:SetWidth(1)
-
 	overlay.name = overlay:CreateFontString(nil, "OVERLAY")
 	overlay.name:SetPoint("BOTTOM", overlay.bar, "TOP", 0, 3)
 	overlay.name:SetTextColor(1, 1, 1)
@@ -692,6 +684,115 @@ local function SkinPlate(plate)
 	table.insert(overlays, overlay)
 end
 
+-- The plate under the mouse, read by hand: with clicks going through the plates
+-- none of them hears it. The nearest to the mouse, of those it is on; none with
+-- the mouse on a window. Asked 20 times a second.
+local hovered
+local hoverWait = 0
+local RISE = 40                 -- the plate under the mouse, over the others
+-- The white line round the name's letters: white copies of it, under the
+-- name and clear of its black outline, all round. Made for a plate the first
+-- time the mouse is on it.
+local HALO = { { -2, 0 }, { 2, 0 }, { 0, -2 }, { 0, 2 }, { -1.5, -1.5 }, { 1.5, -1.5 }, { -1.5, 1.5 }, { 1.5, 1.5 } }
+
+local function ShowHalo(overlay, on)
+	if on and not overlay.named then
+		on = false
+	end
+	if on and not overlay.halo then
+		overlay.halo = {}
+		for index = 1, table.getn(HALO) do
+			local copy = overlay:CreateFontString(nil, "ARTWORK")
+			copy:SetPoint("CENTER", overlay.name, "CENTER", HALO[index][1], HALO[index][2])
+			overlay.halo[index] = copy
+		end
+	end
+	for index = 1, table.getn(overlay.halo or {}) do
+		local copy = overlay.halo[index]
+		if on then
+			local font, size = overlay.name:GetFont()
+			copy:SetFont(font, size)
+			copy:SetTextColor(1, 1, 1, 1)
+			copy:SetText(overlay.name:GetText())
+			copy:Show()
+		else
+			copy:Hide()
+		end
+	end
+end
+
+local function PlateUnderMouse()
+	local focus = GetMouseFocus and GetMouseFocus()
+	if focus and focus ~= WorldFrame and not (hovered and focus == hovered.plate) then
+		return nil
+	end
+	local x, y = GetCursorPosition()
+	local best, bestGap
+	for index = 1, table.getn(overlays) do
+		local overlay = overlays[index]
+		if overlay.plate:IsVisible() and not overlay.put then
+			local scale = overlay.bar:GetEffectiveScale()
+			local atX, atY = x / scale, y / scale
+			local left, right = overlay.bar:GetLeft(), overlay.bar:GetRight()
+			local bottom, top = overlay.bar:GetBottom(), overlay.bar:GetTop()
+			if left and bottom then
+				if overlay.named then
+					top = overlay.name:GetTop() or top
+				end
+				if atX >= left - 2 and atX <= right + 2 and atY >= bottom - 2 and atY <= top + 2 then
+					local gap = math.abs(atX - (left + right) / 2) + math.abs(atY - (top + bottom) / 2)
+					if not bestGap or gap < bestGap then
+						best, bestGap = overlay, gap
+					end
+				end
+			end
+		end
+	end
+	return best
+end
+
+local function SetHovered(overlay)
+	if overlay == hovered then
+		return
+	end
+	if hovered then
+		hovered.lit = nil
+		ShowHalo(hovered, false)
+		hovered.plate:SetFrameLevel(hovered.plateLevel)
+		if Settings().clickThrough then
+			hovered.plate:EnableMouse(false)
+		end
+	end
+	hovered = overlay
+	if overlay then
+		overlay.lit = true
+		ShowHalo(overlay, true)
+		overlay.plateLevel = overlay.plate:GetFrameLevel()
+		overlay.plate:SetFrameLevel(overlay.plateLevel + RISE)
+		overlay.plate:EnableMouse(true)
+	end
+end
+
+-- The game's Nameplate Layout (its 0.131): nil on a game without it.
+local function Layout()
+	local known, value = pcall(GetCVar, "nameplateLayout")
+	return known and value or nil
+end
+
+function SurvivorPlates_Overlapping()
+	return Layout() == "overlap"
+end
+
+function SurvivorPlates_LayoutThere()
+	return Layout() ~= nil
+end
+
+function SurvivorPlates_SetOverlapping(on)
+	if Layout() then
+		SetCVar("nameplateLayout", on and "overlap" or "stack")
+	end
+end
+
 -- New plates only ever get appended to WorldFrame's children.
 local scanned = 0
 local partyCount = 0
@@ -710,6 +811,16 @@ scanner:SetScript("OnUpdate", function()
 	if members ~= partyCount then
 		partyCount = members
 		kindsVersion = kindsVersion + 1
+	end
+
+	hoverWait = hoverWait + arg1
+	if hoverWait >= 0.05 then
+		hoverWait = 0
+		SetHovered(PlateUnderMouse())
+		-- The client hands a plate to another unit: the copies follow its name.
+		if hovered then
+			ShowHalo(hovered, true)
+		end
 	end
 
 	local count = WorldFrame:GetNumChildren()
@@ -784,6 +895,11 @@ scanner:SetScript("OnEvent", function()
 		return
 	end
 	ApplyShown()
+	-- Overlapping for everyone, once; after that it is whoever's choice.
+	if not Settings().layoutSet and Layout() then
+		Settings().layoutSet = true
+		SurvivorPlates_SetOverlapping(true)
+	end
 end)
 
 -- V and Shift+V are the client's own keys, out of any addon's reach. With
@@ -811,10 +927,10 @@ end)
 
 -- Clicks through the plates (the default from v3.0.36): the camera turns
 -- from over a plate, and a click goes to the world, where it targets what
--- it lands on; a click on a plate no longer targets. The client lets no
--- addon start the camera's turn (TurnOrActionStart is its own) nor let
--- one button through and not the other, and it gives every plate its
--- mouse back as a camera turn ends: taken away again every frame.
+-- it lands on. The client lets no addon start the camera's turn
+-- (TurnOrActionStart is its own) nor let one button through and not the
+-- other, and it gives every plate its mouse back as a camera turn ends: taken
+-- away again every frame, but from the plate the mouse is on, which targets.
 local mouseWatch = CreateFrame("Frame")
 mouseWatch:SetScript("OnUpdate", function()
 	if not Settings().clickThrough then
@@ -822,7 +938,7 @@ mouseWatch:SetScript("OnUpdate", function()
 	end
 	for index = 1, table.getn(overlays) do
 		local plate = overlays[index].plate
-		if plate:IsMouseEnabled() then
+		if plate:IsMouseEnabled() and overlays[index] ~= hovered then
 			plate:EnableMouse(false)
 		end
 	end
@@ -888,6 +1004,11 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		end
 		Say(settings.clickThrough and "clicks go through the plates: the camera turns from over one, and a click on one goes to the world."
 			or "a click on a plate targets its enemy again; the camera does not turn from over one.")
+		return
+	elseif command == "overlap" then
+		SurvivorPlates_SetOverlapping(not SurvivorPlates_Overlapping())
+		Say(SurvivorPlates_Overlapping() and "plates stay right over their enemies, on top of each other in a crowd."
+			or "plates move apart in a crowd.")
 		return
 	elseif command == "count" then
 		-- The plates the client has on screen now, by kind, and how many of them
