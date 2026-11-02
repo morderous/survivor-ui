@@ -41,13 +41,17 @@
 //     carries, unpacked by Windows' own tar; the newest exe and the newest
 //     data patches, by the indexes the game updates itself by, each checked
 //     by its sha256. Asked first, with the sizes; then Survivor UI installed
-//     next. The full package also from the mirrors the game's Discord gave
+//     next. The full package also from mirrors
 //     (mirrors.json in its repository, the ones built in when it is out of reach):
 //     each timed first and offered in a list with its speed, the fastest
-//     picked, or a package the player downloaded already; a mirror's taken
+//     picked, ours before it while ours is not slow, or a package the player
+//     downloaded already; a mirror's taken
 //     only with the size and sha256 Aethus gave. A break taken up where it
 //     stopped, and Try another source (the Play button meanwhile) goes on
 //     with the next. A line at the bottom says whose game it is, with a link to his site;
+//   - speaks English or Chinese, picked on the Play tab; it starts by itself
+//     again in the other one. Chinese is lang-zh.json inside the exe; a text
+//     missing there stays English;
 //   - keeps the game current: under the folder, the game's version (read in
 //     its exe) against the newest its server lists, asked with each look at
 //     GitHub; a newer one out, Play turns to "Update game", which takes the
@@ -134,10 +138,79 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.8.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.9.0.0")]
 
 namespace SurvivorInstaller
 {
+    // The launcher's own folder, for the first ones to read it.
+    static class SettingsFolder
+    {
+        public static string Dir
+        {
+            get
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SurvivorUIInstaller");
+                Directory.CreateDirectory(dir);
+                return dir;
+            }
+        }
+    }
+
+    // The launcher's language: English, the texts as they stand in this file, or
+    // Chinese, from lang-zh.json inside the exe. Read once, as it starts, before
+    // any window: launcher.ini's language=, else the game's own language.
+    static class Lang
+    {
+        public static readonly string Code = Pick();
+        static readonly Dictionary<string, string> words = Load();
+
+        // The window's face: Segoe UI has no Chinese.
+        public static string Face
+        {
+            get { return Code == "zh" ? "Microsoft YaHei UI" : "Segoe UI"; }
+        }
+
+        static string Pick()
+        {
+            try
+            {
+                string ini = Path.Combine(SettingsFolder.Dir, "launcher.ini");
+                if (File.Exists(ini))
+                    foreach (string line in File.ReadAllLines(ini))
+                        if (line.StartsWith("language=")) return line.Substring(9).Trim() == "zh" ? "zh" : "en";
+                string game = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "wenilla-rogue", "language.txt");
+                if (File.Exists(game) && File.ReadAllText(game).Trim() == "zh") return "zh";
+            }
+            catch { }
+            return "en";
+        }
+
+        static Dictionary<string, string> Load()
+        {
+            Dictionary<string, string> found = new Dictionary<string, string>();
+            if (Code != "zh") return found;
+            try
+            {
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("lang-zh.json"))
+                using (StreamReader reader = new StreamReader(stream, System.Text.Encoding.UTF8))
+                {
+                    JavaScriptSerializer json = new JavaScriptSerializer();
+                    json.MaxJsonLength = int.MaxValue;
+                    foreach (KeyValuePair<string, object> pair in (Dictionary<string, object>)json.DeserializeObject(reader.ReadToEnd()))
+                        found[pair.Key] = Convert.ToString(pair.Value);
+                }
+            }
+            catch { }
+            return found;
+        }
+
+        public static string T(string text)
+        {
+            string found;
+            return text != null && words.TryGetValue(text, out found) ? found : text;
+        }
+    }
+
     static class Program
     {
         [STAThread]
@@ -147,6 +220,8 @@ namespace SurvivorInstaller
             bool inTray = Array.Exists(args, delegate (string arg) { return arg == "--tray"; });
             // Started by the installer it replaces: that one is closing.
             bool updated = Array.Exists(args, delegate (string arg) { return arg == "--updated"; });
+            // Started by itself in another language: that one is closing.
+            bool again = Array.Exists(args, delegate (string arg) { return arg == "--language"; });
             // Moved into the game's folder by the one that was elsewhere: the
             // same, and that exe goes once it has closed.
             int moved = Array.IndexOf(args, "--moved");
@@ -161,7 +236,7 @@ namespace SurvivorInstaller
             using (Mutex single = new Mutex(false, "SurvivorUIInstaller.Single"))
             {
                 bool owned;
-                try { owned = single.WaitOne(updated ? 20000 : 0, false); }
+                try { owned = single.WaitOne(updated || again ? 20000 : 0, false); }
                 catch (AbandonedMutexException) { owned = true; }
                 if (!owned)
                 {
@@ -373,7 +448,7 @@ namespace SurvivorInstaller
         // The tray, and the half hourly look at GitHub.
         const int CheckEvery = 30 * 60 * 1000;
         readonly NotifyIcon tray = new NotifyIcon();
-        readonly ToolStripMenuItem installItem = new ToolStripMenuItem("Install the update");
+        readonly ToolStripMenuItem installItem = new ToolStripMenuItem(Lang.T("Install the update"));
         readonly System.Windows.Forms.Timer checkTimer = new System.Windows.Forms.Timer();
         Icon appIcon, trayIcon, trayUpdateIcon, overlayIcon;
         ITaskbarList3 taskbar;
@@ -383,11 +458,11 @@ namespace SurvivorInstaller
         bool installWhenNewer;      // asked from the tray: a newer release is installed at once
         bool installing;
         bool startHidden;           // started with Windows: the window stays away until asked for
-        readonly ToolStripMenuItem startItem = new ToolStripMenuItem("Start with Windows");
-        readonly ToolStripMenuItem closeItem = new ToolStripMenuItem("Close to the tray");
+        readonly ToolStripMenuItem startItem = new ToolStripMenuItem(Lang.T("Start with Windows"));
+        readonly ToolStripMenuItem closeItem = new ToolStripMenuItem(Lang.T("Close to the tray"));
         readonly ToolStripMenuItem playItem = new ToolStripMenuItem("Play");
         bool exiting;               // the tray's Exit: the window closes for good
-        readonly ToolStripMenuItem selfItem = new ToolStripMenuItem("Update the launcher");
+        readonly ToolStripMenuItem selfItem = new ToolStripMenuItem(Lang.T("Update the launcher"));
         static readonly Version OwnVersion = Assembly.GetExecutingAssembly().GetName().Version;
         Release selfRelease;        // the release with a newer installer, while one is out
         bool selfUpdating;
@@ -399,7 +474,7 @@ namespace SurvivorInstaller
         // Vulkan asked of it (WGPU_BACKEND, which its renderer reads).
         readonly ComboBox graphicsBox = new ComboBox();
         static readonly string[] GraphicsKeys = { "auto", "dx12", "vulkan" };
-        static readonly string[] GraphicsNames = { "Auto", "DirectX 12", "Vulkan" };
+        static readonly string[] GraphicsNames = { Lang.T("Auto"), "DirectX 12", "Vulkan" };
         readonly Button gameCheckButton = new Button();
         GameState game;             // the game as last looked at, against the newest on its server
         bool checkingGame;
@@ -441,9 +516,7 @@ namespace SurvivorInstaller
         {
             get
             {
-                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SurvivorUIInstaller");
-                Directory.CreateDirectory(dir);
-                return Path.Combine(dir, "addons-folder.txt");
+                return Path.Combine(SettingsFolder.Dir, "addons-folder.txt");
             }
         }
 
@@ -475,8 +548,8 @@ namespace SurvivorInstaller
         static string CloseTip()
         {
             return CloseToTray()
-                ? "Close: the launcher waits in the tray (right click its icon, Exit, to quit it)."
-                : "Close: the launcher quits.";
+                ? Lang.T("Close: the launcher waits in the tray (right click its icon, Exit, to quit it).")
+                : Lang.T("Close: the launcher quits.");
         }
 
         static bool SelfAuto()
@@ -528,7 +601,7 @@ namespace SurvivorInstaller
         // 1.4 as the screen allows (ScaleWindow). S and SF turn an old size into
         // the window's; the canvases draw in old units (Txt, W, H).
         float ui = 1f;
-        static readonly Font BaseFont = new Font("Segoe UI", 9.5f);
+        static readonly Font BaseFont = new Font(Lang.Face, 9.5f);
         readonly Dictionary<string, Font> paintFonts = new Dictionary<string, Font>();
 
         int S(int value)
@@ -659,7 +732,7 @@ namespace SurvivorInstaller
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Back;
             ForeColor = TextColor;
-            Font = new Font("Segoe UI", 9.5f);
+            Font = new Font(Lang.Face, 9.5f);
             LoadIcons();
             if (appIcon != null) Icon = appIcon;
             DoubleBuffered = true;
@@ -676,13 +749,13 @@ namespace SurvivorInstaller
             // The title is drawn on the stone (PaintTitle).
 
             Label subtitle = new Label();
-            subtitle.Text = "Play Azeroth Survivors with Survivor UI";
+            subtitle.Text = Lang.T("Play Azeroth Survivors with Survivor UI");
             subtitle.UseMnemonic = false;
             subtitle.ForeColor = Color.FromArgb(200, 190, 170);
             subtitle.BackColor = Color.Transparent;
             subtitle.AutoSize = true;
             subtitle.Location = new Point(104, 62);
-            subtitle.Font = new Font("Segoe UI", 8.5f);
+            subtitle.Font = new Font(Lang.Face, 8.5f);
             Controls.Add(subtitle);
 
             // At the top right, the versions together, the launcher's and Survivor
@@ -709,7 +782,7 @@ namespace SurvivorInstaller
             versionLabel.AutoSize = false;
             versionLabel.Location = new Point(582, 9);
             versionLabel.Size = new Size(126, 18);
-            versionLabel.Font = new Font("Segoe UI", 9f);
+            versionLabel.Font = new Font(Lang.Face, 9f);
             versionLabel.TextAlign = ContentAlignment.MiddleLeft;
             versionLabel.BackColor = Color.Transparent;
             Controls.Add(versionLabel);
@@ -717,7 +790,7 @@ namespace SurvivorInstaller
             addonLabel.AutoSize = false;
             addonLabel.Location = new Point(582, 27);
             addonLabel.Size = new Size(124, 18);
-            addonLabel.Font = new Font("Segoe UI", 9f);
+            addonLabel.Font = new Font(Lang.Face, 9f);
             addonLabel.TextAlign = ContentAlignment.MiddleLeft;
             addonLabel.ForeColor = VersionYellow;
             addonLabel.BackColor = Color.Transparent;
@@ -727,7 +800,7 @@ namespace SurvivorInstaller
             selfButton.Cursor = Cursors.Hand;
             selfButton.Location = new Point(580, 50);
             selfButton.Size = new Size(160, 26);
-            selfButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            selfButton.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
             selfButton.Click += delegate
             {
                 if (selfRelease != null)
@@ -737,13 +810,14 @@ namespace SurvivorInstaller
                 }
                 checkingByHand = true;
                 ShowOwnVersion();
-                Status("Asking GitHub for updates...");
+                Status(Lang.T("Asking GitHub for updates..."));
                 CheckNow();
             };
             Controls.Add(selfButton);
             Forge(selfButton);
             Wear(selfButton, "stone");
             BuildDonate();
+            BuildMirrorNote();
             BuildWindowButtons();
             System.Windows.Forms.Timer breathe = new System.Windows.Forms.Timer();
             breathe.Interval = 50;
@@ -766,16 +840,16 @@ namespace SurvivorInstaller
             for (int i = 0; i < TabNames.Length; i++)
             {
                 Button tab = new Button();
-                tab.Text = TabNames[i];
+                tab.Text = Lang.T(TabNames[i]);
                 tab.FlatStyle = FlatStyle.Flat;
                 tab.FlatAppearance.BorderSize = 0;
                 tab.FlatAppearance.MouseOverBackColor = Panel;
                 tab.FlatAppearance.MouseDownBackColor = Panel;
                 tab.BackColor = Back;
                 tab.ForeColor = Muted;
-                tab.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+                tab.Font = new Font(Lang.Face, 10f, FontStyle.Bold);
                 tab.Cursor = Cursors.Hand;
-                int width = TextRenderer.MeasureText(TabNames[i], tab.Font).Width + 28;
+                int width = TextRenderer.MeasureText(tab.Text, tab.Font).Width + 28;
                 tab.Location = new Point(tabX, 88);
                 tab.Size = new Size(width, 30);
                 int which = i;
@@ -814,8 +888,8 @@ namespace SurvivorInstaller
 
             // Whose game it is, at the bottom left; his site in the other corner.
             Label credit = new Label();
-            credit.Text = "Azeroth Survivors by Aethus  \u00B7  Launcher by morderous";
-            credit.Font = new Font("Segoe UI", 8f);
+            credit.Text = Lang.T("Azeroth Survivors by Aethus  \u00B7  Launcher by morderous");
+            credit.Font = new Font(Lang.Face, 8f);
             credit.AutoSize = false;
             credit.Location = new Point(20, 584);
             credit.BackColor = Color.Transparent;
@@ -825,7 +899,7 @@ namespace SurvivorInstaller
             Controls.Add(credit);
 
             creditLink.Text = "wow.aethus.pl";
-            creditLink.Font = new Font("Segoe UI", 8f);
+            creditLink.Font = new Font(Lang.Face, 8f);
             creditLink.AutoSize = false;
             creditLink.Location = new Point(580, 584);
             creditLink.BackColor = Color.Transparent;
@@ -844,8 +918,8 @@ namespace SurvivorInstaller
             // The launcher's own channel on the game's Discord, for what players
             // make of it: under every tab, between the credits.
             LinkLabel feedback = new LinkLabel();
-            feedback.Text = "Feedback on Discord";
-            feedback.Font = new Font("Segoe UI", 8f);
+            feedback.Text = Lang.T("Feedback on Discord");
+            feedback.Font = new Font(Lang.Face, 8f);
             feedback.AutoSize = false;
             feedback.Location = new Point(370, 584);
             feedback.BackColor = Color.Transparent;
@@ -868,9 +942,9 @@ namespace SurvivorInstaller
             // No game found, or one without its data: the way to it, Get the game
             // first (the game elsewhere: Find game...).
             if (GameExePath() == null)
-                Status("No game found: click \"Get the game\", or \"Find game...\" if yours is somewhere else.");
+                Status(Lang.T("No game found: click \"Get the game\", or \"Find game...\" if yours is somewhere else."));
             else if (GameMissing())
-                Status("The game's data is missing: click \"Get the game\" to fill it in.");
+                Status(Lang.T("The game's data is missing: click \"Get the game\" to fill it in."));
             ShowInstalled();
             ShowSwitches();
             SeedPlaytime();
@@ -887,8 +961,8 @@ namespace SurvivorInstaller
             ShowTab(currentTab, true);
 
             // Just updated: the old exe, set aside, goes once it has closed.
-            if (MovedFrom != null) Status("The launcher is now in the game's folder.");
-            else if (updated) Status("The launcher is now " + Short(OwnVersion) + ".");
+            if (MovedFrom != null) Status(Lang.T("The launcher is now in the game's folder."));
+            else if (updated) Status(Lang.T("The launcher is now ") + Short(OwnVersion) + ".");
             CleanUpOld(updated);
 
             Shown += delegate
@@ -924,7 +998,7 @@ namespace SurvivorInstaller
         static FontFamily TitleFamily()
         {
             if (titleFamily != null) return titleFamily;
-            titleFamily = new FontFamily("Segoe UI");
+            titleFamily = new FontFamily(Lang.Face);
             try
             {
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("CinzelDecorative-Bold.ttf"))
@@ -1264,7 +1338,7 @@ namespace SurvivorInstaller
             title.Text = text;
             title.UseMnemonic = false;
             title.AutoSize = true;
-            title.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            title.Font = new Font(Lang.Face, 9.5f, FontStyle.Bold);
             title.ForeColor = Gold;
             title.BackColor = Color.Transparent;
             title.Location = new Point(x - 1, y);
@@ -1505,7 +1579,7 @@ namespace SurvivorInstaller
             minimize.Location = new Point(710, 7);
             windowClose = close;
             tips.SetToolTip(close, CloseTip());
-            tips.SetToolTip(minimize, "Minimize");
+            tips.SetToolTip(minimize, Lang.T("Minimize"));
             close.Click += delegate { Close(); };
             minimize.Click += delegate { WindowState = FormWindowState.Minimized; };
         }
@@ -1520,8 +1594,8 @@ namespace SurvivorInstaller
         // does. Its tooltip says what the launcher has seen them play with it
         // so far.
         const string KoFi = "https://ko-fi.com/morderous";
-        static readonly Font DonateBig = new Font("Segoe UI", 11f, FontStyle.Bold);
-        static readonly Font DonateSmall = new Font("Segoe UI", 7.5f);
+        static readonly Font DonateBig = new Font(Lang.Face, 11f, FontStyle.Bold);
+        static readonly Font DonateSmall = new Font(Lang.Face, 7.5f);
         readonly Canvas donate = new Canvas();
         readonly System.Windows.Forms.Timer glint = new System.Windows.Forms.Timer();
         float glintPhase;
@@ -1544,7 +1618,7 @@ namespace SurvivorInstaller
             donate.Click += delegate
             {
                 Open(KoFi);
-                Status("Thank you! Ko-fi is open in your browser.");
+                Status(Lang.T("Thank you! Ko-fi is open in your browser."));
             };
             Controls.Add(donate);
             glint.Interval = 50;
@@ -1558,6 +1632,68 @@ namespace SurvivorInstaller
             glint.Start();
         }
 
+        // Once, for whoever opens this launcher: the new mirror, ad free as
+        // ever, with an arrow up to Donate. It stays until clicked, and only
+        // then counts as seen.
+        readonly Canvas mirrorNote = new Canvas();
+        const int NoteArrow = 9;
+
+        void BuildMirrorNote()
+        {
+            mirrorNote.Size = new Size(330, 92 + NoteArrow);
+            mirrorNote.Location = new Point(398 + 90 - 165, 62);
+            mirrorNote.BackColor = Panel;
+            mirrorNote.Cursor = Cursors.Hand;
+            mirrorNote.Visible = false;
+            mirrorNote.Paint += PaintMirrorNote;
+            mirrorNote.Click += delegate
+            {
+                SetSetting("mirrorNote", "1");
+                mirrorNote.Visible = false;
+            };
+            Controls.Add(mirrorNote);
+        }
+
+        void ShowMirrorNote()
+        {
+            if (Setting("mirrorNote", null) != null || mirrorNote.Visible) return;
+            int w = mirrorNote.Width, h = mirrorNote.Height, tip = S(NoteArrow);
+            using (GraphicsPath shape = new GraphicsPath())
+            {
+                shape.AddPolygon(new Point[] {
+                    new Point(0, tip), new Point(w / 2 - tip, tip), new Point(w / 2, 0), new Point(w / 2 + tip, tip),
+                    new Point(w, tip), new Point(w, h), new Point(0, h) });
+                mirrorNote.Region = new Region(shape);
+            }
+            mirrorNote.Visible = true;
+            mirrorNote.BringToFront();
+        }
+
+        void PaintMirrorNote(object sender, PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.ScaleTransform(ui, ui);
+            int w = W(mirrorNote);
+            using (Pen edge = new Pen(Gold))
+            {
+                g.DrawLines(edge, new Point[] {
+                    new Point(w / 2 - NoteArrow, NoteArrow), new Point(0, NoteArrow), new Point(0, 100), new Point(w - 1, 100),
+                    new Point(w - 1, NoteArrow), new Point(w / 2 + NoteArrow, NoteArrow), new Point(w / 2, 0), new Point(w / 2 - NoteArrow, NoteArrow) });
+            }
+            using (Font title = new Font(Lang.Face, 10f, FontStyle.Bold))
+            using (Font words = new Font(Lang.Face, 8.5f))
+            {
+                Txt(g, Lang.T("New: an exclusive high-speed mirror"), title, new Rectangle(12, NoteArrow + 8, w - 40, 20), Gold, TextOnly);
+                TextFormatFlags wrapped = TextOnly | TextFormatFlags.WordBreak;
+                Txt(g, Lang.T("The launcher now gets the game much faster."), words,
+                    new Rectangle(12, NoteArrow + 30, w - 24, 18), TextColor, wrapped);
+                Txt(g, Lang.T("Ad free, as always. If the launcher and the UI are helping you, consider chipping in."), words,
+                    new Rectangle(12, NoteArrow + 52, w - 24, 34), TextColor, wrapped);
+                Txt(g, "x", title, new Rectangle(w - 20, NoteArrow + 4, 14, 18), Muted, TextOnly);
+            }
+        }
+
         // Seconds from one glint to the next; each takes one to cross.
         const float GlintEvery = 4f;
 
@@ -1568,11 +1704,11 @@ namespace SurvivorInstaller
             if (sessionStart != DateTime.MinValue) seconds += (int)(DateTime.Now - sessionStart).TotalSeconds;
             SaveStats stats = shownStats ?? ReadSaveStats();
             long played = stats != null ? stats.Total("runs") : 0;
-            string so = seconds >= 60 && played > 0 ? Hours(seconds) + " of play and " + Count(played) + " runs so far.\n"
-                : played > 0 ? Count(played) + " runs so far.\n" : "";
-            return so + "Survivor UI, Survivor Plates and this launcher are free, made in my spare time.\n" +
-                "If they made your runs better, a donation on Ko-fi says thanks and keeps them coming.\n" +
-                "Thank you!  morderous";
+            string so = seconds >= 60 && played > 0 ? Hours(seconds) + Lang.T(" of play and ") + Count(played) + Lang.T(" runs so far.\n")
+                : played > 0 ? Count(played) + Lang.T(" runs so far.\n") : "";
+            return so + Lang.T("Survivor UI, Survivor Plates and this launcher are free, made in my spare time.\n") +
+                Lang.T("If they made your runs better, a donation on Ko-fi says thanks and keeps them coming.\n") +
+                Lang.T("Thank you!  morderous");
         }
 
         void PaintDonate(object sender, PaintEventArgs e)
@@ -1604,8 +1740,8 @@ namespace SurvivorInstaller
             }
             g.ScaleTransform(ui, ui);
             TextFormatFlags centred = TextOnly | TextFormatFlags.HorizontalCenter;
-            Shadowed(g, "Donate", DonateBig, new Rectangle(0, 7, w, 22), donateHot ? Color.White : Color.FromArgb(236, 247, 255), centred);
-            Shadowed(g, "if you like my work", DonateSmall, new Rectangle(0, 28, w, 14), Color.FromArgb(206, 232, 255), centred);
+            Shadowed(g, Lang.T("Donate"), DonateBig, new Rectangle(0, 7, w, 22), donateHot ? Color.White : Color.FromArgb(236, 247, 255), centred);
+            Shadowed(g, Lang.T("if you like my work"), DonateSmall, new Rectangle(0, 28, w, 14), Color.FromArgb(206, 232, 255), centred);
         }
 
         // The pages dressed: the secondary buttons in stone (the actions stay
@@ -1696,7 +1832,7 @@ namespace SurvivorInstaller
         // (go), null on Cancel.
         string AskText(string text, string caption, string start, string go)
         {
-            using (ArtBox box = new ArtBox(this, text, caption, MessageBoxButtons.OKCancel, MessageBoxIcon.Question, null, 0, start ?? "", new[] { go, "Cancel" }))
+            using (ArtBox box = new ArtBox(this, text, caption, MessageBoxButtons.OKCancel, MessageBoxIcon.Question, null, 0, start ?? "", new[] { go, Lang.T("Cancel") }))
                 return box.ShowDialog(this) == DialogResult.OK ? box.Typed : null;
         }
 
@@ -1749,7 +1885,7 @@ namespace SurvivorInstaller
                 ShowInTaskbar = false;
                 BackColor = Back;
                 ForeColor = TextColor;
-                Font = new Font("Segoe UI", 9.5f * k);
+                Font = new Font(Lang.Face, 9.5f * k);
                 DoubleBuffered = true;
                 Text = title;
                 if (owner.Icon != null) Icon = owner.Icon;
@@ -1802,17 +1938,17 @@ namespace SurvivorInstaller
                 List<KeyValuePair<string, DialogResult>> choices = new List<KeyValuePair<string, DialogResult>>();
                 if (buttons == MessageBoxButtons.YesNo || buttons == MessageBoxButtons.YesNoCancel)
                 {
-                    choices.Add(new KeyValuePair<string, DialogResult>("Yes", DialogResult.Yes));
-                    choices.Add(new KeyValuePair<string, DialogResult>("No", DialogResult.No));
+                    choices.Add(new KeyValuePair<string, DialogResult>(Lang.T("Yes"), DialogResult.Yes));
+                    choices.Add(new KeyValuePair<string, DialogResult>(Lang.T("No"), DialogResult.No));
                 }
-                else choices.Add(new KeyValuePair<string, DialogResult>("OK", DialogResult.OK));
+                else choices.Add(new KeyValuePair<string, DialogResult>(Lang.T("OK"), DialogResult.OK));
                 if (buttons == MessageBoxButtons.YesNoCancel || buttons == MessageBoxButtons.OKCancel)
-                    choices.Add(new KeyValuePair<string, DialogResult>("Cancel", DialogResult.Cancel));
+                    choices.Add(new KeyValuePair<string, DialogResult>(Lang.T("Cancel"), DialogResult.Cancel));
                 if (labels != null)
                     for (int i = 0; i < choices.Count && i < labels.Length; i++)
                         choices[i] = new KeyValuePair<string, DialogResult>(labels[i], choices[i].Value);
                 int buttonWidth = (int)(112 * k), between = (int)(10 * k);
-                using (Font bold = new Font("Segoe UI", 9.5f * k, FontStyle.Bold))
+                using (Font bold = new Font(Lang.Face, 9.5f * k, FontStyle.Bold))
                     foreach (KeyValuePair<string, DialogResult> choice in choices)
                         buttonWidth = Math.Max(buttonWidth, TextRenderer.MeasureText(choice.Key, bold).Width + (int)(28 * k));
                 int x = width - pad - choices.Count * buttonWidth - (choices.Count - 1) * between;
@@ -1821,7 +1957,7 @@ namespace SurvivorInstaller
                 {
                     Button button = new Button();
                     Style(button, choices[i].Key);
-                    button.Font = new Font("Segoe UI", 9.5f * k, FontStyle.Bold);
+                    button.Font = new Font(Lang.Face, 9.5f * k, FontStyle.Bold);
                     button.Bounds = new Rectangle(x, buttonsTop, buttonWidth, buttonHeight);
                     button.DialogResult = choices[i].Value;
                     if (i > 0) Wear(button, "stone");
@@ -1873,7 +2009,7 @@ namespace SurvivorInstaller
                 g.Clear(Back);
                 if (stone == null) stone = Stone(ClientSize.Width, band);
                 g.DrawImageUnscaled(stone, 0, 0);
-                using (Font head = new Font("Segoe UI", 10.5f * k, FontStyle.Bold))
+                using (Font head = new Font(Lang.Face, 10.5f * k, FontStyle.Bold))
                 {
                     Rectangle titleAt = new Rectangle((int)(22 * k), 0, ClientSize.Width - (int)(44 * k), band);
                     TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis;
@@ -1926,7 +2062,7 @@ namespace SurvivorInstaller
             tip.OwnerDraw = true;
             tip.Popup += delegate (object sender, PopupEventArgs e)
             {
-                if (tipFont == null) tipFont = new Font("Segoe UI", 9f * ui);
+                if (tipFont == null) tipFont = new Font(Lang.Face, 9f * ui);
                 string text = tip.GetToolTip(e.AssociatedControl);
                 Size size = TextRenderer.MeasureText(text, tipFont, new Size(S(440), int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
                 e.ToolTipSize = new Size(size.Width + S(24), size.Height + S(18));
@@ -1936,7 +2072,7 @@ namespace SurvivorInstaller
                 Graphics g = e.Graphics;
                 using (Brush back = new SolidBrush(Color.FromArgb(12, 12, 12))) g.FillRectangle(back, e.Bounds);
                 Slice9(g, Art("card"), e.Bounds, 8, 8, 8, 8, ui, true);
-                if (tipFont == null) tipFont = new Font("Segoe UI", 9f * ui);
+                if (tipFont == null) tipFont = new Font(Lang.Face, 9f * ui);
                 TextRenderer.DrawText(g, e.ToolTipText, tipFont, Rectangle.Inflate(e.Bounds, -S(12), -S(9)), Color.FromArgb(230, 220, 196),
                     TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left | TextFormatFlags.Top);
             };
@@ -2133,11 +2269,11 @@ namespace SurvivorInstaller
         {
             List<KeyValuePair<string, Action>> waiting = new List<KeyValuePair<string, Action>>();
             if (selfRelease != null && !selfUpdating)
-                waiting.Add(new KeyValuePair<string, Action>("Launcher " + Short(selfRelease.InstallerVersion), delegate { UpdateSelf(); }));
+                waiting.Add(new KeyValuePair<string, Action>(Lang.T("Launcher ") + Short(selfRelease.InstallerVersion), delegate { UpdateSelf(); }));
             if (updateWaiting && latest != null)
                 waiting.Add(new KeyValuePair<string, Action>("Survivor UI " + latest.Tag, delegate { ShowTab(AddonsTab); PickAddon(OurUI); }));
             if (!GameMissing() && GameBehind() && game != null)
-                waiting.Add(new KeyValuePair<string, Action>("Game " + game.Latest, delegate { ShowTab(0); }));
+                waiting.Add(new KeyValuePair<string, Action>(Lang.T("Game ") + game.Latest, delegate { ShowTab(0); }));
             // An addon installed from the list, with a newer release out.
             foreach (ListedAddon addon in Updatable(folderBox.Text.Trim()))
                 waiting.Add(new KeyValuePair<string, Action>(addon.Name + " " + ShortVersion(addon), delegate { ShowTab(AddonsTab); }));
@@ -2175,8 +2311,8 @@ namespace SurvivorInstaller
                     {
                         alertsSeen = now;
                         alertPill.Visible = alerts.Count > 0;
-                        tips.SetToolTip(alertPill, alerts.Count == 0 ? "" : "Waiting:\n" + now.TrimEnd('\n') +
-                            "\n\nA click takes you to the first. The launcher looks as it opens, every half hour and at Check for updates.");
+                        tips.SetToolTip(alertPill, alerts.Count == 0 ? "" : Lang.T("Waiting:\n") + now.TrimEnd('\n') +
+                            Lang.T("\n\nA click takes you to the first. The launcher looks as it opens, every half hour and at Check for updates."));
                         foreach (Button tab in tabButtons) tab.Invalidate();
                     }
                     SayWhatWaits();
@@ -2201,9 +2337,9 @@ namespace SurvivorInstaller
             Rectangle inner = Rectangle.Inflate(r, -S(4), -S(4));
             using (Brush wash = new SolidBrush(Color.FromArgb(70 + (int)(90 * glow), 46, 190, 80))) g.FillRectangle(wash, inner);
             using (Pen edge = new Pen(Color.FromArgb(120 + (int)(120 * glow), 150, 255, 160))) g.DrawRectangle(edge, inner.X, inner.Y, inner.Width - 1, inner.Height - 1);
-            string words = alerts.Count == 0 ? "" : alerts.Count == 1 ? "\u2191  " + alerts[0].Key + " is out" : "\u2191  " + alerts.Count + " updates waiting";
+            string words = alerts.Count == 0 ? "" : alerts.Count == 1 ? "\u2191  " + alerts[0].Key + Lang.T(" is out") : "\u2191  " + alerts.Count + Lang.T(" updates waiting");
             TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
-            using (Font font = new Font("Segoe UI", SF(8.5f), FontStyle.Bold))
+            using (Font font = new Font(Lang.Face, SF(8.5f), FontStyle.Bold))
             {
                 Rectangle shadow = inner;
                 shadow.Offset(1, 1);
@@ -2241,8 +2377,8 @@ namespace SurvivorInstaller
                     int index = tabButtons.IndexOf(self);
                     bool waits = false;
                     foreach (KeyValuePair<string, Action> alert in alerts)
-                        waits = waits || (index == AddonsTab && !alert.Key.StartsWith("Launcher") && !alert.Key.StartsWith("Game"))
-                            || (index == PlayTab && alert.Key.StartsWith("Game"));
+                        waits = waits || (index == AddonsTab && !alert.Key.StartsWith(Lang.T("Launcher ").Trim()) && !alert.Key.StartsWith(Lang.T("Game ").Trim()))
+                            || (index == PlayTab && alert.Key.StartsWith(Lang.T("Game ").Trim()));
                     if (waits)
                     {
                         int dot = S(8);
@@ -2388,7 +2524,7 @@ namespace SurvivorInstaller
 
         // --- Play ---------------------------------------------------------------
 
-        static readonly string[] StripNames = { "Today", "Total", "Last played", "Runs", "Wins" };
+        static readonly string[] StripNames = { Lang.T("Today"), Lang.T("Total"), Lang.T("Last played"), Lang.T("Runs"), Lang.T("Wins") };
         readonly Label[] stripValues = new Label[5];
         readonly TextBox gameNews = new TextBox();
 
@@ -2396,8 +2532,8 @@ namespace SurvivorInstaller
         {
             // The game found, its version against the newest, Check version by
             // it (ShowGameLine); Find game... at the right.
-            Style(gameCheckButton, "Check version");
-            gameCheckButton.Font = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+            Style(gameCheckButton, Lang.T("Check version"));
+            gameCheckButton.Font = new Font(Lang.Face, 7.5f, FontStyle.Bold);
             gameCheckButton.Location = new Point(20, 14);
             gameCheckButton.Size = new Size(92, 20);
             gameCheckButton.Visible = false;
@@ -2407,16 +2543,16 @@ namespace SurvivorInstaller
                 gameByHand = true;
                 CheckGame();
             };
-            tips.SetToolTip(gameCheckButton, "Asks wow.aethus.pl now whether a newer Azeroth Survivors is out.");
+            tips.SetToolTip(gameCheckButton, Lang.T("Asks wow.aethus.pl now whether a newer Azeroth Survivors is out."));
             page.Controls.Add(gameCheckButton);
 
-            gameLabel.Font = new Font("Segoe UI", 8.5f);
+            gameLabel.Font = new Font(Lang.Face, 8.5f);
             gameLabel.ForeColor = Muted;
             gameLabel.AutoSize = true;
             gameLabel.Location = new Point(20, 14);
             page.Controls.Add(gameLabel);
 
-            Style(browseButton, "Find game...");
+            Style(browseButton, Lang.T("Find game..."));
             browseButton.Location = new Point(648, 10);
             browseButton.Size = new Size(92, 26);
             browseButton.Click += delegate { BrowseForGame(); };
@@ -2427,13 +2563,13 @@ namespace SurvivorInstaller
             // game picks (the launcher also turns to DirectX 12 by itself when
             // the game closes as it starts: WatchStart).
             Label graphicsLabel = new Label();
-            graphicsLabel.Text = "Graphics";
-            graphicsLabel.Font = new Font("Segoe UI", 8.5f);
+            graphicsLabel.Text = Lang.T("Graphics");
+            graphicsLabel.Font = new Font(Lang.Face, 8.5f);
             graphicsLabel.ForeColor = Muted;
             graphicsLabel.AutoSize = true;
             graphicsLabel.Location = new Point(460, 14);
-            tips.SetToolTip(graphicsLabel, "How the game draws: Auto (the game's own choice), DirectX 12 or Vulkan.\n" +
-                "If the game closes as it starts, the launcher tries DirectX 12 by itself; or pick one here.");
+            tips.SetToolTip(graphicsLabel, Lang.T("How the game draws: Auto (the game's own choice), DirectX 12 or Vulkan.\n") +
+                Lang.T("If the game closes as it starts, the launcher tries DirectX 12 by itself; or pick one here."));
             page.Controls.Add(graphicsLabel);
             DarkCombo(graphicsBox);
             graphicsBox.Items.AddRange(GraphicsNames);
@@ -2445,14 +2581,14 @@ namespace SurvivorInstaller
                 string key = GraphicsKeys[Math.Max(0, graphicsBox.SelectedIndex)];
                 if (key == Setting("graphics", "auto")) return;
                 SetSetting("graphics", key);
-                Status(key == "auto" ? "The game picks its graphics itself." : "The game starts with " + GraphicsNames[graphicsBox.SelectedIndex] + " from now on.");
+                Status(key == "auto" ? Lang.T("The game picks its graphics itself.") : Lang.T("The game starts with ") + GraphicsNames[graphicsBox.SelectedIndex] + Lang.T(" from now on."));
             };
             page.Controls.Add(graphicsBox);
 
             // Play: the game by the AddOns folder, started; the installer steps
             // into the tray. Get the game while there is none, Update game while
             // a newer one is out.
-            playButton.Text = "▶  Play";
+            playButton.Text = Lang.T("▶  Play");
             playButton.FlatStyle = FlatStyle.Flat;
             playButton.FlatAppearance.BorderColor = RedEdge;
             playButton.BackColor = RedFill;
@@ -2460,7 +2596,7 @@ namespace SurvivorInstaller
             playButton.Cursor = Cursors.Hand;
             playButton.Location = new Point(20, 46);
             playButton.Size = new Size(300, 62);
-            playButton.Font = new Font("Segoe UI", 13f, FontStyle.Bold);
+            playButton.Font = new Font(Lang.Face, 13f, FontStyle.Bold);
             playButton.Click += delegate
             {
                 if (gettingGame && packageSwitchable) SwitchPackageSource();
@@ -2484,14 +2620,14 @@ namespace SurvivorInstaller
                 card.Size = new Size(76, 62);
                 Label name = new Label();
                 name.Text = StripNames[i];
-                name.Font = new Font("Segoe UI", 8f);
+                name.Font = new Font(Lang.Face, 8f);
                 name.ForeColor = Muted;
                 name.AutoSize = true;
                 name.Location = new Point(8, 8);
                 card.Controls.Add(name);
                 Label value = new Label();
                 value.Text = "—";
-                value.Font = new Font("Segoe UI", 11.5f, FontStyle.Bold);
+                value.Font = new Font(Lang.Face, 11.5f, FontStyle.Bold);
                 value.ForeColor = TextColor;
                 value.AutoSize = true;
                 value.Location = new Point(7, 29);
@@ -2502,7 +2638,7 @@ namespace SurvivorInstaller
             }
 
             // The game's own news: Aethus' notes for its newest version.
-            Section(page, "Game news", 20, 124, 720);
+            Section(page, Lang.T("Game news"), 20, 124, 720);
             gameNews.Location = new Point(20, 144);
             gameNews.Size = new Size(720, 146);
             gameNews.Multiline = true;
@@ -2511,12 +2647,12 @@ namespace SurvivorInstaller
             gameNews.BackColor = Panel;
             gameNews.ForeColor = TextColor;
             gameNews.BorderStyle = BorderStyle.FixedSingle;
-            gameNews.Text = "Asking wow.aethus.pl for the game's news...";
+            gameNews.Text = Lang.T("Asking wow.aethus.pl for the game's news...");
             page.Controls.Add(gameNews);
             BuildFolderRow(page, 300);
 
             // The launcher's own ticks: with Windows, in the tray; its updates.
-            startBox.Text = "Start with Windows, in the tray";
+            startBox.Text = Lang.T("Start with Windows, in the tray");
             startBox.AutoSize = true;
             startBox.Location = new Point(20, 388);
             startBox.ForeColor = TickText;
@@ -2529,13 +2665,13 @@ namespace SurvivorInstaller
                 SetStartWithWindows(startBox.Checked);
                 startItem.Checked = startBox.Checked;
                 Status(startBox.Checked
-                    ? "It will start with Windows, in the tray, and tell you of updates."
-                    : "It will no longer start with Windows.");
+                    ? Lang.T("It will start with Windows, in the tray, and tell you of updates.")
+                    : Lang.T("It will no longer start with Windows."));
             };
             page.Controls.Add(startBox);
 
             // What the close button does: into the tray, or quitting.
-            closeBox.Text = "Close to the tray";
+            closeBox.Text = Lang.T("Close to the tray");
             closeBox.AutoSize = true;
             closeBox.Location = new Point(20, 364);
             closeBox.ForeColor = TickText;
@@ -2549,16 +2685,16 @@ namespace SurvivorInstaller
                 closeItem.Checked = closeBox.Checked;
                 if (windowClose != null) tips.SetToolTip(windowClose, CloseTip());
                 Status(closeBox.Checked
-                    ? "Closing the window puts the launcher in the tray; the tray's Exit quits it."
-                    : "Closing the window quits the launcher.");
+                    ? Lang.T("Closing the window puts the launcher in the tray; the tray's Exit quits it.")
+                    : Lang.T("Closing the window quits the launcher."));
             };
-            tips.SetToolTip(closeBox, "On: the close button puts the launcher in the tray, where it keeps looking for updates " +
-                "and backs up your save as the game closes. Off: the close button quits it.");
+            tips.SetToolTip(closeBox, Lang.T("On: the close button puts the launcher in the tray, where it keeps looking for updates ") +
+                Lang.T("and backs up your save as the game closes. Off: the close button quits it."));
             page.Controls.Add(closeBox);
             // Moved since it was set: the line follows the exe.
             if (startBox.Checked) SetStartWithWindows(true);
 
-            selfBox.Text = "Update the launcher by itself";
+            selfBox.Text = Lang.T("Update the launcher by itself");
             selfBox.AutoSize = true;
             selfBox.Location = new Point(300, 388);
             selfBox.ForeColor = TickText;
@@ -2570,8 +2706,8 @@ namespace SurvivorInstaller
             {
                 SetSelfAuto(selfBox.Checked);
                 Status(selfBox.Checked
-                    ? "The launcher will update itself when a new one is out."
-                    : "The launcher will only tell you when a new one is out.");
+                    ? Lang.T("The launcher will update itself when a new one is out.")
+                    : Lang.T("The launcher will only tell you when a new one is out."));
                 if (selfBox.Checked && selfRelease != null) UpdateSelf();
             };
             page.Controls.Add(selfBox);
@@ -2579,18 +2715,54 @@ namespace SurvivorInstaller
             TickLook(closeBox);
             TickLook(selfBox);
 
+            // The language: the window's words are set as it opens, so it starts
+            // itself again in the one picked, at once.
+            Label languageLabel = new Label();
+            languageLabel.Text = Lang.T("Language");
+            languageLabel.Font = new Font(Lang.Face, 8.5f);
+            languageLabel.ForeColor = Muted;
+            languageLabel.AutoSize = true;
+            languageLabel.Location = new Point(300, 366);
+            page.Controls.Add(languageLabel);
+            ComboBox languageBox = new ComboBox();
+            DarkCombo(languageBox);
+            languageBox.Items.AddRange(new object[] { "English", "\u4e2d\u6587" });
+            languageBox.Location = new Point(366, 362);
+            languageBox.Size = new Size(96, 24);
+            languageBox.SelectedIndex = Lang.Code == "zh" ? 1 : 0;
+            languageBox.SelectedIndexChanged += delegate
+            {
+                string code = languageBox.SelectedIndex == 1 ? "zh" : "en";
+                if (code == Lang.Code) return;
+                if (installing || addonBusy)
+                {
+                    languageBox.SelectedIndex = Lang.Code == "zh" ? 1 : 0;
+                    Status(Lang.T("Wait for what is running to finish."));
+                    return;
+                }
+                SetSetting("language", code);
+                string exe = Application.ExecutablePath;
+                ProcessStartInfo info = new ProcessStartInfo(exe, "--language");
+                info.WorkingDirectory = Path.GetDirectoryName(exe);
+                info.UseShellExecute = false;
+                Process.Start(info);
+                exiting = true;
+                Close();
+            };
+            page.Controls.Add(languageBox);
+
             // The game's Discord: news, help and the other players.
             Button discord = new Button();
-            Style(discord, "Azeroth Survivors' Discord");
-            discord.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            Style(discord, Lang.T("Azeroth Survivors' Discord"));
+            discord.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
             discord.Location = new Point(540, 383);
             discord.Size = new Size(200, 28);
             discord.ForeColor = Color.FromArgb(214, 220, 255);
             Wear(discord, "stone");
             discord.BackColor = Color.FromArgb(88, 101, 242);
             discord.Click += delegate { Open(GameDiscord); };
-            tips.SetToolTip(discord, "The game's own Discord server: news, help and the other players.\n" +
-                "Survivor UI's thread is there too (Survivor UI tab).");
+            tips.SetToolTip(discord, Lang.T("The game's own Discord server: news, help and the other players.\n") +
+                Lang.T("Survivor UI's thread is there too (Survivor UI tab)."));
             page.Controls.Add(discord);
         }
 
@@ -2599,12 +2771,12 @@ namespace SurvivorInstaller
         void ShowGameNews()
         {
             string text;
-            if (GameExePath() == null) text = "No game found yet: click \"Get the game\", or \"Find game...\" if yours is somewhere else.";
+            if (GameExePath() == null) text = Lang.T("No game found yet: click \"Get the game\", or \"Find game...\" if yours is somewhere else.");
             else if (game == null || game.Latest == null) return;
             else
             {
                 string notes = string.IsNullOrEmpty(game.Notes) ? "" : game.Notes.Trim().Replace("\r\n", "\n").Replace("\n", "\r\n");
-                text = "Azeroth Survivors " + game.Latest + (GameBehind() ? ", out now: click Update game to get it." : ", the one you have.") +
+                text = "Azeroth Survivors " + game.Latest + (GameBehind() ? Lang.T(", out now: click Update game to get it.") : Lang.T(", the one you have.")) +
                     (notes != "" ? "\r\n\r\n" + notes : "");
             }
             if (text != gameNews.Text) gameNews.Text = text;
@@ -2624,7 +2796,7 @@ namespace SurvivorInstaller
         // player's things into the game's own folder when they are in another.
         void BuildFolderRow(Panel page, int y)
         {
-            Section(page, "Game's AddOns folder", 20, y, 720);
+            Section(page, Lang.T("Game's AddOns folder"), 20, y, 720);
             folderBox.Location = new Point(20, y + 20);
             folderBox.Size = new Size(372, 24);
             folderBox.BackColor = Panel;
@@ -2633,7 +2805,7 @@ namespace SurvivorInstaller
             folderBox.TextChanged += delegate { ShowInstalled(); ShowSwitches(); if (currentTab == AddonsTab) FillAddons(); };
             page.Controls.Add(folderBox);
 
-            openLink.Text = "Open folder";
+            openLink.Text = Lang.T("Open folder");
             openLink.AutoSize = false;
             openLink.Location = new Point(396, y + 23);
             openLink.Size = new Size(84, 18);
@@ -2645,14 +2817,14 @@ namespace SurvivorInstaller
             openLink.LinkClicked += delegate
             {
                 if (Directory.Exists(folderBox.Text)) Process.Start("explorer.exe", "\"" + folderBox.Text + "\"");
-                else Status("That folder is not there yet: pick the game first.");
+                else Status(Lang.T("That folder is not there yet: pick the game first."));
             };
             page.Controls.Add(openLink);
 
             // Which folder the game keeps its things in, and the player's moved
             // there when they are in another (NoteFolders paints it).
-            foldersButton.Text = "⇄  Check folder and move if necessary";
-            foldersButton.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            foldersButton.Text = Lang.T("⇄  Check folder and move if necessary");
+            foldersButton.Font = new Font(Lang.Face, 8.5f, FontStyle.Bold);
             foldersButton.FlatStyle = FlatStyle.Flat;
             foldersButton.Cursor = Cursors.Hand;
             foldersButton.Location = new Point(486, y + 19);
@@ -2722,7 +2894,7 @@ namespace SurvivorInstaller
             if (showingSwitches) return;
             if (GameRunning())
             {
-                Ask(this, "Close the game first: it reads its list of addons as it starts.",
+                Ask(this, Lang.T("Close the game first: it reads its list of addons as it starts."),
                     "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 ShowSwitches();
                 return;
@@ -2731,13 +2903,13 @@ namespace SurvivorInstaller
             {
                 SetAddonOn(folderBox.Text, name, box.Checked);
                 string shown = name == "SurvivorUI" ? "Survivor UI" : "Survivor Plates";
-                Status(box.Checked ? shown + " on: the game loads it from its next start."
-                    : shown + " off: the game skips it from its next start; nothing is deleted.");
+                Status(box.Checked ? shown + Lang.T(" on: the game loads it from its next start.")
+                    : shown + Lang.T(" off: the game skips it from its next start; nothing is deleted."));
                 ShowUpdateState();
             }
             catch (Exception error)
             {
-                Status("Could not change the game's list of addons: " + error.Message);
+                Status(Lang.T("Could not change the game's list of addons: ") + error.Message);
                 ShowSwitches();
             }
         }
@@ -2788,9 +2960,9 @@ namespace SurvivorInstaller
         }
 
         static readonly OurAddon OurUI = new OurAddon { Folder = "SurvivorUI", Name = "Survivor UI",
-            About = "The run tracker, the build list with its jewelry, the damage meter, Biggest Crits, Run History and more; with Survivor Plates." };
+            About = Lang.T("The run tracker, the build list with its jewelry, the damage meter, Biggest Crits, Run History and more; with Survivor Plates.") };
         static readonly OurAddon OurPlates = new OurAddon { Folder = "SurvivorPlates", Name = "Survivor Plates",
-            About = "Nameplates for the enemies, your pets and totems and your co-op friends, each kind as you choose; it comes with Survivor UI." };
+            About = Lang.T("Nameplates for the enemies, your pets and totems and your co-op friends, each kind as you choose; it comes with Survivor UI.") };
 
         internal class ListedAddon
         {
@@ -2837,9 +3009,9 @@ namespace SurvivorInstaller
 
         void BuildAddonsPage(Panel page)
         {
-            Section(page, "Addons", 20, 10, 720);
-            Label note = Caption(page, "Survivor UI first; then addons morderous checked, yours, and the ones put in by hand.", 20, 32);
-            note.Font = new Font("Segoe UI", 8f);
+            Section(page, Lang.T("Addons"), 20, 10, 720);
+            Label note = Caption(page, Lang.T("Survivor UI first; then addons morderous checked, yours, and the ones put in by hand."), 20, 32);
+            note.Font = new Font(Lang.Face, 8f);
 
             // The list ones first, the ones put in by hand under them; one picked
             // is shown under the list, its buttons under that.
@@ -2853,12 +3025,12 @@ namespace SurvivorInstaller
             addonList.BorderStyle = BorderStyle.FixedSingle;
             addonList.Location = new Point(20, 56);
             addonList.Size = new Size(720, 236);
-            addonList.Columns.Add("Addon", 222);
-            addonList.Columns.Add("By", 86);
-            addonList.Columns.Add("Latest", 80);
-            addonList.Columns.Add("Installed", 80);
-            addonList.Columns.Add("State", 84);
-            addonList.Columns.Add("Auto Update when ready", 150);
+            addonList.Columns.Add(Lang.T("Addon"), 222);
+            addonList.Columns.Add(Lang.T("By"), 86);
+            addonList.Columns.Add(Lang.T("Latest"), 80);
+            addonList.Columns.Add(Lang.T("Installed"), 80);
+            addonList.Columns.Add(Lang.T("State"), 84);
+            addonList.Columns.Add(Lang.T("Auto Update when ready"), 150);
             addonList.OwnerDraw = true;
             typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(addonList, true, null);
             addonList.DrawColumnHeader += delegate (object sender, DrawListViewColumnHeaderEventArgs e)
@@ -2891,7 +3063,7 @@ namespace SurvivorInstaller
                         addonSmall = new Font(addonList.Font.FontFamily, addonList.Font.Size * 0.8f);
                     int name = TextRenderer.MeasureText(e.Graphics, e.SubItem.Text, addonList.Font, words.Size, TextOnly).Width;
                     Rectangle tag = new Rectangle(words.X + name + S(5), words.Y, Math.Max(0, words.Width - name - S(5)), words.Height);
-                    TextRenderer.DrawText(e.Graphics, "(recommended)", addonSmall, tag, InstalledColor, flags);
+                    TextRenderer.DrawText(e.Graphics, Lang.T("(recommended)"), addonSmall, tag, InstalledColor, flags);
                 }
                 // One its user added: "(added by you)", small and blue.
                 ListedAddon added = e.Item.Tag as ListedAddon;
@@ -2901,7 +3073,7 @@ namespace SurvivorInstaller
                         addonSmall = new Font(addonList.Font.FontFamily, addonList.Font.Size * 0.8f);
                     int name = TextRenderer.MeasureText(e.Graphics, e.SubItem.Text, addonList.Font, words.Size, TextOnly).Width;
                     Rectangle tag = new Rectangle(words.X + name + S(5), words.Y, Math.Max(0, words.Width - name - S(5)), words.Height);
-                    TextRenderer.DrawText(e.Graphics, "(added by you)", addonSmall, tag, AddedColor, flags);
+                    TextRenderer.DrawText(e.Graphics, Lang.T("(added by you)"), addonSmall, tag, AddedColor, flags);
                 }
             };
             addonList.SelectedIndexChanged += delegate { ShowAddonPicked(); };
@@ -2914,20 +3086,20 @@ namespace SurvivorInstaller
             page.Controls.Add(addonList);
 
             // Over the list at its right: every update out, at once.
-            Style(addonUpdateAll, "Update all");
-            addonUpdateAll.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            Style(addonUpdateAll, Lang.T("Update all"));
+            addonUpdateAll.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
             addonUpdateAll.Location = new Point(590, 24);
             addonUpdateAll.Size = new Size(150, 26);
             addonUpdateAll.Click += delegate { UpdateAll(); };
             page.Controls.Add(addonUpdateAll);
             // Beside it: one more from GitHub, for this PC's list only.
-            Style(addonAdd, "Add from GitHub...");
-            addonAdd.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            Style(addonAdd, Lang.T("Add from GitHub..."));
+            addonAdd.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
             addonAdd.Location = new Point(440, 24);
             addonAdd.Size = new Size(144, 26);
             addonAdd.Click += delegate { AddFromGitHub(); };
-            tips.SetToolTip(addonAdd, "An addon's repository on GitHub, added to your list here:\n" +
-                "installed and updated like the others. On this PC only.");
+            tips.SetToolTip(addonAdd, Lang.T("An addon's repository on GitHub, added to your list here:\n") +
+                Lang.T("installed and updated like the others. On this PC only."));
             page.Controls.Add(addonAdd);
             Wear(addonAdd, "stone");
 
@@ -2938,22 +3110,22 @@ namespace SurvivorInstaller
             addonAbout.Size = new Size(720, 34);
             addonAbout.ForeColor = TextColor;
             addonAbout.BackColor = Color.Transparent;
-            addonAbout.Font = new Font("Segoe UI", 8.5f);
+            addonAbout.Font = new Font(Lang.Face, 8.5f);
             page.Controls.Add(addonAbout);
 
-            Style(addonInstall, "Install");
-            addonInstall.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            Style(addonInstall, Lang.T("Install"));
+            addonInstall.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
             addonInstall.Location = new Point(20, 338);
             addonInstall.Size = new Size(190, 30);
             addonInstall.Click += delegate { InstallPicked(); };
             page.Controls.Add(addonInstall);
-            Style(addonRemove, "Uninstall");
-            addonRemove.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            Style(addonRemove, Lang.T("Uninstall"));
+            addonRemove.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
             addonRemove.Location = new Point(220, 338);
             addonRemove.Size = new Size(120, 30);
             addonRemove.Click += delegate { RemovePicked(); };
             page.Controls.Add(addonRemove);
-            addonUse.Text = "On in the game";
+            addonUse.Text = Lang.T("On in the game");
             addonUse.AutoSize = true;
             addonUse.Location = new Point(436, 343);
             addonUse.FlatStyle = FlatStyle.Flat;
@@ -2962,18 +3134,18 @@ namespace SurvivorInstaller
             page.Controls.Add(addonUse);
             TickLook(addonUse);
             addonUse.CheckedChanged += delegate { SwitchPicked(); };
-            addonPage = Link(page, "Its page on GitHub", 610, 345, delegate
+            addonPage = Link(page, Lang.T("Its page on GitHub"), 610, 345, delegate
             {
                 ListedAddon listed = PickedAddon() as ListedAddon;
                 if (listed != null) Open("https://github.com/" + listed.Repo);
                 else if (PickedAddon() is OurAddon) Open("https://github.com/" + Repo);
             });
             // One added by you: off your list again, at the about's right.
-            addonForget = Link(page, "Remove from my list", 610, 302, ForgetPicked);
+            addonForget = Link(page, Lang.T("Remove from my list"), 610, 302, ForgetPicked);
             addonForget.Visible = false;
 
             // The beta: lavender, its version on it; a warning first.
-            betaButton.Text = "No beta right now";
+            betaButton.Text = Lang.T("No beta right now");
             betaButton.FlatStyle = FlatStyle.Flat;
             betaButton.FlatAppearance.BorderColor = Color.FromArgb(112, 86, 176);
             betaButton.BackColor = Color.FromArgb(34, 26, 58);
@@ -2981,21 +3153,21 @@ namespace SurvivorInstaller
             betaButton.Cursor = Cursors.Hand;
             betaButton.Location = new Point(220, 338);
             betaButton.Size = new Size(200, 30);
-            betaButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            betaButton.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
             Active(betaButton, false, BetaColor);
             betaButton.Click += delegate { if (IsActive(betaButton)) InstallBeta(); };
             betaButton.Visible = false;
             page.Controls.Add(betaButton);
             Forge(betaButton);
 
-            Label how = Caption(page, "Only an addon's own folder comes in, never a program. Off: the game skips it, nothing deleted. " +
-                "Uninstall: its folder to the Recycle Bin, its settings kept.", 20, 375);
-            how.Font = new Font("Segoe UI", 8f);
+            Label how = Caption(page, Lang.T("Only an addon's own folder comes in, never a program. Off: the game skips it, nothing deleted. ") +
+                Lang.T("Uninstall: its folder to the Recycle Bin, its settings kept."), 20, 375);
+            how.Font = new Font(Lang.Face, 8f);
             how.AutoSize = false;
             how.Size = new Size(720, 16);
-            Link(page, "Check the list again", 20, 396, delegate { AskAddons(true); });
-            Link(page, "What's new in Survivor UI", 190, 396, ShowNotesWindow);
-            Link(page, "Survivor UI's thread on the game's Discord", 390, 396, delegate { Open(AddonThread); });
+            Link(page, Lang.T("Check the list again"), 20, 396, delegate { AskAddons(true); });
+            Link(page, Lang.T("What's new in Survivor UI"), 190, 396, ShowNotesWindow);
+            Link(page, Lang.T("Survivor UI's thread on the game's Discord"), 390, 396, delegate { Open(AddonThread); });
         }
 
         // The tab opened: the list as it stands, asked again after half an hour.
@@ -3009,7 +3181,7 @@ namespace SurvivorInstaller
         {
             if (addonsAsking) return;
             addonsAsking = true;
-            if (told) Status("Asking for the list of addons and their latest releases...");
+            if (told) Status(Lang.T("Asking for the list of addons and their latest releases..."));
             new Thread(delegate () { FetchAddons(told); }) { IsBackground = true }.Start();
         }
 
@@ -3046,7 +3218,7 @@ namespace SurvivorInstaller
                 addonsAsked = DateTime.Now;
                 addonsAsking = false;
                 FillAddons();
-                if (told) Status("The list of addons is up to date.");
+                if (told) Status(Lang.T("The list of addons is up to date."));
                 TakeWhatIsDue();
             }));
         }
@@ -3290,24 +3462,24 @@ namespace SurvivorInstaller
         {
             ListedAddon addon;
             try { addon = ApiElseWeb(() => RepoByApi(repo), () => RepoByWeb(repo)); }
-            catch (NotOnGitHub) { throw new Exception("GitHub has no public repository " + repo + "."); }
+            catch (NotOnGitHub) { throw new Exception(Lang.T("GitHub has no public repository ") + repo + "."); }
             if (ParseRepo(addon.Repo) != addon.Repo) addon.Repo = repo;
             AskMine(addon, pick);
             using (WebClient client = Client())
                 client.DownloadFile(addon.ZipUrl, zip);
-            if (addon.ZipSize > 0 && new FileInfo(zip).Length != addon.ZipSize) throw new Exception("the download is not the size its release gives.");
+            if (addon.ZipSize > 0 && new FileInfo(zip).Length != addon.ZipSize) throw new Exception(Lang.T("the download is not the size its release gives."));
             if (addon.Sha256 != null && !string.Equals(Sha256Of(zip), addon.Sha256, StringComparison.OrdinalIgnoreCase))
-                throw new Exception("the download is not the one its author's " + addon.Sums + " gives (sha256).");
+                throw new Exception(Lang.T("the download is not the one its author's ") + addon.Sums + Lang.T(" gives (sha256)."));
             string[] folders;
             try { folders = FoldersInZip(zip, addon.Repo.Substring(addon.Repo.IndexOf('/') + 1)); }
-            catch (InvalidDataException) { throw new Exception("what its " + (addon.FromBranch ? "source" : "release") + " gives is not a zip."); }
+            catch (InvalidDataException) { throw new Exception(Lang.T("what its ") + (addon.FromBranch ? Lang.T("source") : Lang.T("release")) + Lang.T(" gives is not a zip.")); }
             if (folders.Length == 0)
-                throw new Exception("its " + (addon.FromBranch ? "source" : "release") + " holds no addon: no folder with a .toc of its own name.");
+                throw new Exception(Lang.T("its ") + (addon.FromBranch ? Lang.T("source") : Lang.T("release")) + Lang.T(" holds no addon: no folder with a .toc of its own name."));
             foreach (string folder in folders)
                 foreach (string ours in AddonFolders)
                     if (string.Equals(folder, ours, StringComparison.OrdinalIgnoreCase))
-                        throw new Exception("it holds " + ours + ", Survivor UI's own folder: Survivor UI comes from its own row.");
-            if (!SafeFolders(folders)) throw new Exception("its folders are not plain addon folders.");
+                        throw new Exception(Lang.T("it holds ") + ours + Lang.T(", Survivor UI's own folder: Survivor UI comes from its own row."));
+            if (!SafeFolders(folders)) throw new Exception(Lang.T("its folders are not plain addon folders."));
             addon.Folders = folders;
             Dictionary<string, string> toc = TocInZip(zip, folders[0]);
             string title = TocValue(toc, "Title");
@@ -3463,7 +3635,7 @@ namespace SurvivorInstaller
             {
                 string[] names = zips.ConvertAll(asset => asset.Name).ToArray();
                 int picked = pick != null ? pick(names) : -1;
-                if (pick != null && picked < 0) throw new Exception("no zip was picked.");
+                if (pick != null && picked < 0) throw new Exception(Lang.T("no zip was picked."));
                 if (picked < 0)
                 {
                     // Asked as a check: the one named as the repository or a folder of it.
@@ -3471,7 +3643,7 @@ namespace SurvivorInstaller
                     picked = Array.FindIndex(names, name => name.IndexOf(repoName, StringComparison.OrdinalIgnoreCase) >= 0
                         || Array.Exists(addon.Folders ?? new string[0], folder => name.IndexOf(folder, StringComparison.OrdinalIgnoreCase) >= 0));
                 }
-                if (picked < 0) throw new Exception("its release holds " + names.Length + " zips, none of them " + (addon.Asset ?? "named as it"));
+                if (picked < 0) throw new Exception(Lang.T("its release holds ") + names.Length + Lang.T(" zips, none of them ") + (addon.Asset ?? Lang.T("named as it")));
                 zip = zips[picked];
             }
             if (zip == null)
@@ -3508,7 +3680,7 @@ namespace SurvivorInstaller
         {
             object[] commits = new JavaScriptSerializer().DeserializeObject(AskGitHub("https://api.github.com/repos/" + addon.Repo +
                 "/commits?per_page=1" + (addon.Branch != null ? "&sha=" + Uri.EscapeDataString(addon.Branch) : ""))) as object[];
-            if (commits == null || commits.Length == 0) throw new Exception("it has no release and nothing in it yet");
+            if (commits == null || commits.Length == 0) throw new Exception(Lang.T("it has no release and nothing in it yet"));
             Dictionary<string, object> commit = (Dictionary<string, object>)commits[0];
             Dictionary<string, object> inner = commit["commit"] as Dictionary<string, object>;
             Dictionary<string, object> committer = inner != null ? inner["committer"] as Dictionary<string, object> : null;
@@ -3521,9 +3693,9 @@ namespace SurvivorInstaller
         {
             string landed, feed;
             try { feed = AskPage("https://github.com/" + addon.Repo + "/commits/" + Uri.EscapeDataString(addon.Branch ?? "HEAD") + ".atom", out landed); }
-            catch (NotOnGitHub) { throw new Exception("it has no release and nothing in it yet"); }
+            catch (NotOnGitHub) { throw new Exception(Lang.T("it has no release and nothing in it yet")); }
             Match sha = Regex.Match(feed, @"/commits?/([0-9a-f]{40})");
-            if (!sha.Success) throw new Exception("it has no release and nothing in it yet");
+            if (!sha.Success) throw new Exception(Lang.T("it has no release and nothing in it yet"));
             Match when = Regex.Match(feed, "<updated>([^<]+)</updated>");
             FromCommit(addon, sha.Groups[1].Value, when.Success ? when.Groups[1].Value : null);
         }
@@ -3545,7 +3717,7 @@ namespace SurvivorInstaller
 
         internal class NotOnGitHub : Exception
         {
-            public NotOnGitHub() : base("GitHub has no such repository now (taken down, or made private)") { }
+            public NotOnGitHub() : base(Lang.T("GitHub has no such repository now (taken down, or made private)")) { }
         }
 
         // The API's hour of asks used up.
@@ -3557,7 +3729,7 @@ namespace SurvivorInstaller
         internal static string AskGitHub(string url)
         {
             if (DateTime.Now < gitHubWait)
-                throw new ApiOut("GitHub's limit of 60 asks an hour is used up until " + gitHubWait.ToString("HH:mm"));
+                throw new ApiOut(Lang.T("GitHub's limit of 60 asks an hour is used up until ") + gitHubWait.ToString("HH:mm"));
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.UserAgent = "SurvivorUI-Installer";
@@ -3576,12 +3748,12 @@ namespace SurvivorInstaller
                 using (response)
                 {
                     if (response.StatusCode == HttpStatusCode.NotFound) throw new NotOnGitHub();
-                    if (response.StatusCode == HttpStatusCode.Conflict) throw new Exception("the repository is empty");
+                    if (response.StatusCode == HttpStatusCode.Conflict) throw new Exception(Lang.T("the repository is empty"));
                     long reset;
                     if (response.Headers["X-RateLimit-Remaining"] == "0" && long.TryParse(response.Headers["X-RateLimit-Reset"], out reset))
                     {
                         gitHubWait = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(reset).ToLocalTime();
-                        throw new ApiOut("GitHub's limit of 60 asks an hour is used up until " + gitHubWait.ToString("HH:mm"));
+                        throw new ApiOut(Lang.T("GitHub's limit of 60 asks an hour is used up until ") + gitHubWait.ToString("HH:mm"));
                     }
                     throw;
                 }
@@ -3654,7 +3826,7 @@ namespace SurvivorInstaller
         static T FromPages<T>(Func<T> web, Exception apiError)
         {
             try { return web(); }
-            catch (WebException) { throw new Exception(apiError.Message + ", and its pages did not answer either"); }
+            catch (WebException) { throw new Exception(apiError.Message + Lang.T(", and its pages did not answer either")); }
         }
 
         // Add from GitHub: its link asked for (one copied is offered), checked
@@ -3665,34 +3837,34 @@ namespace SurvivorInstaller
             if (addonBusy || installing) return;
             string copied = null;
             try { if (Clipboard.ContainsText()) copied = ParseRepo(Clipboard.GetText()); } catch { }
-            string given = AskText("The link of an addon's repository on GitHub, or just its owner/name, as in cadoky/ASBuilder.\n\n" +
-                "It joins your list on this PC only: the launcher sends it nowhere.",
-                "Add an addon from GitHub", copied != null ? "https://github.com/" + copied : "", "Look it up");
+            string given = AskText(Lang.T("The link of an addon's repository on GitHub, or just its owner/name, as in cadoky/ASBuilder.\n\n") +
+                Lang.T("It joins your list on this PC only: the launcher sends it nowhere."),
+                Lang.T("Add an addon from GitHub"), copied != null ? "https://github.com/" + copied : "", Lang.T("Look it up"));
             if (given == null || given.Trim() == "") return;
             string repo = ParseRepo(given);
             if (repo == null)
             {
-                Ask(this, "\"" + given.Trim() + "\" is not a repository on GitHub: github.com/<owner>/<name>.", "Add an addon from GitHub",
+                Ask(this, "\"" + given.Trim() + Lang.T("\" is not a repository on GitHub: github.com/<owner>/<name>."), Lang.T("Add an addon from GitHub"),
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             if (string.Equals(repo, Repo, StringComparison.OrdinalIgnoreCase))
             {
-                Ask(this, "That is Survivor UI: its row is at the top of the list.", "Add an addon from GitHub", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Ask(this, Lang.T("That is Survivor UI: its row is at the top of the list."), Lang.T("Add an addon from GitHub"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 PickAddon(OurUI);
                 return;
             }
             ListedAddon there = listedAddons.Find(each => string.Equals(each.Repo, repo, StringComparison.OrdinalIgnoreCase));
             if (there != null)
             {
-                Ask(this, there.Name + " is in the list already" + (there.Mine ? ", added by you." : ", one morderous checked."),
-                    "Add an addon from GitHub", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Ask(this, there.Name + Lang.T(" is in the list already") + (there.Mine ? Lang.T(", added by you.") : Lang.T(", one morderous checked.")),
+                    Lang.T("Add an addon from GitHub"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 PickAddon(there);
                 return;
             }
             addonBusy = true;
             ShowAddonPicked();
-            Status("Looking up " + repo + " on GitHub...");
+            Status(Lang.T("Looking up ") + repo + Lang.T(" on GitHub..."));
             new Thread(delegate ()
             {
                 string zip = Path.Combine(Path.GetTempPath(), "SurvivorUI-addon-" + Guid.NewGuid().ToString("N") + ".zip");
@@ -3702,8 +3874,8 @@ namespace SurvivorInstaller
                 {
                     found = LookUpRepo(repo, zip, names => (int)Invoke(new Func<int>(delegate
                     {
-                        return Choose(repo + "'s newest release holds " + names.Length + " zips. Which one is the addon?",
-                            "Add an addon from GitHub", names, 0);
+                        return Choose(repo + Lang.T("'s newest release holds ") + names.Length + Lang.T(" zips. Which one is the addon?"),
+                            Lang.T("Add an addon from GitHub"), names, 0);
                     })));
                 }
                 catch (Exception error) { problem = error.Message; }
@@ -3727,36 +3899,36 @@ namespace SurvivorInstaller
         {
             if (found == null)
             {
-                Status(repo + " could not be added.");
+                Status(repo + Lang.T(" could not be added."));
                 FillAddons();
-                Ask(this, repo + " could not be added: " + problem, "Add an addon from GitHub", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Ask(this, repo + Lang.T(" could not be added: ") + problem, Lang.T("Add an addon from GitHub"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             ListedAddon clash = ListedAs(found.Repo, found.Folders, listedAddons);
             if (clash != null)
             {
-                Status(found.Name + " is in the list already.");
+                Status(found.Name + Lang.T(" is in the list already."));
                 FillAddons();
-                Ask(this, found.Name + "'s folder" + (found.Folders.Length > 1 ? "s are " : " is ") + clash.Name + "'s, in the list already" +
-                    (clash.Mine ? ", added by you." : ", one morderous checked."), "Add an addon from GitHub", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Ask(this, found.Name + Lang.T("'s folder") + (found.Folders.Length > 1 ? Lang.T("s are ") : Lang.T(" is ")) + clash.Name + Lang.T("'s, in the list already") +
+                    (clash.Mine ? Lang.T(", added by you.") : Lang.T(", one morderous checked.")), Lang.T("Add an addon from GitHub"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 PickAddon(clash);
                 return;
             }
-            Status("Found " + found.Name + " on GitHub.");
-            string from = found.FromBranch ? "No release: its source as it stands on " + (found.Branch ?? "its branch") + ", changed " + found.ReleaseName + "."
-                : found.Beta ? "Its newest release, a beta (it has no other): " + found.ReleaseName + "."
-                : "Its newest release: " + found.ReleaseName + ".";
-            string words = found.Name + ", by " + found.Author + "\n" + (found.About != null ? found.About + "\n" : "") + "\n" + from +
-                "\nIts folder" + (found.Folders.Length > 1 ? "s: " : ": ") + string.Join(", ", found.Folders) + "." +
-                "\n\nmorderous has not checked it: install only addons you trust. Added, it waits in the list: Install it there when you choose.";
-            if (AskWith(words, "Add " + found.Name + "?", MessageBoxIcon.Question, "Add to my list", "Cancel") != DialogResult.Yes) return;
+            Status(Lang.T("Found ") + found.Name + Lang.T(" on GitHub."));
+            string from = found.FromBranch ? Lang.T("No release: its source as it stands on ") + (found.Branch ?? Lang.T("its branch")) + Lang.T(", changed ") + found.ReleaseName + "."
+                : found.Beta ? Lang.T("Its newest release, a beta (it has no other): ") + found.ReleaseName + "."
+                : Lang.T("Its newest release: ") + found.ReleaseName + ".";
+            string words = found.Name + Lang.T(", by ") + found.Author + "\n" + (found.About != null ? found.About + "\n" : "") + "\n" + from +
+                Lang.T("\nIts folder") + (found.Folders.Length > 1 ? Lang.T("s: ") : ": ") + string.Join(", ", found.Folders) + "." +
+                Lang.T("\n\nmorderous has not checked it: install only addons you trust. Added, it waits in the list: Install it there when you choose.");
+            if (AskWith(words, Lang.T("Add ") + found.Name + "?", MessageBoxIcon.Question, Lang.T("Add to my list"), Lang.T("Cancel")) != DialogResult.Yes) return;
             List<ListedAddon> mine = LoadMyAddons();
             mine.RemoveAll(each => SameAddon(each, found));
             mine.Add(found);
             try { SaveMyAddons(mine); }
             catch (Exception error)
             {
-                Ask(this, found.Name + " could not be added to your list: " + error.Message, "Add an addon from GitHub", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Ask(this, found.Name + Lang.T(" could not be added to your list: ") + error.Message, Lang.T("Add an addon from GitHub"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             List<ListedAddon> list = new List<ListedAddon>(listedAddons);
@@ -3764,7 +3936,7 @@ namespace SurvivorInstaller
             listedAddons = list;
             FillAddons();
             PickAddon(found);
-            Status(found.Name + " is on your list: Install it when you choose, then update and switch it as the others.");
+            Status(found.Name + Lang.T(" is on your list: Install it when you choose, then update and switch it as the others."));
         }
 
         // One of yours as it now stands (its folders, its zip's name) kept in
@@ -3790,21 +3962,21 @@ namespace SurvivorInstaller
             ListedAddon listed = PickedAddon() as ListedAddon;
             if (listed == null || !listed.Mine || addonBusy) return;
             bool present = AddonPresent(folderBox.Text.Trim(), listed.Folders);
-            if (Ask(this, "Remove " + listed.Name + " from your list?" + (present ? "\n\nIts folder stays in AddOns, as one put in by hand. " +
-                "To delete it too, Uninstall first." : ""), "Remove from my list", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            if (Ask(this, Lang.T("Remove ") + listed.Name + Lang.T(" from your list?") + (present ? Lang.T("\n\nIts folder stays in AddOns, as one put in by hand. ") +
+                Lang.T("To delete it too, Uninstall first.") : ""), Lang.T("Remove from my list"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
             List<ListedAddon> mine = LoadMyAddons();
             mine.RemoveAll(each => SameAddon(each, listed));
             try { SaveMyAddons(mine); }
             catch (Exception error)
             {
-                Status(listed.Name + " could not be removed from your list: " + error.Message);
+                Status(listed.Name + Lang.T(" could not be removed from your list: ") + error.Message);
                 return;
             }
             listedAddons = listedAddons.FindAll(each => !SameAddon(each, listed));
             SetSetting(InstalledKey(listed), "");
             SetSetting(TrustKey(listed), "");
-            Status(listed.Name + " is off your list.");
+            Status(listed.Name + Lang.T(" is off your list."));
             FillAddons();
         }
 
@@ -3817,33 +3989,33 @@ namespace SurvivorInstaller
                 {
                     Name = "SurvivorUI Classic", Author = "morderous", Repo = "morderous/survivorui-classic",
                     Asset = "SurvivorUIClassic-*.zip", Sums = "SHA256SUMS.txt", Folders = new[] { ClassicFolder },
-                    About = "A branch of Survivor UI in the game's own look: everything movable, a run tracker, boss bars, a damage meter and more. Works on its own; with Survivor UI too, you pick one.",
+                    About = Lang.T("A branch of Survivor UI in the game's own look: everything movable, a run tracker, boss bars, a damage meter and more. Works on its own; with Survivor UI too, you pick one."),
                 },
                 new ListedAddon
                 {
                     Name = "ASBuilder", Author = "cadoky", Repo = "cadoky/ASBuilder", Asset = "ASBuilder-*.zip", Folders = new[] { "ASBuilder" },
-                    About = "A build planner and in-run tracker: plan a build for any class before the run, then a small window tells you what to take next.",
+                    About = Lang.T("A build planner and in-run tracker: plan a build for any class before the run, then a small window tells you what to take next."),
                 },
                 new ListedAddon
                 {
                     Name = "Azerloot", Author = "Kindagrey", Repo = "Kindagrey/Azerloot", Asset = "Azerloot-*.zip", Folders = new[] { "Azerloot" },
-                    About = "The loot book: every boss drop, ring, trinket and amulet, a build planner, a chronicle of your runs and a wishlist that ticks itself.",
+                    About = Lang.T("The loot book: every boss drop, ring, trinket and amulet, a build planner, a chronicle of your runs and a wishlist that ticks itself."),
                 },
                 new ListedAddon
                 {
                     Name = "AZSSpellMeter", Author = "kex0", Repo = "kex0/AZSSpellMeter", Asset = "AZSSpellMeter-*.zip", Folders = new[] { "AZSSpellMeter" },
-                    About = "A per-spell damage meter: the same numbers as Damage Done, plus kills per spell and the spell a proc actually casts.",
+                    About = Lang.T("A per-spell damage meter: the same numbers as Damage Done, plus kills per spell and the spell a proc actually casts."),
                 },
                 new ListedAddon
                 {
                     Name = "KeijinUI", Author = "KeijinDE", Repo = "KeijinDE/KeijinUI_modern-as-ui", Asset = "KeijinUI-*.zip", Folders = new[] { "KeijinUI" },
-                    About = "A complete interface in one visual style, inspired by Dragonflight: it replaces the game's own HUD.",
+                    About = Lang.T("A complete interface in one visual style, inspired by Dragonflight: it replaces the game's own HUD."),
                 },
                 new ListedAddon
                 {
                     Name = "SurvivorsDragonUi", Author = "migwynkriid", Repo = "migwynkriid13/SurvivorsDragonUi",
                     Asset = "SurvivorsDragonUi.zip", Sums = "SHA256SUMS.txt", Folders = new[] { "SurvivorsDragonUi" },
-                    About = "A HUD for Azeroth Survivors: run and boss bars, combat text, seven action buttons and counters for gold, kills and caches. Type /sdui in the game to set it up.",
+                    About = Lang.T("A HUD for Azeroth Survivors: run and boss bars, combat text, seven action buttons and counters for gold, kills and caches. Type /sdui in the game to set it up."),
                 },
             };
         }
@@ -3901,21 +4073,21 @@ namespace SurvivorInstaller
             GitRelease release = ApiElseWeb(
                 () => ReleaseFromJson((Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(AskGitHub(url))),
                 () => ReleaseByWeb(addon.Repo, addon.Tag));
-            if (release == null) throw new Exception("it has no release");
+            if (release == null) throw new Exception(Lang.T("it has no release"));
             addon.ReleaseTag = release.Tag;
             addon.ReleaseName = release.Name;
             addon.ZipUrl = addon.ZipName = addon.Sha256 = null;
             addon.ZipSize = 0;
             GitAsset zip = release.Assets.Find(asset => AssetMatches(asset.Name, addon.Asset));
-            if (zip == null) throw new Exception("its release holds no " + addon.Asset);
+            if (zip == null) throw new Exception(Lang.T("its release holds no ") + addon.Asset);
             addon.ZipName = zip.Name;
             addon.ZipUrl = zip.Url;
             addon.ZipSize = zip.Size;
             if (addon.Sums == null) return;
             GitAsset sums = release.Assets.Find(asset => asset.Name == addon.Sums);
-            if (sums == null) throw new Exception("its release holds no " + addon.Sums);
+            if (sums == null) throw new Exception(Lang.T("its release holds no ") + addon.Sums);
             addon.Sha256 = ShaIn(Download(sums.Url), addon.ZipName);
-            if (addon.Sha256 == null) throw new Exception(addon.Sums + " says nothing of " + addon.ZipName);
+            if (addon.Sha256 == null) throw new Exception(addon.Sums + Lang.T(" says nothing of ") + addon.ZipName);
         }
 
         // A version older than another, both read as numbers ("3.2.55-survivors"
@@ -4052,7 +4224,7 @@ namespace SurvivorInstaller
                 // is no version).
                 bool outdated = present && addon.ReleaseTag != null && (mine != "" ? mine != addon.ReleaseTag
                     : !addon.FromBranch && OlderThan(TocValue(toc, "Version"), ShortVersion(addon)));
-                AddAddonRow(addon, addon.Name, addon.Author ?? "", addon.ReleaseTag != null ? ShortVersion(addon) + (addon.Beta ? " beta" : "") : "...",
+                AddAddonRow(addon, addon.Name, addon.Author ?? "", addon.ReleaseTag != null ? ShortVersion(addon) + (addon.Beta ? Lang.T(" beta") : "") : "...",
                     TocValue(toc, "Version"), present, outdated, present && !AllOn(addons, addon.Folders) ? Muted : IsClassic(addon) ? Color.FromArgb(255, 226, 120) : Gold);
             }
             if (addons != "" && Directory.Exists(addons))
@@ -4108,7 +4280,7 @@ namespace SurvivorInstaller
             row.SubItems.Add(author, TextColor, Panel, addonList.Font);
             row.SubItems.Add(latest, TextColor, Panel, addonList.Font);
             row.SubItems.Add(installed, TextColor, Panel, addonList.Font);
-            row.SubItems.Add(!present ? "Not installed" : outdated ? "Outdated" : "Installed",
+            row.SubItems.Add(!present ? Lang.T("Not installed") : outdated ? Lang.T("Outdated") : Lang.T("Installed"),
                 !present ? Muted : outdated ? OutdatedColor : InstalledColor, Panel, addonList.Font);
             row.SubItems.Add(!present || AutoKey(tag) == null ? "" : AutoOn(tag) ? "on" : "off");
             row.Tag = tag;
@@ -4130,34 +4302,34 @@ namespace SurvivorInstaller
             {
                 // As the release's button has it (ShowUpdateState): the badge's
                 // state is the release installed.
-                addonInstall.Text = upToDate.Visible ? "Install again" : installButton.Text;
+                addonInstall.Text = upToDate.Visible ? Lang.T("Install again") : installButton.Text;
                 Active(addonInstall, IsActive(installButton) && !busy, Gold);
-                bool beta = betaButton.Text != "No beta right now";
-                addonAbout.Text = our.About + (stable != null ? " Latest: " + stable.Tag + "." : "") +
-                    (beta ? " Betas come before a release: more bugs, more updates." : "");
+                bool beta = betaButton.Text != Lang.T("No beta right now");
+                addonAbout.Text = our.About + (stable != null ? Lang.T(" Latest: ") + stable.Tag + "." : "") +
+                    (beta ? Lang.T(" Betas come before a release: more bugs, more updates.") : "");
                 addonPage.Visible = true;
             }
             else if (listed != null)
             {
                 string mine = Setting(InstalledKey(listed), "");
                 bool ready = listed.ZipUrl != null && (listed.Sums == null || listed.Sha256 != null);
-                addonInstall.Text = !present ? "Install"
-                    : mine == "" ? (listed.Mine ? "Replace with GitHub's" : "Replace with the list's")
-                    : listed.ReleaseTag != null && mine != listed.ReleaseTag ? "Update to " + ShortVersion(listed)
-                    : "Install again";
+                addonInstall.Text = !present ? Lang.T("Install")
+                    : mine == "" ? (listed.Mine ? Lang.T("Replace with GitHub's") : Lang.T("Replace with the list's"))
+                    : listed.ReleaseTag != null && mine != listed.ReleaseTag ? Lang.T("Update to ") + ShortVersion(listed)
+                    : Lang.T("Install again");
                 Active(addonInstall, ready && !busy, Gold);
                 string about = listed.About ?? "";
-                if (listed.Problem != null) about += (about != "" ? " " : "") + "(Its release is out of reach now: " + listed.Problem + ")";
-                else if (listed.FromBranch) about += (about != "" ? " " : "") + "No release: its source on " + (listed.Branch ?? "its branch") + ", changed " + listed.ReleaseName + ".";
-                else if (listed.ReleaseName != null) about += (about != "" ? " " : "") + "Latest: " + listed.ReleaseName + (listed.Beta ? ", a beta." : ".");
+                if (listed.Problem != null) about += (about != "" ? " " : "") + Lang.T("(Its release is out of reach now: ") + listed.Problem + ")";
+                else if (listed.FromBranch) about += (about != "" ? " " : "") + Lang.T("No release: its source on ") + (listed.Branch ?? Lang.T("its branch")) + Lang.T(", changed ") + listed.ReleaseName + ".";
+                else if (listed.ReleaseName != null) about += (about != "" ? " " : "") + Lang.T("Latest: ") + listed.ReleaseName + (listed.Beta ? Lang.T(", a beta.") : ".");
                 addonAbout.Text = about;
                 addonPage.Visible = true;
             }
             else
             {
-                addonInstall.Text = "Install";
+                addonInstall.Text = Lang.T("Install");
                 Active(addonInstall, false, Gold);
-                addonAbout.Text = picked is string ? "Put in the AddOns folder by hand, not from the list: on or off, or uninstalled, here." : "";
+                addonAbout.Text = picked is string ? Lang.T("Put in the AddOns folder by hand, not from the list: on or off, or uninstalled, here.") : "";
                 addonPage.Visible = false;
             }
             // One added by you: Remove from my list at the about's right.
@@ -4168,7 +4340,7 @@ namespace SurvivorInstaller
             Active(addonAdd, !busy, Gold);
             // Survivor UI and its plates, a beta out: its button beside Uninstall,
             // the rest moved over.
-            bool beside = our != null && betaButton.Text != "No beta right now";
+            bool beside = our != null && betaButton.Text != Lang.T("No beta right now");
             betaButton.Visible = beside;
             betaButton.Location = new Point(S(272), S(338));
             addonInstall.Bounds = new Rectangle(S(20), S(338), S(beside ? 150 : 190), S(30));
@@ -4177,7 +4349,7 @@ namespace SurvivorInstaller
             addonRemove.Enabled = present && !busy;
             addonUse.Enabled = present && !busy;
             List<ListedAddon> due = Updatable(addons);
-            addonUpdateAll.Text = due.Count > 1 ? "Update all (" + due.Count + ")" : "Update all";
+            addonUpdateAll.Text = due.Count > 1 ? Lang.T("Update all (") + due.Count + ")" : Lang.T("Update all");
             Active(addonUpdateAll, due.Count > 0 && !busy, Gold);
             addonUse.Checked = present && AllOn(addons, folders);
             showingAddon = false;
@@ -4192,7 +4364,7 @@ namespace SurvivorInstaller
             if (folders.Length == 0) return;
             if (GameRunning())
             {
-                Ask(this, "Close the game first: it reads its list of addons as it starts.", "Get more addons", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Ask(this, Lang.T("Close the game first: it reads its list of addons as it starts."), Lang.T("Get more addons"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 ShowAddonPicked();
                 return;
             }
@@ -4205,12 +4377,12 @@ namespace SurvivorInstaller
                     ShowSwitches();
                     ShowUpdateState();
                 }
-                Status(PickedName(picked) + (addonUse.Checked ? " on: the game loads it from its next start."
-                    : " off: the game skips it from its next start; nothing is deleted."));
+                Status(PickedName(picked) + (addonUse.Checked ? Lang.T(" on: the game loads it from its next start.")
+                    : Lang.T(" off: the game skips it from its next start; nothing is deleted.")));
             }
             catch (Exception error)
             {
-                Status("The game's list of addons could not be changed: " + error.Message);
+                Status(Lang.T("The game's list of addons could not be changed: ") + error.Message);
             }
             FillAddons();
         }
@@ -4228,33 +4400,33 @@ namespace SurvivorInstaller
             if (pair)
             {
                 folders = AddonFolders;
-                name = OurUI.Name + " and " + OurPlates.Name;
+                name = OurUI.Name + Lang.T(" and ") + OurPlates.Name;
             }
             if (folders.Length == 0 || (!pair && !SafeFolders(folders))) return;
             if (ours && GameRunning())
             {
-                Ask(this, "Close the game first: it writes its settings as it closes.", "Get more addons", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Ask(this, Lang.T("Close the game first: it writes its settings as it closes."), Lang.T("Get more addons"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            if (Ask(this, "Uninstall " + name + "?\n\n" +
-                (pair ? "They come together. Their folders go to the Recycle Bin, where they can be taken back from. Their settings stay, should you install them again."
-                    : "Its folder goes to the Recycle Bin, where it can be taken back from. Its settings stay, should you install it again.") +
-                (ours ? "\n\nThe game's own screens come back, the red flag on the minimap among them." : ""),
-                "Get more addons", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (Ask(this, Lang.T("Uninstall ") + name + Lang.T("?\n\n") +
+                (pair ? Lang.T("They come together. Their folders go to the Recycle Bin, where they can be taken back from. Their settings stay, should you install them again.")
+                    : Lang.T("Its folder goes to the Recycle Bin, where it can be taken back from. Its settings stay, should you install it again.")) +
+                (ours ? Lang.T("\n\nThe game's own screens come back, the red flag on the minimap among them.") : ""),
+                Lang.T("Get more addons"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             foreach (string folder in folders)
             {
                 string path = Path.Combine(addons, folder);
                 if (Directory.Exists(path) && !ToRecycleBin(path))
                 {
-                    Ask(this, folder + " could not go to the Recycle Bin. If the game is open, close it and try again.",
-                        "Get more addons", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Ask(this, folder + Lang.T(" could not go to the Recycle Bin. If the game is open, close it and try again."),
+                        Lang.T("Get more addons"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     FillAddons();
                     return;
                 }
             }
             ListedAddon listed = picked as ListedAddon;
             if (listed != null) SetSetting(InstalledKey(listed), "");
-            Status(name + " uninstalled: " + (pair ? "their folders are" : "its folder is") + " in the Recycle Bin.");
+            Status(name + Lang.T(" uninstalled: ") + (pair ? Lang.T("their folders are") : Lang.T("its folder is")) + Lang.T(" in the Recycle Bin."));
             if (ours)
             {
                 GiveBackGameScreens(Path.GetDirectoryName(addons.TrimEnd('\\')));
@@ -4276,23 +4448,23 @@ namespace SurvivorInstaller
             string addons = folderBox.Text.Trim();
             if (addons == "" || !Directory.Exists(addons))
             {
-                Status("The game's AddOns folder is not there: find the game first (Play, Find game...), or start it once.");
+                Status(Lang.T("The game's AddOns folder is not there: find the game first (Play, Find game...), or start it once."));
                 return;
             }
             // One added by you, the first time: a word that morderous has not checked it.
             if (addon.Mine && Setting(TrustKey(addon), "") != "1")
             {
-                if (Ask(this, addon.Name + " is not one morderous checked: it comes straight from github.com/" + addon.Repo +
-                    ", added by you. Install only addons you trust.\n\nThe same rules hold for it: only its own folders and an addon's kinds " +
-                    "of files come in, never a program, never over Survivor UI.\n\nInstall it?", "Get more addons",
+                if (Ask(this, addon.Name + Lang.T(" is not one morderous checked: it comes straight from github.com/") + addon.Repo +
+                    Lang.T(", added by you. Install only addons you trust.\n\nThe same rules hold for it: only its own folders and an addon's kinds ") +
+                    Lang.T("of files come in, never a program, never over Survivor UI.\n\nInstall it?"), Lang.T("Get more addons"),
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                     return;
                 SetSetting(TrustKey(addon), "1");
             }
             if (AddonPresent(addons, addon.Folders) && Setting(InstalledKey(addon), "") == "" &&
-                Ask(this, addon.Name + " is in your AddOns folder already, put there by hand.\n\nReplace it with " +
-                    (addon.Mine ? "the one on GitHub, " : "the list's, ") + ShortVersion(addon) +
-                    "? The one there goes to the Recycle Bin first; its settings stay.", "Get more addons", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                Ask(this, addon.Name + Lang.T(" is in your AddOns folder already, put there by hand.\n\nReplace it with ") +
+                    (addon.Mine ? Lang.T("the one on GitHub, ") : Lang.T("the list's, ")) + ShortVersion(addon) +
+                    Lang.T("? The one there goes to the Recycle Bin first; its settings stay."), Lang.T("Get more addons"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
             addonBusy = true;
             ShowAddonPicked();
@@ -4333,22 +4505,22 @@ namespace SurvivorInstaller
             int left = 0;
             foreach (ListedAddon addon in which)
             {
-                Status((which.Count > 1 ? "Updating " : "Downloading ") + addon.Name + " " + ShortVersion(addon) + "...");
+                Status((which.Count > 1 ? Lang.T("Updating ") : Lang.T("Downloading ")) + addon.Name + " " + ShortVersion(addon) + "...");
                 string zip = Path.Combine(Path.GetTempPath(), "SurvivorUI-addon-" + Guid.NewGuid().ToString("N") + ".zip");
                 try
                 {
                     using (WebClient client = Client())
                         client.DownloadFile(addon.ZipUrl, zip);
-                    Status("Installing " + addon.Name + "...");
+                    Status(Lang.T("Installing ") + addon.Name + "...");
                     // One added by you: its folders read again in this zip
                     // (a release may bring one more), none of another's.
                     if (addon.Mine)
                     {
                         string[] folders = FoldersInZip(zip, addon.Repo.Substring(addon.Repo.IndexOf('/') + 1));
-                        if (folders.Length == 0) throw new Exception("its zip holds no addon now: no folder with a .toc of its own name");
-                        if (!SafeFolders(folders)) throw new Exception("its zip now holds Survivor UI's folders, or folders that are not plain ones");
+                        if (folders.Length == 0) throw new Exception(Lang.T("its zip holds no addon now: no folder with a .toc of its own name"));
+                        if (!SafeFolders(folders)) throw new Exception(Lang.T("its zip now holds Survivor UI's folders, or folders that are not plain ones"));
                         ListedAddon other = ListedAs(null, folders, listedAddons.FindAll(each => !SameAddon(each, addon)));
-                        if (other != null) throw new Exception("its zip now holds " + other.Name + "'s folder");
+                        if (other != null) throw new Exception(Lang.T("its zip now holds ") + other.Name + Lang.T("'s folder"));
                         addon.Folders = folders;
                     }
                     left += PutAddon(addons, addon, zip);
@@ -4375,23 +4547,23 @@ namespace SurvivorInstaller
                 addonBusy = false;
                 FillAddons();
                 ShowUpdateState();
-                string them = done.Count == 1 ? "it" : "them";
-                string loads = running ? "The game is open: restart it to load " + them + "." : "The game loads " + them + " the next time it starts.";
-                string stayed = left > 0 ? "\n\n" + left + " files of " + (done.Count == 1 ? "its zip" : "their zips") +
-                    " stayed out: not an addon's kind (programs, " + (done.Count == 1 ? "its author's" : "their authors'") + " tools)." : "";
+                string them = done.Count == 1 ? Lang.T("it") : Lang.T("them");
+                string loads = running ? Lang.T("The game is open: restart it to load ") + them + "." : Lang.T("The game loads ") + them + Lang.T(" the next time it starts.");
+                string stayed = left > 0 ? "\n\n" + left + Lang.T(" files of ") + (done.Count == 1 ? Lang.T("its zip") : Lang.T("their zips")) +
+                    Lang.T(" stayed out: not an addon's kind (programs, ") + (done.Count == 1 ? Lang.T("its author's") : Lang.T("their authors'")) + Lang.T(" tools).") : "";
                 if (failed.Count == 0)
                 {
-                    Status((which.Count > 1 ? "Updated " : "Installed ") + string.Join(", ", done.ToArray()) + ".");
-                    if (quietInstalls) QuietNote(string.Join(", ", done.ToArray()) + " installed.");
-                    else Ask(this, (done.Count == 1 ? done[0] + " is installed." : "Updated: " + string.Join(", ", done.ToArray()) + ".") + "\n\n" + loads + stayed,
-                        "Get more addons", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    Status((which.Count > 1 ? Lang.T("Updated ") : Lang.T("Installed ")) + string.Join(", ", done.ToArray()) + ".");
+                    if (quietInstalls) QuietNote(string.Join(", ", done.ToArray()) + Lang.T(" installed."));
+                    else Ask(this, (done.Count == 1 ? done[0] + Lang.T(" is installed.") : Lang.T("Updated: ") + string.Join(", ", done.ToArray()) + ".") + "\n\n" + loads + stayed,
+                        Lang.T("Get more addons"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
-                    Status("The install failed: " + failed[0]);
+                    Status(Lang.T("The install failed: ") + failed[0]);
                     if (!quietInstalls)
-                        Ask(this, (done.Count > 0 ? (which.Count > 1 ? "Updated: " : "Installed: ") + string.Join(", ", done.ToArray()) + ". " + loads + "\n\n" : "") +
-                            "Not installed:\n" + string.Join("\n", failed.ToArray()), "Get more addons", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        Ask(this, (done.Count > 0 ? (which.Count > 1 ? Lang.T("Updated: ") : Lang.T("Installed: ")) + string.Join(", ", done.ToArray()) + ". " + loads + "\n\n" : "") +
+                            Lang.T("Not installed:\n") + string.Join("\n", failed.ToArray()), Lang.T("Get more addons"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
                 NextInstall();
             }));
@@ -4406,10 +4578,10 @@ namespace SurvivorInstaller
         // gives or holds no such folder.
         internal static int PutAddon(string addons, ListedAddon addon, string zip)
         {
-            if (addon.ZipSize > 0 && new FileInfo(zip).Length != addon.ZipSize) throw new Exception("the download is not the size its release gives");
+            if (addon.ZipSize > 0 && new FileInfo(zip).Length != addon.ZipSize) throw new Exception(Lang.T("the download is not the size its release gives"));
             if (addon.Sums != null && !string.Equals(Sha256Of(zip), addon.Sha256, StringComparison.OrdinalIgnoreCase))
-                throw new Exception("the download is not the one its author's " + addon.Sums + " gives (sha256)");
-            if (!SafeFolders(addon.Folders)) throw new Exception("its folders are not plain addon folders");
+                throw new Exception(Lang.T("the download is not the one its author's ") + addon.Sums + Lang.T(" gives (sha256)"));
+            if (!SafeFolders(addon.Folders)) throw new Exception(Lang.T("its folders are not plain addon folders"));
             string staging = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(addons).TrimEnd('\\')), "_addon-" + Guid.NewGuid().ToString("N"));
             try
             {
@@ -4428,7 +4600,7 @@ namespace SurvivorInstaller
                             string prefix = name.Substring(0, name.Length - entry.Name.Length);
                             if (root == null || prefix.Length < root.Length) root = prefix;
                         }
-                        if (root == null) throw new Exception("its zip holds no " + folder + ".toc");
+                        if (root == null) throw new Exception(Lang.T("its zip holds no ") + folder + ".toc");
                         string target = Path.GetFullPath(Path.Combine(staging, folder));
                         foreach (ZipArchiveEntry entry in archive.Entries)
                         {
@@ -4450,7 +4622,7 @@ namespace SurvivorInstaller
                 {
                     string there = Path.Combine(addons, folder);
                     if (Directory.Exists(there) && !ToRecycleBin(there))
-                        throw new Exception("its folder in AddOns could not go to the Recycle Bin (is the game open?)");
+                        throw new Exception(Lang.T("its folder in AddOns could not go to the Recycle Bin (is the game open?)"));
                     Directory.Move(Path.Combine(staging, folder), there);
                 }
                 return left;
@@ -4488,19 +4660,19 @@ namespace SurvivorInstaller
 
         void BuildSavePage(Panel page)
         {
-            Caption(page, "Your save", 20, 12);
+            Caption(page, Lang.T("Your save"), 20, 12);
             saveInfo.AutoSize = true;
             saveInfo.UseMnemonic = false;
             saveInfo.Location = new Point(100, 12);
             page.Controls.Add(saveInfo);
-            Link(page, "Open folder", 664, 12, delegate
+            Link(page, Lang.T("Open folder"), 664, 12, delegate
             {
                 if (Directory.Exists(GameSave.SaveFolder())) Process.Start("explorer.exe", "\"" + GameSave.SaveFolder() + "\"");
             });
 
             // A backup now: where to (the Desktop, each USB drive plugged in, a
             // folder of one's own), the last one kept; and putting one back.
-            Caption(page, "Back up to", 20, 50);
+            Caption(page, Lang.T("Back up to"), 20, 50);
             DarkCombo(destBox);
             destBox.Location = new Point(100, 46);
             destBox.Size = new Size(350, 24);
@@ -4508,29 +4680,29 @@ namespace SurvivorInstaller
             destBox.SelectedIndexChanged += delegate { DestinationPicked(); };
             page.Controls.Add(destBox);
 
-            Style(saveButton, "Back up now");
-            saveButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            Style(saveButton, Lang.T("Back up now"));
+            saveButton.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
             saveButton.Location = new Point(460, 45);
             saveButton.Size = new Size(130, 26);
             saveButton.Click += delegate { BackUpSave(); };
-            tips.SetToolTip(saveButton, "Zips your heroes, gear, talents and unlocks, with the game's and the addons'\n" +
-                "settings (key bindings, chat, layout, Run History), into the place picked:\n" +
-                "to keep, or to take to another PC. The game must be closed.");
+            tips.SetToolTip(saveButton, Lang.T("Zips your heroes, gear, talents and unlocks, with the game's and the addons'\n") +
+                Lang.T("settings (key bindings, chat, layout, Run History), into the place picked:\n") +
+                Lang.T("to keep, or to take to another PC. The game must be closed."));
             page.Controls.Add(saveButton);
 
-            Style(restoreButton, "Restore save...");
-            restoreButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            Style(restoreButton, Lang.T("Restore save..."));
+            restoreButton.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
             restoreButton.Location = new Point(600, 45);
             restoreButton.Size = new Size(140, 26);
             restoreButton.Click += delegate { RestoreSave(null); };
-            tips.SetToolTip(restoreButton, "Puts a save zipped by the launcher into the game, on this PC or another.\n" +
-                "Your save as it is now is kept on the Desktop first. The game must be closed.");
+            tips.SetToolTip(restoreButton, Lang.T("Puts a save zipped by the launcher into the game, on this PC or another.\n") +
+                Lang.T("Your save as it is now is kept on the Desktop first. The game must be closed."));
             page.Controls.Add(restoreButton);
 
             // By itself, after each game session the launcher sees end.
-            Section(page, "Automatic", 20, 92, 720);
-            autoBox.Text = "Back up after each game session";
-            usbBox.Text = "Also copy it to a USB drive when one is plugged in";
+            Section(page, Lang.T("Automatic"), 20, 92, 720);
+            autoBox.Text = Lang.T("Back up after each game session");
+            usbBox.Text = Lang.T("Also copy it to a USB drive when one is plugged in");
             autoBox.Location = new Point(20, 114);
             usbBox.Location = new Point(20, 140);
             foreach (CheckBox box in new CheckBox[] { autoBox, usbBox })
@@ -4548,11 +4720,11 @@ namespace SurvivorInstaller
             autoBox.CheckedChanged += delegate
             {
                 SetSetting("autoBackup", autoBox.Checked ? "1" : "0");
-                Status(autoBox.Checked ? "Your save will be backed up each time the game closes." : "No more backups by themselves.");
+                Status(autoBox.Checked ? Lang.T("Your save will be backed up each time the game closes.") : Lang.T("No more backups by themselves."));
             };
             usbBox.CheckedChanged += delegate { SetSetting("autoUsb", usbBox.Checked ? "1" : "0"); };
 
-            Caption(page, "Keep the last", 470, 116);
+            Caption(page, Lang.T("Keep the last"), 470, 116);
             DarkCombo(keepBox);
             keepBox.Items.AddRange(new object[] { "5", "10", "20", "50" });
             keepBox.Location = new Point(560, 112);
@@ -4561,16 +4733,16 @@ namespace SurvivorInstaller
             if (keepBox.SelectedIndex < 0) keepBox.SelectedIndex = 1;
             keepBox.SelectedIndexChanged += delegate { SetSetting("autoKeep", (string)keepBox.SelectedItem); };
             page.Controls.Add(keepBox);
-            Caption(page, "automatic ones", 644, 116);
-            Label autoNote = Caption(page, "Into Documents\\" + SavesFolderName + ". The launcher must be running (in the tray) as the game closes; " +
-                "only the oldest automatic ones are removed, never the ones you make yourself.", 20, 166);
-            autoNote.Font = new Font("Segoe UI", 8f);
+            Caption(page, Lang.T("automatic ones"), 644, 116);
+            Label autoNote = Caption(page, Lang.T("Into Documents\\") + SavesFolderName + Lang.T(". The launcher must be running (in the tray) as the game closes; ") +
+                Lang.T("only the oldest automatic ones are removed, never the ones you make yourself."), 20, 166);
+            autoNote.Font = new Font(Lang.Face, 8f);
             autoNote.AutoSize = false;
             autoNote.Size = new Size(720, 30);
 
             // The backups made: the ones the launcher remembers making, and the
             // ones in its folders, newest first.
-            Section(page, "Your backups", 20, 202, 720);
+            Section(page, Lang.T("Your backups"), 20, 202, 720);
             backupList.View = View.Details;
             backupList.HeaderStyle = ColumnHeaderStyle.None;
             backupList.FullRowSelect = true;
@@ -4580,21 +4752,21 @@ namespace SurvivorInstaller
             backupList.BorderStyle = BorderStyle.FixedSingle;
             backupList.Location = new Point(20, 222);
             backupList.Size = new Size(720, 162);
-            backupList.Columns.Add("Taken", 130);
-            backupList.Columns.Add("Where", 500);
-            backupList.Columns.Add("Size", 70, HorizontalAlignment.Right);
+            backupList.Columns.Add(Lang.T("Taken"), 130);
+            backupList.Columns.Add(Lang.T("Where"), 500);
+            backupList.Columns.Add(Lang.T("Size"), 70, HorizontalAlignment.Right);
             backupList.SelectedIndexChanged += delegate { restoreOne.Enabled = backupList.SelectedItems.Count > 0; };
             backupList.DoubleClick += delegate { RestoreSelected(); };
             page.Controls.Add(backupList);
 
-            Style(restoreOne, "Restore this one");
-            restoreOne.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            Style(restoreOne, Lang.T("Restore this one"));
+            restoreOne.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
             restoreOne.Location = new Point(20, 394);
             restoreOne.Size = new Size(150, 26);
             restoreOne.Enabled = false;
             restoreOne.Click += delegate { RestoreSelected(); };
             page.Controls.Add(restoreOne);
-            Link(page, "Show in folder", 184, 399, delegate
+            Link(page, Lang.T("Show in folder"), 184, 399, delegate
             {
                 if (backupList.SelectedItems.Count == 0) return;
                 string zip = (string)backupList.SelectedItems[0].Tag;
@@ -4622,7 +4794,7 @@ namespace SurvivorInstaller
             string chosen = Setting("backupTo", "");
             destBox.Items.Clear();
             Destination desktop = new Destination();
-            desktop.Name = "Desktop";
+            desktop.Name = Lang.T("Desktop");
             desktop.Folder = GameSave.Desktop();
             destBox.Items.Add(desktop);
             foreach (DriveInfo drive in RemovableDrives())
@@ -4631,7 +4803,7 @@ namespace SurvivorInstaller
                 string label = "";
                 try { label = drive.VolumeLabel; } catch { }
                 usb.Name = "USB  " + drive.Name.TrimEnd('\\') + (label != "" ? "  " + label : "") +
-                    "  (" + (drive.AvailableFreeSpace / 1073741824.0).ToString("0.0") + " GB free)";
+                    "  (" + (drive.AvailableFreeSpace / 1073741824.0).ToString("0.0") + Lang.T(" GB free)");
                 usb.Folder = Path.Combine(drive.RootDirectory.FullName, SavesFolderName);
                 destBox.Items.Add(usb);
             }
@@ -4639,12 +4811,12 @@ namespace SurvivorInstaller
             if (custom != "")
             {
                 Destination folder = new Destination();
-                folder.Name = "Folder  " + custom;
+                folder.Name = Lang.T("Folder  ") + custom;
                 folder.Folder = custom;
                 destBox.Items.Add(folder);
             }
             Destination pick = new Destination();
-            pick.Name = "Choose a folder...";
+            pick.Name = Lang.T("Choose a folder...");
             destBox.Items.Add(pick);
             int index = 0;
             for (int i = 0; i < destBox.Items.Count; i++)
@@ -4668,7 +4840,7 @@ namespace SurvivorInstaller
             }
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "Where your save backups go";
+                dialog.Description = Lang.T("Where your save backups go");
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
                     SetSetting("backupFolder", dialog.SelectedPath);
@@ -4692,12 +4864,12 @@ namespace SurvivorInstaller
             if (File.Exists(characters))
             {
                 FileInfo info = new FileInfo(characters);
-                saveInfo.Text = "changed " + info.LastWriteTime.ToString("yyyy-MM-dd HH:mm") + "  ·  " + save;
+                saveInfo.Text = Lang.T("changed ") + info.LastWriteTime.ToString("yyyy-MM-dd HH:mm") + "  ·  " + save;
                 saveInfo.ForeColor = TextColor;
             }
             else
             {
-                saveInfo.Text = "none yet in " + save + ": play the game once first.";
+                saveInfo.Text = Lang.T("none yet in ") + save + Lang.T(": play the game once first.");
                 saveInfo.ForeColor = Muted;
             }
             FillDestinations();
@@ -4756,7 +4928,7 @@ namespace SurvivorInstaller
                 ListViewItem row = new ListViewItem(file.LastWriteTime.ToString("yyyy-MM-dd HH:mm"));
                 bool auto = file.Name.StartsWith("AzerothSurvivors-save-auto-", StringComparison.OrdinalIgnoreCase);
                 bool before = file.Name.StartsWith("AzerothSurvivors-save-before-restore-", StringComparison.OrdinalIgnoreCase);
-                row.SubItems.Add((auto ? "Automatic  ·  " : before ? "Before a restore  ·  " : "") + file.FullName);
+                row.SubItems.Add((auto ? Lang.T("Automatic  ·  ") : before ? Lang.T("Before a restore  ·  ") : "") + file.FullName);
                 row.SubItems.Add(Math.Max(1, file.Length / 1024) + " KB");
                 row.Tag = file.FullName;
                 backupList.Items.Add(row);
@@ -4927,7 +5099,7 @@ namespace SurvivorInstaller
                 string zip = FreeName(folder, "AzerothSurvivors-save-auto-" + DateTime.Now.ToString("yyyy-MM-dd_HHmm"));
                 GameSave.Backup(save, GameSettingsFolder(), zip, SaveNote());
                 GameSave.Prune(folder, keep);
-                string where = "Documents";
+                string where = Lang.T("Documents");
                 if (Setting("autoUsb", "0") == "1")
                     foreach (DriveInfo drive in RemovableDrives())
                     {
@@ -4937,16 +5109,16 @@ namespace SurvivorInstaller
                             Directory.CreateDirectory(usb);
                             File.Copy(zip, Path.Combine(usb, Path.GetFileName(zip)), true);
                             GameSave.Prune(usb, keep);
-                            where += " and " + drive.Name.TrimEnd('\\');
+                            where += Lang.T(" and ") + drive.Name.TrimEnd('\\');
                         }
                         catch { }
                     }
-                Status("Save backed up as the game closed (" + where + ").");
+                Status(Lang.T("Save backed up as the game closed (") + where + ").");
                 if (currentTab == SaveTab) ShowBackups();
             }
             catch (Exception error)
             {
-                Status("Could not back up the save as the game closed: " + error.Message);
+                Status(Lang.T("Could not back up the save as the game closed: ") + error.Message);
             }
         }
 
@@ -5034,33 +5206,33 @@ namespace SurvivorInstaller
             Color.FromArgb(255, 245, 105), Color.FromArgb(240, 240, 240), Color.FromArgb(40, 140, 236),
             Color.FromArgb(105, 204, 240), Color.FromArgb(160, 142, 214), Color.FromArgb(255, 125, 10) };
         static readonly string[] ZoneIds = { "elwynn", "duskwood", "wsg", "ungoro", "ab", "feralas", "arena", "sm", "av", "brm", "aq", "naxx" };
-        static readonly string[] ZoneNames = { "Elwynn Forest", "Duskwood", "Warsong Gulch", "Un'Goro Crater", "Arathi Basin", "Feralas",
-            "Gurubashi Arena", "Scarlet Monastery", "Alterac Valley", "Blackrock Mountain", "Gates of Ahn'Qiraj", "Naxxramas" };
-        static readonly string[] ZoneShort = { "Elwynn", "Duskwood", "WSG", "Un'Goro", "AB", "Feralas", "Arena", "SM", "AV", "BRM", "AQ", "Naxx" };
+        static readonly string[] ZoneNames = { Lang.T("Elwynn Forest"), Lang.T("Duskwood"), Lang.T("Warsong Gulch"), Lang.T("Un'Goro Crater"), Lang.T("Arathi Basin"), Lang.T("Feralas"),
+            Lang.T("Gurubashi Arena"), Lang.T("Scarlet Monastery"), Lang.T("Alterac Valley"), Lang.T("Blackrock Mountain"), Lang.T("Gates of Ahn'Qiraj"), Lang.T("Naxxramas") };
+        static readonly string[] ZoneShort = { Lang.T("Elwynn"), Lang.T("Duskwood"), "WSG", Lang.T("Un'Goro"), "AB", Lang.T("Feralas"), Lang.T("Arena"), "SM", "AV", "BRM", "AQ", Lang.T("Naxx") };
 
         // The achievements' names, as the game shows them in English; the ones
         // made from a class or a zone are put together in AchievementName.
         static readonly Dictionary<string, string> AchievementNames = new Dictionary<string, string> {
-            { "count:kills10k", "Exterminator" }, { "count:kills100k", "Scourge of Azeroth" }, { "count:kills1m", "A Million Dead" },
-            { "count:gold5k", "Pocket Change" }, { "count:gold50k", "Treasure Hunter" },
-            { "count:guardians100", "Lair Raider" }, { "count:guardians500", "Warden's Bane" },
-            { "count:bosses100", "Boss Hunter" }, { "count:caches100", "Cache Cracker" },
-            { "count:runs10", "Regular" }, { "count:runs100", "Veteran" }, { "count:wins50", "Conqueror" },
-            { "feat:kills2500", "Slaughterhouse" }, { "feat:kills6000", "Carnage" }, { "feat:lairs", "Lair Breaker" },
-            { "feat:endless25", "Overtime" }, { "feat:endless30", "Unending" }, { "feat:endless40", "Deathless Hour" },
-            { "feat:bare", "Bare Knuckles" }, { "feat:thrifty", "Thrifty" }, { "feat:odds", "Against the Odds" },
-            { "feat:nou", "no u" }, { "feat:herod", "Spin to Win" }, { "feat:hakkar", "Suck It, Hakkar!" },
-            { "feat:nefarian", "Bad Dragon!" }, { "feat:cthun", "Eye Caramba!" }, { "feat:vancleef", "You're Fired" },
-            { "feat:stitches", "Stitches Get Stitches" }, { "feat:kazzak", "Not Today, Satan" }, { "feat:mosh", "Clever Girl" },
-            { "feat:kovork", "Bonk the Bonker" }, { "feat:gordok", "Stop Hitting Yourself" }, { "feat:azuregos", "Blue Screen of Death" },
-            { "legendaryset", "Legendary" }, { "pieces:all", "The Whole Armory" },
-            { "talents:1", "Fully Talented" }, { "talents:9", "Master of All" }, { "talents:all", "Master of All" },
-            { "codex:50", "Jeweler's Eye" }, { "codex:all", "Every Bauble" }, { "codex:100", "Every Bauble" },
-            { "coop:together", "Better Together" }, { "coop:fiveofakind", "Five of a Kind" },
-            { "coop:photosynthesis", "Rest in Photosynthesis" }, { "coop:odds", "Against All Odds" },
-            { "coop:brotherhood", "The Brotherhood Falls" }, { "coop:bump", "Things That Go Bump in the Night" },
-            { "coop:team", "For the Team" }, { "coop:jurassic", "Jurassic Pack" }, { "coop:smoothie", "Hakkar Smoothie" },
-            { "coop:holyframe", "Holy Frame Drops" }, { "coop:dragonslayers", "Dragonslayers" } };
+            { "count:kills10k", Lang.T("Exterminator") }, { "count:kills100k", Lang.T("Scourge of Azeroth") }, { "count:kills1m", Lang.T("A Million Dead") },
+            { "count:gold5k", Lang.T("Pocket Change") }, { "count:gold50k", Lang.T("Treasure Hunter") },
+            { "count:guardians100", Lang.T("Lair Raider") }, { "count:guardians500", Lang.T("Warden's Bane") },
+            { "count:bosses100", Lang.T("Boss Hunter") }, { "count:caches100", Lang.T("Cache Cracker") },
+            { "count:runs10", Lang.T("Regular") }, { "count:runs100", Lang.T("Veteran") }, { "count:wins50", Lang.T("Conqueror") },
+            { "feat:kills2500", Lang.T("Slaughterhouse") }, { "feat:kills6000", Lang.T("Carnage") }, { "feat:lairs", Lang.T("Lair Breaker") },
+            { "feat:endless25", Lang.T("Overtime") }, { "feat:endless30", Lang.T("Unending") }, { "feat:endless40", Lang.T("Deathless Hour") },
+            { "feat:bare", Lang.T("Bare Knuckles") }, { "feat:thrifty", Lang.T("Thrifty") }, { "feat:odds", Lang.T("Against the Odds") },
+            { "feat:nou", Lang.T("no u") }, { "feat:herod", Lang.T("Spin to Win") }, { "feat:hakkar", Lang.T("Suck It, Hakkar!") },
+            { "feat:nefarian", Lang.T("Bad Dragon!") }, { "feat:cthun", Lang.T("Eye Caramba!") }, { "feat:vancleef", Lang.T("You're Fired") },
+            { "feat:stitches", Lang.T("Stitches Get Stitches") }, { "feat:kazzak", Lang.T("Not Today, Satan") }, { "feat:mosh", Lang.T("Clever Girl") },
+            { "feat:kovork", Lang.T("Bonk the Bonker") }, { "feat:gordok", Lang.T("Stop Hitting Yourself") }, { "feat:azuregos", Lang.T("Blue Screen of Death") },
+            { "legendaryset", Lang.T("Legendary") }, { "pieces:all", Lang.T("The Whole Armory") },
+            { "talents:1", Lang.T("Fully Talented") }, { "talents:9", Lang.T("Master of All") }, { "talents:all", Lang.T("Master of All") },
+            { "codex:50", Lang.T("Jeweler's Eye") }, { "codex:all", Lang.T("Every Bauble") }, { "codex:100", Lang.T("Every Bauble") },
+            { "coop:together", Lang.T("Better Together") }, { "coop:fiveofakind", Lang.T("Five of a Kind") },
+            { "coop:photosynthesis", Lang.T("Rest in Photosynthesis") }, { "coop:odds", Lang.T("Against All Odds") },
+            { "coop:brotherhood", Lang.T("The Brotherhood Falls") }, { "coop:bump", Lang.T("Things That Go Bump in the Night") },
+            { "coop:team", Lang.T("For the Team") }, { "coop:jurassic", Lang.T("Jurassic Pack") }, { "coop:smoothie", Lang.T("Hakkar Smoothie") },
+            { "coop:holyframe", Lang.T("Holy Frame Drops") }, { "coop:dragonslayers", Lang.T("Dragonslayers") } };
 
         static string AchievementName(string id)
         {
@@ -5073,17 +5245,17 @@ namespace SurvivorInstaller
             int cls = -1;
             for (int i = 0; i < ClassNames.Length; i++)
                 if (string.Equals(ClassNames[i], what, StringComparison.OrdinalIgnoreCase)) cls = i;
-            if (kind == "class" && cls >= 0) return ClassNames[cls] + " Victorious";
-            if (kind == "classlast" && cls >= 0) return ClassNames[cls] + " of the Scarab Wall";
-            if (kind == "zone9" && zone >= 0) return "Champion of " + ZoneNames[zone];
-            if (kind == "zone" && zone >= 0) return ZoneNames[zone] + " cleared";
-            if (kind == "pieces") return "Collect " + what + " pieces of gear";
+            if (kind == "class" && cls >= 0) return Lang.T(ClassNames[cls]) + Lang.T(" Victorious");
+            if (kind == "classlast" && cls >= 0) return Lang.T(ClassNames[cls]) + Lang.T(" of the Scarab Wall");
+            if (kind == "zone9" && zone >= 0) return Lang.T("Champion of ") + ZoneNames[zone];
+            if (kind == "zone" && zone >= 0) return ZoneNames[zone] + Lang.T(" cleared");
+            if (kind == "pieces") return Lang.T("Collect ") + what + Lang.T(" pieces of gear");
             // One the launcher does not know yet: its id, readable.
             string words = (what != "" ? what : kind).Replace('_', ' ');
             return words.Length > 0 ? char.ToUpper(words[0]) + words.Substring(1) : id;
         }
 
-        static readonly string[] StatNames = { "Playtime", "Runs", "Wins", "Kills", "Gold", "Bosses", "Guardians", "Caches" };
+        static readonly string[] StatNames = { Lang.T("Playtime"), Lang.T("Runs"), Lang.T("Wins"), Lang.T("Kills"), Lang.T("Gold"), Lang.T("Bosses"), Lang.T("Guardians"), Lang.T("Caches") };
         static readonly string[] StatKeys = { null, "runs", "wins", "kills", "gold", "bosses", "guardians", "caches" };
         readonly Label[] statValues = new Label[8];
         readonly Label[] statSubs = new Label[8];
@@ -5107,20 +5279,20 @@ namespace SurvivorInstaller
                 card.Size = new Size(84, 62);
                 Label name = new Label();
                 name.Text = StatNames[i];
-                name.Font = new Font("Segoe UI", 8f);
+                name.Font = new Font(Lang.Face, 8f);
                 name.ForeColor = Muted;
                 name.AutoSize = true;
                 name.Location = new Point(7, 5);
                 card.Controls.Add(name);
                 Label value = new Label();
                 value.Text = "—";
-                value.Font = new Font("Segoe UI", 11.5f, FontStyle.Bold);
+                value.Font = new Font(Lang.Face, 11.5f, FontStyle.Bold);
                 value.ForeColor = TextColor;
                 value.AutoSize = true;
                 value.Location = new Point(6, 21);
                 card.Controls.Add(value);
                 Label sub = new Label();
-                sub.Font = new Font("Segoe UI", 7.5f);
+                sub.Font = new Font(Lang.Face, 7.5f);
                 sub.ForeColor = Muted;
                 sub.AutoSize = false;
                 sub.Location = new Point(7, 44);
@@ -5131,17 +5303,17 @@ namespace SurvivorInstaller
                 Card(card);
                 page.Controls.Add(card);
             }
-            tips.SetToolTip(statValues[0], "The time the game ran while the launcher was open or in the tray,\n" +
-                "and from before launcher 1.5, the game time of the runs in Survivor UI's Run History.");
+            tips.SetToolTip(statValues[0], Lang.T("The time the game ran while the launcher was open or in the tray,\n") +
+                Lang.T("and from before launcher 1.5, the game time of the runs in Survivor UI's Run History."));
 
-            Section(page, "Playtime, last 14 days", 20, 82, 350);
+            Section(page, Lang.T("Playtime, last 14 days"), 20, 82, 350);
             playChart.Location = new Point(20, 102);
             playChart.Size = new Size(350, 112);
             playChart.BackColor = Panel;
             playChart.Paint += DrawPlayChart;
             page.Controls.Add(playChart);
 
-            Section(page, "Achievements, newest first", 390, 82, 260);
+            Section(page, Lang.T("Achievements, newest first"), 390, 82, 260);
             achCount.AutoSize = false;
             achCount.Location = new Point(560, 82);
             achCount.Size = new Size(180, 18);
@@ -5155,7 +5327,7 @@ namespace SurvivorInstaller
             Scrollable(achList, achScrolls);
             page.Controls.Add(achList);
 
-            Section(page, "Classes and zones: gold where the zone's final boss fell to that class", 20, 226, 720);
+            Section(page, Lang.T("Classes and zones: gold where the zone's final boss fell to that class"), 20, 226, 720);
             classGrid.Location = new Point(20, 246);
             classGrid.Size = new Size(720, 158);
             classGrid.BackColor = Panel;
@@ -5216,7 +5388,7 @@ namespace SurvivorInstaller
             }
             statValues[0].Text = total > 0 ? Hours(total) : "—";
             statSubs[0].Text = first != DateTime.MaxValue
-                ? "since " + first.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture) : "not seen yet";
+                ? Lang.T("since ") + first.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture) : Lang.T("not seen yet");
 
             for (int i = 1; i < StatKeys.Length; i++)
             {
@@ -5224,17 +5396,17 @@ namespace SurvivorInstaller
                 statSubs[i].Text = "";
             }
             if (stats != null && stats.Total("runs") > 0)
-                statSubs[2].Text = (100.0 * stats.Total("wins") / stats.Total("runs")).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "% of runs";
+                statSubs[2].Text = (100.0 * stats.Total("wins") / stats.Total("runs")).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + Lang.T("% of runs");
             if (stats != null && stats.Total("runs") > 0)
-                statSubs[3].Text = Count(stats.Total("kills") / stats.Total("runs")) + " a run";
+                statSubs[3].Text = Count(stats.Total("kills") / stats.Total("runs")) + Lang.T(" a run");
 
-            achCount.Text = stats != null ? stats.Achievements.Count + " earned" : "";
+            achCount.Text = stats != null ? stats.Achievements.Count + Lang.T(" earned") : "";
             collectionLine.Text = stats == null
-                ? (saveThere ? "The save could not be read just now; it is read again each time this tab opens."
-                    : "No save yet in " + GameSave.SaveFolder() + ": play the game once first.")
-                : "Collection:  " + stats.Items + " pieces of gear  ·  " + stats.Seen + " jewels seen in the codex  ·  " +
-                  stats.Pets + (stats.Pets == 1 ? " pet" : " pets") + "  ·  " + stats.Tabards + (stats.Tabards == 1 ? " tabard" : " tabards") +
-                  "  ·  " + stats.Heroes.Count + (stats.Heroes.Count == 1 ? " hero" : " heroes");
+                ? (saveThere ? Lang.T("The save could not be read just now; it is read again each time this tab opens.")
+                    : Lang.T("No save yet in ") + GameSave.SaveFolder() + Lang.T(": play the game once first."))
+                : Lang.T("Collection:  ") + stats.Items + Lang.T(" pieces of gear  ·  ") + stats.Seen + Lang.T(" jewels seen in the codex  ·  ") +
+                  stats.Pets + (stats.Pets == 1 ? Lang.T(" pet") : Lang.T(" pets")) + "  ·  " + stats.Tabards + (stats.Tabards == 1 ? Lang.T(" tabard") : Lang.T(" tabards")) +
+                  "  ·  " + stats.Heroes.Count + (stats.Heroes.Count == 1 ? Lang.T(" hero") : Lang.T(" heroes"));
             playChart.Invalidate();
             achList.Invalidate();
             classGrid.Invalidate();
@@ -5257,7 +5429,7 @@ namespace SurvivorInstaller
             foreach (int seconds in dayPlay) { if (seconds > max) max = seconds; sum += seconds; }
             int slot = (W(playChart) - 14) / 14;
             int floor = H(playChart) - 22, top = 20;
-            using (Font small = new Font("Segoe UI", 7f))
+            using (Font small = new Font(Lang.Face, 7f))
             using (Brush bar = new SolidBrush(Color.FromArgb(178, 140, 30)))
             using (Brush today = new SolidBrush(Gold))
             using (Brush empty = new SolidBrush(Color.FromArgb(70, 64, 50)))
@@ -5279,7 +5451,7 @@ namespace SurvivorInstaller
                 }
             }
             if (sum == 0)
-                Txt(g, "No game sessions seen yet. The launcher counts the time the game runs while it is open or in the tray.",
+                Txt(g, Lang.T("No game sessions seen yet. The launcher counts the time the game runs while it is open or in the tray."),
                     BaseFont, new Rectangle(16, 8, W(playChart) - 32, floor - 12), Muted,
                     TextOnly | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
         }
@@ -5292,13 +5464,13 @@ namespace SurvivorInstaller
             SaveStats stats = shownStats;
             if (stats == null || stats.Achievements.Count == 0)
             {
-                Txt(g, stats == null ? "No save read yet." : "None yet: they come with your runs.", BaseFont,
+                Txt(g, stats == null ? Lang.T("No save read yet.") : Lang.T("None yet: they come with your runs."), BaseFont,
                     new Rectangle(0, 0, W(achList), H(achList)), Muted, TextOnly | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                 return;
             }
             List<string> ids = new List<string>(stats.Achievements);
             ids.Sort(delegate (string a, string b) { return stats.When(b).CompareTo(stats.When(a)); });
-            using (Font small = new Font("Segoe UI", 8f))
+            using (Font small = new Font(Lang.Face, 8f))
             {
                 Rectangle area = new Rectangle(0, 4, W(achList) - 4, H(achList) - 8);
                 Scrolled(g, achScrolls, "achievements", area, delegate (Graphics inner)
@@ -5329,7 +5501,7 @@ namespace SurvivorInstaller
             SaveStats stats = shownStats;
             const int nameWidth = 84, talentWidth = 72, headHeight = 20, rowHeight = 15;
             int column = (W(classGrid) - nameWidth - talentWidth) / ZoneIds.Length;
-            using (Font small = new Font("Segoe UI", 7.5f))
+            using (Font small = new Font(Lang.Face, 7.5f))
             using (Brush stripe = new SolidBrush(Color.FromArgb(29, 27, 23)))
             using (Brush beat = new SolidBrush(Color.FromArgb(214, 170, 40)))
             using (Pen open = new Pen(Color.FromArgb(84, 76, 60)))
@@ -5337,7 +5509,7 @@ namespace SurvivorInstaller
                 for (int z = 0; z < ZoneIds.Length; z++)
                     Txt(g, ZoneShort[z], small, new Rectangle(nameWidth + z * column - 6, 4, column + 12, 14), Muted,
                         TextOnly | TextFormatFlags.HorizontalCenter);
-                Txt(g, "Talents", small, new Rectangle(W(classGrid) - talentWidth, 4, talentWidth - 10, 14), Muted,
+                Txt(g, Lang.T("Talents"), small, new Rectangle(W(classGrid) - talentWidth, 4, talentWidth - 10, 14), Muted,
                     TextOnly | TextFormatFlags.Right);
                 for (int c = 0; c < ClassIds.Length; c++)
                 {
@@ -5345,7 +5517,7 @@ namespace SurvivorInstaller
                     if (c % 2 == 0) g.FillRectangle(stripe, 0, y, W(classGrid), rowHeight);
                     int id = ClassIds[c];
                     bool hero = stats != null && stats.Heroes.Contains(id);
-                    Txt(g, ClassNames[c], small, new Rectangle(10, y + 1, nameWidth - 12, rowHeight - 2),
+                    Txt(g, Lang.T(ClassNames[c]), small, new Rectangle(10, y + 1, nameWidth - 12, rowHeight - 2),
                         hero ? ClassColors[c] : Color.FromArgb(104, 98, 86), TextOnly);
                     HashSet<string> zones = null;
                     if (stats != null) stats.Beat.TryGetValue(id, out zones);
@@ -5388,8 +5560,8 @@ namespace SurvivorInstaller
             stripValues[0].Text = Hours(today);
             // Past 100 hours, the hours alone, to fit its card.
             stripValues[1].Text = total >= 360000 ? (total / 3600) + "h" : Hours(total);
-            stripValues[2].Text = sessionStart != DateTime.MinValue ? "now" : last == DateTime.MinValue ? "—"
-                : last.Date == DateTime.Today ? "today" : last.Date == DateTime.Today.AddDays(-1) ? "yesterday"
+            stripValues[2].Text = sessionStart != DateTime.MinValue ? Lang.T("now") : last == DateTime.MinValue ? "—"
+                : last.Date == DateTime.Today ? Lang.T("today") : last.Date == DateTime.Today.AddDays(-1) ? Lang.T("yesterday")
                 : last.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture);
             SaveStats stats = ReadSaveStats();
             if (stats != null)
@@ -5448,12 +5620,12 @@ namespace SurvivorInstaller
 
         void BuildRunsPage(Panel page)
         {
-            Caption(page, "Show", 20, 12);
+            Caption(page, Lang.T("Show"), 20, 12);
             DarkCombo(runClass);
             runClass.Location = new Point(62, 8);
             runClass.Size = new Size(140, 24);
-            runClass.Items.Add("All classes");
-            foreach (string name in ClassNames) runClass.Items.Add(name);
+            runClass.Items.Add(Lang.T("All classes"));
+            foreach (string name in ClassNames) runClass.Items.Add(Lang.T(name));
             runClass.SelectedIndex = 0;
             runClass.SelectedIndexChanged += delegate { FillRuns(); };
             page.Controls.Add(runClass);
@@ -5461,7 +5633,7 @@ namespace SurvivorInstaller
             DarkCombo(runResult);
             runResult.Location = new Point(210, 8);
             runResult.Size = new Size(130, 24);
-            runResult.Items.AddRange(new object[] { "All results", "Victories", "Deaths", "Left early" });
+            runResult.Items.AddRange(new object[] { Lang.T("All results"), Lang.T("Victories"), Lang.T("Deaths"), Lang.T("Left early") });
             runResult.SelectedIndex = 0;
             runResult.SelectedIndexChanged += delegate { FillRuns(); };
             page.Controls.Add(runResult);
@@ -5472,7 +5644,7 @@ namespace SurvivorInstaller
             page.Controls.Add(runCount);
             // A filter: only the victories and the endless runs, those the
             // launcher keeps for good (its archive).
-            keepWins.Text = "Only victories and endless";
+            keepWins.Text = Lang.T("Only victories and endless");
             keepWins.AutoSize = true;
             keepWins.FlatStyle = FlatStyle.Flat;
             keepWins.FlatAppearance.BorderColor = TickEdge;
@@ -5481,10 +5653,10 @@ namespace SurvivorInstaller
             page.Controls.Add(keepWins);
             TickLook(keepWins);
             keepWins.CheckedChanged += delegate { KeepWinsChanged(); };
-            tips.SetToolTip(runCount, "Your victories and endless runs are kept here for good, whatever the game's Run History lets go\n" +
-                "(it keeps 100 runs at most). A date in gold: a run gone from the game's, kept here.");
-            tips.SetToolTip(keepWins, "The list shows only your victories and the runs gone on in endless mode.\n" +
-                "Those are kept here for good, whatever the game's Run History lets go (a date in gold: kept here only).");
+            tips.SetToolTip(runCount, Lang.T("Your victories and endless runs are kept here for good, whatever the game's Run History lets go\n") +
+                Lang.T("(it keeps 100 runs at most). A date in gold: a run gone from the game's, kept here."));
+            tips.SetToolTip(keepWins, Lang.T("The list shows only your victories and the runs gone on in endless mode.\n") +
+                Lang.T("Those are kept here for good, whatever the game's Run History lets go (a date in gold: kept here only)."));
 
             // The runs, newest first; one picked is shown under them.
             runList.View = View.Details;
@@ -5497,15 +5669,15 @@ namespace SurvivorInstaller
             runList.BorderStyle = BorderStyle.FixedSingle;
             runList.Location = new Point(20, 38);
             runList.Size = new Size(720, 124);
-            runList.Columns.Add("When", 96);
-            runList.Columns.Add("Hero", 92);
-            runList.Columns.Add("Class", 70);
-            runList.Columns.Add("Zone", 132);
-            runList.Columns.Add("Result", 64);
-            runList.Columns.Add("Time", 56, HorizontalAlignment.Right);
-            runList.Columns.Add("Kills", 62, HorizontalAlignment.Right);
+            runList.Columns.Add(Lang.T("When"), 96);
+            runList.Columns.Add(Lang.T("Hero"), 92);
+            runList.Columns.Add(Lang.T("Class"), 70);
+            runList.Columns.Add(Lang.T("Zone"), 132);
+            runList.Columns.Add(Lang.T("Result"), 64);
+            runList.Columns.Add(Lang.T("Time"), 56, HorizontalAlignment.Right);
+            runList.Columns.Add(Lang.T("Kills"), 62, HorizontalAlignment.Right);
             runList.Columns.Add("DPS", 62, HorizontalAlignment.Right);
-            runList.Columns.Add("Level", 46, HorizontalAlignment.Right);
+            runList.Columns.Add(Lang.T("Level"), 46, HorizontalAlignment.Right);
             runList.OwnerDraw = true;
             typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(runList, true, null);
             runList.DrawColumnHeader += delegate (object sender, DrawListViewColumnHeaderEventArgs e)
@@ -5628,8 +5800,8 @@ namespace SurvivorInstaller
             {
                 runs = new List<RunRecord>();
                 runsFile = null;
-                runsNote = game == null ? "No game found yet: pick it in the Play tab."
-                    : "No runs kept yet. Run History is Survivor UI's: play a run with it on, and once the game goes back to the character screen its runs show here.";
+                runsNote = game == null ? Lang.T("No game found yet: pick it in the Play tab.")
+                    : Lang.T("No runs kept yet. Run History is Survivor UI's: play a run with it on, and once the game goes back to the character screen its runs show here.");
                 FillRuns();
                 return;
             }
@@ -5645,7 +5817,7 @@ namespace SurvivorInstaller
             {
                 runs = WithArchive(RunRecord.ReadAll(path, out runsKeep));
                 runsNote = runs.Count == 0
-                    ? "No runs kept yet. Run History is Survivor UI's: play a run with it on, and once the game goes back to the character screen its runs show here."
+                    ? Lang.T("No runs kept yet. Run History is Survivor UI's: play a run with it on, and once the game goes back to the character screen its runs show here.")
                     : "";
                 runsFile = path;
                 runsStamp = stamp;
@@ -5654,7 +5826,7 @@ namespace SurvivorInstaller
             {
                 runs = new List<RunRecord>();
                 runsFile = null;
-                runsNote = "Could not read Survivor UI's saved settings: " + error.Message;
+                runsNote = Lang.T("Could not read Survivor UI's saved settings: ") + error.Message;
             }
             finally
             {
@@ -5759,7 +5931,7 @@ namespace SurvivorInstaller
 
         static string ResultWord(string result)
         {
-            return result == "victory" ? "Victory" : result == "dead" ? "Died" : result == "left" ? "Left" : result;
+            return result == "victory" ? Lang.T("Victory") : result == "dead" ? Lang.T("Died") : result == "left" ? Lang.T("Left") : result;
         }
 
         static Color ResultColor(string result)
@@ -5802,8 +5974,8 @@ namespace SurvivorInstaller
             SetSetting("runsWinsOnly", keepWins.Checked ? "1" : "0");
             shownRun = null;
             FillRuns();
-            Status(keepWins.Checked ? "Run History here shows only your victories and endless runs."
-                : "Run History here shows every run again.");
+            Status(keepWins.Checked ? Lang.T("Run History here shows only your victories and endless runs.")
+                : Lang.T("Run History here shows every run again."));
         }
 
         // The zone's column takes the width left, so the header has no light
@@ -5844,11 +6016,11 @@ namespace SurvivorInstaller
                 row.SubItems.Add(run.Str("class"), ClassColor(run.Str("classKey")), Panel, runList.Font);
                 // A Heroic run (the game's 0.121) says its level after the zone: "· H III".
                 int heroic = (int)run.Num("heroic");
-                row.SubItems.Add(run.Str("zone") + (heroic > 0 ? "  \u00b7 H " + Numeral(heroic) : ""), TextColor, Panel, runList.Font);
+                row.SubItems.Add(run.Str("zone") + (heroic > 0 ? Lang.T("  \u00b7 H ") + Numeral(heroic) : ""), TextColor, Panel, runList.Font);
                 Dictionary<object, object> endless = run.Table("endless");
                 if (endless != null)
                 {
-                    row.SubItems.Add("Endless", EndlessColor, Panel, runList.Font);
+                    row.SubItems.Add(Lang.T("Endless"), EndlessColor, Panel, runList.Font);
                     row.SubItems.Add(Clock(RunRecord.NumOf(endless, "time")), TextColor, Panel, runList.Font);
                 }
                 else
@@ -5870,7 +6042,7 @@ namespace SurvivorInstaller
             shownRun = keep != null ? (RunRecord)keep.Tag : null;
             runList.EndUpdate();
             fillingRuns = false;
-            runCount.Text = runs.Count == 0 ? "" : shown + (shown == 1 ? " run" : " runs") + "  ·  " + wins + (wins == 1 ? " victory" : " victories");
+            runCount.Text = runs.Count == 0 ? "" : shown + (shown == 1 ? Lang.T(" run") : Lang.T(" runs")) + "  ·  " + wins + (wins == 1 ? Lang.T(" victory") : Lang.T(" victories"));
             FitRunColumns();
             if (keep != null) keep.EnsureVisible();
             runDetail.Invalidate();
@@ -6034,7 +6206,7 @@ namespace SurvivorInstaller
             RunRecord run = shownRun;
             if (run == null)
             {
-                Txt(g, runs.Count == 0 ? runsNote : "Pick a run above to see it here.", BaseFont,
+                Txt(g, runs.Count == 0 ? runsNote : Lang.T("Pick a run above to see it here."), BaseFont,
                     new Rectangle(24, 0, width - 48, H(runDetail)), Muted,
                     TextOnly | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
                 return;
@@ -6042,9 +6214,9 @@ namespace SurvivorInstaller
             System.Globalization.CultureInfo invariant = System.Globalization.CultureInfo.InvariantCulture;
             Dictionary<object, object> endless = run.Table("endless");
             RunRecord view = Moment(run);
-            using (Font title = new Font("Segoe UI", 11f, FontStyle.Bold))
-            using (Font head = new Font("Segoe UI", 8.5f, FontStyle.Bold))
-            using (Font small = new Font("Segoe UI", 8f))
+            using (Font title = new Font(Lang.Face, 11f, FontStyle.Bold))
+            using (Font head = new Font(Lang.Face, 8.5f, FontStyle.Bold))
+            using (Font small = new Font(Lang.Face, 8f))
             using (Pen line = new Pen(Color.FromArgb(70, 62, 46)))
             {
                 // The detail's tabs, as the window's: stone, the open one red;
@@ -6053,12 +6225,12 @@ namespace SurvivorInstaller
                 foreach (string tab in new string[] { "overview", "build", "stats" })
                 {
                     Rectangle at = tab == "overview" ? overviewTabAt : tab == "build" ? buildTabAt : statsTabAt;
-                    Plate(g, at, tab == "overview" ? "Overview" : tab == "build" ? "Build" : "Stats", tab == detailTab, head);
+                    Plate(g, at, tab == "overview" ? Lang.T("Overview") : tab == "build" ? Lang.T("Build") : Lang.T("Stats"), tab == detailTab, head);
                 }
                 if (endless != null)
                 {
-                    Plate(g, victoryAt, "Victory  " + Clock(run.Num("time")), moment == "victory", head, FellColor);
-                    Plate(g, endlessAt, "Endless  " + Clock(RunRecord.NumOf(endless, "time")), moment == "endless", head, EndlessColor);
+                    Plate(g, victoryAt, Lang.T("Victory  ") + Clock(run.Num("time")), moment == "victory", head, FellColor);
+                    Plate(g, endlessAt, Lang.T("Endless  ") + Clock(RunRecord.NumOf(endless, "time")), moment == "endless", head, EndlessColor);
                 }
                 g.TranslateTransform(0, 32);
                 string hero = run.Str("hero");
@@ -6069,12 +6241,12 @@ namespace SurvivorInstaller
                 // its Run Options before it, unless normal.
                 int level = (int)run.Num("heroic");
                 string affixes = AffixNames(run);
-                string mods = level > 0 ? "Heroic " + Numeral(level) + (affixes != "" ? " (" + affixes + ")" : "") : run.Str("mods");
-                string who = "Level " + (int)view.Num("level") + " " + run.Str("race") + " " + run.Str("class") + "  ·  " + run.Str("zone") +
+                string mods = level > 0 ? Lang.T("Heroic ") + Numeral(level) + (affixes != "" ? " (" + affixes + ")" : "") : run.Str("mods");
+                string who = Lang.T("Level ") + (int)view.Num("level") + " " + run.Str("race") + " " + run.Str("class") + "  ·  " + run.Str("zone") +
                     (mods != "" && mods != "normal" ? "  ·  " + mods : "");
                 Txt(g, who, BaseFont, new Rectangle(x, 9, width - x - 190, 18), Muted, TextOnly | TextFormatFlags.EndEllipsis);
                 bool showingEnd = view != run;
-                string end = showingEnd ? "Endless  " + Clock(view.Num("time")) : ResultWord(run.Str("result")) + "  " + Clock(run.Num("time"));
+                string end = showingEnd ? Lang.T("Endless  ") + Clock(view.Num("time")) : ResultWord(run.Str("result")) + "  " + Clock(run.Num("time"));
                 Txt(g, end, title, new Rectangle(width - 190, 6, 180, 22), showingEnd ? EndlessColor : ResultColor(run.Str("result")),
                     TextOnly | TextFormatFlags.Right);
 
@@ -6089,11 +6261,11 @@ namespace SurvivorInstaller
                     double added = view.Num(key) - run.Num(key);
                     return added > 0 ? " (+" + (key == "dealt" || key == "taken" ? Big(added) : ((long)added).ToString("N0", invariant)) + ")" : "";
                 };
-                string numbers = ((long)view.Num("kills")).ToString("N0", invariant) + more("kills") + " kills  ·  " + Big(view.Num("meterDps")) + " DPS  ·  " +
-                    Big(view.Num("dealt")) + more("dealt") + " damage  ·  " + Big(view.Num("taken")) + " taken  ·  " +
-                    ((long)view.Num("gold")).ToString("N0", invariant) + more("gold") + " gold  ·  " + (int)view.Num("bosses") + " bosses  ·  " +
-                    (int)view.Num("guardians") + " guardians  ·  " + (int)view.Num("elites") + " elites  ·  " +
-                    looted + " looted" + (fresh > 0 ? ", " + fresh + " new" : "");
+                string numbers = ((long)view.Num("kills")).ToString("N0", invariant) + more("kills") + Lang.T(" kills  ·  ") + Big(view.Num("meterDps")) + " DPS  ·  " +
+                    Big(view.Num("dealt")) + more("dealt") + Lang.T(" damage  ·  ") + Big(view.Num("taken")) + Lang.T(" taken  ·  ") +
+                    ((long)view.Num("gold")).ToString("N0", invariant) + more("gold") + Lang.T(" gold  ·  ") + (int)view.Num("bosses") + Lang.T(" bosses  ·  ") +
+                    (int)view.Num("guardians") + Lang.T(" guardians  ·  ") + (int)view.Num("elites") + Lang.T(" elites  ·  ") +
+                    looted + Lang.T(" looted") + (fresh > 0 ? ", " + fresh + Lang.T(" new") : "");
                 Txt(g, numbers, small, new Rectangle(10, 32, width - 20, 16), TextColor, TextOnly | TextFormatFlags.EndEllipsis);
 
                 g.DrawLine(line, 10, 52, width - 10, 52);
@@ -6221,41 +6393,41 @@ namespace SurvivorInstaller
         }
 
         static readonly StatGroup[] StatGroups = {
-            StatSet("Offense", Color.FromArgb(255, 115, 64),
-                Geared(Row("Crit", s => Stat(s, "crit"), s => Fixed(Stat(s, "crit") * 100, "0.0") + "%"), "gcrit", "crit", null, null),
-                Geared(Row("Crit Dmg", s => Stat(s, "cm"), s => Fixed(Stat(s, "cm") * 100, "0") + "%"), "gcm", null, null, null),
-                Geared(Row("Damage", s => Stat(s, "dmg") - 1, s => Pct(Stat(s, "dmg") - 1)), "gdmg", "dmg", "less1", null),
-                Geared(Row("Haste", s => 1 - Stat(s, "cd"), s => Pct(1 - Stat(s, "cd"))), "gcd", "cd", "from1", null),
-                Geared(Row("Echo", s => Stat(s, "echo"), s => Fixed(Stat(s, "echo") * 100, "0") + "%"), "gecho", "echo", null, null)),
-            StatSet("Defense", Color.FromArgb(77, 166, 255),
-                Geared(Row("Health", s => Stat(s, "hp"), s => Fixed(Stat(s, "hp"), "0")), "ghp", "hp", null, "+0"),
-                Geared(Row("Regen", s => Stat(s, "reg"), s => Fixed(Stat(s, "reg"), "0.0")), "greg", "reg", null, "+0.0"),
-                Row("Lifesteal", s => Stat(s, "lch"), s => Fixed(Stat(s, "lch") * 100, "0.0") + "%"),
-                Geared(Row("Armor", s => Stat(s, "arm"), s => Fixed(Stat(s, "arm") * 100, "0") + "%"), "garm", "arm", null, null),
-                Row("Kill Heal", s => Stat(s, "heal"), s => Fixed(Stat(s, "heal"), "0")),
-                Row("Thorns", s => Stat(s, "thn"), s => Fixed(Stat(s, "thn") * 100, "0") + "%"),
-                Row("Lives", s => Stat(s, "liv"), s => Fixed(Stat(s, "liv"), "0"))),
-            StatSet("Reach", Color.FromArgb(184, 115, 255),
-                Geared(Row("Area", s => Stat(s, "area") - 1, s => Pct(Stat(s, "area") - 1)), "garea", "area", "less1", null),
-                Geared(Row("Targets", s => Stat(s, "cnt"), s => "+" + Fixed(Stat(s, "cnt"), "0")), "gcnt", "cnt", null, "+0"),
-                Geared(Row("Pickup", s => Stat(s, "pick"), s => Fixed(Stat(s, "pick"), "0") + " yd"), "gpick", null, null, null)),
-            StatSet("Utility", Color.FromArgb(89, 230, 140),
-                Geared(Row("Speed", s => Stat(s, "spd") - 1, s => Pct(Stat(s, "spd") - 1)), "gspd", "spd", "less1", null),
-                Row("Experience", s => Stat(s, "xp") - 1, s => Pct(Stat(s, "xp") - 1)),
-                Geared(Row("Gold", s => Stat(s, "gold") - 1, s => Pct(Stat(s, "gold") - 1)), "ggold", "gold", "less1", null),
-                Row("Luck", s => Stat(s, "luck"), s => Pct(Stat(s, "luck"))),
-                Row("Buff Power", s => Stat(s, "bp"), s => Pct(Stat(s, "bp")))),
-            StatSet("Damage over time", Color.FromArgb(64, 217, 217),
-                Row("DoT Stacks", s => Stat(s, "dots"), s => Fixed(Stat(s, "dots"), "0")),
-                Row("DoT Haste", s => Stat(s, "doth"), s => Pct(Stat(s, "doth")))),
-            StatSet("Bonus damage", Color.FromArgb(255, 209, 0),
-                Row("Vs Elites", s => Stat(s, "big"), s => Pct(Stat(s, "big"))),
-                Row("Execute", s => Stat(s, "exe"), s => Pct(Stat(s, "exe"))),
-                Row("Vs Controlled", s => Stat(s, "cc"), s => Pct(Stat(s, "cc"))),
-                Row("Vs Afflicted", s => Stat(s, "dotd"), s => Pct(Stat(s, "dotd"))),
-                Row("Shielded", s => Stat(s, "shd"), s => Pct(Stat(s, "shd"))),
-                Row("Melee", s => Stat(s, "auto"), s => Pct(Stat(s, "auto"))),
-                Row("Pet Damage", s => Stat(s, "pet"), s => Pct(Stat(s, "pet")))),
+            StatSet(Lang.T("Offense"), Color.FromArgb(255, 115, 64),
+                Geared(Row(Lang.T("Crit"), s => Stat(s, "crit"), s => Fixed(Stat(s, "crit") * 100, "0.0") + "%"), "gcrit", "crit", null, null),
+                Geared(Row(Lang.T("Crit Dmg"), s => Stat(s, "cm"), s => Fixed(Stat(s, "cm") * 100, "0") + "%"), "gcm", null, null, null),
+                Geared(Row(Lang.T("Damage"), s => Stat(s, "dmg") - 1, s => Pct(Stat(s, "dmg") - 1)), "gdmg", "dmg", "less1", null),
+                Geared(Row(Lang.T("Haste"), s => 1 - Stat(s, "cd"), s => Pct(1 - Stat(s, "cd"))), "gcd", "cd", "from1", null),
+                Geared(Row(Lang.T("Echo"), s => Stat(s, "echo"), s => Fixed(Stat(s, "echo") * 100, "0") + "%"), "gecho", "echo", null, null)),
+            StatSet(Lang.T("Defense"), Color.FromArgb(77, 166, 255),
+                Geared(Row(Lang.T("Health"), s => Stat(s, "hp"), s => Fixed(Stat(s, "hp"), "0")), "ghp", "hp", null, "+0"),
+                Geared(Row(Lang.T("Regen"), s => Stat(s, "reg"), s => Fixed(Stat(s, "reg"), "0.0")), "greg", "reg", null, "+0.0"),
+                Row(Lang.T("Lifesteal"), s => Stat(s, "lch"), s => Fixed(Stat(s, "lch") * 100, "0.0") + "%"),
+                Geared(Row(Lang.T("Armor"), s => Stat(s, "arm"), s => Fixed(Stat(s, "arm") * 100, "0") + "%"), "garm", "arm", null, null),
+                Row(Lang.T("Kill Heal"), s => Stat(s, "heal"), s => Fixed(Stat(s, "heal"), "0")),
+                Row(Lang.T("Thorns"), s => Stat(s, "thn"), s => Fixed(Stat(s, "thn") * 100, "0") + "%"),
+                Row(Lang.T("Lives"), s => Stat(s, "liv"), s => Fixed(Stat(s, "liv"), "0"))),
+            StatSet(Lang.T("Reach"), Color.FromArgb(184, 115, 255),
+                Geared(Row(Lang.T("Area"), s => Stat(s, "area") - 1, s => Pct(Stat(s, "area") - 1)), "garea", "area", "less1", null),
+                Geared(Row(Lang.T("Targets"), s => Stat(s, "cnt"), s => "+" + Fixed(Stat(s, "cnt"), "0")), "gcnt", "cnt", null, "+0"),
+                Geared(Row(Lang.T("Pickup"), s => Stat(s, "pick"), s => Fixed(Stat(s, "pick"), "0") + Lang.T(" yd")), "gpick", null, null, null)),
+            StatSet(Lang.T("Utility"), Color.FromArgb(89, 230, 140),
+                Geared(Row(Lang.T("Speed"), s => Stat(s, "spd") - 1, s => Pct(Stat(s, "spd") - 1)), "gspd", "spd", "less1", null),
+                Row(Lang.T("Experience"), s => Stat(s, "xp") - 1, s => Pct(Stat(s, "xp") - 1)),
+                Geared(Row(Lang.T("Gold"), s => Stat(s, "gold") - 1, s => Pct(Stat(s, "gold") - 1)), "ggold", "gold", "less1", null),
+                Row(Lang.T("Luck"), s => Stat(s, "luck"), s => Pct(Stat(s, "luck"))),
+                Row(Lang.T("Buff Power"), s => Stat(s, "bp"), s => Pct(Stat(s, "bp")))),
+            StatSet(Lang.T("Damage over time"), Color.FromArgb(64, 217, 217),
+                Row(Lang.T("DoT Stacks"), s => Stat(s, "dots"), s => Fixed(Stat(s, "dots"), "0")),
+                Row(Lang.T("DoT Haste"), s => Stat(s, "doth"), s => Pct(Stat(s, "doth")))),
+            StatSet(Lang.T("Bonus damage"), Color.FromArgb(255, 209, 0),
+                Row(Lang.T("Vs Elites"), s => Stat(s, "big"), s => Pct(Stat(s, "big"))),
+                Row(Lang.T("Execute"), s => Stat(s, "exe"), s => Pct(Stat(s, "exe"))),
+                Row(Lang.T("Vs Controlled"), s => Stat(s, "cc"), s => Pct(Stat(s, "cc"))),
+                Row(Lang.T("Vs Afflicted"), s => Stat(s, "dotd"), s => Pct(Stat(s, "dotd"))),
+                Row(Lang.T("Shielded"), s => Stat(s, "shd"), s => Pct(Stat(s, "shd"))),
+                Row(Lang.T("Melee"), s => Stat(s, "auto"), s => Pct(Stat(s, "auto"))),
+                Row(Lang.T("Pet Damage"), s => Stat(s, "pet"), s => Pct(Stat(s, "pet")))),
         };
 
         // What the gear gave of a number, as the game's pane tells it
@@ -6276,7 +6448,7 @@ namespace SurvivorInstaller
             Dictionary<object, object> stats = run.Table("stats");
             if (stats == null)
             {
-                Txt(g, "No stats kept with this run.", small, new Point(area.X, area.Y + 2), Muted, TextOnly);
+                Txt(g, Lang.T("No stats kept with this run."), small, new Point(area.X, area.Y + 2), Muted, TextOnly);
                 return area.Y + 20;
             }
             int columns = 3, gap = 14;
@@ -6302,7 +6474,7 @@ namespace SurvivorInstaller
                     int gearWidth = gear != null ? 64 : 0;
                     Txt(g, row.Text(stats), small, new Rectangle(x, y, width - 6 - gearWidth, 15), Color.White, TextOnly | TextFormatFlags.Right);
                     if (gear != null)
-                        Txt(g, "gear " + gear, small, new Rectangle(x + width - 6 - gearWidth, y, gearWidth, 15), Muted, TextOnly | TextFormatFlags.Right);
+                        Txt(g, Lang.T("gear ") + gear, small, new Rectangle(x + width - 6 - gearWidth, y, gearWidth, 15), Muted, TextOnly | TextFormatFlags.Right);
                     y += 16;
                 }
                 y += 8;
@@ -6316,20 +6488,20 @@ namespace SurvivorInstaller
         // and its range as they were, the racial marked. Returns where it ends.
         int DrawBuild(Graphics g, RunRecord run, Rectangle area, Font head, Font small)
         {
-            Txt(g, "Build", head, new Point(area.X, area.Y), Gold, TextOnly);
+            Txt(g, Lang.T("Build"), head, new Point(area.X, area.Y), Gold, TextOnly);
             double xp = run.Num("talentXp");
             if (xp > 0)
-                Txt(g, ((long)xp).ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " talent experience from this run",
+                Txt(g, ((long)xp).ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + Lang.T(" talent experience from this run"),
                     small, new Rectangle(area.X + 120, area.Y + 1, area.Width - 128, 15), Muted, TextOnly | TextFormatFlags.Right);
             int[] columns = { 0, 250, 310, 384 };
-            string[] names = { "Spell", "Rank", "Cooldown", "Range" };
+            string[] names = { Lang.T("Spell"), Lang.T("Rank"), Lang.T("Cooldown"), Lang.T("Range") };
             for (int c = 0; c < names.Length; c++)
                 Txt(g, names[c], small, new Rectangle(area.X + columns[c], area.Y + 18, 80, 14), Muted, TextOnly);
             List<Dictionary<object, object>> spells = RunRecord.List(run.Table("build"));
             int y = area.Y + 35;
             if (spells.Count == 0)
             {
-                Txt(g, "None kept.", small, new Point(area.X, y), Muted, TextOnly);
+                Txt(g, Lang.T("None kept."), small, new Point(area.X, y), Muted, TextOnly);
                 y += 16;
             }
             foreach (Dictionary<object, object> spell in spells)
@@ -6383,12 +6555,12 @@ namespace SurvivorInstaller
         // white over it with a shadow.
         int DrawSources(Graphics g, RunRecord run, Rectangle area, Font head, Font small)
         {
-            Txt(g, "Damage by spell", head, new Point(area.X, area.Y), Gold, TextOnly);
+            Txt(g, Lang.T("Damage by spell"), head, new Point(area.X, area.Y), Gold, TextOnly);
             List<Dictionary<object, object>> sources = RunRecord.List(run.Table("sources"));
             int y = area.Y + 20;
             if (sources.Count == 0)
             {
-                Txt(g, "None kept.", small, new Point(area.X, y + 2), Muted, TextOnly);
+                Txt(g, Lang.T("None kept."), small, new Point(area.X, y + 2), Muted, TextOnly);
                 return y + 18;
             }
             foreach (Dictionary<object, object> source in sources)
@@ -6420,12 +6592,12 @@ namespace SurvivorInstaller
 
         int DrawGear(Graphics g, RunRecord run, Rectangle area, Font head, Font small)
         {
-            Txt(g, "Jewelry", head, new Point(area.X, area.Y), Gold, TextOnly);
+            Txt(g, Lang.T("Jewelry"), head, new Point(area.X, area.Y), Gold, TextOnly);
             List<Dictionary<object, object>> gear = RunRecord.List(run.Table("gear"));
             int y = area.Y + 20;
             if (gear.Count == 0)
             {
-                Txt(g, "None worn.", small, new Point(area.X, y + 2), Muted, TextOnly);
+                Txt(g, Lang.T("None worn."), small, new Point(area.X, y + 2), Muted, TextOnly);
                 return y + 18;
             }
             foreach (Dictionary<object, object> piece in gear)
@@ -6439,7 +6611,7 @@ namespace SurvivorInstaller
                 {
                     RowBar(g, row, Color.FromArgb(128, 128, 140), 15, 38);
                     Txt(g, label, small, new Rectangle(area.X + 4, y + 2, 50, 14), Color.FromArgb(115, 115, 128), TextOnly);
-                    Txt(g, "empty", small, new Rectangle(area.X + 54, y + 2, area.Width - 62, 14), Color.FromArgb(102, 102, 115), TextOnly);
+                    Txt(g, Lang.T("empty"), small, new Rectangle(area.X + 54, y + 2, area.Width - 62, 14), Color.FromArgb(102, 102, 115), TextOnly);
                     y += 33;
                     continue;
                 }
@@ -6456,13 +6628,13 @@ namespace SurvivorInstaller
         int DrawEnd(Graphics g, RunRecord run, Rectangle area, Font head, Font small)
         {
             int y = area.Y;
-            Txt(g, "Bosses", head, new Point(area.X, y), Gold, TextOnly);
+            Txt(g, Lang.T("Bosses"), head, new Point(area.X, y), Gold, TextOnly);
             y += 20;
             Dictionary<object, object> tracker = run.Table("tracker");
             List<Dictionary<object, object>> bosses = RunRecord.List(RunRecord.Field(tracker, "bosses"));
             if (bosses.Count == 0)
             {
-                Txt(g, "None kept.", small, new Point(area.X, y), Muted, TextOnly);
+                Txt(g, Lang.T("None kept."), small, new Point(area.X, y), Muted, TextOnly);
                 y += 16;
             }
             foreach (Dictionary<object, object> boss in bosses)
@@ -6474,7 +6646,7 @@ namespace SurvivorInstaller
                 bool final = RunRecord.Field(boss, "final") is bool && (bool)RunRecord.Field(boss, "final");
                 Txt(g, RunRecord.Field(boss, "name") as string ?? "", small, new Rectangle(area.X, y, area.Width - 70, 14),
                     dead ? FellColor : due ? Muted : final ? Gold : TextColor, TextOnly | TextFormatFlags.EndEllipsis);
-                Txt(g, dead ? Clock(RunRecord.NumOf(boss, "fell")) : due ? "due " + Clock(RunRecord.NumOf(boss, "at")) : "alive", small,
+                Txt(g, dead ? Clock(RunRecord.NumOf(boss, "fell")) : due ? Lang.T("due ") + Clock(RunRecord.NumOf(boss, "at")) : Lang.T("alive"), small,
                     new Rectangle(area.Right - 70, y, 64, 14), dead ? FellColor : due ? Muted : Color.FromArgb(236, 104, 96), TextOnly | TextFormatFlags.Right);
                 y += 16;
             }
@@ -6486,7 +6658,7 @@ namespace SurvivorInstaller
             List<Dictionary<object, object>> party = RunRecord.List(run.Table("party"));
             if (death != null)
             {
-                Txt(g, "Death", head, new Point(area.X, y), Gold, TextOnly);
+                Txt(g, Lang.T("Death"), head, new Point(area.X, y), Gold, TextOnly);
                 y += 20;
                 Dictionary<string, double> byWho = new Dictionary<string, double>();
                 Dictionary<string, int> hits = new Dictionary<string, int>();
@@ -6506,7 +6678,7 @@ namespace SurvivorInstaller
                 }
                 if (killer != null)
                 {
-                    Txt(g, "Killed by " + killer, small, new Rectangle(area.X, y, area.Width - 6, 14),
+                    Txt(g, Lang.T("Killed by ") + killer, small, new Rectangle(area.X, y, area.Width - 6, 14),
                         Color.FromArgb(236, 104, 96), TextOnly | TextFormatFlags.EndEllipsis);
                     y += 16;
                 }
@@ -6523,7 +6695,7 @@ namespace SurvivorInstaller
             }
             if (party.Count > 0)
             {
-                Txt(g, "Party", head, new Point(area.X, y), Gold, TextOnly);
+                Txt(g, Lang.T("Party"), head, new Point(area.X, y), Gold, TextOnly);
                 y += 20;
                 foreach (Dictionary<object, object> member in party)
                 {
@@ -6538,7 +6710,7 @@ namespace SurvivorInstaller
             List<Dictionary<object, object>> crits = RunRecord.List(run.Table("crits"));
             if (crits.Count > 0)
             {
-                Txt(g, "Biggest hits", head, new Point(area.X, y), Gold, TextOnly);
+                Txt(g, Lang.T("Biggest hits"), head, new Point(area.X, y), Gold, TextOnly);
                 y += 20;
                 foreach (Dictionary<object, object> crit in crits)
                 {
@@ -6616,14 +6788,14 @@ namespace SurvivorInstaller
             tray.Icon = trayIcon ?? SystemIcons.Application;
             tray.Text = "Azeroth SurvivorUI Launcher";
             ContextMenuStrip menu = new ContextMenuStrip();
-            menu.Items.Add("Open", null, delegate { FromTray(); });
+            menu.Items.Add(Lang.T("Open"), null, delegate { FromTray(); });
             playItem.Click += delegate { Play(); };
             menu.Items.Add(playItem);
-            menu.Items.Add("Check for updates now", null, delegate
+            menu.Items.Add(Lang.T("Check for updates now"), null, delegate
             {
                 FromTray();
                 installWhenNewer = true;
-                Status("Asking GitHub for the latest release...");
+                Status(Lang.T("Asking GitHub for the latest release..."));
                 CheckNow();
             });
             installItem.Enabled = false;
@@ -6641,7 +6813,7 @@ namespace SurvivorInstaller
             closeItem.Click += delegate { closeBox.Checked = !closeBox.Checked; };
             menu.Items.Add(closeItem);
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Exit", null, delegate { exiting = true; Close(); });
+            menu.Items.Add(Lang.T("Exit"), null, delegate { exiting = true; Close(); });
             tray.ContextMenuStrip = menu;
             tray.MouseClick += delegate (object sender, MouseEventArgs e)
             {
@@ -6672,7 +6844,7 @@ namespace SurvivorInstaller
             {
                 toldOfTray = true;
                 tray.ShowBalloonTip(5000, "Azeroth SurvivorUI Launcher",
-                    "Still here, in the tray: a green arrow shows when an update is out. To quit it, right click this icon and choose Exit.", ToolTipIcon.Info);
+                    Lang.T("Still here, in the tray: a green arrow shows when an update is out. To quit it, right click this icon and choose Exit."), ToolTipIcon.Info);
             }
         }
 
@@ -6747,13 +6919,13 @@ namespace SurvivorInstaller
             string save = GameSave.SaveFolder();
             if (!GameSave.HasSave(save))
             {
-                Ask(this, "No save found in:\n\n" + save + "\n\nPlay the game once first.",
+                Ask(this, Lang.T("No save found in:\n\n") + save + Lang.T("\n\nPlay the game once first."),
                     "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (GameRunning())
             {
-                Ask(this, "Close the game first: it writes your save as you play and as it closes.",
+                Ask(this, Lang.T("Close the game first: it writes your save as you play and as it closes."),
                     "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -6765,13 +6937,13 @@ namespace SurvivorInstaller
                 string zip = FreeName(folder, "AzerothSurvivors-save-" + DateTime.Now.ToString("yyyy-MM-dd_HHmm"));
                 GameSave.Backup(save, GameSettingsFolder(), zip, SaveNote());
                 RememberBackup(zip);
-                Status("Save backed up: " + zip);
+                Status(Lang.T("Save backed up: ") + zip);
                 ShowBackups();
             }
             catch (Exception error)
             {
-                Status("Could not back up the save: " + error.Message);
-                Ask(this, "Could not back up the save into:\n" + folder + "\n\n" + error.Message, "Survivor UI",
+                Status(Lang.T("Could not back up the save: ") + error.Message);
+                Ask(this, Lang.T("Could not back up the save into:\n") + folder + "\n\n" + error.Message, "Survivor UI",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -6788,8 +6960,8 @@ namespace SurvivorInstaller
             {
                 using (OpenFileDialog dialog = new OpenFileDialog())
                 {
-                    dialog.Title = "Pick a save to put in the game";
-                    dialog.Filter = "Azeroth Survivors save (*.zip)|*.zip";
+                    dialog.Title = Lang.T("Pick a save to put in the game");
+                    dialog.Filter = Lang.T("Azeroth Survivors save (*.zip)|*.zip");
                     string folder = ChosenFolder();
                     dialog.InitialDirectory = Directory.Exists(folder) ? folder : GameSave.Desktop();
                     if (dialog.ShowDialog(this) != DialogResult.OK) return;
@@ -6800,27 +6972,27 @@ namespace SurvivorInstaller
             string problem = GameSave.Check(zip, out hasSettings);
             if (problem != null)
             {
-                Ask(this, "That zip is not a save made by the launcher:\n\n" + problem,
+                Ask(this, Lang.T("That zip is not a save made by the launcher:\n\n") + problem,
                     "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             if (GameRunning())
             {
-                Ask(this, "Close the game first: it writes your save as you play and as it closes, " +
-                    "and would write over the one put in.", "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Ask(this, Lang.T("Close the game first: it writes your save as you play and as it closes, ") +
+                    Lang.T("and would write over the one put in."), "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             string save = GameSave.SaveFolder();
             string game = GameSettingsFolder();
-            string ask = "Put this save in the game?\n\n" + zip +
-                "\n\nYour heroes, their gear, talents and unlocks become the ones in it. " +
-                "Your save as it is now is kept on the Desktop first.";
+            string ask = Lang.T("Put this save in the game?\n\n") + zip +
+                Lang.T("\n\nYour heroes, their gear, talents and unlocks become the ones in it. ") +
+                Lang.T("Your save as it is now is kept on the Desktop first.");
             bool withSettings = false;
             if (hasSettings && game != null)
             {
                 DialogResult choice = Ask(this, ask +
-                    "\n\nIt also carries the game's settings and the addons' (key bindings, chat windows, " +
-                    "layout, Run History). Take those too?\n\nYes: the save and the settings.\nNo: the save only.",
+                    Lang.T("\n\nIt also carries the game's settings and the addons' (key bindings, chat windows, ") +
+                    Lang.T("layout, Run History). Take those too?\n\nYes: the save and the settings.\nNo: the save only."),
                     "Survivor UI", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
                 if (choice == DialogResult.Cancel) return;
                 withSettings = choice == DialogResult.Yes;
@@ -6841,16 +7013,16 @@ namespace SurvivorInstaller
                     RememberBackup(kept);
                 }
                 GameSave.Restore(zip, save, game, withSettings);
-                Status("Save put in" + (withSettings ? ", with its settings" : "") + ". Start the game to play it.");
-                Ask(this, "The save is in the game" + (withSettings ? ", with its settings" : "") + "." +
-                    (kept != null ? "\n\nYour save from before is kept on the Desktop:\n" + kept : ""),
+                Status(Lang.T("Save put in") + (withSettings ? Lang.T(", with its settings") : "") + Lang.T(". Start the game to play it."));
+                Ask(this, Lang.T("The save is in the game") + (withSettings ? Lang.T(", with its settings") : "") + "." +
+                    (kept != null ? Lang.T("\n\nYour save from before is kept on the Desktop:\n") + kept : ""),
                     "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception error)
             {
-                Status("Could not put the save in: " + error.Message);
-                Ask(this, "Could not put the save in:\n\n" + error.Message +
-                    (kept != null && File.Exists(kept) ? "\n\nYour save from before is on the Desktop:\n" + kept : ""),
+                Status(Lang.T("Could not put the save in: ") + error.Message);
+                Ask(this, Lang.T("Could not put the save in:\n\n") + error.Message +
+                    (kept != null && File.Exists(kept) ? Lang.T("\n\nYour save from before is on the Desktop:\n") + kept : ""),
                     "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -6873,18 +7045,18 @@ namespace SurvivorInstaller
             if (exe == null)
             {
                 FromTray();
-                Status("The game is not found by that AddOns folder: click \"Find game...\".");
+                Status(Lang.T("The game is not found by that AddOns folder: click \"Find game...\"."));
                 return;
             }
             if (GameMissing())
             {
                 FromTray();
-                Status("The game's data is missing: click \"Get the game\".");
+                Status(Lang.T("The game's data is missing: click \"Get the game\"."));
                 return;
             }
             if (GameRunning())
             {
-                Status("The game is already open.");
+                Status(Lang.T("The game is already open."));
                 return;
             }
             try
@@ -6910,14 +7082,14 @@ namespace SurvivorInstaller
                 }
                 else if (started == null && error != 0)
                     throw new System.ComponentModel.Win32Exception(error);
-                Status(retry != null ? "The game closed as it started: trying again with DirectX 12..." : "Starting the game...");
+                Status(retry != null ? Lang.T("The game closed as it started: trying again with DirectX 12...") : Lang.T("Starting the game..."));
                 if (Visible) ToTray();
                 WatchStart(started, exe, at, graphics, retry != null);
             }
             catch (Exception error)
             {
                 FromTray();
-                Status("Could not start the game: " + error.Message);
+                Status(Lang.T("Could not start the game: ") + error.Message);
             }
         }
 
@@ -7048,7 +7220,7 @@ namespace SurvivorInstaller
             SetSetting("graphics", graphics);
             int index = Array.IndexOf(GraphicsKeys, graphics);
             if (index >= 0) graphicsBox.SelectedIndex = index;
-            Status("The game runs with " + GraphicsName(graphics) + " on this PC: the launcher keeps it (Play tab, Graphics).");
+            Status(Lang.T("The game runs with ") + GraphicsName(graphics) + Lang.T(" on this PC: the launcher keeps it (Play tab, Graphics)."));
         }
 
         static string GraphicsName(string key)
@@ -7094,7 +7266,7 @@ namespace SurvivorInstaller
                     }
             }
             catch { }
-            return "(the report says no more)";
+            return Lang.T("(the report says no more)");
         }
 
         void StartFailed(int code, string report, string graphics, bool retried)
@@ -7110,47 +7282,47 @@ namespace SurvivorInstaller
             }
             FromTray();
             bool admin = graphics == "admin";
-            string tried = admin ? ", run as an administrator" :
-                retried ? ", with the game's own graphics and with DirectX 12 too" :
-                graphics != "auto" ? ", with " + GraphicsName(graphics) : "";
+            string tried = admin ? Lang.T(", run as an administrator") :
+                retried ? Lang.T(", with the game's own graphics and with DirectX 12 too") :
+                graphics != "auto" ? Lang.T(", with ") + GraphicsName(graphics) : "";
             string advice = admin
-                ? "Untick \"Run this program as an administrator\" in AzerothSurvivors.exe's Properties (Compatibility), then click Play again: " +
-                    "the launcher then tries other graphics by itself and keeps the game's log."
-                : "Update your graphics driver, or pick other graphics in the Play tab (Graphics), then click Play again.";
+                ? Lang.T("Untick \"Run this program as an administrator\" in AzerothSurvivors.exe's Properties (Compatibility), then click Play again: ") +
+                    Lang.T("the launcher then tries other graphics by itself and keeps the game's log.")
+                : Lang.T("Update your graphics driver, or pick other graphics in the Play tab (Graphics), then click Play again.");
             string tail = admin ? null : LogTail(6);
             // Not found, not the right kind, an entry point missing: a DLL the
             // exe needs as it loads.
             if (missingDll)
             {
-                Status("The game could not start: Windows lacks Microsoft's Visual C++ runtime.");
-                if (Ask(this, "Azeroth Survivors closed as it started: Windows could not load a part the game needs, " +
-                    "Microsoft's Visual C++ runtime (VCRUNTIME140.dll).\n\nInstall it from Microsoft (vc_redist.x64.exe, a minute), " +
-                    "then click Play again.\n\nOpen Microsoft's download now?",
+                Status(Lang.T("The game could not start: Windows lacks Microsoft's Visual C++ runtime."));
+                if (Ask(this, Lang.T("Azeroth Survivors closed as it started: Windows could not load a part the game needs, ") +
+                    Lang.T("Microsoft's Visual C++ runtime (VCRUNTIME140.dll).\n\nInstall it from Microsoft (vc_redist.x64.exe, a minute), ") +
+                    Lang.T("then click Play again.\n\nOpen Microsoft's download now?"),
                     "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                     try { Process.Start(VcRuntime); } catch { }
                 return;
             }
             if (report != null)
             {
-                Status("The game closed as it started, and left a crash report.");
-                if (Ask(this, "Azeroth Survivors closed as it started" + tried + ", and left a crash report:\n\n" + CrashWhy(report) +
-                    "\n\n" + advice + " If it still closes, share the report in the game's Discord (#help), so it can be fixed.\n\nShow the report in its folder now?",
+                Status(Lang.T("The game closed as it started, and left a crash report."));
+                if (Ask(this, Lang.T("Azeroth Survivors closed as it started") + tried + Lang.T(", and left a crash report:\n\n") + CrashWhy(report) +
+                    "\n\n" + advice + Lang.T(" If it still closes, share the report in the game's Discord (#help), so it can be fixed.\n\nShow the report in its folder now?"),
                     "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.Yes)
                     try { Process.Start("explorer.exe", "/select,\"" + report + "\""); } catch { }
                 return;
             }
-            Status("The game closed as it started (code 0x" + status.ToString("X8") + ").");
+            Status(Lang.T("The game closed as it started (code 0x") + status.ToString("X8") + ").");
             if (tail == null)
             {
-                Ask(this, "Azeroth Survivors closed as it started" + tried + " (code 0x" + status.ToString("X8") + "), without a crash report.\n\n" +
-                    advice + " If it still closes, ask in the game's Discord (#help) with this code.",
+                Ask(this, Lang.T("Azeroth Survivors closed as it started") + tried + Lang.T(" (code 0x") + status.ToString("X8") + Lang.T("), without a crash report.\n\n") +
+                    advice + Lang.T(" If it still closes, ask in the game's Discord (#help) with this code."),
                     "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             // Its log's last lines: how far it got.
-            if (Ask(this, "Azeroth Survivors closed as it started" + tried + " (code 0x" + status.ToString("X8") + "), without a crash report. " +
-                "Its log's last lines:\n\n" + tail + "\n\n" + advice + " If it still closes, share the game's log (game-log.txt) in the game's Discord (#help).\n\n" +
-                "Show the log in its folder now?",
+            if (Ask(this, Lang.T("Azeroth Survivors closed as it started") + tried + Lang.T(" (code 0x") + status.ToString("X8") + Lang.T("), without a crash report. ") +
+                Lang.T("Its log's last lines:\n\n") + tail + "\n\n" + advice + Lang.T(" If it still closes, share the game's log (game-log.txt) in the game's Discord (#help).\n\n") +
+                Lang.T("Show the log in its folder now?"),
                 "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.Yes)
                 try { Process.Start("explorer.exe", "/select,\"" + GameLog + "\""); } catch { }
         }
@@ -7170,9 +7342,9 @@ namespace SurvivorInstaller
         {
             if (pre == null || pre.ZipUrl == null) return;
             DialogResult go = Ask(this,
-                "Beta builds come before a release, to be tested: they may have more bugs than usual, and they update more often.\n\n" +
-                "Install " + pre.Tag + "? From then on the launcher follows the betas; the release's button takes you back.",
-                "Survivor UI beta", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                Lang.T("Beta builds come before a release, to be tested: they may have more bugs than usual, and they update more often.\n\n") +
+                Lang.T("Install ") + pre.Tag + Lang.T("? From then on the launcher follows the betas; the release's button takes you back."),
+                Lang.T("Survivor UI beta"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (go == DialogResult.Yes) Install(pre);
         }
 
@@ -7184,12 +7356,12 @@ namespace SurvivorInstaller
         {
             if (latest == null)
             {
-                Status("The notes come with the latest release: wait for GitHub's answer.");
+                Status(Lang.T("The notes come with the latest release: wait for GitHub's answer."));
                 return;
             }
             if (notesWindow == null || notesWindow.IsDisposed)
                 notesWindow = new NotesForm(appIcon);
-            notesWindow.ShowNotes("What's new in Survivor UI " + latest.Tag + (latest.Beta ? " (beta)" : ""), latest.Notes);
+            notesWindow.ShowNotes(Lang.T("What's new in Survivor UI ") + latest.Tag + (latest.Beta ? Lang.T(" (beta)") : ""), latest.Notes);
             if (!notesWindow.Visible) notesWindow.Show(this);
             notesWindow.Activate();
         }
@@ -7247,7 +7419,7 @@ namespace SurvivorInstaller
                     taskbar.HrInit();
                 }
                 bool on = updateWaiting && overlayIcon != null;
-                taskbar.SetOverlayIcon(Handle, on ? overlayIcon.Handle : IntPtr.Zero, on ? "Update available" : null);
+                taskbar.SetOverlayIcon(Handle, on ? overlayIcon.Handle : IntPtr.Zero, on ? Lang.T("Update available") : null);
             }
             catch
             {
@@ -7270,27 +7442,27 @@ namespace SurvivorInstaller
             updateWaiting = known && installed != null && Newer(latest.Tag, installed) && AddonOn(folderBox.Text, "SurvivorUI");
             bool current = known && installed != null && !updateWaiting;
             tray.Icon = updateWaiting ? (trayUpdateIcon ?? tray.Icon) : (trayIcon ?? tray.Icon);
-            tray.Text = updateWaiting ? Trim("Survivor UI " + latest.Tag + " is out: click to update", 63)
-                : current ? "Azeroth SurvivorUI Launcher: up to date" : "Azeroth SurvivorUI Launcher";
+            tray.Text = updateWaiting ? Trim("Survivor UI " + latest.Tag + Lang.T(" is out: click to update"), 63)
+                : current ? Lang.T("Azeroth SurvivorUI Launcher: up to date") : "Azeroth SurvivorUI Launcher";
             installItem.Enabled = updateWaiting && !installing;
             // Play, or Get the game while there is none: by the AddOns folder,
             // nor in its usual place.
             bool missing = GameMissing();
             bool behind = !missing && GameBehind();
             bool playable = !installing && !gettingGame && !addonBusy && GameExePath() != null;
-            playButton.Text = missing ? "\u2193  Get the game" : behind ? "\u2191  Update game" : "\u25B6  Play";
+            playButton.Text = missing ? Lang.T("\u2193  Get the game") : behind ? Lang.T("\u2191  Update game") : Lang.T("\u25B6  Play");
             playButton.Enabled = missing || behind ? !installing && !gettingGame : playable;
             tips.SetToolTip(playButton, missing
-                ? "Download Azeroth Survivors, Aethus' game, from his own servers (wow.aethus.pl)."
-                : behind ? "Azeroth Survivors " + game.Latest + " is out: download it from wow.aethus.pl, checked. (The game would also update itself as it starts.)"
-                : "Start the game; the launcher steps into the tray.");
+                ? Lang.T("Download Azeroth Survivors, Aethus' game, from his own servers (wow.aethus.pl).")
+                : behind ? "Azeroth Survivors " + game.Latest + Lang.T(" is out: download it from wow.aethus.pl, checked. (The game would also update itself as it starts.)")
+                : Lang.T("Start the game; the launcher steps into the tray."));
             // The full package downloading, with another source there: the
             // button moves it to the next one.
             if (gettingGame && packageSwitchable)
             {
-                playButton.Text = "⇄  Try another source";
+                playButton.Text = Lang.T("⇄  Try another source");
                 playButton.Enabled = true;
-                tips.SetToolTip(playButton, "Download the game's package from the next source instead (Aethus' site or a mirror).");
+                tips.SetToolTip(playButton, Lang.T("Download the game's package from the next source instead (Aethus' site or a mirror)."));
             }
             playItem.Enabled = playable && !missing;
             // Under its words, small: the game's version; an update out, from
@@ -7298,9 +7470,9 @@ namespace SurvivorInstaller
             string note = "";
             if (!missing && game != null && game.Exe == GameExePath() && game.Version != null)
             {
-                if (!behind) note = "(ver. " + game.Version + ")";
-                else if (game.Latest != game.Version) note = "(ver. " + game.Version + " → " + game.Latest + ")";
-                else note = "(ver. " + game.Version + ", new data)";
+                if (!behind) note = Lang.T("(ver. ") + game.Version + ")";
+                else if (game.Latest != game.Version) note = Lang.T("(ver. ") + game.Version + " → " + game.Latest + ")";
+                else note = Lang.T("(ver. ") + game.Version + Lang.T(", new data)");
             }
             if (note != playNote)
             {
@@ -7312,32 +7484,32 @@ namespace SurvivorInstaller
             if (behind && toldOfGame != game.Latest)
             {
                 toldOfGame = game.Latest;
-                tray.ShowBalloonTip(6000, "Azeroth Survivors " + game.Latest + " is out",
-                    "Click Update game in the launcher, or play: the game updates itself as it starts.", ToolTipIcon.Info);
+                tray.ShowBalloonTip(6000, "Azeroth Survivors " + game.Latest + Lang.T(" is out"),
+                    Lang.T("Click Update game in the launcher, or play: the game updates itself as it starts."), ToolTipIcon.Info);
             }
-            installItem.Text = updateWaiting ? "Install " + latest.Tag : current ? "Up to date (" + latest.Tag + ")" : "Install the update";
+            installItem.Text = updateWaiting ? Lang.T("Install ") + latest.Tag : current ? Lang.T("Up to date (") + latest.Tag + ")" : Lang.T("Install the update");
             // Survivor UI's version under the launcher's, and the newer one out.
-            addonLabel.Text = installed == null ? "Survivor UI not installed"
-                : "Survivor UI ver. " + installed + (updateWaiting ? " → " + latest.Tag.TrimStart('v', 'V') : "");
+            addonLabel.Text = installed == null ? Lang.T("Survivor UI not installed")
+                : Lang.T("Survivor UI ver. ") + installed + (updateWaiting ? " → " + latest.Tag.TrimStart('v', 'V') : "");
             addonLabel.ForeColor = updateWaiting ? Color.FromArgb(110, 225, 125) : installed == null ? Muted : VersionYellow;
-            tips.SetToolTip(addonLabel, stable != null ? "Latest release on GitHub: " + stable.Tag : "GitHub not asked yet.");
+            tips.SetToolTip(addonLabel, stable != null ? Lang.T("Latest release on GitHub: ") + stable.Tag : Lang.T("GitHub not asked yet."));
 
             // The release's button: its version, and what installing it does.
             bool stableKnown = stable != null && stable.ZipUrl != null;
             bool onStable = stableKnown && installed != null && Same(stable.Tag, installed);
-            installButton.Text = !stableKnown ? "Install"
-                : installed == null ? "Install " + stable.Tag
-                : Newer(stable.Tag, installed) ? "Update to " + stable.Tag
-                : IsBeta(installed) ? "Back to stable " + stable.Tag
-                : "Install " + stable.Tag;
+            installButton.Text = !stableKnown ? Lang.T("Install")
+                : installed == null ? Lang.T("Install ") + stable.Tag
+                : Newer(stable.Tag, installed) ? Lang.T("Update to ") + stable.Tag
+                : IsBeta(installed) ? Lang.T("Back to stable ") + stable.Tag
+                : Lang.T("Install ") + stable.Tag;
             installButton.Visible = !onStable;
             Active(installButton, stableKnown && !installing, StableText);
-            upToDate.Text = onStable ? "\u2713  Up to date  \u00B7  " + stable.Tag : "";
+            upToDate.Text = onStable ? Lang.T("\u2713  Up to date  \u00B7  ") + stable.Tag : "";
             upToDate.Visible = onStable;
 
             // The beta's button: its version, or none newer than the release.
             bool onBeta = betaOut && installed != null && Same(pre.Tag, installed);
-            betaButton.Text = !betaOut ? "No beta right now" : onBeta ? "\u2713  Beta " + pre.Tag + " installed" : "Install beta " + pre.Tag;
+            betaButton.Text = !betaOut ? Lang.T("No beta right now") : onBeta ? Lang.T("\u2713  Beta ") + pre.Tag + Lang.T(" installed") : Lang.T("Install beta ") + pre.Tag;
             Active(betaButton, betaOut && !onBeta && !installing, BetaColor);
             if (currentTab == AddonsTab) FillAddons();
             ShowOverlay();
@@ -7350,13 +7522,13 @@ namespace SurvivorInstaller
                     Install(latest);
                     return;
                 }
-                if (current) Status("Survivor UI " + latest.Tag + " is the latest: up to date.");
+                if (current) Status("Survivor UI " + latest.Tag + Lang.T(" is the latest: up to date."));
             }
             if (updateWaiting && toldOf != latest.Tag && !AutoOn(OurUI))
             {
                 toldOf = latest.Tag;
-                tray.ShowBalloonTip(6000, "Survivor UI " + latest.Tag + " is out",
-                    (latest.Beta ? "A beta build: more bugs than usual. " : "") + "Click to see what's new and update.", ToolTipIcon.Info);
+                tray.ShowBalloonTip(6000, "Survivor UI " + latest.Tag + Lang.T(" is out"),
+                    (latest.Beta ? Lang.T("A beta build: more bugs than usual. ") : "") + Lang.T("Click to see what's new and update."), ToolTipIcon.Info);
             }
         }
 
@@ -7551,11 +7723,11 @@ namespace SurvivorInstaller
             return false;
         }
 
-        const string FirstStartNote =
-            "Azeroth Survivors 0.112.5 and newer keep your addons and settings in a new folder,\n" +
-            "and the game moves them there by itself the first time it starts.\n\n" +
-            "Click Play once (you can close the game at the menu), then come back:\n" +
-            "the launcher will use the new folder from then on.";
+        static readonly string FirstStartNote =
+            Lang.T("Azeroth Survivors 0.112.5 and newer keep your addons and settings in a new folder,\n") +
+            Lang.T("and the game moves them there by itself the first time it starts.\n\n") +
+            Lang.T("Click Play once (you can close the game at the menu), then come back:\n") +
+            Lang.T("the launcher will use the new folder from then on.");
 
         // The game wherever it was found before (by its exe, or by the AddOns
         // folder saved), next to the installer, or in its usual place; its
@@ -7782,7 +7954,7 @@ namespace SurvivorInstaller
         static string SavedLine(string folder)
         {
             DateTime last = LastSaved(folder);
-            return last == DateTime.MinValue ? "(no settings saved there yet)" : "(settings last saved " + last.ToString("yyyy-MM-dd HH:mm") + ")";
+            return last == DateTime.MinValue ? Lang.T("(no settings saved there yet)") : Lang.T("(settings last saved ") + last.ToString("yyyy-MM-dd HH:mm") + ")";
         }
 
         class FolderPlan
@@ -7909,13 +8081,13 @@ namespace SurvivorInstaller
         }
 
         // Why the button is there, in its tooltip.
-        const string FolderWhy =
-            "The game keeps your AddOns, addon settings, key bindings and options in a folder\n" +
-            "its exe names. If Aethus' build changes that folder (as the game's 0.112 did),\n" +
-            "the game starts from an empty one and your things look gone.\n\n" +
-            "This checks which folder the game uses now. If your data is somewhere else,\n" +
-            "the launcher makes a backup and moves it to the new place. Nothing is deleted.\n" +
-            "Close the game first.";
+        static readonly string FolderWhy =
+            Lang.T("The game keeps your AddOns, addon settings, key bindings and options in a folder\n") +
+            Lang.T("its exe names. If Aethus' build changes that folder (as the game's 0.112 did),\n") +
+            Lang.T("the game starts from an empty one and your things look gone.\n\n") +
+            Lang.T("This checks which folder the game uses now. If your data is somewhere else,\n") +
+            Lang.T("the launcher makes a backup and moves it to the new place. Nothing is deleted.\n") +
+            Lang.T("Close the game first.");
 
         // A move worth telling of: the other folder holds an addon, or an
         // addon's saved settings, that the game's folder lacks. (The game
@@ -7964,7 +8136,7 @@ namespace SurvivorInstaller
                 foldersButton.ForeColor = FolderText;
                 foldersButton.FlatAppearance.BorderColor = FolderEdge;
                 folderTip.SetToolTip(foldersButton, FirstStartNote);
-                if (tell) Status("Click Play once: the game moves your addons and settings to its new folder by itself.");
+                if (tell) Status(Lang.T("Click Play once: the game moves your addons and settings to its new folder by itself."));
                 return;
             }
             FolderPlan plan = null;
@@ -7977,10 +8149,10 @@ namespace SurvivorInstaller
             foldersButton.FlatAppearance.MouseOverBackColor = waiting ? Color.FromArgb(40, 140, 66) : Color.FromArgb(32, 66, 90);
             foldersButton.FlatAppearance.MouseDownBackColor = foldersButton.FlatAppearance.MouseOverBackColor;
             folderTip.SetToolTip(foldersButton, waiting
-                ? "Your data is in:\n" + plan.From + "\n\nThe game now uses:\n" + plan.Game + "\n\nClick to move it there.\n\n" + FolderWhy
-                : (plan != null ? "The game uses:\n" + plan.Game + "\n\n" : "") + FolderWhy);
+                ? Lang.T("Your data is in:\n") + plan.From + Lang.T("\n\nThe game now uses:\n") + plan.Game + Lang.T("\n\nClick to move it there.\n\n") + FolderWhy
+                : (plan != null ? Lang.T("The game uses:\n") + plan.Game + "\n\n" : "") + FolderWhy);
             if (waiting && tell)
-                Status("Your addons and settings are in an older folder of the game: click the green button.");
+                Status(Lang.T("Your addons and settings are in an older folder of the game: click the green button."));
         }
 
         // The link: the game's folder said, the AddOns folder set to it, and
@@ -7989,7 +8161,7 @@ namespace SurvivorInstaller
         {
             if (GameExePath() == null)
             {
-                Status("Find the game first: \"Find game...\".");
+                Status(Lang.T("Find the game first: \"Find game...\"."));
                 return;
             }
             if (GameWillBringAlong(GameExePath()))
@@ -8008,23 +8180,23 @@ namespace SurvivorInstaller
                     try { File.WriteAllText(ConfigPath, addons); } catch { }
                 }
                 NoteFolders(false);
-                Ask(this, "The game keeps its AddOns, saved settings and options in:\n\n" + plan.Game +
-                    "\n" + SavedLine(plan.Game) + "\n\nNothing of yours is in another folder of the game: nothing to move.",
+                Ask(this, Lang.T("The game keeps its AddOns, saved settings and options in:\n\n") + plan.Game +
+                    "\n" + SavedLine(plan.Game) + Lang.T("\n\nNothing of yours is in another folder of the game: nothing to move."),
                     "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
             DialogResult go = Ask(this,
-                "The game keeps its AddOns, saved settings and options in:\n\n" + plan.Game + "\n" + SavedLine(plan.Game) +
-                "\n\nYours are in another folder of the game:\n\n" + plan.From + "\n" + SavedLine(plan.From) +
-                "\n\nMove them to the game's folder?\n" + string.Join(", ", plan.Items.ToArray()) +
-                "\n\nNothing is deleted: what the game has in its folder under those names is kept there in before-move-" + stamp +
-                ", and the originals in moved-" + stamp + ", where they are now.",
+                Lang.T("The game keeps its AddOns, saved settings and options in:\n\n") + plan.Game + "\n" + SavedLine(plan.Game) +
+                Lang.T("\n\nYours are in another folder of the game:\n\n") + plan.From + "\n" + SavedLine(plan.From) +
+                Lang.T("\n\nMove them to the game's folder?\n") + string.Join(", ", plan.Items.ToArray()) +
+                Lang.T("\n\nNothing is deleted: what the game has in its folder under those names is kept there in before-move-") + stamp +
+                Lang.T(", and the originals in moved-") + stamp + Lang.T(", where they are now."),
                 "Survivor UI", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (go != DialogResult.Yes) return;
             if (GameRunning())
             {
-                Ask(this, "Close the game first: it writes its settings as it closes.",
+                Ask(this, Lang.T("Close the game first: it writes its settings as it closes."),
                     "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -8034,12 +8206,12 @@ namespace SurvivorInstaller
                 MoveState(plan.From, plan.Game, plan.Items, stamp);
                 folderBox.Text = addons;
                 try { File.WriteAllText(ConfigPath, addons); } catch { }
-                Status("Moved to the game's folder: " + string.Join(", ", plan.Items.ToArray()) + ".");
+                Status(Lang.T("Moved to the game's folder: ") + string.Join(", ", plan.Items.ToArray()) + ".");
             }
             catch (Exception error)
             {
-                Status("Could not move everything: " + error.Message);
-                Ask(this, "Could not move everything: " + error.Message + "\n\nThe originals are still in:\n" + plan.From,
+                Status(Lang.T("Could not move everything: ") + error.Message);
+                Ask(this, Lang.T("Could not move everything: ") + error.Message + Lang.T("\n\nThe originals are still in:\n") + plan.From,
                     "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             finally
@@ -8054,8 +8226,8 @@ namespace SurvivorInstaller
         {
             using (OpenFileDialog dialog = new OpenFileDialog())
             {
-                dialog.Title = "Pick the game: " + GameExe;
-                dialog.Filter = "Azeroth Survivors|" + GameExe + "|Programs|*.exe";
+                dialog.Title = Lang.T("Pick the game: ") + GameExe;
+                dialog.Filter = "Azeroth Survivors|" + GameExe + Lang.T("|Programs|*.exe");
                 if (Directory.Exists(CommonGameFolder)) dialog.InitialDirectory = CommonGameFolder;
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 // The game belongs in its benilla-config folder; anywhere else, ask first.
@@ -8063,16 +8235,16 @@ namespace SurvivorInstaller
                 if (!string.Equals(picked, "benilla-config", StringComparison.OrdinalIgnoreCase))
                 {
                     DialogResult go = Ask(this,
-                        "It is recommended that " + GameExe + " be inside the game's benilla-config folder, usually:\n\n" +
-                        CommonGameFolder + "\n\nThe addons would go to:\n" + AddonsFor(dialog.FileName) +
-                        "\n\nUse this place anyway?",
+                        Lang.T("It is recommended that ") + GameExe + Lang.T(" be inside the game's benilla-config folder, usually:\n\n") +
+                        CommonGameFolder + Lang.T("\n\nThe addons would go to:\n") + AddonsFor(dialog.FileName) +
+                        Lang.T("\n\nUse this place anyway?"),
                         "Survivor UI", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                     if (go != DialogResult.Yes) return;
                 }
                 RememberExe(dialog.FileName);
                 folderBox.Text = AddonsFor(dialog.FileName);
                 try { File.WriteAllText(ConfigPath, folderBox.Text); } catch { }
-                Status("AddOns folder set.");
+                Status(Lang.T("AddOns folder set."));
                 NoteFolders(true);
                 TakeWhatIsDue();
             }
@@ -8126,7 +8298,7 @@ namespace SurvivorInstaller
                         if (isPre) ownNewestPre = release; else ownNewest = release;
                     }
                 }
-                if (stable == null && pre == null) throw new Exception("GitHub lists no release");
+                if (stable == null && pre == null) throw new Exception(Lang.T("GitHub lists no release"));
                 BeginInvoke(new Action<Release, Release, Release, Release>(ShowReleases), stable, pre, ownNewest, ownNewestPre);
             }
             catch (Exception error)
@@ -8143,10 +8315,10 @@ namespace SurvivorInstaller
                     // Known already: kept, and asked again in half an hour.
                     if (latest != null)
                     {
-                        Status("Could not reach GitHub just now; it will ask again later.");
+                        Status(Lang.T("Could not reach GitHub just now; it will ask again later."));
                         return;
                     }
-                    notesBox.Text = "Could not reach GitHub: " + error.Message + "\r\n\r\nCheck your internet connection; it will ask again in half an hour.";
+                    notesBox.Text = Lang.T("Could not reach GitHub: ") + error.Message + Lang.T("\r\n\r\nCheck your internet connection; it will ask again in half an hour.");
                 }));
             }
         }
@@ -8194,7 +8366,7 @@ namespace SurvivorInstaller
             if (latest != null)
             {
                 ShowNotes();
-                if (latest.ZipUrl == null) Status("The latest release has no zip to install.");
+                if (latest.ZipUrl == null) Status(Lang.T("The latest release has no zip to install."));
             }
             Release newestInstaller = null;
             // The newest release (and, on the betas, beta) that carries one.
@@ -8210,9 +8382,9 @@ namespace SurvivorInstaller
             ShowSelfUpdate(newestInstaller);
             // Asked by hand: the answer said, for the launcher and the addons.
             if (byHand && selfRelease == null && !selfUpdating)
-                Status("The launcher " + Short(OwnVersion) + " is up to date; " +
-                    (InstalledVersion(folderBox.Text) == null ? "Survivor UI is not in the game's AddOns folder yet."
-                    : updateWaiting ? "Survivor UI " + latest.Tag + " is out." : "so is Survivor UI."));
+                Status(Lang.T("The launcher ") + Short(OwnVersion) + Lang.T(" is up to date; ") +
+                    (InstalledVersion(folderBox.Text) == null ? Lang.T("Survivor UI is not in the game's AddOns folder yet.")
+                    : updateWaiting ? "Survivor UI " + latest.Tag + Lang.T(" is out.") : Lang.T("so is Survivor UI.")));
             TakeWhatIsDue();
         }
 
@@ -8267,26 +8439,26 @@ namespace SurvivorInstaller
         {
             Release pending = selfUpdating ? updatingTo : selfRelease;
             arrowMark.Visible = pending != null;
-            versionLabel.Text = pending != null ? "Launcher ver. " + Short(OwnVersion) + " \u2192 " + Short(pending.InstallerVersion)
-                : "Launcher " + Short(OwnVersion);
+            versionLabel.Text = pending != null ? Lang.T("Launcher ver. ") + Short(OwnVersion) + " \u2192 " + Short(pending.InstallerVersion)
+                : Lang.T("Launcher ") + Short(OwnVersion);
             versionLabel.ForeColor = pending != null ? Color.FromArgb(110, 225, 125) : VersionYellow;
             if (pending != null)
             {
-                selfButton.Text = selfUpdating ? "Updating..." : "Update to " + Short(pending.InstallerVersion);
+                selfButton.Text = selfUpdating ? Lang.T("Updating...") : Lang.T("Update to ") + Short(pending.InstallerVersion);
                 selfButton.Enabled = !selfUpdating;
                 selfButton.ForeColor = Color.White;
                 selfButton.FlatAppearance.BorderColor = Color.FromArgb(150, 240, 160);
                 if (selfUpdating) selfButton.BackColor = LauncherDim;
-                tips.SetToolTip(selfButton, "Launcher " + Short(pending.InstallerVersion) + " is out: click to update it. It starts again by itself.");
+                tips.SetToolTip(selfButton, Lang.T("Launcher ") + Short(pending.InstallerVersion) + Lang.T(" is out: click to update it. It starts again by itself."));
             }
             else
             {
-                selfButton.Text = checkingByHand ? "Checking..." : "Check for updates";
+                selfButton.Text = checkingByHand ? Lang.T("Checking...") : Lang.T("Check for updates");
                 selfButton.Enabled = !checkingByHand;
                 selfButton.ForeColor = Gold;
                 selfButton.BackColor = StoneFill;
                 selfButton.FlatAppearance.BorderColor = RedEdge;
-                tips.SetToolTip(selfButton, "Asks GitHub now for a new launcher and a new Survivor UI.");
+                tips.SetToolTip(selfButton, Lang.T("Asks GitHub now for a new launcher and a new Survivor UI."));
             }
         }
 
@@ -8297,7 +8469,7 @@ namespace SurvivorInstaller
             bool available = selfRelease != null;
             selfItem.Visible = available;
             selfItem.Enabled = available && !selfUpdating;
-            if (available) selfItem.Text = "Update the launcher to " + Short(selfRelease.InstallerVersion);
+            if (available) selfItem.Text = Lang.T("Update the launcher to ") + Short(selfRelease.InstallerVersion);
             ShowOwnVersion();
             if (!available) return;
             if (selfBox.Checked)
@@ -8309,8 +8481,8 @@ namespace SurvivorInstaller
             if (toldOfSelf != version)
             {
                 toldOfSelf = version;
-                tray.ShowBalloonTip(6000, "Azeroth SurvivorUI Launcher " + Short(selfRelease.InstallerVersion) + " is out",
-                    "Click \"Update to " + Short(selfRelease.InstallerVersion) + "\" at the top of the window, or in the tray's menu.", ToolTipIcon.Info);
+                tray.ShowBalloonTip(6000, "Azeroth SurvivorUI Launcher " + Short(selfRelease.InstallerVersion) + Lang.T(" is out"),
+                    Lang.T("Click \"Update to ") + Short(selfRelease.InstallerVersion) + Lang.T("\" at the top of the window, or in the tray's menu."), ToolTipIcon.Info);
             }
         }
 
@@ -8320,7 +8492,7 @@ namespace SurvivorInstaller
             // Not in the middle of installing the addons: after it.
             if (installing || addonBusy)
             {
-                Status("The launcher updates itself once the addons are installed.");
+                Status(Lang.T("The launcher updates itself once the addons are installed."));
                 return;
             }
             selfUpdating = true;
@@ -8329,7 +8501,7 @@ namespace SurvivorInstaller
             updatingTo = release;
             selfRelease = null;
             ShowOwnVersion();
-            Status("Downloading the launcher " + Short(release.InstallerVersion) + "...");
+            Status(Lang.T("Downloading the launcher ") + Short(release.InstallerVersion) + "...");
             new Thread(delegate () { DoUpdateSelf(release); }) { IsBackground = true }.Start();
         }
 
@@ -8354,12 +8526,12 @@ namespace SurvivorInstaller
                 using (ZipArchive archive = ZipFile.OpenRead(zip))
                 {
                     ZipArchiveEntry entry = archive.GetEntry("SurvivorInstaller.exe");
-                    if (entry == null) throw new Exception("the zip holds no SurvivorInstaller.exe");
+                    if (entry == null) throw new Exception(Lang.T("the zip holds no SurvivorInstaller.exe"));
                     entry.ExtractToFile(fresh, true);
                 }
                 // The one downloaded is the one announced, and newer than this.
                 Version got = AssemblyName.GetAssemblyName(fresh).Version;
-                if (got <= OwnVersion) throw new Exception("the download is not newer (" + got + ")");
+                if (got <= OwnVersion) throw new Exception(Lang.T("the download is not newer (") + got + ")");
                 // A running exe can be renamed, not overwritten: this one aside,
                 // the new one in its place.
                 if (File.Exists(OldPath)) File.Delete(OldPath);
@@ -8386,7 +8558,7 @@ namespace SurvivorInstaller
                     selfRelease = release;
                     selfItem.Enabled = true;
                     ShowOwnVersion();
-                    Status("The launcher could not update itself: " + error.Message + ". Download it again from GitHub.");
+                    Status(Lang.T("The launcher could not update itself: ") + error.Message + Lang.T(". Download it again from GitHub."));
                 }));
             }
             finally
@@ -8406,7 +8578,7 @@ namespace SurvivorInstaller
             {
                 tries++;
                 if (updated && tries == 1 && !Visible)
-                    tray.ShowBalloonTip(5000, "Azeroth SurvivorUI Launcher", "Updated to " + Short(OwnVersion) + ".", ToolTipIcon.Info);
+                    tray.ShowBalloonTip(5000, "Azeroth SurvivorUI Launcher", Lang.T("Updated to ") + Short(OwnVersion) + ".", ToolTipIcon.Info);
                 bool gone = true;
                 try
                 {
@@ -8448,6 +8620,7 @@ namespace SurvivorInstaller
             public string Name, Url, Sha256, User, Password;
             public long Size;                   // 0: as its server says
             public bool Official, Ranges;       // Ranges: it takes up where a download stopped
+            public bool First;                  // ours: first while it answers well
             public double Speed = -1;           // bytes a second, measured just before; -1: not reached
 
             // Two sources with the same file share a download stopped halfway.
@@ -8475,7 +8648,15 @@ namespace SurvivorInstaller
             {
                 new PackageSource
                 {
-                    Name = "Mirror by Meexa",
+                    Name = Lang.T("Survivor UI mirror"),
+                    Url = "https://download.survivorui.com/AzerothSurvivorsWindowsNew-971db796.rar",
+                    Size = 760497456,
+                    Sha256 = "971db7968dc37ec50b18d64a1de7f693e137f6793a7368e4d5c27bd9522eccd8",
+                    First = true,
+                },
+                new PackageSource
+                {
+                    Name = Lang.T("Mirror by Meexa"),
                     Url = "https://azerothsurvivors-mirror.sandervspl.dev/downloads/1792925574766-14929617-e3ce-4190-8591-6e5e1a4a1c59/AzerothSurvivorsWindowsNew.rar",
                     Size = 760497456,
                     Sha256 = "971db7968dc37ec50b18d64a1de7f693e137f6793a7368e4d5c27bd9522eccd8",
@@ -8483,7 +8664,7 @@ namespace SurvivorInstaller
                 // Its login as its owner gave it on the game's Discord, here with his ok.
                 new PackageSource
                 {
-                    Name = "Mirror by Leo",
+                    Name = Lang.T("Mirror by Leo"),
                     Url = "https://budapestmix.hu:5000/download",
                     Size = 760497456,
                     Sha256 = "971db7968dc37ec50b18d64a1de7f693e137f6793a7368e4d5c27bd9522eccd8",
@@ -8498,7 +8679,7 @@ namespace SurvivorInstaller
         static List<PackageSource> PackageSources()
         {
             List<PackageSource> sources = new List<PackageSource>();
-            sources.Add(new PackageSource { Name = "wow.aethus.pl (official)", Url = GamePackage, Official = true });
+            sources.Add(new PackageSource { Name = Lang.T("wow.aethus.pl (official)"), Url = GamePackage, Official = true });
             List<PackageSource> mirrors;
             try { mirrors = ReadMirrors(Download(MirrorsUrl)); }
             catch { mirrors = BuiltInMirrors(); }
@@ -8506,7 +8687,7 @@ namespace SurvivorInstaller
             return sources;
         }
 
-        // mirrors.json: {"package": [{"name", "url", "size", "sha256", "user"?, "password"?}, ...]}.
+        // mirrors.json: {"package": [{"name", "url", "size", "sha256", "user"?, "password"?, "first"?}, ...]}.
         static List<PackageSource> ReadMirrors(string json)
         {
             List<PackageSource> mirrors = new List<PackageSource>();
@@ -8517,6 +8698,8 @@ namespace SurvivorInstaller
                 Func<string, string> text = name => entry.ContainsKey(name) && entry[name] != null ? Convert.ToString(entry[name]) : null;
                 PackageSource mirror = new PackageSource { Name = text("name"), Url = text("url"), User = text("user"), Password = text("password") };
                 mirror.Sha256 = text("sha256") != null ? text("sha256").ToLowerInvariant() : null;
+                mirror.First = text("first") == "yes";
+                mirror.Name = Lang.T(mirror.Name);
                 long size;
                 if (long.TryParse(text("size"), out size)) mirror.Size = size;
                 if (mirror.Name != null && mirror.Url != null && mirror.Sha256 != null && mirror.Size > 0) mirrors.Add(mirror);
@@ -8679,7 +8862,7 @@ namespace SurvivorInstaller
         void ShowNotes()
         {
             string text = latest == null ? "" : (latest.Beta
-                ? "BETA BUILD, before a release: more bugs than usual may be in it, and it updates more often. The release's button takes you back.\r\n\r\n"
+                ? Lang.T("BETA BUILD, before a release: more bugs than usual may be in it, and it updates more often. The release's button takes you back.\r\n\r\n")
                 : "") + Plain(latest.Notes);
             if (text != "" && text != notesBox.Text) notesBox.Text = text;
             ShowGameNews();
@@ -8702,19 +8885,19 @@ namespace SurvivorInstaller
             gameLabel.Location = found ? new Point(gameCheckButton.Right + S(6), gameCheckButton.Top + S(3)) : new Point(gameCheckButton.Left, gameCheckButton.Top);
             if (exe == null)
             {
-                gameLabel.Text = "Recommended: the game's " + GameExe + " in its benilla-config folder,\nusually " + CommonGameFolder;
+                gameLabel.Text = Lang.T("Recommended: the game's ") + GameExe + Lang.T(" in its benilla-config folder,\nusually ") + CommonGameFolder;
                 gameLabel.ForeColor = Muted;
                 return;
             }
             if (!found)
             {
-                gameLabel.Text = "Azeroth Survivors found, without its data: click Get the game.";
+                gameLabel.Text = Lang.T("Azeroth Survivors found, without its data: click Get the game.");
                 gameLabel.ForeColor = Muted;
                 return;
             }
             if (checkingGame)
             {
-                gameLabel.Text = "Asking wow.aethus.pl for the game's newest version...";
+                gameLabel.Text = Lang.T("Asking wow.aethus.pl for the game's newest version...");
                 gameLabel.ForeColor = Muted;
                 return;
             }
@@ -8723,24 +8906,24 @@ namespace SurvivorInstaller
             if (state == null)
             {
                 // Not looked at yet (or another game picked): asked now.
-                gameLabel.Text = name + "  ·  asking wow.aethus.pl...";
+                gameLabel.Text = name + Lang.T("  ·  asking wow.aethus.pl...");
                 gameLabel.ForeColor = Muted;
                 CheckGame();
             }
             else if (state.Behind)
             {
                 bool sameExe = state.LatestSha256 == state.Sha256;
-                gameLabel.Text = name + "  ·  " + (sameExe ? "new game data is out" : state.Latest + " is out") + ": click Update game";
+                gameLabel.Text = name + "  ·  " + (sameExe ? Lang.T("new game data is out") : state.Latest + Lang.T(" is out")) + Lang.T(": click Update game");
                 gameLabel.ForeColor = Color.FromArgb(90, 220, 110);
             }
             else if (state.Latest != null)
             {
-                gameLabel.Text = name + "  ·  up to date";
+                gameLabel.Text = name + Lang.T("  ·  up to date");
                 gameLabel.ForeColor = Muted;
             }
             else
             {
-                gameLabel.Text = name + "  ·  could not reach wow.aethus.pl";
+                gameLabel.Text = name + Lang.T("  ·  could not reach wow.aethus.pl");
                 gameLabel.ForeColor = Muted;
             }
         }
@@ -8809,7 +8992,7 @@ namespace SurvivorInstaller
             GameState known = game != null && game.Exe == exe ? game : null;
             checkingGame = true;
             gameCheckButton.Enabled = false;
-            gameCheckButton.Text = "Checking...";
+            gameCheckButton.Text = Lang.T("Checking...");
             ShowGameLine();
             new Thread(delegate ()
             {
@@ -8855,7 +9038,7 @@ namespace SurvivorInstaller
                     game = state;
                     checkingGame = false;
                     gameCheckButton.Enabled = true;
-                    gameCheckButton.Text = "Check version";
+                    gameCheckButton.Text = Lang.T("Check version");
                     ShowUpdateState();
                     ShowNotes();
                     // Asked by hand: the answer in the status line too.
@@ -8863,10 +9046,10 @@ namespace SurvivorInstaller
                     {
                         gameByHand = false;
                         string name = "Azeroth Survivors" + (state.Version != null ? " " + state.Version : "");
-                        Status(state.Latest == null ? "Could not reach wow.aethus.pl just now: try again later."
-                            : state.Behind ? (state.Latest != state.Version ? "Azeroth Survivors " + state.Latest + " is out" : "New game data is out")
-                                + ": click Update game."
-                            : name + " is the newest: up to date.");
+                        Status(state.Latest == null ? Lang.T("Could not reach wow.aethus.pl just now: try again later.")
+                            : state.Behind ? (state.Latest != state.Version ? "Azeroth Survivors " + state.Latest + Lang.T(" is out") : Lang.T("New game data is out"))
+                                + Lang.T(": click Update game.")
+                            : name + Lang.T(" is the newest: up to date."));
                     }
                 }));
             }) { IsBackground = true }.Start();
@@ -8877,7 +9060,7 @@ namespace SurvivorInstaller
             GameFile file = new GameFile();
             file.Name = data.ContainsKey("name") ? Convert.ToString(data["name"]) : name;
             if (file.Name.Contains("\\") || file.Name.Contains("/") || file.Name.Contains(".."))
-                throw new Exception("the game's index lists an odd file: " + file.Name);
+                throw new Exception(Lang.T("the game's index lists an odd file: ") + file.Name);
             file.Sha256 = Convert.ToString(data["sha256"]).ToLowerInvariant();
             file.Size = Convert.ToInt64(data["size"]);
             foreach (object item in (System.Collections.IEnumerable)data["parts"])
@@ -8885,12 +9068,12 @@ namespace SurvivorInstaller
                 Dictionary<string, object> part = (Dictionary<string, object>)item;
                 string url = Convert.ToString(part["url"]);
                 // A piece of the game's own folder on its server, nothing else.
-                if (url.Contains("..") || url.Contains(":")) throw new Exception("the game's index lists an odd part: " + url);
+                if (url.Contains("..") || url.Contains(":")) throw new Exception(Lang.T("the game's index lists an odd part: ") + url);
                 file.Urls.Add(server + url);
                 file.Download += Convert.ToInt64(part["size"]);
             }
             if (file.Urls.Count == 0 || file.Sha256.Length != 64 || file.Size <= 0)
-                throw new Exception("the game's index holds no " + file.Name);
+                throw new Exception(Lang.T("the game's index holds no ") + file.Name);
             return file;
         }
 
@@ -8927,8 +9110,16 @@ namespace SurvivorInstaller
                 Probe(sources);
                 plan.Sources = sources.FindAll(source => source.Reached);
                 plan.Sources.Sort((a, b) => b.Speed.CompareTo(a.Speed));
+                // Ours first, unless it is slow now; a source far quicker still
+                // takes over as the download goes.
+                PackageSource ours = plan.Sources.Find(source => source.First && source.Speed >= SlowSpeed);
+                if (ours != null)
+                {
+                    plan.Sources.Remove(ours);
+                    plan.Sources.Insert(0, ours);
+                }
                 plan.Known = sources;
-                if (plan.Sources.Count == 0) throw new Exception("its full package is out of reach (wow.aethus.pl and its mirrors)");
+                if (plan.Sources.Count == 0) throw new Exception(Lang.T("its full package is out of reach (wow.aethus.pl and its mirrors)"));
                 plan.Source = plan.Sources[0];
                 plan.PackageSize = plan.Source.Size;
             }
@@ -8961,14 +9152,14 @@ namespace SurvivorInstaller
             bool update = !GameMissing();
             if (GameRunning())
             {
-                Status(update ? "The game is open: close it, then Update game." : "The game is open: close it, then Get the game.");
+                Status(update ? Lang.T("The game is open: close it, then Update game.") : Lang.T("The game is open: close it, then Get the game."));
                 return;
             }
             string exe = GameExePath();
             string folder = exe != null ? Path.GetDirectoryName(exe) : CommonGameFolder;
             gettingGame = true;
             ShowUpdateState();
-            Status("Asking wow.aethus.pl for the game...");
+            Status(Lang.T("Asking wow.aethus.pl for the game..."));
             new Thread(delegate ()
             {
                 GamePlan plan = null;
@@ -8981,25 +9172,25 @@ namespace SurvivorInstaller
                     ShowUpdateState();
                     if (plan == null)
                     {
-                        Status("Could not reach wow.aethus.pl: " + problem);
+                        Status(Lang.T("Could not reach wow.aethus.pl: ") + problem);
                         return;
                     }
                     if (plan.Download == 0)
                     {
-                        Status(update ? "The game is up to date: " + plan.Version + "." : "The game is all there.");
+                        Status(update ? Lang.T("The game is up to date: ") + plan.Version + "." : Lang.T("The game is all there."));
                         CheckGame();
                         return;
                     }
                     string pieces = "";
-                    if (plan.PackageSize > 0) pieces += "\n  \u2022  the game's data, from its full package: " + Megabytes(plan.PackageSize) + " MB";
-                    if (plan.Exe != null) pieces += "\n  \u2022  the newest game, " + plan.Version + ": " + Megabytes(plan.Exe.Download) + " MB";
-                    if (plan.Patches.Count > 0) pieces += "\n  \u2022  its newest updates: " + Megabytes(plan.PatchesDownload) + " MB";
-                    string words = (update ? "Update Azeroth Survivors to " + plan.Version + " (about " + Megabytes(plan.Download) + " MB)?\n\n"
-                            : "Download Azeroth Survivors (about " + Megabytes(plan.Download) + " MB in all)?\n\n") +
-                        "Azeroth Survivors is Aethus' game. The launcher takes it from his own servers (wow.aethus.pl)" +
-                        (plan.PackageSize > 0 ? ", the full package also from the mirrors his Discord gave," : "") + " and checks it:" +
-                        pieces + "\n\nInto: " + plan.Folder + "\nIt needs about " + Gigabytes(RoomNeeded(plan)) + " GB free while it works." +
-                        (update ? "" : Setting(NewHereKey, "") == "1" ? " Then it installs Survivor UI and SurvivorUI Classic." : " Then it installs Survivor UI.");
+                    if (plan.PackageSize > 0) pieces += Lang.T("\n  \u2022  the game's data, from its full package: ") + Megabytes(plan.PackageSize) + " MB";
+                    if (plan.Exe != null) pieces += Lang.T("\n  \u2022  the newest game, ") + plan.Version + ": " + Megabytes(plan.Exe.Download) + " MB";
+                    if (plan.Patches.Count > 0) pieces += Lang.T("\n  \u2022  its newest updates: ") + Megabytes(plan.PatchesDownload) + " MB";
+                    string words = (update ? Lang.T("Update Azeroth Survivors to ") + plan.Version + Lang.T(" (about ") + Megabytes(plan.Download) + Lang.T(" MB)?\n\n")
+                            : Lang.T("Download Azeroth Survivors (about ") + Megabytes(plan.Download) + Lang.T(" MB in all)?\n\n")) +
+                        Lang.T("Azeroth Survivors is Aethus' game. The launcher takes it from his own servers (wow.aethus.pl)") +
+                        (plan.PackageSize > 0 ? Lang.T(", the full package also from mirrors,") : "") + Lang.T(" and checks it:") +
+                        pieces + Lang.T("\n\nInto: ") + plan.Folder + Lang.T("\nIt needs about ") + Gigabytes(RoomNeeded(plan)) + Lang.T(" GB free while it works.") +
+                        (update ? "" : Setting(NewHereKey, "") == "1" ? Lang.T(" Then it installs Survivor UI and SurvivorUI Classic.") : Lang.T(" Then it installs Survivor UI."));
                     plan.Update = update;
                     if (plan.PackageSize > 0)
                     {
@@ -9007,9 +9198,9 @@ namespace SurvivorInstaller
                         // picked, or a package the player has already.
                         List<string> lines = new List<string>();
                         for (int i = 0; i < plan.Sources.Count; i++)
-                            lines.Add(plan.Sources[i].Name + ": " + Speed(plan.Sources[i].Speed) + " now" + (i == 0 && plan.Sources.Count > 1 ? ", the fastest" : ""));
-                        lines.Add("A package I downloaded already (.rar)...");
-                        int picked = Choose(words + "\n\nThe full package from:", "Azeroth Survivors", lines.ToArray(), 0);
+                            lines.Add(plan.Sources[i].Name + ": " + Speed(plan.Sources[i].Speed) + Lang.T(" now") + (i == 0 && plan.Sources.Count > 1 ? Lang.T(plan.Sources[0].First ? ", our mirror" : ", the fastest") : ""));
+                        lines.Add(Lang.T("A package I downloaded already (.rar)..."));
+                        int picked = Choose(words + Lang.T("\n\nThe full package from:"), "Azeroth Survivors", lines.ToArray(), 0);
                         if (picked < 0)
                         {
                             Status("");
@@ -9019,8 +9210,8 @@ namespace SurvivorInstaller
                         {
                             using (OpenFileDialog pick = new OpenFileDialog())
                             {
-                                pick.Title = "The game's full package";
-                                pick.Filter = "The game's package (*.rar)|*.rar|All files|*.*";
+                                pick.Title = Lang.T("The game's full package");
+                                pick.Filter = Lang.T("The game's package (*.rar)|*.rar|All files|*.*");
                                 if (pick.ShowDialog(this) != DialogResult.OK)
                                 {
                                     Status("");
@@ -9075,7 +9266,7 @@ namespace SurvivorInstaller
             gameBar.Visible = gameShare >= 0;
             gameBar.Invalidate();
             if (done >= 0)
-                Status("Downloading " + what + ": " + Megabytes(done) + " of " + Megabytes(total) + " MB (" + (total > 0 ? done * 100 / total : 0) + "%)" + (progressTail ?? ""));
+                Status(Lang.T("Downloading ") + what + ": " + Megabytes(done) + Lang.T(" of ") + Megabytes(total) + " MB (" + (total > 0 ? done * 100 / total : 0) + "%)" + (progressTail ?? ""));
         }
 
         // --- The game's full package, from the source picked -----------------
@@ -9090,7 +9281,7 @@ namespace SurvivorInstaller
         void SwitchPackageSource()
         {
             packageSwitch = true;
-            Status("Trying another source...");
+            Status(Lang.T("Trying another source..."));
             HttpWebRequest request = packageRequest;
             if (request != null) try { request.Abort(); } catch { }
         }
@@ -9119,14 +9310,14 @@ namespace SurvivorInstaller
         // size of the site's; else used only when the player says so.
         void CheckLocalPackage(GamePlan plan)
         {
-            Status("Checking the package picked (sha256)...");
+            Status(Lang.T("Checking the package picked (sha256)..."));
             string sha = Sha256Of(plan.LocalPackage);
             long size = new FileInfo(plan.LocalPackage).Length;
             foreach (PackageSource source in plan.Known)
                 if (sha == source.Sha256 || (source.Official && size == source.Size)) return;
-            if (Ask(this, "The package picked is not one the launcher knows: not the size of wow.aethus.pl's, nor a mirror's by its sha256.\n\n" +
-                    plan.LocalPackage + "\n\nUse it anyway?", "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-                throw new Exception("the package picked was not used");
+            if (Ask(this, Lang.T("The package picked is not one the launcher knows: not the size of wow.aethus.pl's, nor a mirror's by its sha256.\n\n") +
+                    plan.LocalPackage + Lang.T("\n\nUse it anyway?"), "Azeroth Survivors", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                throw new Exception(Lang.T("the package picked was not used"));
         }
 
         // The full package into a .part beside it, from the source picked: a
@@ -9169,7 +9360,7 @@ namespace SurvivorInstaller
                     if (quicker != null)
                     {
                         slow.Add(source);
-                        Status(source.Name + " is slow: going on with " + quicker.Name + " (" + Speed(quicker.Speed) + " when timed)...");
+                        Status(source.Name + Lang.T(" is slow: going on with ") + quicker.Name + " (" + Speed(quicker.Speed) + Lang.T(" when timed)..."));
                         index = order.IndexOf(quicker);
                         breaks = 0;
                         continue;
@@ -9182,7 +9373,7 @@ namespace SurvivorInstaller
                     }
                     if (problem == null)
                     {
-                        if (source.Sha256 != null) Status("Checking the game's package (sha256)...");
+                        if (source.Sha256 != null) Status(Lang.T("Checking the game's package (sha256)..."));
                         if (new FileInfo(part).Length == source.Size && (source.Sha256 == null || Sha256Of(part) == source.Sha256))
                         {
                             if (File.Exists(package)) File.Delete(package);
@@ -9190,13 +9381,13 @@ namespace SurvivorInstaller
                             if (File.Exists(from)) File.Delete(from);
                             return done + source.Size;
                         }
-                        problem = source.Name + "'s package is not the game's (its size or sha256 does not match)";
+                        problem = source.Name + Lang.T("'s package is not the game's (its size or sha256 does not match)");
                         File.Delete(part);
                     }
                     else if (source.Ranges && ++breaks <= 5)
                     {
                         // A break: the same source again, from where it stopped.
-                        Status("The download broke (" + problem + "): going on in a moment...");
+                        Status(Lang.T("The download broke (") + problem + Lang.T("): going on in a moment..."));
                         Thread.Sleep(3000);
                         if (packageSwitch)
                         {
@@ -9213,11 +9404,11 @@ namespace SurvivorInstaller
                         index = index % order.Count;
                         packageSwitchable = order.Count > 1;
                         BeginInvoke(new Action(ShowUpdateState));
-                        Status(source.Name + " failed (" + problem + "): " + order[index].Name + " next...");
+                        Status(source.Name + Lang.T(" failed (") + problem + "): " + order[index].Name + Lang.T(" next..."));
                         Thread.Sleep(1500);
                     }
                 }
-                throw new Exception("the game's package could not be downloaded (" + problem + ")");
+                throw new Exception(Lang.T("the game's package could not be downloaded (") + problem + ")");
             }
             finally
             {
@@ -9249,7 +9440,7 @@ namespace SurvivorInstaller
                 }
                 using (FileStream output = new FileStream(part, have > 0 ? FileMode.Append : FileMode.Create))
                 {
-                    string what = "the game's data from " + source.Name;
+                    string what = Lang.T("the game's data from ") + source.Name;
                     byte[] buffer = new byte[81920];
                     Stopwatch clock = Stopwatch.StartNew();
                     long got = have, before = have;
@@ -9274,7 +9465,7 @@ namespace SurvivorInstaller
                         if (speed >= SlowSpeed) slowSince = -1;
                         else if (slowSince < 0) slowSince = now;
                         bool slow = packageSwitchable && slowSince >= 0 && now - slowSince >= 15;
-                        progressTail = ", " + Speed(speed) + (slow ? ". Slow: click Try another source" : "");
+                        progressTail = ", " + Speed(speed) + (slow ? Lang.T(". Slow: click Try another source") : "");
                         GameProgress(done + got, total, what);
                         // Another source that would end it far sooner, for a while: taken.
                         PackageSource best = null;
@@ -9297,7 +9488,7 @@ namespace SurvivorInstaller
                         }
                         else quickerSince = -1;
                     }
-                    if (got < source.Size) throw new IOException("it stopped at " + Megabytes(got) + " MB");
+                    if (got < source.Size) throw new IOException(Lang.T("it stopped at ") + Megabytes(got) + " MB");
                 }
             }
         }
@@ -9347,7 +9538,7 @@ namespace SurvivorInstaller
                 using (System.Security.Cryptography.SHA256 hash = System.Security.Cryptography.SHA256.Create())
                     sha = BitConverter.ToString(hash.ComputeHash(input)).Replace("-", "").ToLowerInvariant();
                 if (new FileInfo(fresh).Length != file.Size || sha != file.Sha256)
-                    throw new Exception(file.Name + " does not match the game's own check (sha256). Try again");
+                    throw new Exception(file.Name + Lang.T(" does not match the game's own check (sha256). Try again"));
                 if (File.Exists(target)) File.Delete(target);
                 File.Move(fresh, target);
             }
@@ -9373,8 +9564,8 @@ namespace SurvivorInstaller
                 string errors = process.StandardError.ReadToEnd();
                 process.WaitForExit();
                 if (process.ExitCode != 0)
-                    throw new Exception("Windows could not unpack the game's package (" + errors.Trim() + "). " +
-                        "Download it from wow.aethus.pl/download and unpack its Data folder next to the game");
+                    throw new Exception(Lang.T("Windows could not unpack the game's package (") + errors.Trim() + "). " +
+                        Lang.T("Download it from wow.aethus.pl/download and unpack its Data folder next to the game"));
             }
         }
 
@@ -9386,14 +9577,14 @@ namespace SurvivorInstaller
             string data = Path.Combine(folder, "Data");
             string staging = Path.Combine(folder, "_get-the-game");
             long total = plan.Download, done = 0;
-            GameProgress(0, total, "the game");
+            GameProgress(0, total, Lang.T("the game"));
             try
             {
                 Directory.CreateDirectory(data);
                 DriveInfo drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(folder)));
                 if (drive.AvailableFreeSpace < RoomNeeded(plan))
-                    throw new Exception("not enough room on " + drive.Name + ": " + Gigabytes(drive.AvailableFreeSpace) +
-                        " GB free, about " + Gigabytes(RoomNeeded(plan)) + " GB needed");
+                    throw new Exception(Lang.T("not enough room on ") + drive.Name + ": " + Gigabytes(drive.AvailableFreeSpace) +
+                        Lang.T(" GB free, about ") + Gigabytes(RoomNeeded(plan)) + Lang.T(" GB needed"));
                 if (plan.PackageSize > 0)
                 {
                     string package = Path.Combine(staging, PackageName);
@@ -9404,11 +9595,11 @@ namespace SurvivorInstaller
                         package = plan.LocalPackage;
                     }
                     else done = FetchPackage(plan, package, done, ref total);
-                    Status("Unpacking the game's data (a minute or two)...");
+                    Status(Lang.T("Unpacking the game's data (a minute or two)..."));
                     Unpack(package, staging);
                     if (plan.LocalPackage == null) File.Delete(package);
                     string[] found = Directory.GetFiles(staging, "patch.MPQ", SearchOption.AllDirectories);
-                    if (found.Length == 0) throw new Exception("the game's package holds no Data\\patch.MPQ");
+                    if (found.Length == 0) throw new Exception(Lang.T("the game's package holds no Data\\patch.MPQ"));
                     foreach (string file in Directory.GetFiles(Path.GetDirectoryName(found[0]), "*.MPQ"))
                     {
                         string target = Path.Combine(data, Path.GetFileName(file));
@@ -9417,7 +9608,7 @@ namespace SurvivorInstaller
                     Directory.Delete(staging, true);
                 }
                 if (plan.Exe != null)
-                    done = FetchGameFile(plan.Exe, Path.Combine(folder, GameExe), done, total, "the game");
+                    done = FetchGameFile(plan.Exe, Path.Combine(folder, GameExe), done, total, Lang.T("the game"));
                 // The patches still missing, or not as the index has them (the
                 // package may have brought some).
                 foreach (GameFile patch in plan.Patches)
@@ -9428,7 +9619,7 @@ namespace SurvivorInstaller
                         done += patch.Download;
                         continue;
                     }
-                    done = FetchGameFile(patch, target, done, total, "the game's updates");
+                    done = FetchGameFile(patch, target, done, total, Lang.T("the game's updates"));
                 }
                 RememberExe(Path.Combine(folder, GameExe));
                 string addons = AddonsFor(Path.Combine(folder, GameExe));
@@ -9442,7 +9633,7 @@ namespace SurvivorInstaller
                     GameProgress(-1, 0, null);
                     folderBox.Text = addons;
                     try { File.WriteAllText(ConfigPath, addons); } catch { }
-                    Status("Azeroth Survivors " + plan.Version + " is ready." + (bringing ? " Click Play once." : ""));
+                    Status("Azeroth Survivors " + plan.Version + Lang.T(" is ready.") + (bringing ? Lang.T(" Click Play once.") : ""));
                     AfterGame(plan, addons, bringing);
                 }));
             }
@@ -9461,12 +9652,12 @@ namespace SurvivorInstaller
                     }
                 }
                 catch { }
-                string more = kept ? " Click Get the game again: it goes on from where it stopped." : "";
+                string more = kept ? Lang.T(" Click Get the game again: it goes on from where it stopped.") : "";
                 BeginInvoke(new Action(delegate
                 {
                     GameProgress(-1, 0, null);
-                    Status("Could not get the game: " + error.Message + "." + more);
-                    Ask(this, "Could not get the game:\n\n" + error.Message + "." + (kept ? "\n\n" + more.Trim() : ""), "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Status(Lang.T("Could not get the game: ") + error.Message + "." + more);
+                    Ask(this, Lang.T("Could not get the game:\n\n") + error.Message + "." + (kept ? "\n\n" + more.Trim() : ""), "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }));
             }
             finally
@@ -9491,7 +9682,7 @@ namespace SurvivorInstaller
             if (gameExe != null && GameWillBringAlong(gameExe))
             {
                 // A folder made now would stop the game's own copy of the old ones.
-                Status("Click Play once first: the game moves your addons and settings to its new folder.");
+                Status(Lang.T("Click Play once first: the game moves your addons and settings to its new folder."));
                 Ask(this, FirstStartNote, "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -9501,7 +9692,7 @@ namespace SurvivorInstaller
                 try { File.WriteAllText(ConfigPath, folderBox.Text); } catch { }
             }
             string addons = folderBox.Text.Trim();
-            if (addons == "" || release == null) { Status("Pick the game first."); return; }
+            if (addons == "" || release == null) { Status(Lang.T("Pick the game first.")); return; }
             if (!Directory.Exists(Path.GetDirectoryName(addons.TrimEnd('\\'))))
             {
                 // The game's own folder, not made yet (the game makes it as it
@@ -9511,7 +9702,7 @@ namespace SurvivorInstaller
                     Directory.CreateDirectory(Path.GetDirectoryName(addons.TrimEnd('\\')));
                 else
                 {
-                    Ask(this, "That folder does not look like the game's: " + addons, "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Ask(this, Lang.T("That folder does not look like the game's: ") + addons, "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
             }
@@ -9523,7 +9714,7 @@ namespace SurvivorInstaller
             installItem.Enabled = false;
             playButton.Enabled = false;
             playItem.Enabled = false;
-            Status("Downloading " + release.ZipName + "...");
+            Status(Lang.T("Downloading ") + release.ZipName + "...");
             new Thread(delegate () { DoInstall(addons, release); }) { IsBackground = true }.Start();
         }
 
@@ -9535,7 +9726,7 @@ namespace SurvivorInstaller
                 using (WebClient client = Client())
                     client.DownloadFile(release.ZipUrl, zip);
 
-                Status("Installing...");
+                Status(Lang.T("Installing..."));
                 Directory.CreateDirectory(addons);
                 // The old folders go first, so no file from an earlier version stays behind.
                 foreach (string folder in AddonFolders)
@@ -9565,24 +9756,24 @@ namespace SurvivorInstaller
                 BeginInvoke(new Action(delegate
                 {
                     ShowInstalled();
-                    Status("Installed " + release.Tag + ".");
-                    if (quietInstalls) QuietNote("Survivor UI " + release.Tag + " installed.");
+                    Status(Lang.T("Installed ") + release.Tag + ".");
+                    if (quietInstalls) QuietNote("Survivor UI " + release.Tag + Lang.T(" installed."));
                     else Ask(this,
-                        "Survivor UI " + release.Tag + " is installed.\n\n" +
-                        (release.Beta ? "A beta build: more bugs than usual may be in it, and it updates more often. Tell what you find on Discord.\n\n" : "") +
-                        (running ? "The game is open: restart it to load the new version." : "Start the game and enjoy!") +
-                        "\n\nType /sui in the game for every command.",
+                        "Survivor UI " + release.Tag + Lang.T(" is installed.\n\n") +
+                        (release.Beta ? Lang.T("A beta build: more bugs than usual may be in it, and it updates more often. Tell what you find on Discord.\n\n") : "") +
+                        (running ? Lang.T("The game is open: restart it to load the new version.") : Lang.T("Start the game and enjoy!")) +
+                        Lang.T("\n\nType /sui in the game for every command."),
                         "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }));
             }
             catch (Exception error)
             {
-                Status("Install failed: " + error.Message);
+                Status(Lang.T("Install failed: ") + error.Message);
                 BeginInvoke(new Action(delegate
                 {
                     if (!quietInstalls)
-                        Ask(this, "The install failed:\n\n" + error.Message +
-                            "\n\nIf the game is open, close it and try again.", "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        Ask(this, Lang.T("The install failed:\n\n") + error.Message +
+                            Lang.T("\n\nIf the game is open, close it and try again."), "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }));
             }
             finally
@@ -9688,8 +9879,8 @@ namespace SurvivorInstaller
             nextInstalls.Enqueue(delegate
             {
                 if (InstalledVersion(folderBox.Text) != null && AddonPresent(folderBox.Text.Trim(), classic.Folders))
-                    Ask(this, "Survivor UI and SurvivorUI Classic are installed.\n\nThe game asks which of the two to use as it first starts. " +
-                        "Change UI, in either one's options, changes it later.", "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    Ask(this, Lang.T("Survivor UI and SurvivorUI Classic are installed.\n\nThe game asks which of the two to use as it first starts. ") +
+                        Lang.T("Change UI, in either one's options, changes it later."), "Survivor UI", MessageBoxButtons.OK, MessageBoxIcon.Information);
             });
             NextInstall();
         }
@@ -9730,8 +9921,8 @@ namespace SurvivorInstaller
         {
             bool on = !AutoOn(row);
             SetSetting(AutoKey(row), on ? "1" : "0");
-            string name = row is OurAddon ? OurUI.Name + " and " + OurPlates.Name : PickedName(row);
-            Status(name + (on ? ": updated by itself as a new release is out, with the game closed." : ": you update by hand."));
+            string name = row is OurAddon ? OurUI.Name + Lang.T(" and ") + OurPlates.Name : PickedName(row);
+            Status(name + (on ? Lang.T(": updated by itself as a new release is out, with the game closed.") : Lang.T(": you update by hand.")));
             BeginInvoke(new Action(delegate
             {
                 FillAddons();
@@ -9778,6 +9969,7 @@ namespace SurvivorInstaller
         {
             windowOpened = true;
             openedAt = DateTime.Now;
+            ShowMirrorNote();
         }
 
         void SayWhatWaits()
@@ -9792,20 +9984,20 @@ namespace SurvivorInstaller
             List<string> lines = new List<string>();
             bool gameDue = !GameMissing() && GameBehind() && game != null;
             if (gameDue)
-                lines.Add("Azeroth Survivors " + game.Latest + (game.Version == null ? "" : game.Version == game.Latest ? ", new data" : ", you have " + game.Version));
+                lines.Add("Azeroth Survivors " + game.Latest + (game.Version == null ? "" : game.Version == game.Latest ? Lang.T(", new data") : Lang.T(", you have ") + game.Version));
             Release release = updateWaiting && !AutoOn(OurUI) ? latest : null;
-            if (release != null) lines.Add("Survivor UI " + release.Tag + ", you have " + InstalledVersion(addons));
+            if (release != null) lines.Add("Survivor UI " + release.Tag + Lang.T(", you have ") + InstalledVersion(addons));
             List<ListedAddon> due = Updatable(addons).FindAll(each => !AutoOn(each));
             foreach (ListedAddon addon in due)
             {
                 string have = TocValue(TocOf(Path.Combine(addons, addon.Folders[0])), "Version");
-                lines.Add(addon.Name + " " + ShortVersion(addon) + (string.IsNullOrEmpty(have) ? "" : ", you have " + have));
+                lines.Add(addon.Name + " " + ShortVersion(addon) + (string.IsNullOrEmpty(have) ? "" : Lang.T(", you have ") + have));
             }
             string said = string.Join("\n", lines.ToArray());
             if (lines.Count == 0 || said == saidWaiting) return;
             saidWaiting = said;
-            if (AskWith("Updates are out:\n\n  \u2022  " + string.Join("\n  \u2022  ", lines.ToArray()), "Updates",
-                MessageBoxIcon.Question, "Update now", "Later") != DialogResult.Yes) return;
+            if (AskWith(Lang.T("Updates are out:\n\n  \u2022  ") + string.Join("\n  \u2022  ", lines.ToArray()), Lang.T("Updates"),
+                MessageBoxIcon.Question, Lang.T("Update now"), Lang.T("Later")) != DialogResult.Yes) return;
             quietInstalls = true;
             if (release != null) nextInstalls.Enqueue(delegate { Install(release); });
             if (due.Count > 0) nextInstalls.Enqueue(delegate { InstallListed(due); });
@@ -9836,7 +10028,7 @@ namespace SurvivorInstaller
             else if (bringing || (plan.Update && !quietInstalls))
                 nextInstalls.Enqueue(delegate
                 {
-                    Ask(this, "Azeroth Survivors " + plan.Version + " is ready.\n\n" + (bringing ? FirstStartNote : "Click Play."),
+                    Ask(this, "Azeroth Survivors " + plan.Version + Lang.T(" is ready.\n\n") + (bringing ? FirstStartNote : Lang.T("Click Play.")),
                         "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 });
         }
@@ -9855,15 +10047,15 @@ namespace SurvivorInstaller
             if (SameFolder(Path.GetDirectoryName(exe), folder))
             {
                 if (File.Exists(ShortcutPath))
-                    Ask(this, "Azeroth Survivors is ready.\n\nClick Play.", "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                else if (AskWith("Azeroth Survivors is ready.\n\nThe launcher is in the game's folder. Put a shortcut to it on your Desktop?", "Azeroth Survivors",
-                    MessageBoxIcon.Question, "Add a shortcut", "No thanks") == DialogResult.Yes)
+                    Ask(this, Lang.T("Azeroth Survivors is ready.\n\nClick Play."), "Azeroth Survivors", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                else if (AskWith(Lang.T("Azeroth Survivors is ready.\n\nThe launcher is in the game's folder. Put a shortcut to it on your Desktop?"), "Azeroth Survivors",
+                    MessageBoxIcon.Question, Lang.T("Add a shortcut"), Lang.T("No thanks")) == DialogResult.Yes)
                     AddShortcut(exe);
                 return;
             }
-            DialogResult answer = AskWith("Azeroth Survivors is ready.\n\nThe launcher is still in the folder you unzipped it to, where it could be deleted by accident. " +
-                "Move it into the game's folder, with a shortcut on your Desktop (recommended), or add only the shortcut?",
-                "Azeroth Survivors", MessageBoxIcon.Question, "Move it", "Only a shortcut", "Leave it");
+            DialogResult answer = AskWith(Lang.T("Azeroth Survivors is ready.\n\nThe launcher is still in the folder you unzipped it to, where it could be deleted by accident. ") +
+                Lang.T("Move it into the game's folder, with a shortcut on your Desktop (recommended), or add only the shortcut?"),
+                "Azeroth Survivors", MessageBoxIcon.Question, Lang.T("Move it"), Lang.T("Only a shortcut"), Lang.T("Leave it"));
             if (answer == DialogResult.Yes) MoveTo(folder);
             else if (answer == DialogResult.No) AddShortcut(exe);
         }
@@ -9882,12 +10074,12 @@ namespace SurvivorInstaller
                 type.InvokeMember("Description", BindingFlags.SetProperty, null, link, new object[] { "Azeroth SurvivorUI Launcher" });
                 type.InvokeMember("IconLocation", BindingFlags.SetProperty, null, link, new object[] { target + ",0" });
                 type.InvokeMember("Save", BindingFlags.InvokeMethod, null, link, null);
-                Status("A shortcut to the launcher is on your Desktop.");
+                Status(Lang.T("A shortcut to the launcher is on your Desktop."));
                 return true;
             }
             catch (Exception error)
             {
-                Status("The shortcut could not be made: " + error.Message);
+                Status(Lang.T("The shortcut could not be made: ") + error.Message);
                 return false;
             }
         }
@@ -9912,8 +10104,8 @@ namespace SurvivorInstaller
             }
             catch (Exception error)
             {
-                Status("The launcher could not be moved: " + error.Message);
-                Ask(this, "The launcher could not be moved:\n\n" + error.Message + "\n\nIt stays where it is, and works the same.",
+                Status(Lang.T("The launcher could not be moved: ") + error.Message);
+                Ask(this, Lang.T("The launcher could not be moved:\n\n") + error.Message + Lang.T("\n\nIt stays where it is, and works the same."),
                     "Azeroth SurvivorUI Launcher", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
@@ -10119,7 +10311,7 @@ namespace SurvivorInstaller
         // went in.
         public static string Backup(string saveFolder, string gameFolder, string zipPath, string note)
         {
-            if (!HasSave(saveFolder)) throw new IOException("no save in " + saveFolder);
+            if (!HasSave(saveFolder)) throw new IOException(Lang.T("no save in ") + saveFolder);
             string part = zipPath + ".part";
             if (File.Exists(part)) File.Delete(part);
             int settings = 0;
@@ -10179,7 +10371,7 @@ namespace SurvivorInstaller
                 using (ZipArchive archive = ZipFile.OpenRead(zipPath))
                 {
                     ZipArchiveEntry characters = archive.GetEntry(SaveRoot + "characters.txt");
-                    if (characters == null) return "it has no " + SaveRoot + "characters.txt.";
+                    if (characters == null) return Lang.T("it has no ") + SaveRoot + "characters.txt.";
                     byte[] head = new byte[Seal.Length];
                     using (Stream stream = characters.Open())
                     {
@@ -10191,11 +10383,11 @@ namespace SurvivorInstaller
                             got += n;
                         }
                     }
-                    if (System.Text.Encoding.ASCII.GetString(head) != Seal) return "its characters.txt is not the game's save.";
+                    if (System.Text.Encoding.ASCII.GetString(head) != Seal) return Lang.T("its characters.txt is not the game's save.");
                     foreach (ZipArchiveEntry entry in archive.Entries)
                     {
                         string name = entry.FullName.Replace('\\', '/');
-                        if (name.Contains("..")) return "it has a file that climbs out of its folder: " + entry.FullName;
+                        if (name.Contains("..")) return Lang.T("it has a file that climbs out of its folder: ") + entry.FullName;
                         if (Inside(entry, SettingsRoot) != null) hasSettings = true;
                     }
                 }
@@ -10203,7 +10395,7 @@ namespace SurvivorInstaller
             }
             catch (Exception error)
             {
-                return "it could not be read: " + error.Message;
+                return Lang.T("it could not be read: ") + error.Message;
             }
         }
 
@@ -10398,7 +10590,7 @@ namespace SurvivorInstaller
                 reader.Skip();
                 if (reader.pos >= reader.s.Length) return globals;
                 string name = reader.Name();
-                if (name == null) throw reader.Wrong("a name");
+                if (name == null) throw reader.Wrong(Lang.T("a name"));
                 reader.Skip();
                 reader.Expect('=');
                 globals[name] = reader.Value();
@@ -10407,7 +10599,7 @@ namespace SurvivorInstaller
 
         FormatException Wrong(string wanted)
         {
-            return new FormatException(wanted + " expected at character " + pos);
+            return new FormatException(wanted + Lang.T(" expected at character ") + pos);
         }
 
         void Expect(char c)
@@ -10462,7 +10654,7 @@ namespace SurvivorInstaller
         object Value()
         {
             Skip();
-            if (pos >= s.Length) throw Wrong("a value");
+            if (pos >= s.Length) throw Wrong(Lang.T("a value"));
             char c = s[pos];
             if (c == '{') return Table();
             if (c == '"' || c == '\'') return Text();
@@ -10471,7 +10663,7 @@ namespace SurvivorInstaller
             if (word == "true") return true;
             if (word == "false") return false;
             if (word == "nil") return null;
-            throw Wrong("a value");
+            throw Wrong(Lang.T("a value"));
         }
 
         Dictionary<object, object> Table()
@@ -10551,7 +10743,7 @@ namespace SurvivorInstaller
                 string word = Name();
                 if (word == "inf") return s[start] == '-' ? double.NegativeInfinity : double.PositiveInfinity;
                 if (word == "nan") return double.NaN;
-                throw Wrong("a number");
+                throw Wrong(Lang.T("a number"));
             }
             return value;
         }
@@ -10562,7 +10754,7 @@ namespace SurvivorInstaller
             System.Text.StringBuilder text = new System.Text.StringBuilder();
             while (true)
             {
-                if (pos >= s.Length) throw Wrong("the string's end");
+                if (pos >= s.Length) throw Wrong(Lang.T("the string's end"));
                 char c = s[pos++];
                 if (c == quote) return text.ToString();
                 if (c != '\\')
@@ -10570,7 +10762,7 @@ namespace SurvivorInstaller
                     text.Append(c);
                     continue;
                 }
-                if (pos >= s.Length) throw Wrong("an escape");
+                if (pos >= s.Length) throw Wrong(Lang.T("an escape"));
                 char e = s[pos++];
                 if (Digit(e))
                 {
@@ -10852,14 +11044,14 @@ namespace SurvivorInstaller
 
         readonly Label heading = new Label();
         readonly RichTextBox box = new RichTextBox();
-        readonly Font body = new Font("Segoe UI", 11.5f);
+        readonly Font body = new Font(Lang.Face, 11.5f);
         readonly Font headFont = new Font("Segoe UI Semibold", 14f);
-        readonly Font quoteFont = new Font("Segoe UI", 10.5f, FontStyle.Italic);
+        readonly Font quoteFont = new Font(Lang.Face, 10.5f, FontStyle.Italic);
         readonly Font codeFont = new Font("Consolas", 11f);
 
         public NotesForm(Icon icon)
         {
-            Text = "Survivor UI: what's new";
+            Text = Lang.T("Survivor UI: what's new");
             ClientSize = new Size(760, 660);
             MinimumSize = new Size(480, 360);
             StartPosition = FormStartPosition.CenterParent;
@@ -10870,7 +11062,7 @@ namespace SurvivorInstaller
             heading.Dock = DockStyle.Top;
             heading.Height = 54;
             heading.Padding = new Padding(22, 16, 22, 0);
-            heading.Font = new Font("Segoe UI", 16f, FontStyle.Bold);
+            heading.Font = new Font(Lang.Face, 16f, FontStyle.Bold);
             heading.ForeColor = Gold;
 
             Panel frame = new Panel();

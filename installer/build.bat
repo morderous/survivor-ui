@@ -12,6 +12,7 @@ cd /d "%~dp0"
   /resource:SurvivorUpdate.ico,SurvivorUpdate.ico ^
   /resource:UpdateOverlay.ico,UpdateOverlay.ico ^
   /resource:Logo.png,Logo.png ^
+  /resource:lang-zh.json,lang-zh.json ^
   /resource:CinzelDecorative-Bold.ttf,CinzelDecorative-Bold.ttf ^
   /resource:art\arrow-down.png,art.arrow-down.png ^
   /resource:art\bar-back.png,art.bar-back.png ^
