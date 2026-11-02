@@ -227,6 +227,13 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.51, 2026-11-02
+
+A fix for v3.0.50. Thanks to N3x and Amarolk for the report.
+
+**Fixed**
+- **The options button on the minimap:** after the first level's cards it stayed invisible until the next reload, though a click and the tooltip still found it. It now comes back with the rest of the minimap.
+
 ### v3.0.50, 2026-11-02
 
 Two new Guide pages on your gear, Marks and Sets, and the level's cards come clean: nothing of ours over them unless you ask for it.

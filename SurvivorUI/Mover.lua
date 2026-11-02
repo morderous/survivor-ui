@@ -1110,16 +1110,18 @@ function SurvivorUI_PlaceOverCards()
 	end
 end
 
--- The frames that fade along with a piece, each with its own alpha kept.
-local function FadeAlong(handle, out)
+-- The frames that fade along with a piece, each with its own alpha kept:
+-- "read" (before anything fades), "out", or "back".
+local function FadeAlong(handle, step)
 	local frames = handle.fadesWith
 	if not frames then
 		return
 	end
 	handle.fadesWithFrom = handle.fadesWithFrom or {}
 	for each = 1, table.getn(frames) do
-		if out then
+		if step == "read" then
 			handle.fadesWithFrom[each] = frames[each]:GetAlpha()
+		elseif step == "out" then
 			frames[each]:SetAlpha(0)
 		else
 			frames[each]:SetAlpha(handle.fadesWithFrom[each] or 1)
@@ -1130,19 +1132,29 @@ end
 -- As the cards open, the pieces under them fade out, their own alpha kept
 -- for after; and a tooltip of the world (an enemy under the mouse) goes, as
 -- over the veil it would stay on the cards.
+-- Every alpha is read before any is set: the game's SetAlpha writes the whole
+-- subtree, so a piece inside another (the minimap button in the minimap) read
+-- after its parent faded kept 0 and came back invisible (v3.0.50, Discord).
 local function FadeUnderCards(out)
+	local fading = {}
 	for index = 1, table.getn(handles) do
 		local handle = handles[index]
 		local piece = handle.mover or handle.frame
 		if out and handle.underCards and piece and not handle.fadedFrom then
 			handle.fadedFrom = piece:GetAlpha()
-			piece:SetAlpha(0)
-			FadeAlong(handle, true)
+			FadeAlong(handle, "read")
+			table.insert(fading, handle)
 		elseif not out and handle.fadedFrom then
 			piece:SetAlpha(handle.fadedFrom)
 			handle.fadedFrom = nil
-			FadeAlong(handle, false)
+			FadeAlong(handle, "back")
 		end
+	end
+	for index = 1, table.getn(fading) do
+		local handle = fading[index]
+		local piece = handle.mover or handle.frame
+		piece:SetAlpha(0)
+		FadeAlong(handle, "out")
 	end
 end
 
