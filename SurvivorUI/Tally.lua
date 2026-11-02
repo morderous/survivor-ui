@@ -10,6 +10,28 @@ if SurvivorUI_Standby then return end
 
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 
+-- The game's clock (its 0.131) hangs under the minimap, drawn outside the
+-- interface, so no addon can move or cover it: 4 pixels under the edge and 18
+-- tall, as large as its HUD Scale, the same in pixels whatever the window and
+-- the interface's size. How far under the minimap's edge it ends, with 3 pixels
+-- more, in `frame`'s units: what goes under the minimap goes that much down.
+-- Put away (ours showing, the game's 0.136), just a small gap.
+local CLOCK_PIXELS = 25
+local NO_CLOCK = 5
+
+function SurvivorUI_UnderClock(frame)
+	if AZS_HUD_CVARS and AZS_HUD_CVARS.localClock and not AZS_IsHudShown("localClock") then
+		return NO_CLOCK
+	end
+	-- The window's height in pixels: its place in the game's list of sizes
+	-- follows the window (the gxResolution setting does not); else 1080.
+	local sizes = { GetScreenResolutions() }
+	local _, _, height = string.find(sizes[GetCurrentResolution()] or "", "%d+x(%d+)")
+	local hud = tonumber(GetCVar("hudScale")) or 1
+	local units = CLOCK_PIXELS * hud * GetScreenHeight() / (tonumber(height) or 1080)
+	return math.ceil(units * UIParent:GetEffectiveScale() / frame:GetEffectiveScale())
+end
+
 local row = getglobal("SurvivorUIRow")
 if not row then
 	return
@@ -44,7 +66,7 @@ holder:SetMovable(true)
 local function DefaultPlace()
 	local underBar = SurvivorUIDB and SurvivorUIDB.tallyPlace == "bar"
 	if Minimap and not underBar then
-		holder:SetPoint("TOP", Minimap, "BOTTOM", 0, -5)
+		holder:SetPoint("TOP", Minimap, "BOTTOM", 0, -SurvivorUI_UnderClock(holder))
 	else
 		holder:SetPoint("TOP", row, "BOTTOM", 0, -12)
 	end
@@ -508,4 +530,24 @@ loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", function()
 	RestorePlace()
 	ApplyGameHud()
+end)
+
+-- The window resized, the clock's pixels more or fewer of the interface's, or
+-- the clock put away or back.
+local clockAt
+local clockWait = 0
+loader:SetScript("OnUpdate", function()
+	clockWait = clockWait + arg1
+	if clockWait < 1 then
+		return
+	end
+	clockWait = 0
+	local at = SurvivorUI_UnderClock(holder)
+	if clockAt and at ~= clockAt then
+		RestorePlace()
+		if SurvivorUI_PlaceTracker then
+			SurvivorUI_PlaceTracker()
+		end
+	end
+	clockAt = at
 end)

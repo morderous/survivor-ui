@@ -7,7 +7,8 @@
 -- that, two switches with a key each: the game's spell effects (sparkles)
 -- and its sound effects (a speaker), on or off. Other minimap buttons stack
 -- over them, upward, in the same square look: the game's battleground button
--- (the crossed swords).
+-- (the crossed swords). On top of the switches, the Guide's: the one square
+-- filled in gold, whatever the class.
 
 if SurvivorUI_Standby then return end
 
@@ -320,8 +321,8 @@ function SurvivorUI_ToggleSoundEffects()
 	KeyFlip(soundSwitch)
 end
 
--- The top of the stack: the last switch shown, else Run History's, else ours.
-local function StackTop()
+-- The top of the switches: the last one shown, else Run History's, else ours.
+local function SwitchTop()
 	local top = HistoryTop()
 	for index = 1, table.getn(switches) do
 		if SwitchShown(switches[index]) then
@@ -329,6 +330,193 @@ local function StackTop()
 		end
 	end
 	return top
+end
+
+------------------------------------------------------------------------------
+-- The Guide's (Guide.lua): the same square, filled in gold with a dark mark,
+-- so it stands apart from the class's colors around it: a ! that breathes
+-- while a page is unread, a ? once all are read. Off with "Guide button" (the
+-- options' Minimap tab).
+
+local GUIDE_GOLD = { 1, 0.78, 0.15 }
+local guideButton = CreateFrame("Button", "SurvivorUIGuideButton", Minimap or UIParent)
+guideButton:SetFrameStrata("MEDIUM")
+guideButton:SetFrameLevel((Minimap and Minimap:GetFrameLevel() or 1) + 5)
+guideButton.icon = guideButton:CreateTexture(nil, "ARTWORK")
+guideButton.icon:SetTexture(FLAT)
+guideButton.icon:SetVertexColor(GUIDE_GOLD[1], GUIDE_GOLD[2], GUIDE_GOLD[3])
+guideButton.ownIcon = guideButton.icon
+Square(guideButton, guideButton.icon)
+guideButton.mark = guideButton:CreateFontString(nil, "OVERLAY")
+guideButton.mark:SetFont("Fonts\\FRIZQT__.TTF", 13)
+guideButton.mark:SetTextColor(0.13, 0.08, 0)
+guideButton.mark:SetPoint("CENTER", guideButton, "CENTER", 0, 0)
+guideButton.wait = 0
+guideButton:SetScript("OnClick", function()
+	if SurvivorUI_ToggleGuide then
+		GameTooltip:Hide()
+		if SurvivorUIGuideHint then
+			SurvivorUIGuideHint:Hide()
+		end
+		SurvivorUI_ToggleGuide()
+	end
+end)
+guideButton:SetScript("OnEnter", function()
+	Lit(this, true)
+	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
+	GameTooltip:SetText(SurvivorUI_T("Guide"), GUIDE_GOLD[1], GUIDE_GOLD[2], GUIDE_GOLD[3])
+	GameTooltip:AddLine(SurvivorUI_T("How Luck, Damage and Crit really work."), 1, 1, 1)
+	if SurvivorUI_GuideUnread and SurvivorUI_GuideUnread() then
+		GameTooltip:AddLine(SurvivorUI_T("Something new to read!"), GUIDE_GOLD[1], GUIDE_GOLD[2], GUIDE_GOLD[3])
+	end
+	GameTooltip:Show()
+end)
+guideButton:SetScript("OnLeave", function()
+	Lit(this, false)
+	GameTooltip:Hide()
+end)
+
+-- Its mark, as the pages stand.
+function SurvivorUI_PaintGuideButton()
+	local unread = SurvivorUI_GuideUnread and SurvivorUI_GuideUnread()
+	guideButton.unread = unread
+	guideButton.mark:SetText(unread and "!" or "?")
+	if not unread then
+		guideButton.icon:SetAlpha(1)
+	end
+end
+
+guideButton:SetScript("OnUpdate", function()
+	if this.unread then
+		this.wait = this.wait + arg1
+		this.icon:SetAlpha(0.8 + 0.2 * math.sin(this.wait * 4))
+	end
+end)
+
+local function GuideShown()
+	return not (SurvivorUIDB and SurvivorUIDB.guideMapButton == false)
+end
+
+-- A note beside the button, once for each player, some seconds into their
+-- first run with it: as Run History's note below, the result box in the Guide's
+-- gold, alive. A click opens the Guide; it goes by itself after a while.
+local HINT_DELAY, HINT_SECONDS = 5, 25
+
+local hint = CreateFrame("Button", "SurvivorUIGuideHint", UIParent)
+hint:SetFrameStrata("HIGH")
+hint:SetWidth(120)
+hint:SetHeight(32)
+hint:Hide()
+
+-- Made the first time: the box is Run History's, which loads after this file.
+local function HintParts()
+	if hint.face then
+		return
+	end
+	if SurvivorUI_ResultBadge then
+		hint.look = SurvivorUI_ResultBadge(hint)
+		hint.look:SetAllPoints(hint)
+		hint.look.text:Hide()
+		hint.look.time:Hide()
+		SurvivorUI_SetResultBadge(hint.look, "guide", nil)
+	else
+		hint:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
+		hint:SetBackdropColor(0.04, 0.04, 0.06, 0.95)
+	end
+	local face = CreateFrame("Frame", nil, hint)
+	face:SetAllPoints(hint)
+	face:SetFrameLevel(hint:GetFrameLevel() + 10)
+	hint.face = face
+	hint.title = face:CreateFontString(nil, "OVERLAY")
+	hint.title:SetFont(SurvivorUI_FONT, 8 + (SurvivorUI_FONT_BUMP or 0), "OUTLINE")
+	hint.title:SetPoint("TOPLEFT", face, "TOPLEFT", 7, -5)
+	hint.title:SetTextColor(1, 1, 1)
+	hint.title:SetText(SurvivorUI_T("Questions about a mechanic?"))
+	hint.line = face:CreateFontString(nil, "OVERLAY")
+	hint.line:SetFont(SurvivorUI_FONT, 7 + (SurvivorUI_FONT_BUMP or 0), "OUTLINE")
+	hint.line:SetPoint("TOPLEFT", hint.title, "BOTTOMLEFT", 0, -3)
+	hint.line:SetTextColor(1, 0.92, 0.65)
+	hint.line:SetText(SurvivorUI_T("Click: the Guide explains it"))
+	local close = CreateFrame("Button", nil, face)
+	close:SetWidth(12)
+	close:SetHeight(12)
+	close:SetPoint("TOPRIGHT", face, "TOPRIGHT", -1, -1)
+	close.text = close:CreateFontString(nil, "OVERLAY")
+	close.text:SetFont(SurvivorUI_FONT, 8 + (SurvivorUI_FONT_BUMP or 0), "OUTLINE")
+	close.text:SetPoint("CENTER", close, "CENTER", 0, 0)
+	close.text:SetText(SurvivorUI_T("x"))
+	close.text:SetTextColor(0.85, 0.85, 0.9)
+	close:SetScript("OnClick", function() hint:Hide() end)
+	close:SetScript("OnEnter", function() this.text:SetTextColor(1, 1, 1) end)
+	close:SetScript("OnLeave", function() this.text:SetTextColor(0.85, 0.85, 0.9) end)
+end
+
+hint:SetScript("OnClick", function()
+	this:Hide()
+	if SurvivorUI_ToggleGuide then
+		SurvivorUI_ToggleGuide()
+	end
+end)
+hint:SetScript("OnEnter", function()
+	if this.look then
+		this.look.hot = true
+	end
+end)
+hint:SetScript("OnLeave", function()
+	if this.look then
+		this.look.hot = nil
+	end
+end)
+hint:SetScript("OnUpdate", function()
+	this.age = this.age + arg1
+	local left = HINT_SECONDS - this.age
+	if left <= 0 or (AZS_GetPhase and AZS_GetPhase() == "choosing") then
+		this:Hide()
+	else
+		this:SetAlpha(math.min(1, this.age * 3, left * 3))
+	end
+end)
+
+local hintWatch = CreateFrame("Frame")
+local hintWait, hintPlayed = 0, 0
+hintWatch:SetScript("OnUpdate", function()
+	hintWait = hintWait + arg1
+	if hintWait < 1 then
+		return
+	end
+	hintWait = 0
+	if not SurvivorUIDB then
+		return
+	end
+	if SurvivorUIDB.guideHintSeen then
+		this:SetScript("OnUpdate", nil)
+		return
+	end
+	local history = getglobal("SurvivorUIHistoryNotice")
+	if SurvivorUIDB.guideMapButton == false or not guideButton:IsVisible() or (history and history:IsShown())
+		or not AZS_GetPhase or AZS_GetPhase() ~= "playing" then
+		return
+	end
+	hintPlayed = hintPlayed + 1
+	if hintPlayed >= HINT_DELAY then
+		SurvivorUIDB.guideHintSeen = true
+		HintParts()
+		hint:SetWidth(math.max(hint.title:GetStringWidth() + 24, hint.line:GetStringWidth() + 16))
+		hint:ClearAllPoints()
+		if SurvivorUI_RoomOnRight(guideButton) then
+			hint:SetPoint("BOTTOMLEFT", guideButton, "BOTTOMRIGHT", 6, 0)
+		else
+			hint:SetPoint("BOTTOMRIGHT", guideButton, "BOTTOMLEFT", -6, 0)
+		end
+		hint.age = 0
+		hint:SetAlpha(0)
+		hint:Show()
+	end
+end)
+
+-- The top of the stack: the Guide's when it shows, else the switches'.
+local function StackTop()
+	return GuideShown() and guideButton or SwitchTop()
 end
 
 ------------------------------------------------------------------------------
@@ -387,6 +575,14 @@ function SurvivorUI_PlaceMapButtons()
 			switch:Hide()
 		end
 	end
+	guideButton:ClearAllPoints()
+	guideButton:SetPoint("BOTTOM", under, "TOP", 0, 5)
+	if GuideShown() then
+		guideButton:Show()
+	else
+		guideButton:Hide()
+	end
+	SurvivorUI_PaintGuideButton()
 	RestyleBattlefield()
 end
 

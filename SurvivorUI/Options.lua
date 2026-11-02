@@ -256,6 +256,7 @@ local TABS = {
 	{ key = "xpbar", label = "XP bar", color = { 0.72, 0.45, 1.00 } },
 	{ key = "levelup", label = "Level Up!", color = { 1.00, 0.86, 0.30 } },
 	{ key = "loot", label = "Loot list", color = { 0.55, 0.75, 1.00 } },
+	{ key = "worn", label = "Jewelry worn", color = { 0.92, 0.76, 0.45 } },
 	{ key = "history", label = "Run History", color = { 0.82, 0.62, 1.00 } },
 	{ group = "Combat", color = { 1.00, 0.50, 0.38 } },
 	{ key = "combat", label = "Combat text", color = { 1.00, 0.38, 0.32 } },
@@ -270,7 +271,7 @@ local TABS = {
 	{ key = "build", label = "Build list", color = { 0.45, 0.85, 1.00 } },
 	{ key = "character", label = "Character pane", color = { 1.00, 0.50, 0.70 } },
 	{ key = "stats", label = "Stats panel", color = { 0.95, 0.62, 0.88 } },
-	{ key = "jewelry", label = "Jewelry", color = { 0.92, 0.76, 0.45 } },
+	{ key = "jewelry", label = "Jewelry collection", color = { 0.92, 0.76, 0.45 } },
 	{ group = "Interface", color = { 0.45, 0.72, 1.00 } },
 	{ key = "units", label = "Frames & bar", color = { 1.00, 0.62, 0.25 } },
 	{ key = "minimap", label = "Minimap", color = { 0.55, 0.82, 0.40 } },
@@ -325,9 +326,10 @@ local TAB_PIECES = {
 	records = { "New best crit", "New jump record" },
 	crits = { "Biggest Crits" },
 	build = { "Build list" },
+	worn = { "Jewelry worn" },
 	character = { "Character pane" },
 	stats = { "Stats" },
-	units = { "Player frame", "Target frame", "Buffs" },
+	units = { "Player frame", "Target frame", "Target debuffs", "Buffs" },
 	minimap = { "Minimap", "Minimap button" },
 	chat = { "Chat" },
 }
@@ -1223,6 +1225,13 @@ local function Slider(page, label, low, high, step, get, set, format)
 		slider:SetValue(value)
 		Show(value)
 		slider.quiet = nil
+		-- Switched off by another setting (holder.off): dimmed, it takes no mouse.
+		if self.off then
+			local off = self.off()
+			slider:EnableMouse(not off)
+			slider:EnableMouseWheel(not off)
+			self:SetAlpha(off and 0.4 or 1)
+		end
 	end
 	table.insert(widgets, holder)
 	side.Index(page, label, nil, page.y, 20)
@@ -1827,13 +1836,15 @@ local MODULES = {
 	} },
 	{ "Character", {
 		{ "Build list", OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"),
-			"Your spells, their ranks and your jewelry. It puts the game's row of spells away.", nil, nil, GAME.build },
+			"Your spells and their ranks. It puts the game's row of spells away.", nil, nil, GAME.build },
+		{ "Jewelry worn", OnUnlessOff("jewelryWorn"), Call("SurvivorUI_ToggleWorn"),
+			"The panel under the build list: the neck, the rings and the trinkets you wear this run." },
 		{ "Character pane", FeatureOn("characterPane"), FeatureToggle("characterPane"),
 			"The character pane laid out again, the stats in sections. Off: the game's pane.", true },
 		{ "Stats panel", OnlyIfOn("statsPanel"), Call("SurvivorUI_ToggleStatsPanel"),
 			"The run's numbers as a panel on the screen all the time, apart from the character pane." },
-		{ "Jewelry", OnUnlessOff("jewelry"), Flip("jewelry"),
-			"Every amulet, ring and trinket found, and what is left to find." },
+		{ "Jewelry collection", OnUnlessOff("jewelry"), Flip("jewelry"),
+			"The list by the character pane: every amulet, ring and trinket found, and what is left to find." },
 		{ "Ability tooltips", FeatureOn("abilityTooltip"), FeatureToggle("abilityTooltip"),
 			"A spell's tooltip laid out again: what it does, its numbers in colors, its upgrades, bonuses and talents.", true },
 	} },
@@ -3282,6 +3293,7 @@ Subheader(page, "Look")
 Check(page, "Background behind the list", OnUnlessOff("lootBackground"), Flip("lootBackground"), "off: the rows on the world itself")
 Slider(page, "Lines shown", 3, 15, 1, function() return DB().lootLines or 8 end,
 	function(value) DB().lootLines = math.floor(value + 0.5) end, "%d")
+Note(page, "The same piece again in a run is one bar, x2. On its title, the run's marks: hover them for each boss's.")
 
 ------------------------------------------------------------------------------
 -- Combat text.
@@ -3502,7 +3514,7 @@ function Paint.Over(tile, ground)
 		Kit.Dab(tile, ground, x, 17 - math.mod(index, 2) * 4, 10, 3, 1, crit and 0.76 or 1, crit and 0.08 or 1)
 	end
 end
-Kit.Section(page, "Where", "Drag a column while this tab is open, or click it for its card; moved, it stays put whatever the distance. Over the enemies needs nameplates.")
+Kit.Section(page, "Where", "Drag a column while this tab is open, or click it for its card; moved, it stays put whatever the distance. Over the enemies: each number over the enemy it hit, kept where that enemy fell.")
 Kit.Tiles(page, {
 	{ "sides", "Beside the hero", "Damage left, crits right, heals over you", Paint.Sides },
 	{ "enemies", "Over the enemies", "Each number over the enemy it hit", Paint.Over },
@@ -3564,6 +3576,16 @@ Kit.Foot(page, {
 page = pages.meter
 Header(page, "Damage meter", "Each source's damage and its share, its crits on hover; its title's menu for the healing or the last boss fight. Off: the game's meter.")
 PanelHead(page, OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "meter", "Damage meter", nil, GAME.meter)
+-- Its height in lines (Meter.lua), the same as its card's in move mode: the
+-- other windows follow unless set on their own cards.
+Slider(page, "Height", 3, 20, 1,
+	function()
+		local _, lines = SurvivorUI_MeterMainSize()
+		return lines
+	end,
+	function(value) SurvivorUI_SetMeterMainSize(nil, math.floor(value + 0.5)) end,
+	function(value) return string.format("%d lines", value) end)
+Note(page, "With more to show than lines, roll them with the mouse wheel or the bar at its right. Move mode sets each window's height and width on its own, and its Reset gives back the lines the screen fits.")
 -- Others: the share under which the fold button in the meter's title folds
 -- the lines into one (Meter.lua's Folded).
 Subheader(page, "Others")
@@ -3738,21 +3760,35 @@ Subheader(page, "Time zone")
 local clockLine
 local function ShowClock()
 	local hours = tonumber(DB().timeZone)
-	local now = time() + (hours or 0) * 3600
+	local zone = SurvivorUI_TimeZone()
+	local now = time() + (zone or 0)
 	local clock = string.format("%02d:%02d", math.floor(math.mod(now, 86400) / 3600), math.floor(math.mod(now, 3600) / 60))
 	if hours then
-		clockLine:SetText("Your time now: |cffffffff"..clock.."|r, if this is your zone. The game's own clock runs in UTC, so the runs' dates take this one.")
+		clockLine:SetText("Your time now: |cffffffff"..clock.."|r in this zone. The minimap's clock and the runs' dates take it.")
+	elseif zone then
+		clockLine:SetText("Your computer's time: |cffffffff"..clock.."|r now. The minimap's clock and the runs' dates take it. Untick it for another zone.")
 	else
 		clockLine:SetText("Not set: the runs' dates are in UTC (|cffffffff"..clock.."|r now), the game's own clock. Set yours: Brazil UTC-3, Portugal UTC+0 or +1.")
 	end
 end
-Slider(page, "Your time zone", -12, 14, 0.5,
-	function() return tonumber(DB().timeZone) or 0 end,
+Check(page, "Your computer's time", function() return DB().timeZone == nil end, function()
+	if DB().timeZone == nil then
+		DB().timeZone = (SurvivorUI_TimeZone() or 0) / 3600
+	else
+		DB().timeZone = nil
+	end
+	ShowClock()
+end, "untick it for the time zone under it")
+local zoneRow = Slider(page, "Your time zone", -12, 14, 0.5,
+	function() return (SurvivorUI_TimeZone() or 0) / 3600 end,
 	function(value)
 		DB().timeZone = value
 		ShowClock()
 	end,
 	function(value) return SurvivorUI_ZoneLabel and SurvivorUI_ZoneLabel(value) or tostring(value) end)
+function zoneRow.off()
+	return DB().timeZone == nil and SurvivorUI_ComputerZone() ~= nil
+end
 clockLine = Text(page, 9, MUTED)
 clockLine:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 clockLine:SetWidth(PAGE_WIDTH)
@@ -3866,7 +3902,7 @@ Check(page, "Revive bar", ReviveIsOn, Call("SurvivorUI_ToggleRevive"),
 -- Build list (BuildList.lua).
 
 page = pages.build
-Header(page, "Build list", "Your spells with their icons and ranks, the free slots and the jewelry you wear. Off: the game's row of spells.")
+Header(page, "Build list", "Your spells with their icons and ranks, and the free slots. Off: the game's row of spells.")
 PanelHead(page, OnUnlessOff("buildList"), Call("SurvivorUI_ToggleBuild"), "build", "Build list", nil, GAME.build)
 Subheader(page, "Beside each spell")
 InlineChecks(page, {
@@ -3886,6 +3922,17 @@ Check(page, "Keep the game's row of spells too", OnlyIfOn("gameBuildToo"), funct
 		SurvivorUI_GameHud.build()
 	end
 end, "The game's own row stays under the list. From the game's 0.115 the Summons count down to the next Felguard or Pit Lord (Butcher, Pact of the Annihilan) as well, so this is no longer needed for that.")
+
+-- Jewelry worn (BuildList.lua).
+
+page = pages.worn
+Header(page, "Jewelry worn", "The neck, the rings and the trinkets you wear this run, a panel of its own, under the build list until you move it.")
+PanelHead(page, OnUnlessOff("jewelryWorn"), Call("SurvivorUI_ToggleWorn"), "worn", "Jewelry worn")
+Subheader(page, "Look")
+Inline(page, "Each piece shows", { { "stats", "Its stats" }, { "name", "Its name" } },
+	function() return DB().jewelryNames and "name" or "stats" end,
+	function(value) DB().jewelryNames = value == "name" or nil end)
+Note(page, "Its name: cut when long, and only that. Hover the piece for its stats.")
 
 -- Character pane (CharacterPane.lua): it opens with this tab.
 
@@ -3997,7 +4044,7 @@ Button(page, "Stats back to default", 200, 0, Asked("Stats back to default?",
 -- Jewelry: the Jewelry Collection (Jewelry.lua).
 
 page = pages.jewelry
-Header(page, "Jewelry", "The Jewelry Collection: every amulet, ring and trinket of the game's codex, found or still to find, and what each gives by rarity; your class's own amulets by spell.")
+Header(page, "Jewelry collection", "The Jewelry Collection: every amulet, ring and trinket of the game's codex, found or still to find, and what each gives by rarity; your class's own amulets by spell.")
 PanelHead(page, OnUnlessOff("jewelry"), Flip("jewelry"), "jewelry", nil, nil, nil, { font = "Jewelry",
 	back = function() if SurvivorUI_ResetJewelryPlace then SurvivorUI_ResetJewelryPlace() end end })
 Check(page, "Beside the character pane", function() return SurvivorUI_JewelryWithPane and SurvivorUI_JewelryWithPane() end,
@@ -4021,7 +4068,7 @@ page.y = page.y - 30
 -- Frames & bar: the player's and the target's frames, and the action bar.
 
 page = pages.units
-Header(page, "Frames & bar", "Your frame and your target's, the action bar and the tooltip (the minimap has a tab of its own). While this tab is open, drag the frames or the buffs to move them.")
+Header(page, "Frames & bar", "Your frame and your target's, the action bar and the tooltip (the minimap has a tab of its own). While this tab is open, drag the frames, the buffs or the target's debuffs to move them.")
 InlineChecks(page, {
 	{ "Unit frames", FeatureOn("unitFrames"), FeatureToggle("unitFrames") },
 	{ "Action bar", FeatureOn("actionBar"), FeatureToggle("actionBar") },
@@ -4058,7 +4105,7 @@ page.y = page.y - 4
 Button(page, "Center the action bar", 200, 0, Call("SurvivorUI_CenterRow"))
 Button(page, "Frames back in place", 200, 212, function()
 	if SurvivorUI_ResetPiece then
-		for _, name in pairs({ "Player frame", "Target frame", "Buffs" }) do
+		for _, name in pairs({ "Player frame", "Target frame", "Target debuffs", "Buffs" }) do
 			SurvivorUI_ResetPiece(name)
 		end
 	end
@@ -4095,24 +4142,32 @@ Check(page, "Run History button", OnUnlessOff("historyMapButton"), function()
 		SurvivorUI_PlaceMapButtons()
 	end
 end, "the hourglass over the [S], opening Run History")
+Check(page, "Guide button", OnUnlessOff("guideMapButton"), function()
+	DB().guideMapButton = DB().guideMapButton == false
+	if SurvivorUI_PlaceMapButtons then
+		SurvivorUI_PlaceMapButtons()
+	end
+end, "the gold square, a ! with unread pages; /sui guide too")
 Check(page, "Spell effects button", OnUnlessOff("effectsMapButton"), function()
 	DB().effectsMapButton = DB().effectsMapButton == false
 	if SurvivorUI_PlaceMapButtons then
 		SurvivorUI_PlaceMapButtons()
 	end
-end, "sparkles over the hourglass: the game's No Spell Effects on or off in a click (no explosions, missiles, glows or beams)")
+end, "sparkles: no explosions, missiles, glows or beams, in a click")
 Check(page, "Sound effects button", OnUnlessOff("soundMapButton"), function()
 	DB().soundMapButton = DB().soundMapButton == false
 	if SurvivorUI_PlaceMapButtons then
 		SurvivorUI_PlaceMapButtons()
 	end
-end, "a speaker over them: the game's sound effects muted or back in a click, the music and the ambience kept. The game keeps no sound of the spells apart: the hits and the clicks go with them.")
+end, "a speaker: mutes spells, hits and clicks; music stays")
 KeyButton(page, "Spell effects key", "SURVIVORUI_SPELLEFFECTS",
 	"A key of your own for the spell effects, on or off, as the sparkles' button. None by default; Key Bindings in the game's menu lists it as well.")
 KeyButton(page, "Sound effects key", "SURVIVORUI_SOUNDEFFECTS",
 	"A key of your own for the sound effects, muted or back, as the speaker's button. None by default; Key Bindings in the game's menu lists it as well.")
-Check(page, "Clock and FPS", OnUnlessOff("minimapClock"), Flip("minimapClock"),
-	"along its bottom: your time (the time zone in This Run) and the frames a second")
+Check(page, "Clock and FPS", OnUnlessOff("minimapClock"), function()
+	Flip("minimapClock")()
+	SurvivorUI_GameHud.localClock()
+end, "your time and the frames a second; puts the game's clock away")
 Inline(page, "Clock", { { "24", "24 hours" }, { "12", "12 hours" } },
 	function() return DB().clock12 and "12" or "24" end,
 	function(value) DB().clock12 = value == "12" or nil end)
@@ -4140,22 +4195,23 @@ Subheader(page, "Pins")
 Check(page, "Pins on the minimap", FeatureOn("mapPins"), FeatureToggle("mapPins", true), "all of them; the same as Minimap pins in Modules")
 Check(page, "Lairs", OnUnlessOff("pinLairs"), Flip("pinLairs"), "each guardian's lair, alive or empty")
 PinSizeSlider("Lair size", "lair")
-Check(page, "Lair marks", OnUnlessOff("guardianMarks"), Flip("guardianMarks"), "off: a skull for each lair; the same marks as the run tracker's and the boss bars'")
+Check(page, "Lair marks", OnUnlessOff("guardianMarks"), Flip("guardianMarks"), "off: a skull for each lair")
 Inline(page, "An empty lair", { { "dim", "Dimmed" }, { "hide", "Hidden" } },
 	function() return DB().pinEmpty == "hide" and "hide" or "dim" end,
 	function(value) DB().pinEmpty = value == "hide" and "hide" or nil end)
+Check(page, "Lair timers", OnlyIfOn("pinTimers"), function() DB().pinTimers = not DB().pinTimers end, "under an empty lair's pin, how long till its guardian is back")
 Check(page, "Caches", OnUnlessOff("pinCaches"), Flip("pinCaches"), "a chest for each one on the field")
 PinSizeSlider("Cache size", "cache")
 Inline(page, "Out of reach", { { "edge", "On the edge" }, { "hide", "Hidden" } },
 	function() return DB().pinEdge == "hide" and "hide" or "edge" end,
 	function(value) DB().pinEdge = value == "hide" and "hide" or nil end)
-Note(page, "On the edge: a pin past the minimap's reach sits on its edge, smaller and fainter, pointing the way. Hidden: only what the minimap reaches.")
+Note(page, "On the edge: a pin past the minimap's reach sits on its edge, smaller and fainter. Hidden: only what it reaches.")
 
 Subheader(page, "The game's flag")
 Inline(page, "Red flag", { { "ours", "Our glow" }, { "game", "The game's" }, { "none", "Off" } },
 	function() return SurvivorUI_GameFlag and SurvivorUI_GameFlag() or "game" end,
 	function(value) if SurvivorUI_SetGameFlag then SurvivorUI_SetGameFlag(value) end end)
-Note(page, "The game flags the lair to head for: the nearest with its guardian, else the one back soonest. Our glow: the flag put away, that lair's mark glowing gold on the minimap and in the run tracker. The game's: its red flag. Off: neither. With the pins off (Modules), the game's flag is back, unless its The game's is unticked there. From the game's 0.102.")
+Note(page, "The lair to head for. Our glow: its mark glows gold on the minimap and in the run tracker. The game's: its red flag. Off: neither. With the pins off (Modules), the game's flag is back, unless unticked there.")
 
 -- The preview: the eight marks (or the skull) at the lairs' size and the chest
 -- at the caches', on a minimap's grass, as the settings stand.
@@ -4176,6 +4232,8 @@ pinPreview.glow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
 pinPreview.glow:SetBlendMode("ADD")
 pinPreview.glow:SetVertexColor(1, 0.82, 0.2, 0.85)
 pinPreview.glow:SetPoint("CENTER", pinPreview.icons[1], "CENTER", 0, 0)
+pinPreview.timer = Text(pinPreview, 9, TEXT)
+pinPreview.timer:SetText("1:30")
 pinPreview.none = Text(pinPreview, 10, MUTED)
 pinPreview.none:SetPoint("CENTER", pinPreview, "CENTER", 0, 0)
 pinPreview.none:SetText("No pins")
@@ -4205,6 +4263,13 @@ function pinPreview:Refresh()
 		else
 			icon:Hide()
 		end
+	end
+	if lairsOn and DB().pinTimers then
+		self.timer:ClearAllPoints()
+		self.timer:SetPoint("TOP", self.icons[DB().guardianMarks ~= false and 2 or 1], "BOTTOM", 0, -1)
+		self.timer:Show()
+	else
+		self.timer:Hide()
 	end
 	if lairsOn and SurvivorUI_GameFlag and SurvivorUI_GameFlag() == "ours" then
 		self.glow:SetWidth(lair * 2.4)

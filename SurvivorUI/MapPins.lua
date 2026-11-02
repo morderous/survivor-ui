@@ -15,13 +15,15 @@
 -- minimap's edge sits on the edge, smaller and fainter, pointing the way.
 -- Hover a pin for what it is.
 -- The options' Minimap tab sets them: lairs and caches each on or off and its
--- size, an empty lair dimmed or hidden, a pin out of reach on the edge or
--- hidden. All off with "Caches on the minimap" (Modules); /sui pins prints
+-- size, an empty lair dimmed or hidden, with its guardian's return under it or
+-- not, a pin out of reach on the edge or hidden. All off with "Caches on the
+-- minimap" (Modules); /sui pins prints
 -- what the addon reads, to check it.
 
 if SurvivorUI_Standby then return end
 
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
+local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local PIN_SIZE = 16                -- a pin's size untouched; on the edge, 11 of each 16
 local EDGE_SIZE = 11
 
@@ -136,6 +138,12 @@ local function Pin(index)
 	pin.glow:SetVertexColor(1, 0.82, 0.2)
 	pin.glow:SetPoint("CENTER", pin, "CENTER", 0, 0)
 	pin.glow:Hide()
+	-- How long till a lair's guardian is back (the options' Minimap tab).
+	pin.timer = pin:CreateFontString(nil, "OVERLAY")
+	pin.timer:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
+	pin.timer:SetPoint("TOP", pin, "BOTTOM", 0, -1)
+	pin.timer:SetTextColor(1, 1, 1)
+	pin.timer:Hide()
 	pin:EnableMouse(true)
 	pin:SetScript("OnEnter", function()
 		GameTooltip:SetOwner(this, "ANCHOR_LEFT")
@@ -178,10 +186,15 @@ SurvivorUI_MapSpan = Span
 SurvivorUI_MapShare = Share
 
 -- The hero's place in the world, in the caches' and lairs' yards, and the way
--- faced in radians clockwise from north, as the arrows read it (the game's
--- pf, a WoW orientation: 0 north, turning toward the west). Nil on a game
--- that does not send them (before 0.97).
+-- faced in radians clockwise from north, as the arrows read it (a WoW
+-- orientation: 0 north, turning toward the west). The game's live place (its
+-- 0.132), in dungeons and raids too; else the px, py and pf it sends a few
+-- times a second. Nil on a game that sends neither (before 0.97).
 local function HeroWorld()
+	local place = AZS_GetPlayerPosition and AZS_GetPlayerPosition()
+	if place then
+		return place.x, place.y, -place.facing
+	end
 	local run = AZS_RUN
 	if not run then
 		return nil
@@ -390,6 +403,11 @@ local function WayTo(place, px, py, heroX, heroY, span)
 	end
 end
 
+local function Clock(seconds)
+	seconds = math.max(0, math.floor(seconds + 0.5))
+	return string.format("%d:%02d", math.floor(seconds / 60), math.mod(seconds, 60))
+end
+
 local pinsWere                  -- the pins on or off at the last look
 
 local function Update()
@@ -423,12 +441,16 @@ local function Update()
 					pin.art:SetVertexColor(1, 1, 1)
 					pin.glow:Hide()
 					pin.title, pin.note, pin.flagged = "Cache", nil, nil
+					pin.timer:Hide()
 					Place(pin, east, south, yardsAcross, cacheSize)
 				end
 			end
 			local lairs = settings.pinLairs ~= false and AZS_GetLairs and AZS_GetLairs() or {}
 			local marks = SurvivorUI_LairMarks and SurvivorUI_LairMarks(lairs) or {}
 			local lairSize = SurvivorUI_PinSize("lair")
+			-- The game's seconds left are from its last word; while it plays they
+			-- run on from there (Guardians.lua).
+			local since = AZS_LAIRS_UPDATED and AZS_GetPhase() == "playing" and GetTime() - AZS_LAIRS_UPDATED or 0
 			for index = 1, table.getn(lairs) do
 				local lair = lairs[index]
 				local east, south = WayTo(lair, px, py, heroX, heroY, span)
@@ -457,6 +479,13 @@ local function Update()
 					local markName = SurvivorUI_LairMarkName and SurvivorUI_LairMarkName(mark)
 					pin.title = markName and SurvivorUI_TF("{1} lair", SurvivorUI_T(markName)) or SurvivorUI_T("Lair")
 					pin.flagged = tonumber(lair.flag) == 1 or nil
+					local left = settings.pinTimers and not lair.active and (tonumber(lair.left) or -1) - since
+					if left and left > 0 then
+						pin.timer:SetText(Clock(left))
+						pin.timer:Show()
+					else
+						pin.timer:Hide()
+					end
 					if pin.flagged and FlagChoice() == "ours" then
 						flaggedPin = pin
 					else

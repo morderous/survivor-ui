@@ -160,7 +160,9 @@ local function Place(window)
 	end
 	local main = getglobal("SurvivorUIMeter")
 	if main then
-		window:SetPoint("BOTTOMRIGHT", main, "BOTTOMLEFT", -8 - (window.index - 1) * (M.WIDTH + 16), 0)
+		-- By the title, level with the main one's: a height changed moves only
+		-- the bottom edge.
+		window:SetPoint("TOPRIGHT", main, "TOPLEFT", -8 - (window.index - 1) * (M.WIDTH + 16), 0)
 	else
 		window:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -260 - (window.index - 1) * (M.WIDTH + 16), 40)
 	end
@@ -341,17 +343,22 @@ local function Window(index)
 	end
 	window:SetScript("OnDragStart", window.StartMove)
 	window:SetScript("OnDragStop", window.StopMove)
-	window.Wheel = function()
-		local most = window.most or 0
-		window.scrolled = math.max(0, math.min(most, math.min(window.scrolled or 0, most) - (arg1 or 0)))
+	window.Roll = function(to)
+		window.scrolled = math.max(0, math.min(window.most or 0, to))
 		Draw(window)
 		GameTooltip:Hide()
 		if SurvivorUI_CritCardHide then
 			SurvivorUI_CritCardHide()
 		end
 	end
+	window.Wheel = function()
+		window.Roll(math.min(window.scrolled or 0, window.most or 0) - (arg1 or 0))
+	end
 	window:EnableMouseWheel(true)
 	window:SetScript("OnMouseWheel", window.Wheel)
+	if SurvivorUI_MeterNewRoll then
+		SurvivorUI_MeterNewRoll(window)
+	end
 
 	-- The title: the page's name and a caret, a menu of the pages.
 	local title = CreateFrame("Button", nil, window)
@@ -553,6 +560,9 @@ Draw = function(window)
 	local skip = math.min(window.scrolled or 0, window.most)
 	local count = math.min(shown, table.getn(lines) - skip)
 	local top = count > 0 and lines[1].dmg or 0
+	if SurvivorUI_MeterShowRoll then
+		SurvivorUI_MeterShowRoll(window, skip, shown)
+	end
 	for index = 1, count do
 		local bar = window.bars[index]
 		if not bar and SurvivorUI_MeterNewBar then

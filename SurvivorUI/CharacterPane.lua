@@ -652,6 +652,15 @@ local function MakeView(alone)
 		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
 		GameTooltip:SetText(this.title, 1, 1, 1)
 		GameTooltip:AddLine(SurvivorUI_T(this.text), 1, 0.82, 0, 1)
+		-- Stormguard's line under Armor, in the game's own words (its 0.137;
+		-- Earthen Bulwark's before).
+		local guard = AZS_Stormguard or AZS_Bulwark
+		if this.key == "Armor" and guard and AZS_STATS then
+			local line = guard(AZS_STATS)
+			if line ~= "" then
+				GameTooltip:AddLine(string.sub(line, 2), 1, 1, 1, 1)
+			end
+		end
 		-- Its parts: what the gear worn gives, and the rest.
 		local gear, rest = SurvivorUI_StatGear(this.key)
 		if gear then

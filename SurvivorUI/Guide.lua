@@ -1,0 +1,1305 @@
+-- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
+-- Survivor UI: the guide, pages that explain the game's numbers so a child
+-- could follow them, each with numbers to play with: SurvivorUI Classic's, in
+-- this addon's flat look. Its button is the gold square on the stack by the
+-- minimap (MinimapButton.lua). Opened from there or with /sui guide. In a run
+-- the game's Paused screen takes Escape first. Its words go through
+-- SurvivorUI_T, the game's names through SurvivorUI_Native (Locale.lua).
+--
+-- The rules, read in the game's 0.131 exe (game\mod.rs, game\upgrades.rs):
+--   Luck: as in XpBar.lua. At m = 1 the weights add up to 100.
+--   A hit = the spell's own number x Damage x Crit Dmg if it crits x the
+--     enemy's bonuses. Inside each, added; from one to the next, multiplied.
+--   Damage adds level, gear, jewelry, talents and the buffs that last a while
+--     (Battle Shout 0.4, Slice and Dice 0.32, Arcane Power 0.35, Blood Fury
+--     0.35, Perception 0.15, at their first rank), each buff x (1 + Buff
+--     Power). The same buff twice counts once: the stronger stays.
+--   Past Crit 100% the rest adds to Crit Dmg, one for one.
+--   A DoT: spell x Damage counted once as it lands, x (its time / its base
+--     time) x (1 + DoT Haste), cut into ticks of one size. It rolls no crit.
+--     Ticks: its base ticks stretched by its time, x (1 + DoT Haste), to the
+--     nearest. Each tick goes through the enemy's bonuses as it lands. Copies on
+--     one enemy: 1, and 1 more every 15 levels, 4 at most; a new one takes
+--     the place of the copy with the fewest ticks left.
+--   A ground spell (game\mod.rs): a list of its own on the hero, each with its
+--     clock, none knowing of the others; the tick's size set as it lands; at
+--     every tick every enemy inside rolls Crit. Measured in the test game on
+--     2026-10-31: Consecration 23.6% of 1725 hits at Crit 23.7%, Blizzard 20.3%
+--     at 21.1%, and two Consecrations striking the same enemies 0.13 sec apart;
+--     Corruption and Curse of Agony none of 897 ticks.
+--   Damage reduction: every source added, then min(sum, 0.6 + the cap's raises);
+--     Titan is the only raise. A hit x (1 - reduction) x (1 - the gear's "while
+--     5 or more enemies are within 8 yards"), which stands outside the cap, and
+--     only then shields. Past the cap, lost but for Unbreakable; Defiance reads
+--     the reduction after the cap.
+
+if SurvivorUI_Standby then return end
+
+local WIDTH, HEIGHT = 770, 584
+local LEFT = 130                -- the pages' left edge, past the tabs
+local PAGE_WIDTH = WIDTH - LEFT - 26
+local PAGE_TOP = -36
+local TEXT = 13                 -- the words' size
+local SMALL = 11
+local LINE = 16                 -- a line of the words
+local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
+-- Friz whatever font the options choose, as the pages are laid out by its
+-- lines; in a language the addon speaks, that language's face.
+local FONT = "Fonts\\FRIZQT__.TTF"
+local MARBLE = "Interface\\AddOns\\SurvivorUI\\Art\\Marble"
+local NEW_MARK = "Interface\\AddOns\\SurvivorUI\\Art\\GuideNew"
+local GOLD = "|cffffd100"
+local GREEN = { 0.35, 0.95, 0.45 }  -- as on the character page
+local PEACH = { 1, 0.67, 0.38 }
+local RED = { 1, 0.45, 0.4 }
+local BLUE = { 0.45, 0.75, 1 }
+local PURPLE = { 0.75, 0.5, 1 }
+local YELLOW = { 1, 0.85, 0.3 }
+local TEAL = { 0.3, 0.9, 0.85 }
+local ORANGE = { 1, 0.5, 0.15 }
+local GREY = { 0.55, 0.55, 0.55 }
+-- Common to Legendary, as CardOdds gives them.
+local RARITIES = {
+	{ "Common", { 0.62, 0.62, 0.62 }, "60" },
+	{ "Uncommon", { 0.12, 1, 0 }, "25 x m" },
+	{ "Rare", { 0.2, 0.55, 1 }, "10 x m x m" },
+	{ "Epic", { 0.64, 0.21, 0.93 }, "4 x m x m x m" },
+	{ "Legendary", { 1, 0.5, 0 }, "1 x m x m x m x m" },
+}
+local GRID, GRID_MARBLE = 10, 15
+local BAG_HEIGHT = 190
+local BAG_WIDTH = 442
+local COUNT_AT, PERCENT_AT = 320, 416  -- the bag's columns
+-- Each with who has it, and its first rank's numbers in the exe: %, seconds, cooldown.
+local BUFFS = {
+	{ "Battle Shout", "Interface\\Icons\\Ability_Warrior_BattleShout", "Warrior spell", 40, 8, 16 },
+	{ "Slice and Dice", "Interface\\Icons\\Ability_Rogue_SliceDice", "Rogue spell", 32, 9, 15 },
+	{ "Arcane Power", "Interface\\Icons\\Spell_Nature_Lightning", "Mage spell", 35, 12, 30 },
+	{ "Blood Fury", "Interface\\Icons\\Racial_Orc_BerserkerStrength", "Orc racial", 35, 12, 40 },
+	{ "Perception", "Interface\\Icons\\Spell_Nature_Sleep", "Human racial", 15, 10, 30 },
+}
+-- The boxes of a hit: its title, its color, its icon, what goes in it, each thing in a color.
+local STEPS = {
+	{ "The spell", BLUE, "Spell_Fire_FlameBolt", { { "Its base hit", BLUE }, { "Its rank", TEAL }, { "Talents that name it", PURPLE } } },
+	{ "Damage", GREEN, "INV_Sword_27", { { "3% a level", YELLOW }, { "Gear and jewelry", TEAL }, { "Talents", PURPLE }, { "Damage buffs", GREEN } } },
+	{ "Crit", PEACH, "Ability_CriticalStrike", { { "", YELLOW }, { "", ORANGE } } },
+	{ "The enemy", RED, "INV_Misc_Bone_HumanSkull_01", { { "Elite or boss", PURPLE }, { "Under 30% health", RED }, { "Stunned or slowed", BLUE }, { "Burning or bleeding", ORANGE } } },
+}
+local BOX_GAP = 20
+local BOX_HEIGHT = 154
+local CARD_GAP = 10
+local CARD_HEIGHT = 90
+local FACT_HEIGHT = 80
+local WARNING = { 1, 0.28, 0.18 }
+local WARNING_HEIGHT = 52
+local TICK = 12                 -- a tick's marble on the DoTs page
+local SAMPLE_TICKS = 6          -- the sample DoT's ticks
+local MOST_COPIES, MOST_TICKS = 4, 24
+local COPY_COLORS = { PURPLE, BLUE, TEAL, GREEN }
+local SPELL_ROW = 46            -- a ground spell's card, and the step to the next
+local FEET = "Marks the ground where you stand once enemies come within %d yd."
+local GROUP = "Lands on the thickest group of enemies within %d yd."
+-- The ground spells: name, icon, class, its name, where it lands (the words and
+-- the yards), the yards it reaches, each tick, its time, its cooldown, what else
+-- it does. Each spell's first rank, as its tooltip says with no bonuses.
+local GROUND = {
+	{ "Consecration", "Spell_Holy_InnerFire", "PALADIN", "Paladin spell", FEET, 8, 8, "1", "11", 8 },
+	{ "Flamestrike", "Spell_Fire_SelfDestruct", "MAGE", "Mage spell", GROUP, 30, 8, "2.1", "8.4", 7 },
+	{ "Blizzard", "Spell_Frost_IceStorm", "MAGE", "Mage spell", GROUP, 30, 9, "1", "9.8", 8, "Slows them by 40% for 1.5 sec." },
+	{ "Rain of Fire", "Spell_Shadow_RainOfFire", "WARLOCK", "Warlock spell", GROUP, 30, 8, "1.9", "11", 8 },
+	{ "Hurricane", "Spell_Nature_Cyclone", "DRUID", "Druid spell", GROUP, 28, 10, "1", "11", 9, "Slows them by 40% for 1.5 sec." },
+	{ "Volley", "Ability_Marksmanship", "HUNTER", "Hunter spell", GROUP, 28, 8, "1", "8.4", 8 },
+	{ "Immolation Trap", "Spell_Fire_FlameShock", "HUNTER", "Hunter spell", FEET, 7, 7, "1.9", "11", 9 },
+	{ "Frost Trap", "Spell_Frost_FreezingBreath", "HUNTER", "Hunter spell", FEET, 10, 10, "2.1", "8.4", 10, "Roots them for 1.5 sec; bosses for a quarter as long." },
+}
+-- What touches the cap.
+local CAP_TALENTS = {
+	{ "Titan", "Ability_Warrior_DefensiveStance", "WARRIOR", "Warrior capstone" },
+	{ "Unbreakable", "Ability_Warrior_Sunder", "WARRIOR", "Warrior talent, 3 ranks" },
+	{ "Defiance", "Ability_Warrior_InnerRage", "WARRIOR", "Warrior talent, 3 ranks" },
+	{ "Soul Link", "Spell_Shadow_GatherShadows", "WARLOCK", "Warlock talent, 3 ranks" },
+}
+-- The other classes' talents, which only add to the number: name, icon, class,
+-- what it is, "talent", what it does.
+local OTHER_TALENTS = {
+	{ "Deflection", "Ability_Parry", "WARRIOR", "Warrior talent, 5 ranks", "talent", "Reduces all damage taken by 1% a rank: 5% at 5 ranks." },
+	{ "Shield Specialization", "INV_Shield_06", "WARRIOR", "Warrior talent, 5 ranks", "talent", "Reduces all damage taken by 1.5% a rank: 7.5% at 5 ranks." },
+	{ "Unyielding Faith", "Spell_Holy_UnyieldingFaith", "PALADIN", "Paladin talent, 3 ranks", "talent", "Reduces all damage taken by 1.2% a rank: 3.6% at 3 ranks." },
+	{ "Unbreakable Will", "Spell_Magic_MageArmor", "PRIEST", "Priest talent, 5 ranks", "talent", "Reduces all damage taken by 0.8% a rank: 4% at 5 ranks." },
+	{ "Elemental Warding", "Spell_Nature_StoneClawTotem", "SHAMAN", "Shaman talent, 3 ranks", "talent", "Reduces all damage taken by 2% a rank: 6% at 3 ranks." },
+	{ "Stormguard", "Spell_Nature_LightningShield", "SHAMAN", "Shaman talent, 5 ranks", "talent", "While Lightning Shield is active, reduces all damage taken by 3% a rank: 15% at 5 ranks." },
+	{ "Arcane Fortitude", "Spell_Arcane_ArcaneResilience", "MAGE", "Mage talent, 3 ranks", "talent", "Reduces all damage taken by 2.5% a rank: 7.5% at 3 ranks." },
+	{ "Rake", "Ability_Druid_Disembowel", "DRUID", "Druid milestone", "talent", "Your hide thickens: 8% less damage taken and 20% more maximum health." },
+	{ "Dire Bear Form", "Ability_Racial_BearForm", "DRUID", "Druid capstone", "talent", "You fight in Dire Bear Form: 10% less damage taken and 25% more maximum health." },
+}
+local CHIP_HEIGHT = 22
+local CHIP_GAP = 5
+local CHIP_REST, CHIP_LIT = 0.5, 0.66   -- how much of the class's color fills a chip
+local WALL_WIDTH = PAGE_WIDTH   -- the wall's bar
+local WALL_HEIGHT = 16
+-- Hellfire looks the same and works another way: nothing stays on the ground.
+local HELLFIRE = { "Hellfire", "Spell_Fire_Incinerate", "WARLOCK", "Warlock spell" }
+local ROW_STEP = 14
+-- A panel tinted in its own color: thin edge, the ground a dark shade of it.
+local TINTED = { bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } }
+-- The game's font templates, as the pages name them: size, color.
+local TEMPLATES = {
+	GameFontHighlight = { 12, 1, 1, 1 },
+	GameFontNormal = { 12, 1, 0.82, 0 },
+	GameFontNormalLarge = { 16, 1, 0.82, 0 },
+	GameFontDisableSmall = { 10, 0.5, 0.5, 0.5 },
+}
+
+local try = {}                  -- the numbers being played with
+local pages, tabs = {}, {}
+local current
+
+local function Text(parent, template, size)
+	local look = TEMPLATES[template]
+	local text = parent:CreateFontString(nil, "OVERLAY")
+	text:SetFont(SurvivorUI_Translated() and SurvivorUI_FONT or FONT, size or look[1])
+	text:SetTextColor(look[2], look[3], look[4])
+	text:SetShadowColor(0, 0, 0, 1)
+	text:SetShadowOffset(1, -1)
+	return text
+end
+
+-- A panel: the window's ground a little darker, a grey line round it.
+local function Framed(frame)
+	frame.noHoverOutline = true
+	frame:SetBackdrop(TINTED)
+	frame:SetBackdropColor(0.02, 0.02, 0.04, 0.6)
+	frame:SetBackdropBorderColor(0.3, 0.3, 0.36, 1)
+end
+
+-- A gold line fading out at both ends.
+local function Rule(parent)
+	local rule = parent:CreateTexture(nil, "ARTWORK")
+	rule:SetTexture(FLAT)
+	rule:SetHeight(1)
+	if rule.SetGradientAlpha then
+		rule:SetGradientAlpha("HORIZONTAL", 1, 0.82, 0, 0.8, 1, 0.82, 0, 0.15)
+	else
+		rule:SetVertexColor(1, 0.82, 0, 0.5)
+	end
+	return rule
+end
+
+-- Common to Legendary, 0 to 1, and their weights, for a roll with the given m.
+local function CardOdds(m)
+	local weights = { 60, 25 * m, 10 * m * m, 4 * m * m * m, m * m * m * m }
+	local total = 0
+	for index = 1, 5 do
+		total = total + weights[index]
+	end
+	local odds = {}
+	for index = 1, 5 do
+		odds[index] = weights[index] / total
+	end
+	return odds, weights
+end
+
+local function FlatButton(parent, label, width)
+	local button = CreateFrame("Button", nil, parent)
+	button:SetWidth(width)
+	button:SetHeight(22)
+	button.noHoverOutline = true
+	button:SetBackdrop(TINTED)
+	button:SetBackdropColor(0.11, 0.11, 0.14, 1)
+	button:SetBackdropBorderColor(0.3, 0.3, 0.36, 1)
+	button.text = Text(button, "GameFontHighlight", SMALL)
+	button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button.text:SetText(label)
+	button:SetScript("OnEnter", function() this:SetBackdropBorderColor(1, 0.82, 0, 1) end)
+	button:SetScript("OnLeave", function() this:SetBackdropBorderColor(0.3, 0.3, 0.36, 1) end)
+	return button
+end
+
+-- A button that can be pressed, or greyed out.
+local function Able(button, on)
+	if on then
+		button:Enable()
+		button.text:SetTextColor(1, 1, 1)
+	else
+		button:Disable()
+		button.text:SetTextColor(0.45, 0.45, 0.45)
+	end
+end
+
+local window = CreateFrame("Frame", "SurvivorUIGuide", UIParent)
+window:SetWidth(WIDTH)
+window:SetHeight(HEIGHT)
+window:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
+window:SetFrameStrata("DIALOG")
+-- The size it has on SurvivorUI Classic.
+window:SetScale(0.8)
+-- The ground see-through, the game behind it: the run panel's color, more
+-- solid than that panel for the words' sake.
+window:SetBackdrop(TINTED)
+window:SetBackdropColor(0.04, 0.04, 0.07, 0.7)
+window:SetBackdropBorderColor(1, 0.82, 0, 0.6)
+window:EnableMouse(true)
+window:SetMovable(true)
+if window.SetClampedToScreen then
+	window:SetClampedToScreen(true)
+end
+window:RegisterForDrag("LeftButton")
+window:SetScript("OnDragStart", function() this:StartMoving() end)
+window:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+window:Hide()
+if UISpecialFrames then
+	table.insert(UISpecialFrames, "SurvivorUIGuide")
+end
+local heading = Text(window, "GameFontNormalLarge")
+heading:SetPoint("TOP", window, "TOP", 0, -10)
+heading:SetText(SurvivorUI_T("Guide"))
+window.heading = heading
+local close = FlatButton(window, "x", 20)
+close:SetPoint("TOPRIGHT", window, "TOPRIGHT", -6, -6)
+close:SetScript("OnClick", function() window:Hide() end)
+
+local function Level()
+	return tonumber(AZS_RUN and AZS_RUN.lvl) or UnitLevel("player") or 1
+end
+
+-- The numbers to play with, from the hero.
+local function FromHero()
+	local s = AZS_STATS
+	try.luck = s and tonumber(s.luck) or 0
+	try.level = Level()
+	try.damage = s and tonumber(s.dmg) or 1
+	try.crit = s and tonumber(s.crit) or 0.05
+	try.double = s and tonumber(s.cm) or 2
+	try.haste = s and tonumber(s.doth) or 0
+	try.longer = 0
+	try.armor = s and tonumber(s.arm) or 0
+	try.cap = try.armor > 0.6 and 0.7 or 0.6
+	try.crowd = 0
+end
+
+-- Our tooltips stand over the guide's words, and the game's tooltip art lets
+-- them through at any color: a solid floor of our own under them while open.
+local tipFloor
+
+local function SolidTip()
+	if not tipFloor then
+		tipFloor = GameTooltip:CreateTexture(nil, "BACKGROUND")
+		tipFloor:SetTexture(FLAT)
+		tipFloor:SetVertexColor(0.03, 0.03, 0.05, 1)
+		tipFloor:SetPoint("TOPLEFT", GameTooltip, "TOPLEFT", 4, -4)
+		tipFloor:SetPoint("BOTTOMRIGHT", GameTooltip, "BOTTOMRIGHT", -4, 4)
+	end
+	tipFloor:Show()
+end
+
+local function CloseTip()
+	if tipFloor then
+		tipFloor:Hide()
+	end
+	GameTooltip:Hide()
+end
+
+-- An average hit from the three numbers, and the Crit and Crit Dmg it plays with.
+local function Worth(damage, crit, double)
+	if crit > 1 then
+		double = double + crit - 1
+		crit = 1
+	end
+	local average = 1 + crit * (double - 1)
+	return damage * average, average, crit, double
+end
+
+------------------------------------------------------------------------------
+-- What the pages are made of. The words go down the page, each a number of
+-- lines tall (a wrapped text's height is not known until it is drawn).
+
+local function Paint(text, color)
+	text:SetTextColor(color[1], color[2], color[3])
+end
+
+local function Words(parent, x, y, width, text, size, color)
+	local words = Text(parent, "GameFontHighlight", size or TEXT)
+	words:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+	words:SetWidth(width)
+	words:SetJustifyH("LEFT")
+	words:SetText(text or "")
+	if color then
+		Paint(words, color)
+	end
+	return words
+end
+
+local function Para(page, text, lines)
+	Words(page, 0, page.y, PAGE_WIDTH, text)
+	page.y = page.y - lines * LINE - 6
+end
+
+local function Title(page, text)
+	local title = Text(page, "GameFontNormalLarge")
+	title:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+	title:SetText(text)
+	page.y = page.y - 26
+end
+
+local function Tip(page, text, lines)
+	Words(page, 0, page.y, PAGE_WIDTH, text, SMALL + 1)
+	page.y = page.y - (lines or 1) * 15 - 3
+end
+
+local function Heading(page, text)
+	local heading = Text(page, "GameFontNormal", TEXT + 1)
+	heading:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+	heading:SetText(text)
+	page.y = page.y - 16
+	local rule = Rule(page)
+	rule:SetWidth(PAGE_WIDTH)
+	rule:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+	page.y = page.y - 8
+end
+
+-- A panel of the same make as the others, its title in the middle.
+local function Box(page, title, color, x, y, width, height)
+	local box = CreateFrame("Frame", nil, page)
+	box:SetWidth(width)
+	box:SetHeight(height)
+	box:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+	Framed(box)
+	box.title = Text(box, "GameFontNormal", TEXT)
+	box.title:SetPoint("TOP", box, "TOP", 0, -8)
+	box.title:SetText(title)
+	if color then
+		Paint(box.title, color)
+	end
+	return box
+end
+
+-- A tinted panel, with a band of its color across its top or foot.
+local function Tint(box, color, strength)
+	box:SetBackdropColor(color[1] * 0.16 * strength, color[2] * 0.16 * strength, color[3] * 0.16 * strength, 0.95)
+	box:SetBackdropBorderColor(color[1], color[2], color[3], 0.35 + 0.6 * strength)
+end
+
+local function Tinted(parent, color, x, y, width, height)
+	local box = CreateFrame("Frame", nil, parent)
+	box.noHoverOutline = true
+	box:SetWidth(width)
+	box:SetHeight(height)
+	box:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+	box:SetBackdrop(TINTED)
+	Tint(box, color, 1)
+	return box
+end
+
+local function Band(box, color, edge, height)
+	local band = box:CreateTexture(nil, "BORDER")
+	band:SetTexture(FLAT)
+	band:SetVertexColor(color[1], color[2], color[3], 0.3)
+	band:SetHeight(height)
+	local inset = edge == "TOP" and -1 or 1
+	band:SetPoint(edge.."LEFT", box, edge.."LEFT", 1, inset)
+	band:SetPoint(edge.."RIGHT", box, edge.."RIGHT", -1, inset)
+	return band
+end
+
+-- A slider to play with, flat as the clock's: label, its range, how a value
+-- reads, what it sets.
+local function Try(page, x, y, width, label, low, high, step, shown, set)
+	local slider = CreateFrame("Slider", nil, page)
+	slider.noHoverOutline = true
+	slider:SetOrientation("HORIZONTAL")
+	slider:SetWidth(width)
+	slider:SetHeight(14)
+	slider:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+	slider:SetMinMaxValues(low, high)
+	slider:SetValueStep(step)
+	slider:EnableMouseWheel(true)
+	local track = slider:CreateTexture(nil, "BACKGROUND")
+	track:SetTexture(FLAT)
+	track:SetVertexColor(0.14, 0.14, 0.18, 1)
+	track:SetHeight(4)
+	track:SetPoint("LEFT", slider, "LEFT", 0, 0)
+	track:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
+	local fill = slider:CreateTexture(nil, "BORDER")
+	fill:SetTexture(FLAT)
+	fill:SetVertexColor(1, 0.82, 0, 0.8)
+	fill:SetHeight(4)
+	fill:SetPoint("LEFT", slider, "LEFT", 0, 0)
+	local thumb = slider:CreateTexture(nil, "OVERLAY")
+	thumb:SetTexture(FLAT)
+	thumb:SetWidth(8)
+	thumb:SetHeight(14)
+	slider:SetThumbTexture(thumb)
+	local text = Text(slider, "GameFontHighlight", SMALL)
+	text:SetPoint("BOTTOM", slider, "TOP", 0, 1)
+	local least = Text(slider, "GameFontDisableSmall")
+	least:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 0, 0)
+	least:SetText(shown(low))
+	local most = Text(slider, "GameFontDisableSmall")
+	most:SetPoint("TOPRIGHT", slider, "BOTTOMRIGHT", 0, 0)
+	most:SetText(shown(high))
+	slider:SetScript("OnValueChanged", function()
+		if not this.reading then
+			set(math.floor(this:GetValue() / step + 0.5) * step)
+			page.Draw()
+		end
+	end)
+	slider:SetScript("OnMouseWheel", function()
+		this:SetValue(this:GetValue() + arg1 * step)
+	end)
+	-- To a value of the hero's, which may sit between two steps or past the end.
+	function slider.Read(value)
+		local kept = math.max(low, math.min(high, value))
+		slider.reading = true
+		slider:SetValue(kept)
+		text:SetText(SurvivorUI_TF("{1}: {2}", label, shown(value)))
+		-- A texture of no width draws at its art's size, so at least a sliver.
+		fill:SetWidth(math.max(0.01, (kept - low) / (high - low) * width))
+		slider.reading = nil
+	end
+	return slider
+end
+
+local function MyHero(page, x, y)
+	local again = FlatButton(page, SurvivorUI_T("My hero"), 84)
+	again:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+	again:SetScript("OnClick", function()
+		FromHero()
+		page.Draw()
+	end)
+end
+
+local function Signed(value)
+	return string.format("%+.0f%%", value * 100)
+end
+
+local function Whole(value)
+	return string.format("%.0f%%", value * 100)
+end
+
+------------------------------------------------------------------------------
+-- Luck.
+
+-- A hundred marbles out of the shares, the largest remainders getting the rest.
+local function Hundred(odds)
+	local counts, rest, total = {}, {}, 0
+	for index = 1, 5 do
+		local share = odds[index] * 100
+		counts[index] = math.floor(share)
+		rest[index] = share - counts[index]
+		total = total + counts[index]
+	end
+	while total < 100 do
+		local best = 1
+		for index = 2, 5 do
+			if rest[index] > rest[best] then
+				best = index
+			end
+		end
+		counts[best] = counts[best] + 1
+		rest[best] = -1
+		total = total + 1
+	end
+	return counts
+end
+
+local function BuildLuck(page)
+	Title(page, SurvivorUI_T("Luck: the bag of marbles"))
+	Para(page, SurvivorUI_T("Every card the game shows you comes out of a big bag of marbles. The game reaches in without looking, pulls out one marble, and its color is the card's rarity."), 2)
+	Para(page, SurvivorUI_T("Luck never takes a marble out. It pours new ones in, and the shinier the marble, the faster it multiplies!"), 2)
+	local top = page.y
+	local bag = Box(page, SurvivorUI_T("What's in the bag"), nil, 0, top, BAG_WIDTH, BAG_HEIGHT)
+	Words(bag, 10, -28, BAG_WIDTH - 20, SurvivorUI_T("|cffffd100m|r is your magic number: 1 + Luck + Level"))
+	page.magic = Words(bag, 10, -44, BAG_WIDTH - 20, "")
+	local rows = {}
+	for index = 1, table.getn(RARITIES) do
+		local rarity = RARITIES[index]
+		local y = -64 - (index - 1) * 16
+		local marble = bag:CreateTexture(nil, "ARTWORK")
+		marble:SetTexture(MARBLE)
+		marble:SetVertexColor(rarity[2][1], rarity[2][2], rarity[2][3])
+		marble:SetWidth(13)
+		marble:SetHeight(13)
+		marble:SetPoint("TOPLEFT", bag, "TOPLEFT", 10, y)
+		Words(bag, 28, y, 100, SurvivorUI_T(rarity[1]), TEXT, rarity[2])
+		Words(bag, 118, y, 120, rarity[3], SMALL + 1, { 0.8, 0.8, 0.8 })
+		local count = Text(bag, "GameFontHighlight", TEXT)
+		count:SetPoint("TOPRIGHT", bag, "TOPLEFT", COUNT_AT, y)
+		local percent = Text(bag, "GameFontHighlight", TEXT)
+		percent:SetPoint("TOPRIGHT", bag, "TOPLEFT", PERCENT_AT, y)
+		Paint(percent, rarity[2])
+		rows[index] = { count = count, percent = percent }
+	end
+	page.total = Words(bag, 10, -148, BAG_WIDTH - 20, "")
+	page.three = Words(bag, 10, -166, BAG_WIDTH - 20, "")
+	local hundred = Box(page, SurvivorUI_T("Out of 100 cards"), nil, BAG_WIDTH + 8, top, PAGE_WIDTH - BAG_WIDTH - 8, BAG_HEIGHT)
+	local marbles = {}
+	local left = math.floor((PAGE_WIDTH - BAG_WIDTH - 8 - GRID * GRID_MARBLE) / 2)
+	for index = 1, GRID * GRID do
+		local marble = hundred:CreateTexture(nil, "ARTWORK")
+		marble:SetTexture(MARBLE)
+		marble:SetWidth(GRID_MARBLE - 1)
+		marble:SetHeight(GRID_MARBLE - 1)
+		marble:SetPoint("TOPLEFT", hundred, "TOPLEFT", left + math.mod(index - 1, GRID) * GRID_MARBLE,
+			-28 - math.floor((index - 1) / GRID) * GRID_MARBLE)
+		marbles[index] = marble
+	end
+	page.y = top - BAG_HEIGHT - 26
+	local luck = Try(page, 8, page.y, 180, SurvivorUI_T("Luck"), 0, 3, 0.05, Signed, function(value) try.luck = value end)
+	local level = Try(page, 212, page.y, 180, SurvivorUI_T("Level"), 1, 120, 1, function(value) return tostring(value) end,
+		function(value) try.level = value end)
+	MyHero(page, 412, page.y + 4)
+	page.y = page.y - 34
+	Tip(page, SurvivorUI_T("|cffffd100Three cards, three pulls.|r Every card is pulled on its own."))
+	Tip(page, SurvivorUI_T("|cffffd100Level|r gives 1% a level, up to 30%. |cffffd100Luck has no top!|r"))
+	Tip(page, SurvivorUI_T("|cffffd100Amulets are shinier:|r they pull with m + 0.5."))
+	Tip(page, SurvivorUI_T("|cffffd100A guardian or boss hoard cache|r has 25% more Luck (m + 0.25)."))
+
+	function page.Draw()
+		local part = math.min(try.level * 0.01, 0.3)
+		local m = 1 + try.luck + part
+		local odds, weights = CardOdds(m)
+		luck.Read(try.luck)
+		level.Read(try.level)
+		page.magic:SetText(string.format("1 + %.2f + %.2f = "..GOLD.."%.2f|r", try.luck, part, m))
+		local total = 0
+		for index = 1, 5 do
+			total = total + weights[index]
+			rows[index].count:SetText(string.format("%.0f", weights[index]))
+			rows[index].percent:SetText(string.format("%.1f%%", odds[index] * 100))
+		end
+		page.total:SetText(string.format(SurvivorUI_T("%.0f marbles in the bag, %.0f of them orange."), total, weights[5]))
+		local none = 1 - odds[5]
+		page.three:SetText(string.format(SurvivorUI_T("A legendary among 3 cards: |cffffd100%.1f%%|r"), (1 - none * none * none) * 100))
+		local counts = Hundred(odds)
+		local at = 0
+		for index = 5, 1, -1 do
+			local color = RARITIES[index][2]
+			for each = 1, counts[index] do
+				at = at + 1
+				marbles[at]:SetVertexColor(color[1], color[2], color[3])
+			end
+		end
+	end
+end
+
+------------------------------------------------------------------------------
+-- Damage.
+
+local function BuffEnter()
+	local buff = this.buff
+	GameTooltip:SetOwner(this, "ANCHOR_NONE")
+	GameTooltip:ClearAllPoints()
+	GameTooltip:SetPoint("BOTTOMLEFT", this, "TOPLEFT", 0, 4)
+	GameTooltip:SetText(SurvivorUI_Native(buff[1]))
+	GameTooltip:AddLine(string.format(SurvivorUI_T("Increases all your damage by %d%% for %d sec."), buff[4], buff[5]), 1, 1, 1, 1)
+	GameTooltip:AddLine(string.format(SurvivorUI_T("Cooldown: %d sec."), buff[6]), 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T(buff[3]), 0.7, 0.7, 0.7)
+	GameTooltip:AddLine(SurvivorUI_T("Numbers at rank 1."), 0.7, 0.7, 0.7)
+	GameTooltip:Show()
+	SolidTip()
+end
+
+-- One box of a hit: its band with its title, its icon, what goes in it, and
+-- at its foot what it multiplies by.
+local function HitBox(page, step, x, top, width)
+	local color = step[2]
+	local box = Tinted(page, color, x, top, width, BOX_HEIGHT)
+	Band(box, color, "TOP", 22)
+	local title = Text(box, "GameFontNormal", TEXT)
+	title:SetPoint("CENTER", box, "TOP", 0, -15)
+	title:SetText(SurvivorUI_T(step[1]))
+	Paint(title, color)
+	local icon = box:CreateTexture(nil, "ARTWORK")
+	icon:SetTexture("Interface\\Icons\\"..step[3])
+	icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+	icon:SetWidth(30)
+	icon:SetHeight(30)
+	icon:SetPoint("TOP", box, "TOP", 0, -30)
+	box.rows = {}
+	for each = 1, table.getn(step[4]) do
+		local row = step[4][each]
+		local y = -66 - (each - 1) * ROW_STEP
+		local dot = box:CreateTexture(nil, "ARTWORK")
+		dot:SetTexture(MARBLE)
+		dot:SetVertexColor(row[2][1], row[2][2], row[2][3])
+		dot:SetWidth(8)
+		dot:SetHeight(8)
+		dot:SetPoint("TOPLEFT", box, "TOPLEFT", 9, y - 2)
+		box.rows[each] = Words(box, 20, y, width - 22, SurvivorUI_T(row[1]), SMALL)
+	end
+	Band(box, color, "BOTTOM", 26)
+	box.foot = Text(box, "GameFontHighlight", 16)
+	box.foot:SetPoint("CENTER", box, "BOTTOM", 0, 17)
+	Paint(box.foot, color)
+	return box
+end
+
+local function BuildDamage(page)
+	Title(page, SurvivorUI_T("Damage: four boxes"))
+	Para(page, SurvivorUI_T("Every hit goes through four boxes, left to right. |cffffd100Inside a box, numbers are added. From one box to the next, they multiply.|r"), 2)
+	local count = table.getn(STEPS)
+	local width = math.floor((PAGE_WIDTH - (count - 1) * BOX_GAP) / count)
+	local top = page.y
+	local boxes = {}
+	for index = 1, count do
+		boxes[index] = HitBox(page, STEPS[index], (index - 1) * (width + BOX_GAP), top, width)
+		if index < count then
+			-- A gold marble between two boxes, the sign on it.
+			local ball = page:CreateTexture(nil, "ARTWORK")
+			ball:SetTexture(MARBLE)
+			ball:SetVertexColor(1, 0.8, 0.2)
+			ball:SetWidth(BOX_GAP)
+			ball:SetHeight(BOX_GAP)
+			ball:SetPoint("CENTER", boxes[index], "RIGHT", BOX_GAP / 2, 0)
+			local times = Text(page, "GameFontNormal", 13)
+			times:SetPoint("CENTER", ball, "CENTER", 0, 1)
+			times:SetText("x")
+			times:SetTextColor(0.15, 0.08, 0)
+			times:SetShadowOffset(0, 0)
+		end
+	end
+	page.y = top - BOX_HEIGHT - 6
+	local strip = Tinted(page, YELLOW, 0, page.y, PAGE_WIDTH, 28)
+	page.sum = Text(strip, "GameFontHighlight", TEXT)
+	page.sum:SetPoint("CENTER", strip, "CENTER", 0, 0)
+	page.y = page.y - 28 - 10
+	Heading(page, SurvivorUI_T("Buffs go in the |cff59f273green box|r"))
+	local x = 0
+	for index = 1, table.getn(BUFFS) do
+		local buff = BUFFS[index]
+		local icon = page:CreateTexture(nil, "ARTWORK")
+		icon:SetTexture(buff[2])
+		icon:SetWidth(24)
+		icon:SetHeight(24)
+		icon:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
+		local name = Text(page, "GameFontHighlight", SMALL)
+		name:SetPoint("LEFT", icon, "RIGHT", 4, 0)
+		name:SetText(SurvivorUI_Native(buff[1]))
+		local spot = CreateFrame("Frame", nil, page)
+		spot.noHoverOutline = true
+		spot:SetWidth(24 + 4 + name:GetStringWidth())
+		spot:SetHeight(24)
+		spot:SetPoint("TOPLEFT", icon, "TOPLEFT", 0, 0)
+		spot:EnableMouse(true)
+		spot.buff = buff
+		spot:SetScript("OnEnter", BuffEnter)
+		spot:SetScript("OnLeave", CloseTip)
+		x = x + 24 + 4 + name:GetStringWidth() + 12
+	end
+	page.y = page.y - 32
+	Para(page, SurvivorUI_T("These add to Damage while they last, just like your level or your gear. They do not multiply it. So +95% and a +40% buff make +135%: that is 2.35 against 1.95, about 20% harder, not 40%. The fuller a box is, the less the same bonus gives."), 3)
+	Tip(page, SurvivorUI_T("|cff59f273Buff Power|r makes a buff stronger before it goes in: with +25%, a +40% buff gives +50%."))
+	Tip(page, SurvivorUI_T("|cff59f273The same buff twice|r counts once: the stronger one stays."))
+	Tip(page, SurvivorUI_T("|cff73bfffTalents that name a spell,|r like \"Fire spells deal 8% more\", grow the first box, so they multiply with the rest."), 2)
+	Tip(page, SurvivorUI_T("|cffff7366Enemy bonuses|r count only on the right enemy, and they add up with each other."))
+
+	function page.Draw()
+		local all, average, chance, real = Worth(try.damage, try.crit, try.double)
+		boxes[1].foot:SetText("100")
+		boxes[2].foot:SetText(string.format("x %.2f", try.damage))
+		boxes[3].foot:SetText(string.format("x %.2f", average))
+		boxes[3].rows[1]:SetText(SurvivorUI_T("How often: ")..Whole(chance))
+		boxes[3].rows[2]:SetText(SurvivorUI_T("How hard: ")..Whole(real))
+		boxes[4].foot:SetText(SurvivorUI_T("x 1 or more"))
+		page.sum:SetText(string.format(SurvivorUI_T("Your hero: 100 x %.2f x %.2f = |cffffd100%.0f|r on average, more on the right enemy."),
+			try.damage, average, 100 * all))
+	end
+end
+
+------------------------------------------------------------------------------
+-- Crit.
+
+-- One of the three picks, a card: its title, how much harder, and its box.
+local function PickCard(page, color, x, y, width)
+	local card = Tinted(page, color, x, y, width, CARD_HEIGHT)
+	card.color = color
+	card.band = Band(card, color, "TOP", 22)
+	card.head = Text(card, "GameFontNormal", TEXT)
+	card.head:SetPoint("CENTER", card, "TOP", 0, -15)
+	card.big = Text(card, "GameFontHighlight", 22)
+	card.big:SetPoint("CENTER", card, "TOP", 0, -42)
+	card.what = Text(card, "GameFontHighlight", SMALL)
+	card.what:SetPoint("CENTER", card, "TOP", 0, -61)
+	card.what:SetText(SurvivorUI_T("harder hits"))
+	card.box = Text(card, "GameFontHighlight", SMALL)
+	card.box:SetPoint("CENTER", card, "TOP", 0, -77)
+	return card
+end
+
+local function DrawCard(card, name, gain, won, label, before, after)
+	local color = won and GREEN or card.color
+	Tint(card, color, won and 1.4 or 0.5)
+	card.band:SetVertexColor(color[1], color[2], color[3], won and 0.45 or 0.15)
+	card.head:SetText((won and SurvivorUI_T("Best pick: ") or "")..name)
+	Paint(card.head, color)
+	card.big:SetText(string.format("+%.1f%%", gain * 100))
+	Paint(card.big, won and GREEN or GREY)
+	card.box:SetText(string.format(SurvivorUI_T("%s box: %.0f to %.0f"), label, before * 100, after * 100))
+end
+
+local function BuildCrit(page)
+	Title(page, SurvivorUI_T("Crit: past 100%"))
+	Para(page, SurvivorUI_T("Crit is how often a hit is critical. Crit Dmg is how hard it lands: at 200%, a critical hit counts double."), 2)
+	Para(page, SurvivorUI_T("A hit can only be critical once, so Crit stops at 100%. Nothing is lost! |cffffd100Every point past 100% jumps into Crit Dmg, one for one.|r"), 2)
+	page.y = page.y - 16
+	local hit = Try(page, 8, page.y, 180, SurvivorUI_T("Damage"), 0, 5, 0.05, Signed, function(value) try.damage = 1 + value end)
+	local crit = Try(page, 214, page.y, 180, SurvivorUI_T("Crit"), 0, 2, 0.01, Whole, function(value) try.crit = value end)
+	local double = Try(page, 420, page.y, 180, SurvivorUI_T("Crit Dmg"), 2, 5, 0.05, Whole, function(value) try.double = value end)
+	page.y = page.y - 34
+	MyHero(page, PAGE_WIDTH - 84, page.y - 2)
+	page.plays = Words(page, 0, page.y, PAGE_WIDTH - 92, "")
+	page.y = page.y - 2 * LINE - 8
+	Heading(page, SurvivorUI_T("You can take one +10. Which one makes you hit harder?"))
+	local width = math.floor((PAGE_WIDTH - 2 * CARD_GAP) / 3)
+	local cards = {}
+	local colors = { GREEN, PEACH, PEACH }
+	for index = 1, 3 do
+		cards[index] = PickCard(page, colors[index], (index - 1) * (width + CARD_GAP), page.y, width)
+	end
+	page.y = page.y - CARD_HEIGHT - 10
+	Para(page, SurvivorUI_T("|cffffd100Why not always the same one?|r Multiplying works in any order: 2 x 3 is 3 x 2, so no box gets a bonus for coming last. What counts is how full each box is. +10 on 100 is a lot, +10 on 300 is a little."), 3)
+	Para(page, SurvivorUI_T("|cff66ff66So feed the emptiest box!|r Past 100%, Crit and Crit Dmg are the same pick, so look at your Damage box against your Crit Dmg. Under 100%, Crit always beats Crit Dmg."), 2)
+
+	function page.Draw()
+		hit.Read(try.damage - 1)
+		crit.Read(try.crit)
+		double.Read(try.double)
+		local base, average, chance, real = Worth(try.damage, try.crit, try.double)
+		if try.crit > 1 then
+			page.plays:SetText(string.format(SurvivorUI_T("%s points jumped: it plays as Crit 100%% and Crit Dmg %s. An average hit is x %.2f."),
+				string.format("%.0f", (try.crit - 1) * 100), Whole(real), average))
+		else
+			page.plays:SetText(string.format(SurvivorUI_T("%s of your hits are critical, for %s. An average hit is x %.2f."), Whole(chance), Whole(real), average))
+		end
+		local more, withCrit = Worth(try.damage, try.crit + 0.1, try.double)
+		local deeper, withDouble = Worth(try.damage, try.crit, try.double + 0.1)
+		local gains = { (try.damage + 0.1) / try.damage - 1, more / base - 1, deeper / base - 1 }
+		local best = math.max(gains[1], math.max(gains[2], gains[3]))
+		DrawCard(cards[1], SurvivorUI_T("+10 Damage"), gains[1], gains[1] >= best - 0.00001, SurvivorUI_T("Damage"), try.damage, try.damage + 0.1)
+		DrawCard(cards[2], SurvivorUI_T("+10 Crit"), gains[2], gains[2] >= best - 0.00001, SurvivorUI_T("Crit"), average, withCrit)
+		DrawCard(cards[3], SurvivorUI_T("+10 Crit Dmg"), gains[3], gains[3] >= best - 0.00001, SurvivorUI_T("Crit"), average, withDouble)
+	end
+end
+
+------------------------------------------------------------------------------
+-- DoTs.
+
+local function Round(value)
+	return math.floor(value + 0.5)
+end
+
+-- How many copies of a DoT one enemy carries at a level.
+local function Copies(level)
+	return 1 + math.min(math.floor(level / 15), MOST_COPIES - 1)
+end
+
+-- One thing to know, a tinted panel with its title on a band.
+local function Fact(page, color, x, y, width, title, words)
+	local box = Tinted(page, color, x, y, width, FACT_HEIGHT)
+	Band(box, color, "TOP", 20)
+	local head = Text(box, "GameFontNormal", TEXT)
+	head:SetPoint("CENTER", box, "TOP", 0, -14)
+	head:SetText(title)
+	Paint(head, color)
+	Words(box, 9, -28, width - 18, words, SMALL + 1)
+end
+
+-- What must not be missed: a band in its color whose light comes and goes,
+-- between two of the guide's own marks.
+local function Warning(page, color, big, small)
+	local box = Tinted(page, color, 0, page.y, PAGE_WIDTH, WARNING_HEIGHT)
+	local band = Band(box, color, "TOP", WARNING_HEIGHT - 8)
+	local head = Text(box, "GameFontNormal", 17)
+	head:SetPoint("CENTER", box, "TOP", 0, -18)
+	head:SetText(big)
+	head:SetTextColor(1, 0.88, 0.25)
+	local line = Text(box, "GameFontHighlight", TEXT)
+	line:SetPoint("CENTER", box, "TOP", 0, -37)
+	line:SetText(small)
+	for index = 1, 2 do
+		local mark = box:CreateTexture(nil, "ARTWORK")
+		mark:SetTexture(NEW_MARK)
+		mark:SetWidth(34)
+		mark:SetHeight(34)
+		mark:SetPoint("CENTER", box, index == 1 and "LEFT" or "RIGHT", index == 1 and 25 or -25, 0)
+	end
+	box:SetScript("OnUpdate", function()
+		band:SetVertexColor(color[1], color[2], color[3], 0.34 + 0.16 * math.sin(GetTime() * 2.5))
+	end)
+	page.y = page.y - WARNING_HEIGHT - 8
+end
+
+local function BuildDots(page)
+	Title(page, SurvivorUI_T("DoTs: damage that keeps biting"))
+	Para(page, SurvivorUI_T("A DoT doesn't hit once. It sticks to the enemy and bites again and again. Each bite is a |cffffd100tick|r, about one a second."), 2)
+	Warning(page, WARNING, SurvivorUI_T("CRIT AND CRIT DMG DO NOTHING FOR DOTS"), SurvivorUI_T("Building a DoT run? Don't pick them and don't rank them up."))
+	local width = math.floor((PAGE_WIDTH - CARD_GAP) / 2)
+	local top = page.y
+	Fact(page, GREEN, 0, top, width, SurvivorUI_T("Set when it lands"),
+		SurvivorUI_T("Spell x Damage is counted once, as the DoT lands. A buff that ends later still counts. One that starts later doesn't."))
+	Fact(page, PEACH, width + CARD_GAP, top, width, SurvivorUI_T("Not plain DoTs"),
+		SurvivorUI_T("Bleeds and burns born from a crit take a share of that crit. Ground spells like Consecration aren't DoTs: they can crit."))
+	top = top - FACT_HEIGHT - 6
+	Fact(page, RED, 0, top, width, SurvivorUI_T("The enemy box, every tick"),
+		SurvivorUI_T("Each tick goes through the enemy box as it lands: elite or boss, under 30% health, more damage to afflicted enemies."))
+	Fact(page, PURPLE, width + CARD_GAP, top, width, SurvivorUI_T("Copies"),
+		SurvivorUI_T("One enemy carries 1 copy of each DoT, 2 from level 15, 3 from 30, 4 from 45. A new one replaces the copy with the fewest ticks left."))
+	page.y = top - FACT_HEIGHT - 10
+	Heading(page, SurvivorUI_T("Each marble is a tick, each row a copy on one enemy"))
+	page.y = page.y - 14
+	local level = Try(page, 8, page.y, 180, SurvivorUI_T("Level"), 1, 60, 1, function(value) return tostring(value) end,
+		function(value) try.level = value end)
+	local haste = Try(page, 214, page.y, 180, SurvivorUI_T("DoT Haste"), 0, 1, 0.05, Signed, function(value) try.haste = value end)
+	local longer = Try(page, 420, page.y, 180, SurvivorUI_T("Lasts longer"), 0, 1, 0.05, Signed, function(value) try.longer = value end)
+	page.y = page.y - 34
+	local marbles = {}
+	for copy = 1, MOST_COPIES do
+		local color = COPY_COLORS[copy]
+		marbles[copy] = {}
+		for tick = 1, MOST_TICKS do
+			local marble = page:CreateTexture(nil, "ARTWORK")
+			marble:SetTexture(MARBLE)
+			marble:SetVertexColor(color[1], color[2], color[3])
+			marble:SetWidth(TICK - 1)
+			marble:SetHeight(TICK - 1)
+			marble:SetPoint("TOPLEFT", page, "TOPLEFT", (tick - 1) * TICK, page.y - (copy - 1) * TICK)
+			marbles[copy][tick] = marble
+		end
+	end
+	local right = MOST_TICKS * TICK + 12
+	page.one = Words(page, right, page.y - 2, PAGE_WIDTH - right - 92, "")
+	page.all = Words(page, right, page.y - 2 - LINE, PAGE_WIDTH - right - 92, "")
+	MyHero(page, PAGE_WIDTH - 84, page.y + 2)
+	page.y = page.y - MOST_COPIES * TICK - 8
+	Tip(page, SurvivorUI_T("|cff4de6d9DoT Haste and lasting longer|r add ticks of the same size, so each copy deals more in all."))
+
+	function page.Draw()
+		level.Read(try.level)
+		haste.Read(try.haste)
+		longer.Read(try.longer)
+		local copies = Copies(try.level)
+		local ticks = Round(Round(SAMPLE_TICKS * (1 + try.longer)) * (1 + try.haste))
+		local total = 100 * try.damage * (1 + try.longer) * (1 + try.haste)
+		for copy = 1, MOST_COPIES do
+			for tick = 1, MOST_TICKS do
+				if copy <= copies and tick <= ticks then
+					marbles[copy][tick]:Show()
+				else
+					marbles[copy][tick]:Hide()
+				end
+			end
+		end
+		page.one:SetText(string.format(SurvivorUI_T("%d ticks of %.0f = |cffffd100%.0f|r"), ticks, total / ticks, total))
+		page.all:SetText(string.format("%d %s: "..GOLD.."%.0f|r", copies, SurvivorUI_T(copies > 1 and "copies" or "copy"), total * copies))
+	end
+end
+
+------------------------------------------------------------------------------
+-- Not DoTs: the spells that strike again and again from the ground.
+
+local function ClassTint(class)
+	local r, g, b = SurvivorUI_ClassColor(class)
+	return { r or 0.8, g or 0.8, b or 0.8 }
+end
+
+local function GroundTip(spell, lines)
+	GameTooltip:SetOwner(this, "ANCHOR_NONE")
+	GameTooltip:ClearAllPoints()
+	GameTooltip:SetPoint("BOTTOMLEFT", this, "TOPLEFT", 0, 4)
+	GameTooltip:SetText(SurvivorUI_Native(spell[1]))
+	for index = 1, table.getn(lines) do
+		local line = lines[index]
+		GameTooltip:AddLine(line[1], line[2], line[3], line[4], 1)
+	end
+	GameTooltip:AddLine(SurvivorUI_T(spell[4]), 0.7, 0.7, 0.7)
+	if not spell[5] or spell[5] ~= "talent" then
+		GameTooltip:AddLine(SurvivorUI_T("Numbers at rank 1."), 0.7, 0.7, 0.7)
+	end
+	GameTooltip:Show()
+	SolidTip()
+end
+
+local function CardEnter()
+	Tint(this, this.tint, 1.8)
+	this.tip()
+end
+
+local function CardLeave()
+	Tint(this, this.tint, 1)
+	CloseTip()
+end
+
+-- A spell's card: its icon, its name in its class's color, what it does in a
+-- few words, what works on it, and the rest in its tooltip.
+local function SpellCard(page, spell, x, y, width, words, marks, tip)
+	local tint = ClassTint(spell[3])
+	local card = Tinted(page, tint, x, y, width, SPELL_ROW - 4)
+	card.tint = tint
+	card.tip = tip
+	card:EnableMouse(true)
+	card:SetScript("OnEnter", CardEnter)
+	card:SetScript("OnLeave", CardLeave)
+	local icon = card:CreateTexture(nil, "ARTWORK")
+	icon:SetTexture("Interface\\Icons\\"..spell[2])
+	icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+	icon:SetWidth(30)
+	icon:SetHeight(30)
+	icon:SetPoint("LEFT", card, "LEFT", 6, 0)
+	local name = Text(card, "GameFontNormal", TEXT)
+	name:SetPoint("TOPLEFT", card, "TOPLEFT", 42, -6)
+	name:SetText(SurvivorUI_Native(spell[1]))
+	Paint(name, tint)
+	local line = Text(card, "GameFontHighlight", SMALL)
+	line:SetPoint("TOPLEFT", card, "TOPLEFT", 42, -22)
+	line:SetText(words)
+	local tags = Text(card, "GameFontNormal", SMALL)
+	tags:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -7)
+	tags:SetText(marks)
+end
+
+local function BuildGround(page)
+	Title(page, SurvivorUI_T("Not DoTs: the ground bites"))
+	Para(page, SurvivorUI_T("These spells strike again and again too, but the bites come from the ground, not from a curse on the enemy. An enemy takes a tick only while it stands inside."), 2)
+	Warning(page, GREEN, SurvivorUI_T("CRIT AND CRIT DMG WORK HERE"), SurvivorUI_T("Every tick rolls Crit for every enemy inside. Two at once both count."))
+	local width = math.floor((PAGE_WIDTH - CARD_GAP) / 2)
+	local both = SurvivorUI_T("|cffffad61Crit|r  |cff59f273Stacks|r")
+	for index = 1, table.getn(GROUND) do
+		local spell = GROUND[index]
+		local tip = function()
+			local lines = {
+				{ string.format(SurvivorUI_T(spell[5]), spell[6]), 1, 1, 1 },
+				{ string.format(SurvivorUI_T("Every enemy within %d yd of that spot is struck every %s sec for %s sec."), spell[7], spell[8], spell[9]), 1, 1, 1 },
+			}
+			if spell[11] then
+				table.insert(lines, { SurvivorUI_T(spell[11]), 1, 1, 1 })
+			end
+			table.insert(lines, { string.format(SurvivorUI_T("Cooldown: %d sec."), spell[10]), 1, 1, 1 })
+			table.insert(lines, { SurvivorUI_T("Each tick rolls Crit for each enemy inside."), PEACH[1], PEACH[2], PEACH[3] })
+			table.insert(lines, { SurvivorUI_T("Two at once both tick."), GREEN[1], GREEN[2], GREEN[3] })
+			GroundTip(spell, lines)
+		end
+		local row = math.floor((index - 1) / 2)
+		SpellCard(page, spell, math.mod(index - 1, 2) * (width + CARD_GAP), page.y - row * SPELL_ROW, width,
+			string.format(SurvivorUI_T("Every %s sec for %s sec"), spell[8], spell[9]), both, tip)
+	end
+	local rows = math.ceil(table.getn(GROUND) / 2)
+	SpellCard(page, HELLFIRE, 0, page.y - rows * SPELL_ROW, PAGE_WIDTH, SurvivorUI_T("Not on the ground: a blast around you, cast again and again."),
+		SurvivorUI_T("|cffffad61Crit|r"), function()
+			GroundTip(HELLFIRE, {
+				{ SurvivorUI_T("Hits every enemy within 7 yd of you."), 1, 1, 1 },
+				{ SurvivorUI_T("Cooldown: 1.5 sec."), 1, 1, 1 },
+				{ SurvivorUI_T("Each blast rolls Crit for each enemy it hits."), PEACH[1], PEACH[2], PEACH[3] },
+				{ SurvivorUI_T("Nothing stays behind, so there is nothing to stack."), 0.8, 0.8, 0.8 },
+			})
+		end)
+	page.y = page.y - (rows + 1) * SPELL_ROW - 6
+	Tip(page, SurvivorUI_T("|cff59f273Two at once:|r each one keeps its own clock, so an enemy inside both is struck by both. Haste brings the next one sooner."), 2)
+	Tip(page, SurvivorUI_T("|cff4de6d9DoT Haste and DoT Stacks|r do nothing here. |cff4de6d9Area|r makes the circle wider."))
+	Tip(page, SurvivorUI_T("|cffffd100Set when it lands:|r its damage is counted once, as a DoT's is. The enemy box still counts at every tick."))
+
+	function page.Draw()
+	end
+end
+
+------------------------------------------------------------------------------
+-- Damage reduction.
+
+local function ChipPaint(chip, strength)
+	local tint = chip.tint
+	chip.fill:SetVertexColor(tint[1] * strength, tint[2] * strength, tint[3] * strength, 1)
+	chip:SetBackdropBorderColor(tint[1], tint[2], tint[3], 1)
+end
+
+local function ChipEnter()
+	ChipPaint(this, CHIP_LIT)
+	local spell = this.spell
+	GroundTip(spell, {
+		{ SurvivorUI_T(spell[6]), 1, 1, 1 },
+		{ SurvivorUI_T("It adds to your reduction, and the cap holds."), GREEN[1], GREEN[2], GREEN[3] },
+	})
+end
+
+local function ChipLeave()
+	ChipPaint(this, CHIP_REST)
+	CloseTip()
+end
+
+-- The talents as chips on their class's color, four to a row.
+local function Chips(page, list)
+	local width = math.floor((PAGE_WIDTH - 3 * CHIP_GAP) / 4)
+	for index = 1, table.getn(list) do
+		local spell = list[index]
+		local chip = Tinted(page, { 1, 1, 1 }, math.mod(index - 1, 4) * (width + CHIP_GAP),
+			page.y - math.floor((index - 1) / 4) * (CHIP_HEIGHT + CHIP_GAP), width, CHIP_HEIGHT)
+		chip.spell = spell
+		chip.tint = ClassTint(spell[3])
+		chip:EnableMouse(true)
+		chip:SetScript("OnEnter", ChipEnter)
+		chip:SetScript("OnLeave", ChipLeave)
+		-- Over the panel's ground: on the same layer the two can land either way.
+		chip.fill = chip:CreateTexture(nil, "BORDER")
+		chip.fill:SetTexture(FLAT)
+		chip.fill:SetPoint("TOPLEFT", chip, "TOPLEFT", 1, -1)
+		chip.fill:SetPoint("BOTTOMRIGHT", chip, "BOTTOMRIGHT", -1, 1)
+		ChipPaint(chip, CHIP_REST)
+		local icon = chip:CreateTexture(nil, "ARTWORK")
+		icon:SetTexture("Interface\\Icons\\"..spell[2])
+		icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+		icon:SetWidth(16)
+		icon:SetHeight(16)
+		icon:SetPoint("LEFT", chip, "LEFT", 4, 0)
+		local name = Text(chip, "GameFontHighlight", SMALL)
+		name:SetPoint("LEFT", icon, "RIGHT", 4, 0)
+		name:SetText(SurvivorUI_Native(spell[1]))
+	end
+	page.y = page.y - math.ceil(table.getn(list) / 4) * (CHIP_HEIGHT + CHIP_GAP)
+end
+
+local function BuildArmor(page)
+	Title(page, SurvivorUI_T("Damage Reduction: the wall"))
+	Para(page, SurvivorUI_T("Every hit on you meets this wall first. At 40%, a hit of 100 lands for 60. Your class, race, gear, jewelry and talents are all added into one number."), 2)
+	Warning(page, BLUE, SurvivorUI_T("THE CAP IS 60%"), SurvivorUI_T("Whatever you add past it is lost. Only Titan moves it, to 70%."))
+	local talks = {
+		{ SurvivorUI_T("Your damage reduction can reach 70% instead of 60%."), SurvivorUI_T("Nothing else in the game moves the cap.") },
+		{ SurvivorUI_T("Damage reduction past the cap is not wasted: each 1% of it becomes more damage."), SurvivorUI_T("At 3 ranks, each 1% is 3% more damage.") },
+		{ SurvivorUI_T("You deal more damage for every 10% damage reduction you have."), SurvivorUI_T("It counts up to the cap: at 3 ranks, 60% gives +18% damage.") },
+		{ SurvivorUI_T("Its Voidwalker gains 3% damage per 1% Damage Reduction."), SurvivorUI_T("It counts up to the cap.") },
+	}
+	local words = { SurvivorUI_T("The cap goes from 60% to 70%."), SurvivorUI_T("Each 1% past the cap becomes more damage."),
+		SurvivorUI_T("More damage per 10% you have."), SurvivorUI_T("Its Voidwalker grows with your reduction.") }
+	local marks = { SurvivorUI_T("|cff73bfffCap 70%|r"), SurvivorUI_T("|cffff7366Past the cap|r"), SurvivorUI_T("|cff59f273Up to the cap|r"), SurvivorUI_T("|cff59f273Up to the cap|r") }
+	local width = math.floor((PAGE_WIDTH - CARD_GAP) / 2)
+	for index = 1, table.getn(CAP_TALENTS) do
+		local spell = CAP_TALENTS[index]
+		local talk = talks[index]
+		spell[5] = "talent"
+		SpellCard(page, spell, math.mod(index - 1, 2) * (width + CARD_GAP), page.y - math.floor((index - 1) / 2) * SPELL_ROW, width,
+			words[index], marks[index], function()
+				GroundTip(spell, { { talk[1], 1, 1, 1 }, { talk[2], GREEN[1], GREEN[2], GREEN[3] } })
+			end)
+	end
+	page.y = page.y - 2 * SPELL_ROW - 6
+	Heading(page, SurvivorUI_T("Try it"))
+	page.y = page.y - 14
+	local armor = Try(page, 8, page.y, 180, SurvivorUI_T("Damage Reduction"), 0, 1, 0.01, Whole, function(value) try.armor = value end)
+	local cap = Try(page, 214, page.y, 180, SurvivorUI_T("Cap"), 0.6, 0.7, 0.1, Whole, function(value) try.cap = value end)
+	local crowd = Try(page, 420, page.y, 180, SurvivorUI_T("Enemies close"), 0, 0.2, 0.01, Whole, function(value) try.crowd = value end)
+	page.y = page.y - 32
+	-- The wall: what holds in green, what is lost past the cap in red, the cap in gold.
+	local ground = page:CreateTexture(nil, "BORDER")
+	ground:SetTexture(FLAT)
+	ground:SetVertexColor(0, 0, 0, 0.6)
+	ground:SetWidth(WALL_WIDTH)
+	ground:SetHeight(WALL_HEIGHT)
+	ground:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
+	local held = page:CreateTexture(nil, "ARTWORK")
+	held:SetTexture(FLAT)
+	held:SetVertexColor(GREEN[1] * 0.7, GREEN[2] * 0.7, GREEN[3] * 0.7)
+	held:SetHeight(WALL_HEIGHT)
+	held:SetPoint("TOPLEFT", ground, "TOPLEFT", 0, 0)
+	local lost = page:CreateTexture(nil, "ARTWORK")
+	lost:SetTexture(FLAT)
+	lost:SetVertexColor(RED[1] * 0.8, RED[2] * 0.5, RED[3] * 0.5)
+	lost:SetHeight(WALL_HEIGHT)
+	lost:SetPoint("TOPLEFT", held, "TOPRIGHT", 0, 0)
+	local line = page:CreateTexture(nil, "OVERLAY")
+	line:SetTexture(FLAT)
+	line:SetVertexColor(1, 0.82, 0)
+	line:SetWidth(2)
+	line:SetHeight(WALL_HEIGHT + 6)
+	page.y = page.y - WALL_HEIGHT - 8
+	page.land = Words(page, 0, page.y, PAGE_WIDTH, "")
+	page.y = page.y - LINE - 8
+	Tip(page, SurvivorUI_T("|cff59f273Past the wall:|r shields soak what gets through. Gear that cuts damage \"while 5 or more enemies are within 8 yards\" works on top of the cap: 60% and 10% make 64%."), 2)
+	Tip(page, SurvivorUI_T("|cffffd100The last points count most:|r going from 50% to 60% takes 20% off every hit. From 0 to 10%, only 10%."))
+	Tip(page, SurvivorUI_T("|cff73bfffThese talents only add to the number:|r"))
+	Chips(page, OTHER_TALENTS)
+
+	function page.Draw()
+		armor.Read(try.armor)
+		cap.Read(try.cap)
+		crowd.Read(try.crowd)
+		local kept = math.min(try.armor, try.cap)
+		local over = math.max(try.armor - try.cap, 0)
+		local lands = 100 * (1 - kept) * (1 - try.crowd)
+		-- A texture of no width draws at its art's size, so at least a sliver.
+		held:SetWidth(math.max(1, kept * WALL_WIDTH))
+		lost:SetWidth(math.max(1, over * WALL_WIDTH))
+		if over > 0 then
+			lost:Show()
+		else
+			lost:Hide()
+		end
+		line:ClearAllPoints()
+		line:SetPoint("CENTER", ground, "LEFT", try.cap * WALL_WIDTH, 0)
+		local gone = over > 0 and string.format(SurvivorUI_T("  |cffff7366%.0f points past the cap are lost.|r"), over * 100) or ""
+		page.land:SetText(string.format(SurvivorUI_T("A hit of 100 lands for |cffffd100%.0f|r, so your health counts |cffffd100%.1f|r times.%s"),
+			lands, 100 / math.max(lands, 1), gone))
+	end
+end
+
+------------------------------------------------------------------------------
+-- The window: the pages' names down its left, as the options' tabs.
+
+local PAGES = {
+	{ "Luck", "luck", BuildLuck },
+	{ "Damage", "damage", BuildDamage },
+	{ "Crit", "crit", BuildCrit },
+	{ "DoTs", "dots", BuildDots },
+	{ "Not DoTs", "ground", BuildGround },
+	{ "Reduction", "armor", BuildArmor },
+}
+
+local divider = window:CreateTexture(nil, "ARTWORK")
+divider:SetTexture(FLAT)
+divider:SetVertexColor(1, 0.82, 0, 0.25)
+divider:SetWidth(1)
+divider:SetPoint("TOPLEFT", window, "TOPLEFT", LEFT - 12, PAGE_TOP)
+divider:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", LEFT - 12, 36)
+
+local back = FlatButton(window, SurvivorUI_T("Previous"), 84)
+back:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", LEFT, 10)
+local forward = FlatButton(window, SurvivorUI_T("Next"), 84)
+forward:SetPoint("LEFT", back, "RIGHT", 6, 0)
+-- Close in the foot's right corner, in red, apart from the pages' two.
+local shut = FlatButton(window, SurvivorUI_T("Close"), 84)
+shut:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -14, 10)
+shut:SetBackdropColor(0.32, 0.07, 0.07, 1)
+shut:SetBackdropBorderColor(0.7, 0.22, 0.22, 1)
+shut:SetScript("OnLeave", function() this:SetBackdropBorderColor(0.7, 0.22, 0.22, 1) end)
+shut:SetScript("OnClick", function() window:Hide() end)
+-- The page's number beside the title, small and grey, the two together in the
+-- middle.
+local numbered = Text(window, "GameFontDisableSmall")
+numbered:SetPoint("LEFT", window.heading, "RIGHT", 5, 0)
+
+-- The pages read, kept in the addon's settings.
+local function Reads()
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.guideRead = SurvivorUIDB.guideRead or {}
+	return SurvivorUIDB.guideRead
+end
+
+local function Unread()
+	local read = Reads()
+	for index = 1, table.getn(PAGES) do
+		if not read[PAGES[index][2]] then
+			return true
+		end
+	end
+	return false
+end
+
+local function Build(index)
+	if pages[index] then
+		return pages[index]
+	end
+	local page = CreateFrame("Frame", nil, window)
+	page:SetPoint("TOPLEFT", window, "TOPLEFT", LEFT, PAGE_TOP)
+	page:SetWidth(PAGE_WIDTH)
+	page:SetHeight(HEIGHT + PAGE_TOP - 50)
+	page.y = 0
+	PAGES[index][3](page)
+	page:Hide()
+	pages[index] = page
+	return page
+end
+
+local function Select(index)
+	current = index
+	for each = 1, table.getn(PAGES) do
+		if pages[each] then
+			pages[each]:Hide()
+		end
+		if each == index then
+			tabs[each].selected:Show()
+		else
+			tabs[each].selected:Hide()
+		end
+	end
+	Reads()[PAGES[index][2]] = true
+	tabs[index].unread:Hide()
+	FromHero()
+	local page = Build(index)
+	page:Show()
+	page.Draw()
+	numbered:SetText(SurvivorUI_TF("(page {1} of {2})", index, table.getn(PAGES)))
+	local point, relative, relativePoint, _, y = window.heading:GetPoint(1)
+	window.heading:SetPoint(point, relative, relativePoint, -(numbered:GetStringWidth() + 5) / 2, y)
+	Able(back, index > 1)
+	Able(forward, index < table.getn(PAGES))
+	if SurvivorUI_PaintGuideButton then
+		SurvivorUI_PaintGuideButton()
+	end
+end
+
+back:SetScript("OnClick", function() Select(current - 1) end)
+forward:SetScript("OnClick", function() Select(current + 1) end)
+
+for index = 1, table.getn(PAGES) do
+	local tab = CreateFrame("Button", nil, window)
+	tab.noHoverOutline = true
+	tab:SetWidth(LEFT - 34)
+	tab:SetHeight(20)
+	tab:SetPoint("TOPLEFT", window, "TOPLEFT", 18, PAGE_TOP - (index - 1) * 22)
+	tab.text = Text(tab, "GameFontNormal")
+	tab.text:SetPoint("LEFT", tab, "LEFT", 8, 0)
+	tab.text:SetText(SurvivorUI_T(PAGES[index][1]))
+	tab.lit = tab:CreateTexture(nil, "BACKGROUND")
+	tab.lit:SetTexture(FLAT)
+	tab.lit:SetVertexColor(1, 1, 1, 0.07)
+	tab.lit:SetAllPoints(tab)
+	tab.lit:Hide()
+	tab.selected = tab:CreateTexture(nil, "BORDER")
+	tab.selected:SetTexture(FLAT)
+	tab.selected:SetVertexColor(1, 0.82, 0, 0.2)
+	tab.selected:SetAllPoints(tab)
+	tab.selected:Hide()
+	tab.unread = tab:CreateTexture(nil, "OVERLAY")
+	tab.unread:SetTexture(NEW_MARK)
+	tab.unread:SetWidth(16)
+	tab.unread:SetHeight(16)
+	tab.unread:SetPoint("RIGHT", tab, "RIGHT", -4, 0)
+	tab.index = index
+	tab:SetScript("OnEnter", function() this.lit:Show() end)
+	tab:SetScript("OnLeave", function() this.lit:Hide() end)
+	tab:SetScript("OnClick", function()
+		Select(this.index)
+	end)
+	tabs[index] = tab
+end
+
+-- Closed with a tooltip up, no card hears the mouse leave.
+window:SetScript("OnHide", function()
+	if tipFloor then
+		tipFloor:Hide()
+	end
+end)
+
+-- A page by its number.
+function SurvivorUI_GuidePage(index)
+	window:Show()
+	Select(index)
+end
+
+function SurvivorUI_ToggleGuide()
+	if window:IsShown() then
+		window:Hide()
+	else
+		window:Show()
+		Select(current or 1)
+	end
+end
+
+-- Whether a page waits to be read, for the button on the stack.
+SurvivorUI_GuideUnread = Unread
+
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("PLAYER_ENTERING_WORLD")
+loader:SetScript("OnEvent", function()
+	for index = 1, table.getn(PAGES) do
+		if Reads()[PAGES[index][2]] then
+			tabs[index].unread:Hide()
+		end
+	end
+end)

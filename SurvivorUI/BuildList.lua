@@ -12,9 +12,10 @@
 -- cooldown, damage and crits. The spells run from the highest rank down, each
 -- in a border of its color.
 --
--- Under the spells, the jewelry worn (neck, rings, trinkets), the gear a run
--- drops: each slot filled with the piece's quality color, with what it gives in
--- short, read off its tooltip ("Neck  CDR · DMG").
+-- The jewelry worn (neck, rings, trinkets), the gear a run drops, is a panel of
+-- its own, under the list until moved, with its own switch and tab (Jewelry
+-- worn): each slot filled with the piece's quality color, with what it gives
+-- in short, read off its tooltip ("Neck  CDR · DMG"), or the piece's name.
 --
 -- From the game's addon API (AZS_SPELLS); without it nothing shows. Hold Alt
 -- and drag to move; /sui build hides it.
@@ -35,7 +36,7 @@ local MUTED = { 0.45, 0.45, 0.45 }
 local GEAR_SLOTS = {               -- inventory slot, label
 	{ 2, "Neck" }, { 11, "Ring" }, { 12, "Ring" }, { 13, "Trinket" }, { 14, "Trinket" },
 }
-local GEAR_TOP = TITLE_HEIGHT + HEAD_HEIGHT + (SLOTS + 1) * ROW_HEIGHT + 6
+local LIST_HEIGHT = TITLE_HEIGHT + HEAD_HEIGHT + (SLOTS + 1) * ROW_HEIGHT + 6
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
@@ -67,7 +68,7 @@ end
 local NAMES = {
 	sw_pain = "Shadow Word: Pain", pw_shield = "Power Word: Shield",
 	demo_shout = "Demoralizing Shout", hunters_mark = "Hunter's Mark",
-	soul_fire = "Soulfire",
+	soul_fire = "Soulfire", rockbiter = "Rockbiter Weapon",
 }
 
 -- "of", "the" and "and" small after the first word, as the meter has them:
@@ -103,7 +104,7 @@ end
 
 local list = CreateFrame("Frame", "SurvivorUIBuild", UIParent)
 list:SetWidth(WIDTH + 12)
-list:SetHeight(GEAR_TOP + 16 + table.getn(GEAR_SLOTS) * 17 + 6)
+list:SetHeight(LIST_HEIGHT)
 list:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -12, -260)
 list:SetBackdrop({ bgFile = FLAT })
 list:SetBackdropColor(0.04, 0.04, 0.07, 0.55)
@@ -358,8 +359,8 @@ local function Row(index)
 	end
 
 	-- The spell's tooltip, as on its action button (AbilityTooltip.lua lays it
-	-- out): beside the list, on its left, level with the row. Its damage and
-	-- crits are the damage meter's and Biggest Crits' cards.
+	-- out): beside the list, towards the screen's middle, level with the row.
+	-- Its damage and crits are the damage meter's and Biggest Crits' cards.
 	row:EnableMouse(true)
 	row:SetScript("OnEnter", function()
 		if not (this.ability and this.actionSlot) then
@@ -367,7 +368,11 @@ local function Row(index)
 		end
 		GameTooltip:SetOwner(this, "ANCHOR_NONE")
 		GameTooltip:ClearAllPoints()
-		GameTooltip:SetPoint("TOPRIGHT", this, "TOPLEFT", -((this:GetLeft() or 0) - (list:GetLeft() or 0)) - 6, 0)
+		if SurvivorUI_RoomOnRight(list) then
+			GameTooltip:SetPoint("TOPLEFT", this, "TOPRIGHT", (list:GetRight() or 0) - (this:GetRight() or 0) + 6, 0)
+		else
+			GameTooltip:SetPoint("TOPRIGHT", this, "TOPLEFT", -((this:GetLeft() or 0) - (list:GetLeft() or 0)) - 6, 0)
+		end
 		GameTooltip:SetAction(this.actionSlot)
 		GameTooltip:Show()
 	end)
@@ -1078,23 +1083,59 @@ local function ReadPiece(slot, link)
 	return pieces[link]
 end
 
-list.gearTitle = list:CreateFontString(nil, "OVERLAY")
-list.gearTitle:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
-list.gearTitle:SetPoint("TOPLEFT", list, "TOPLEFT", 7, -GEAR_TOP)
-list.gearTitle:SetTextColor(1, 0.82, 0)
-list.gearTitle:SetText(SurvivorUI_T("Gear"))
+local GEAR_TOP, GEAR_ROW = 21, 17
+
+local worn = CreateFrame("Frame", "SurvivorUIWorn", UIParent)
+worn:SetWidth(WIDTH + 12)
+worn:SetHeight(GEAR_TOP + table.getn(GEAR_SLOTS) * GEAR_ROW + 5)
+worn:SetBackdrop({ bgFile = FLAT })
+worn:SetBackdropColor(0.04, 0.04, 0.07, 0.55)
+worn:SetMovable(true)
+worn:Hide()
+
+worn.title = worn:CreateFontString(nil, "OVERLAY")
+worn.title:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
+worn.title:SetPoint("TOPLEFT", worn, "TOPLEFT", 7, -6)
+worn.title:SetTextColor(1, 0.82, 0)
+worn.title:SetText(SurvivorUI_T("Jewelry"))
+
+local function SaveWorn()
+	local settings = Settings()
+	settings.wornLeft = math.floor(worn:GetLeft() + 0.5)
+	settings.wornTop = math.floor(worn:GetTop() + 0.5)
+end
+
+-- Where it was moved to; else under the build list, or in its place with the
+-- list off. Looked at only as that changes.
+local wornPlace
+
+local function PlaceWorn()
+	local settings = Settings()
+	local place = settings.wornLeft and "moved" or list:IsShown() and "under" or "instead"
+	if place == wornPlace then
+		return
+	end
+	wornPlace = place
+	worn:ClearAllPoints()
+	if place == "moved" then
+		worn:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", settings.wornLeft, settings.wornTop)
+	elseif place == "under" then
+		worn:SetPoint("TOPLEFT", list, "BOTTOMLEFT", 0, 0)
+	else
+		worn:SetPoint("TOPLEFT", list, "TOPLEFT", 0, 0)
+	end
+end
 
 -- The jewelry worn, the gear a run drops: one row a slot, filled with the
--- piece's quality color, the slot's name and what the piece gives in short;
--- an empty slot faint. Hover a piece for its own tooltip.
-local GEAR_ROW = 17
-
+-- piece's quality color, the slot's name and what the piece gives in short,
+-- or the piece's own name alone (the options' Build list tab); an empty slot
+-- faint. Hover a piece for its own tooltip.
 local gearLines = {}
 for index = 1, table.getn(GEAR_SLOTS) do
-	local line = CreateFrame("Frame", nil, list)
+	local line = CreateFrame("Frame", nil, worn)
 	line:SetWidth(WIDTH)
 	line:SetHeight(GEAR_ROW - 1)
-	line:SetPoint("TOPLEFT", list, "TOPLEFT", 6, -GEAR_TOP - 15 - (index - 1) * GEAR_ROW)
+	line:SetPoint("TOPLEFT", worn, "TOPLEFT", 6, -GEAR_TOP - (index - 1) * GEAR_ROW)
 
 	line.wash = line:CreateTexture(nil, "BACKGROUND")
 	line.wash:SetTexture(FLAT)
@@ -1216,8 +1257,30 @@ local function FitTags(line, text)
 	Fits(6, parts[1]..SEPARATOR.."...+")
 end
 
+-- A piece by its name, cut to the row when long. Measured only as it changes,
+-- as FitTags is.
+local function FitName(line, name)
+	if line.named == name then
+		return
+	end
+	line.label:SetText(name)
+	local width = line.label:GetStringWidth()
+	-- A label not drawn yet measures nothing: cut next time.
+	line.named = width > 0 and name or nil
+	local room = WIDTH - 8
+	if width <= room then
+		return
+	end
+	local count = string.len((string.gsub(name, "[\128-\191]", "")))
+	while count > 1 and line.label:GetStringWidth() > room do
+		count = count - 1
+		line.label:SetText((string.gsub(SurvivorUI_Cut(name, count), "%s+$", ""))..".")
+	end
+end
+
 local function DrawGear()
-	list.gearTitle:SetText(SurvivorUI_T("Jewelry"))
+	worn.title:SetText(SurvivorUI_T("Jewelry"))
+	local named = Settings().jewelryNames
 	for index = 1, table.getn(GEAR_SLOTS) do
 		local slot, label = GEAR_SLOTS[index][1], GEAR_SLOTS[index][2]
 		local line = gearLines[index]
@@ -1230,15 +1293,23 @@ local function DrawGear()
 			local g = (tonumber(gg or "cc", 16) or 204) / 255
 			local b = (tonumber(bb or "cc", 16) or 204) / 255
 			PaintGear(line, r, g, b, 0.45, 0.7)
-			-- The slot, then the piece's rank as a Roman numeral: "Ring  II". A
-			-- legendary amulet shows the spell it boosts in the slot's place.
-			local piece = ReadPiece(slot, link)
-			line.label:SetText((piece.spell and Short(piece.spell) or SurvivorUI_T(label)).."  "..piece.rank)
+			if named then
+				local _, _, name = string.find(link, "%[(.-)%]")
+				FitName(line, SurvivorUI_Native(name or "?"))
+				FitTags(line, "")
+			else
+				-- The slot, then the piece's rank as a Roman numeral: "Ring  II". A
+				-- legendary amulet shows the spell it boosts in the slot's place.
+				local piece = ReadPiece(slot, link)
+				line.named = nil
+				line.label:SetText((piece.spell and Short(piece.spell) or SurvivorUI_T(label)).."  "..piece.rank)
+				FitTags(line, piece.tags ~= "" and piece.tags or "-")
+			end
 			line.label:SetTextColor(1, 1, 1)
-			FitTags(line, piece.tags ~= "" and piece.tags or "-")
 			line.tags:SetTextColor(1, 1, 1)
 		else
 			PaintGear(line, 0.5, 0.5, 0.55, 0.06, 0.15)
+			line.named = nil
 			line.label:SetText(SurvivorUI_T(label))
 			line.label:SetTextColor(0.45, 0.45, 0.5)
 			FitTags(line, SurvivorUI_T("empty"))
@@ -1259,12 +1330,20 @@ watcher:SetScript("OnUpdate", function()
 	elapsed = 0
 	if Settings().buildList and Running() then
 		Draw()
-		DrawGear()
 		if not list:IsShown() then
 			list:Show()
 		end
 	elseif list:IsShown() then
 		list:Hide()
+	end
+	if Settings().jewelryWorn ~= false and Running() then
+		PlaceWorn()
+		DrawGear()
+		if not worn:IsShown() then
+			worn:Show()
+		end
+	elseif worn:IsShown() then
+		worn:Hide()
 	end
 end)
 
@@ -1369,6 +1448,11 @@ function SurvivorUI_GearSnapshot()
 	return gear
 end
 
+function SurvivorUI_ToggleWorn()
+	local settings = Settings()
+	settings.jewelryWorn = settings.jewelryWorn == false
+end
+
 function SurvivorUI_ToggleBuild()
 	local settings = Settings()
 	settings.buildList = not settings.buildList
@@ -1383,9 +1467,18 @@ local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", function()
 	RestorePlace()
+	wornPlace = nil
+	PlaceWorn()
 	ApplyGameHud()
 end)
 
 if SurvivorUI_RegisterMover then
 	SurvivorUI_RegisterMover(list, "Build list", SavePlace, nil, RestorePlace)
+	SurvivorUI_RegisterMover(worn, "Jewelry worn", function()
+		SaveWorn()
+		wornPlace = "moved"
+	end, nil, function()
+		wornPlace = nil
+		PlaceWorn()
+	end)
 end

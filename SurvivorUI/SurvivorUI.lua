@@ -8,7 +8,8 @@
 --   Unit frames: a health bar in the class color (red for an enemy) on a dark
 --   backing with a thin black border, the name on the left, the health on the
 --   right ("439K | 100%"), a slim power bar underneath and the portrait on the
---   outer end. The target's debuffs line up above its frame. They replace the
+--   outer end. The target's debuffs line up above its frame, or wherever they
+--   are moved to (move mode: "Target debuffs"). They replace the
 --   stock player and target frames.
 --
 --   Action bar: the game only uses the first bar. Buttons 1 to 6 and the last
@@ -245,7 +246,7 @@ do
 	local MARKS = {
 		bosses = "hidGameBosses", build = "hidGameBuild", levels = "hidGameLevels", loot = "hidGameLoot",
 		flag = "hidGameFlag", meter = "hidGameMeter", tally = "hidGameTally", clock = "hidGameClock",
-		revive = "hidGameRevive",
+		revive = "hidGameRevive", localClock = "hidGameLocalClock",
 	}
 	if gameSetHud then
 		AZS_SetHudShown = function(part, shown)
@@ -363,6 +364,13 @@ local CLASS_OVERRIDES = {
 	SHAMAN = { r = 0.00, g = 0.44, b = 0.87 },
 }
 
+-- Whether a frame stands in the screen's left half: a card beside it opens to
+-- its right, towards the middle, where there is room.
+function SurvivorUI_RoomOnRight(frame)
+	local middle = frame:GetCenter()
+	return middle ~= nil and middle * frame:GetEffectiveScale() < GetScreenWidth() * UIParent:GetEffectiveScale() / 2
+end
+
 -- A class's color, as the unit frames wear it (the shaman's blue): r, g, b.
 function SurvivorUI_ClassColor(class)
 	local color = class and (CLASS_OVERRIDES[class] or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]))
@@ -377,11 +385,7 @@ end
 -- a hit's source goes by:
 -- the Searing Totem's shots, as an "Attack" for Fire damage ("Your Attack
 -- hits Scarlet Monk for 168 Fire damage."): with the totem among the hero's
--- spells, a Fire "Attack" is the totem's;
--- Call of Flame's blast, the totems exploding as they expire, as a "Fire
--- Nova" ("Your Fire Nova hits Core Hound for 3650 Fire damage."): with Call
--- of Flame among the hero's spells and no Fire Nova of its own, a Fire Nova
--- is Call of Flame's.
+-- spells, a Fire "Attack" is the totem's.
 local keysSeen, keysHeld = nil, {}
 
 -- Whether the hero has a spell, by its key in the game's list; the list read
@@ -407,6 +411,7 @@ end
 local KEY_NAMES = {
 	sw_pain = "Shadow Word: Pain", pw_shield = "Power Word: Shield",
 	demo_shout = "Demoralizing Shout", hunters_mark = "Hunter's Mark",
+	rockbiter = "Rockbiter Weapon",
 }
 local shortOf, shortMissed = {}, {}
 
@@ -476,15 +481,6 @@ local PET_CASTS = {
 	["Shadow Bolt"] = { "shadow_bolt", "Doomguard's Shadow Bolt" },
 }
 
--- A demon's spell the hero holds too: its key and the demon's name for it
--- ("hellfire", "Infernal's Hellfire"); nil for any other name.
-function SurvivorUI_PetCast(name)
-	local cast = name and PET_CASTS[name]
-	if cast and Holds(cast[1]) then
-		return cast[1], cast[2]
-	end
-end
-
 -- The game's meter adds a hunter's beasts up in one line, Pets, so the rest goes
 -- by that name too: Biggest Crits, the combat numbers, their color and icon.
 -- Another class's summon joins them only if the meter has it so; a warlock's
@@ -517,11 +513,52 @@ local function InPets(name)
 	return inPets[name]
 end
 
+-- A demon's spell by its meter line: the demon's since the game's 0.139 (its
+-- feed tells that game by being there); before it "Infernal's Hellfire".
+local function DemonLine(spell)
+	local _, _, demon = string.find(spell, "^(.+)'s ")
+	return AZS_GetCombatTextEvents and demon or spell
+end
+
+-- A spell the hero holds that a demon casts too: its key and the demon's name
+-- for it ("hellfire", "Infernal"); nil for any other name.
+function SurvivorUI_PetCast(name)
+	local cast = name and PET_CASTS[name]
+	if cast and Holds(cast[1]) then
+		return cast[1], DemonLine(cast[2])
+	end
+end
+
+-- A Shaman's free casts, which the meter counts under the talent since the
+-- game's 0.137, while the combat log still names the spell. From its 0.139 the
+-- game's hits say the meter's line (SurvivorUI_HitLine, below), each hit as it
+-- is. For a hit not found there: not holding the spell, it is the talent's.
+local TALENT_CASTS = {
+	["Fire Nova"] = { "fire_nova", "Flametongue Weapon" },
+	["Frost Shock"] = { "frost_shock", "Frostbrand Weapon" },
+}
+
 function SurvivorUI_SourceOf(name, line)
+	local exact = name and line and SurvivorUI_HitLine and SurvivorUI_HitLine(name, line)
+	if exact then
+		return InPets(exact) and "Pets" or exact
+	end
+	local free = name and TALENT_CASTS[name]
+	if free and not Holds(free[1]) then
+		local _, class = UnitClass("player")
+		if class == "SHAMAN" then
+			return free[2]
+		end
+	end
 	if name then
 		local _, _, owner = string.find(name, "^(.+)'s ")
 		if InPets(owner or name) then
 			return "Pets"
+		end
+		-- A demon's own spell: since the game's 0.139 its meter line is the
+		-- demon's, so one found there and one not read the same.
+		if owner and AZS_GetCombatTextEvents and SurvivorUI_IsPet and SurvivorUI_IsPet(owner) then
+			return owner
 		end
 	end
 	if name == "Attack" and line and string.find(line, " Fire damage", 1, true) and Holds("searing_totem") then
@@ -529,10 +566,7 @@ function SurvivorUI_SourceOf(name, line)
 	end
 	local cast = name and PET_CASTS[name]
 	if cast and not Holds(cast[1]) then
-		return cast[2]
-	end
-	if name == "Fire Nova" and Holds("call_of_flame") and not Holds("fire_nova") then
-		return "Call of Flame"
+		return DemonLine(cast[2])
 	end
 	if name then
 		return ShortName(name)
@@ -1013,14 +1047,19 @@ end
 local player = UnitFrame("player", "SurvivorUIPlayer", "LEFT", "PlayerFrameDropDown")
 local target = UnitFrame("target", "SurvivorUITarget", "RIGHT", "TargetFrameDropDown")
 
--- The target's debuffs, in a row above its frame.
+-- The target's debuffs, in a row above its frame until moved on their own
+-- (Mover.lua): its child, so they come and go with it.
 local DEBUFFS = 8
 local debuffs = {}
+local debuffRow = CreateFrame("Frame", "SurvivorUITargetDebuffs", target)
+debuffRow:SetWidth(DEBUFFS * 21 - 3)
+debuffRow:SetHeight(18)
+debuffRow:SetPoint("BOTTOMLEFT", target, "TOPLEFT", 0, 4)
 for index = 1, DEBUFFS do
-	local icon = CreateFrame("Frame", nil, target)
+	local icon = CreateFrame("Frame", nil, debuffRow)
 	icon:SetWidth(18)
 	icon:SetHeight(18)
-	icon:SetPoint("BOTTOMLEFT", target, "TOPLEFT", (index - 1) * 21, 4)
+	icon:SetPoint("BOTTOMLEFT", debuffRow, "BOTTOMLEFT", (index - 1) * 21, 0)
 	AddBorder(icon)
 
 	icon.texture = icon:CreateTexture(nil, "ARTWORK")
@@ -1440,20 +1479,74 @@ end
 -- The minimap clock's time, and its setter: a click on the time opens a box
 -- by the minimap with the time as the clock shows it, large, and a slider of
 -- the time zone; moved until that time is the player's own, it is set (the
--- same time zone as This Run's, which dates Run History too).
+-- same time zone as This Run's, which dates Run History too). With none set,
+-- the computer's own time.
 do
-	-- The time now as the clock shows it: the game's clock (UTC) moved by the
-	-- time zone set, 24 or 12 hours; and whether a time zone is set at all.
+	-- The computer's time zone in seconds: what its time (the game's 0.136,
+	-- AZS_GetLocalTime) stands from the game's clock (UTC), to the quarter of
+	-- an hour; nil on a game that does not share it.
+	function SurvivorUI_ComputerZone()
+		local here = AZS_GetLocalTime and AZS_GetLocalTime()
+		if not (here and here.hour and here.minute) then
+			return nil
+		end
+		local apart = here.hour * 60 + here.minute - math.floor(math.mod(time(), 86400) / 60)
+		if apart > 840 then
+			apart = apart - 1440
+		elseif apart < -720 then
+			apart = apart + 1440
+		end
+		return math.floor(apart / 15 + 0.5) * 900
+	end
+
+	-- The zone the times are in, seconds from UTC: the one set, else the
+	-- computer's; nil while neither is known, the times then in UTC.
+	function SurvivorUI_TimeZone()
+		local hours = SurvivorUIDB and tonumber(SurvivorUIDB.timeZone)
+		if hours then
+			return hours * 3600
+		end
+		return SurvivorUI_ComputerZone()
+	end
+
+	-- The time now as the clock shows it, 24 or 12 hours, and whether it is
+	-- the player's own (false: the game's clock, UTC).
 	function SurvivorUI_ClockText()
 		local db = SurvivorUIDB or {}
-		local hours = tonumber(db.timeZone)
-		local now = time() + (hours or 0) * 3600
+		local zone = SurvivorUI_TimeZone()
+		local now = time() + (zone or 0)
 		local hour, minute = math.floor(math.mod(now, 86400) / 3600), math.floor(math.mod(now, 3600) / 60)
 		if db.clock12 then
-			return string.format("%d:%02d %s", math.mod(hour + 11, 12) + 1, minute, hour < 12 and "am" or "pm"), hours ~= nil
+			return string.format("%d:%02d %s", math.mod(hour + 11, 12) + 1, minute, hour < 12 and "am" or "pm"), zone ~= nil
 		end
-		return string.format("%02d:%02d", hour, minute), hours ~= nil
+		return string.format("%02d:%02d", hour, minute), zone ~= nil
 	end
+
+	-- The game's clock under the minimap (its 0.131, put away since its 0.136):
+	-- away while ours shows, the same time told twice. The setting is the
+	-- game's and is saved, so the addon remembers that it was the one to turn
+	-- it off.
+	local function ApplyGameClock()
+		if not (AZS_HUD_CVARS and AZS_HUD_CVARS.localClock and AZS_SetHudShown and AZS_IsHudShown) then
+			return
+		end
+		SurvivorUIDB = SurvivorUIDB or {}
+		if SurvivorUIDB.minimapClock ~= false then
+			if AZS_IsHudShown("localClock") then
+				AZS_SetHudShown("localClock", false)
+				SurvivorUIDB.hidGameLocalClock = true
+			end
+		elseif SurvivorUIDB.hidGameLocalClock then
+			AZS_SetHudShown("localClock", true)
+			SurvivorUIDB.hidGameLocalClock = nil
+		end
+	end
+	SurvivorUI_GameHud = SurvivorUI_GameHud or {}
+	SurvivorUI_GameHud.localClock = ApplyGameClock
+
+	local clockLoader = CreateFrame("Frame")
+	clockLoader:RegisterEvent("PLAYER_ENTERING_WORLD")
+	clockLoader:SetScript("OnEvent", ApplyGameClock)
 
 	local LOW, HIGH, STEP = -12, 14, 0.5
 	local GOLD, MUTED = { 1, 0.82, 0 }, { 0.6, 0.6, 0.65 }
@@ -1475,22 +1568,85 @@ do
 		return button
 	end
 
+	-- A box to tick, its words beside it, as the options' have them.
+	local function Tick(parent, label, y, onClick)
+		local tick = CreateFrame("Button", nil, parent)
+		tick:SetWidth(170)
+		tick:SetHeight(16)
+		tick:SetPoint("TOPLEFT", parent, "TOPLEFT", 35, y)
+		local edge = tick:CreateTexture(nil, "BORDER")
+		edge:SetTexture(FLAT)
+		edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+		edge:SetWidth(13)
+		edge:SetHeight(13)
+		edge:SetPoint("LEFT", tick, "LEFT", 0, 0)
+		local box = tick:CreateTexture(nil, "ARTWORK")
+		box:SetTexture(FLAT)
+		box:SetVertexColor(0.06, 0.06, 0.08, 1)
+		box:SetPoint("TOPLEFT", edge, "TOPLEFT", 1, -1)
+		box:SetPoint("BOTTOMRIGHT", edge, "BOTTOMRIGHT", -1, 1)
+		tick.mark = tick:CreateTexture(nil, "OVERLAY")
+		tick.mark:SetTexture(FLAT)
+		tick.mark:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 1)
+		tick.mark:SetPoint("TOPLEFT", edge, "TOPLEFT", 3, -3)
+		tick.mark:SetPoint("BOTTOMRIGHT", edge, "BOTTOMRIGHT", -3, 3)
+		tick.text = Text(tick, 11, "LEFT", 19, 0)
+		tick.text:SetText(label)
+		tick:SetScript("OnClick", onClick)
+		tick:SetScript("OnEnter", function() this.text:SetTextColor(1, 1, 1) end)
+		tick:SetScript("OnLeave", function() this:Paint() end)
+		function tick:Paint()
+			local color = self.lit and GOLD or MUTED
+			self.text:SetTextColor(color[1], color[2], color[3])
+			if self.lit then
+				self.mark:Show()
+			else
+				self.mark:Hide()
+			end
+		end
+		return tick
+	end
+
 	local function Refresh()
-		local text, set = SurvivorUI_ClockText()
+		local text = SurvivorUI_ClockText()
 		local hours = tonumber(SurvivorUIDB and SurvivorUIDB.timeZone)
+		local computer = SurvivorUI_ComputerZone()
 		setter.time:SetText(text)
-		setter.zone:SetText(set and (SurvivorUI_ZoneLabel and SurvivorUI_ZoneLabel(hours) or tostring(hours))
+		local value = hours or (computer and computer / 3600)
+		setter.zone:SetText(value and (SurvivorUI_ZoneLabel and SurvivorUI_ZoneLabel(value) or tostring(value))
 			or "UTC, the game's clock: no time zone set yet")
-		local value = hours or 0
+		value = value or 0
 		setter.fill:SetWidth(math.max(1, (setter.slider:GetWidth() - 8) * (value - LOW) / (HIGH - LOW) + 4))
-		setter.h24.lit = not (SurvivorUIDB and SurvivorUIDB.clock12)
-		setter.h12.lit = not setter.h24.lit
-		setter.h24:Paint()
-		setter.h12:Paint()
+		setter.hours.lit = not (SurvivorUIDB and SurvivorUIDB.clock12)
+		setter.hours:Paint()
+		setter.computer.lit = hours == nil
+		setter.computer:Paint()
+		if computer then
+			setter.computer:Show()
+		else
+			setter.computer:Hide()
+		end
+		-- With the computer's time ticked the slider has no say: dimmed, it and
+		-- its steps take no mouse.
+		local free = hours ~= nil or computer == nil
+		setter.slider:EnableMouse(free)
+		setter.slider:EnableMouseWheel(free)
+		setter.less:EnableMouse(free)
+		setter.more:EnableMouse(free)
+		setter.less.lit, setter.more.lit = free, free
+		setter.less:Paint()
+		setter.more:Paint()
+		if free then
+			setter.fill:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 0.8)
+			setter.thumb:SetVertexColor(1, 1, 1, 1)
+		else
+			setter.fill:SetVertexColor(MUTED[1], MUTED[2], MUTED[3], 0.4)
+			setter.thumb:SetVertexColor(MUTED[1], MUTED[2], MUTED[3], 0.7)
+		end
 		-- The strip under the minimap at once, not at its next half second.
 		local strip = getglobal("SurvivorUIMinimapClock")
 		if strip then
-			strip.counted = 1
+			strip.timeChanged = true
 		end
 	end
 
@@ -1503,7 +1659,7 @@ do
 	local function Build()
 		setter = CreateFrame("Frame", "SurvivorUIClockSetter", UIParent)
 		setter:SetWidth(240)
-		setter:SetHeight(168)
+		setter:SetHeight(182)
 		setter:SetFrameStrata("DIALOG")
 		setter:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
 		setter:SetBackdropColor(0.04, 0.04, 0.06, 0.96)
@@ -1528,12 +1684,27 @@ do
 		setter.zone = Text(setter, 10, "TOP", 0, -64)
 		setter.zone:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
 
+		-- The computer's time, or, unticked, the time zone slid to.
+		setter.computer = Tick(setter, SurvivorUI_T("Your computer's time"), -82, function()
+			SurvivorUIDB = SurvivorUIDB or {}
+			local computer = SurvivorUI_ComputerZone()
+			if SurvivorUIDB.timeZone then
+				SurvivorUIDB.timeZone = nil
+				setter.slider.quiet = true
+				setter.slider:SetValue(computer and computer / 3600 or 0)
+				setter.slider.quiet = nil
+			else
+				SurvivorUIDB.timeZone = (computer or 0) / 3600
+			end
+			Refresh()
+		end)
+
 		-- The slider, in the options' look, with a step each way beside it.
 		local slider = CreateFrame("Slider", nil, setter)
 		slider:SetOrientation("HORIZONTAL")
 		slider:SetWidth(170)
 		slider:SetHeight(14)
-		slider:SetPoint("TOP", setter, "TOP", 0, -84)
+		slider:SetPoint("TOP", setter, "TOP", 0, -104)
 		slider:SetMinMaxValues(LOW, HIGH)
 		slider:SetValueStep(STEP)
 		slider:EnableMouseWheel(true)
@@ -1553,6 +1724,7 @@ do
 		thumb:SetWidth(8)
 		thumb:SetHeight(14)
 		slider:SetThumbTexture(thumb)
+		setter.thumb = thumb
 		slider:SetScript("OnValueChanged", function()
 			if not this.quiet then
 				SetZone(this:GetValue())
@@ -1563,34 +1735,24 @@ do
 		end)
 		setter.slider = slider
 		local function Nudge(by)
-			slider:SetValue((tonumber(SurvivorUIDB and SurvivorUIDB.timeZone) or 0) + by)
+			slider:SetValue(slider:GetValue() + by)
 		end
-		local less = TextButton(setter, "-", function() Nudge(-STEP) end)
-		less:SetPoint("RIGHT", slider, "LEFT", -4, 0)
-		less.lit = true
-		less:Paint()
-		local more = TextButton(setter, "+", function() Nudge(STEP) end)
-		more:SetPoint("LEFT", slider, "RIGHT", 4, 0)
-		more.lit = true
-		more:Paint()
+		setter.less = TextButton(setter, "-", function() Nudge(-STEP) end)
+		setter.less:SetPoint("RIGHT", slider, "LEFT", -4, 0)
+		setter.more = TextButton(setter, "+", function() Nudge(STEP) end)
+		setter.more:SetPoint("LEFT", slider, "RIGHT", 4, 0)
 
-		setter.h24 = TextButton(setter, "24 hours", function()
+		-- 24 hours ticked, 12 unticked.
+		setter.hours = Tick(setter, SurvivorUI_T("24-hour clock"), -126, function()
 			SurvivorUIDB = SurvivorUIDB or {}
-			SurvivorUIDB.clock12 = nil
+			SurvivorUIDB.clock12 = not SurvivorUIDB.clock12 or nil
 			Refresh()
 		end)
-		setter.h24:SetPoint("TOPRIGHT", setter, "TOP", -2, -106)
-		setter.h12 = TextButton(setter, "12 hours", function()
-			SurvivorUIDB = SurvivorUIDB or {}
-			SurvivorUIDB.clock12 = true
-			Refresh()
-		end)
-		setter.h12:SetPoint("TOPLEFT", setter, "TOP", 2, -106)
 
 		local note = Text(setter, 9, "BOTTOM", 0, 8)
 		note:SetWidth(220)
 		note:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
-		note:SetText(SurvivorUI_T("Slide until the time above is yours. The game's clock runs in UTC; this time zone also dates Run History."))
+		note:SetText(SurvivorUI_T("Untick your computer's time to slide to any time zone. Run History's dates follow."))
 
 		-- The minutes go on while it is open.
 		setter.wait = 0
@@ -1601,6 +1763,7 @@ do
 				Refresh()
 			end
 		end)
+		setter:Hide()
 	end
 
 	-- A click on the minimap's time: the box opens beside the minimap, or closes.
@@ -1615,7 +1778,7 @@ do
 		setter:ClearAllPoints()
 		setter:SetPoint("TOPRIGHT", Minimap, "TOPLEFT", -10, 0)
 		setter.slider.quiet = true
-		setter.slider:SetValue(tonumber(SurvivorUIDB and SurvivorUIDB.timeZone) or 0)
+		setter.slider:SetValue((SurvivorUI_TimeZone() or 0) / 3600)
 		setter.slider.quiet = nil
 		Refresh()
 		setter:Show()
@@ -1675,10 +1838,11 @@ local function SquareMinimap()
 		end)
 
 		-- Along its bottom, inside: the time and the frames a second (the
-		-- options, Minimap: on unless switched off, 24 or 12 hours). The game's
-		-- clock runs in UTC, so the time takes the time zone set in This Run,
-		-- "UTC" beside it while none is; the game has no GetFramerate, so the
-		-- frames are counted here, one OnUpdate a frame. Under the pins.
+		-- options, Minimap: on unless switched off, 24 or 12 hours). The time is
+		-- the computer's, or takes the time zone set in Run History; "UTC" beside
+		-- it on a game that does not share the computer's. The game has no
+		-- GetFramerate, so the frames are counted here, one OnUpdate a frame.
+		-- Under the pins.
 		local strip = CreateFrame("Frame", "SurvivorUIMinimapClock", Minimap)
 		strip:SetPoint("BOTTOMLEFT", Minimap, "BOTTOMLEFT", 0, 0)
 		strip:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", 0, 0)
@@ -1726,7 +1890,7 @@ local function SquareMinimap()
 			end
 			GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
 			GameTooltip:SetText(SurvivorUI_T("Your time"), 1, 0.82, 0)
-			GameTooltip:AddLine(SurvivorUI_T("Click to set it: the game's clock runs in UTC, so the time takes your time zone."), 1, 1, 1, 1)
+			GameTooltip:AddLine(SurvivorUI_T("Click to tick your computer's time, or untick it and slide to the time zone you want, and to pick 24 or 12 hours."), 1, 1, 1, 1)
 			GameTooltip:Show()
 		end)
 		strip.button:SetScript("OnLeave", function()
@@ -1738,9 +1902,10 @@ local function SquareMinimap()
 		strip:SetScript("OnUpdate", function()
 			this.frames = this.frames + 1
 			this.counted = this.counted + arg1
-			if this.counted < 0.5 then
+			if this.counted < 0.5 and not this.timeChanged then
 				return
 			end
+			this.timeChanged = nil
 			local fps = this.frames / this.counted
 			this.frames, this.counted = 0, 0
 			local db = SurvivorUIDB or {}
@@ -2785,6 +2950,7 @@ local function SpawnSide(kind, amount, crit, periodic, source)
 	text.life = crit and SIDE_LIFE * 1.2 or SIDE_LIFE
 	text.age = 0
 	text.side = true
+	text.anchor = nil
 	-- Numbers that start together line up, the later ones a line behind.
 	text.x = startX
 	text.y = startY - column.rise * stack.count * SIDE_GAP
@@ -2793,6 +2959,127 @@ local function SpawnSide(kind, amount, crit, periodic, source)
 	text:SetAlpha(0)
 	text:Show()
 	damageLive = damageLive + 1
+end
+
+-- The game's own feed of the hero's hits (its 0.138): each with an anchor, a
+-- place in the world over the enemy, kept where it fell. A line of the combat
+-- log finds its hit by the target, the amount and the crit; the hits wait a
+-- second for it. Nil on a game without the feed: the plates, as before.
+local HitAnchor
+do
+	local hitCursor
+	local hitsWaiting = {}
+
+	local function ReadHits()
+		local result = AZS_GetCombatTextEvents(hitCursor, 256)
+		if not result then
+			hitCursor = nil
+			return
+		end
+		hitCursor = result.cursor
+		local now = GetTime()
+		local events = result.events or {}
+		for index = 1, table.getn(events) do
+			local hit = events[index]
+			if hit.kind == "damage" and hit.anchorId then
+				table.insert(hitsWaiting, { at = now, id = hit.anchorId, name = hit.targetName, amount = hit.amount, crit = hit.critical,
+					ability = hit.abilityName, meter = hit.meterSource })
+			end
+		end
+		while hitsWaiting[1] and now - hitsWaiting[1].at > 1 do
+			table.remove(hitsWaiting, 1)
+		end
+	end
+
+	HitAnchor = function(target, amount, crit)
+		if not AZS_GetCombatTextEvents then
+			return nil
+		end
+		ReadHits()
+		amount = tonumber(amount)
+		for index = 1, table.getn(hitsWaiting) do
+			local hit = hitsWaiting[index]
+			if not hit.held and hit.name == target and hit.amount == amount and (not hit.crit) == (not crit) then
+				hit.held = true
+				return hit.id
+			end
+		end
+		return nil
+	end
+
+	-- The meter's line for a line of the combat log, when it is not the spell the
+	-- line names (the game's 0.139): a Flametongue Weapon's Fire Nova, a Shadow
+	-- Weaving strike under Shadow Word: Pain. Nil for the spell itself, and for a
+	-- hit not found: by its amount and crit, the same spell's first.
+	function SurvivorUI_HitLine(name, line)
+		if not AZS_GetCombatTextEvents then
+			return nil
+		end
+		local _, _, amount = string.find(line, " for (%d+)")
+		amount = tonumber(amount)
+		if not amount then
+			return nil
+		end
+		ReadHits()
+		local crit = string.find(line, " crit", 1, true) ~= nil
+		local found
+		for index = table.getn(hitsWaiting), 1, -1 do
+			local hit = hitsWaiting[index]
+			if hit.amount == amount and (not hit.crit) == (not crit) then
+				found = found or hit
+				if hit.ability == name then
+					found = hit
+					break
+				end
+			end
+		end
+		local meter = found and found.meter and SurvivorUI_English(found.meter)
+		if meter and meter ~= found.ability then
+			return meter
+		end
+		return nil
+	end
+
+	-- The numbers held to their hits, where the game says those are now: run after
+	-- the camera moves, so they do not trail behind it. A place off the screen
+	-- hides its number.
+	local function PlaceAnchored()
+		if damageLive == 0 then
+			return
+		end
+		local ids, held = {}, {}
+		for index = 1, table.getn(damageTexts) do
+			local text = damageTexts[index]
+			if text.live and text.anchor then
+				table.insert(ids, text.anchor)
+				held[text.anchor] = text
+			end
+		end
+		if table.getn(ids) == 0 then
+			return
+		end
+		local result = AZS_ProjectCombatTextAnchors(ids, "follow")
+		if not result then
+			return
+		end
+		local ratio = WorldFrame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		for index = 1, table.getn(result.entries or {}) do
+			local entry = result.entries[index]
+			local text = held[entry.anchorId]
+			if text then
+				text.away = entry.state ~= "onScreen" or not entry.x
+				if not text.away then
+					text.x, text.y = entry.x * ratio, entry.y * ratio
+					text:ClearAllPoints()
+					text:SetPoint("CENTER", UIParent, "BOTTOMLEFT", text.x + (text.offX or 0), text.y + (text.offY or 0))
+				end
+			end
+		end
+	end
+
+	if AZS_RegisterCombatTextFrameHandler then
+		AZS_RegisterCombatTextFrameHandler(PlaceAnchored)
+	end
 end
 
 local function SpawnDamage(target, amount, crit, periodic, source)
@@ -2810,11 +3097,14 @@ local function SpawnDamage(target, amount, crit, periodic, source)
 	end
 	text.side = nil
 	text.addKey = nil
+	text.anchor = target and HitAnchor(target, amount, crit) or nil
+	text.away, text.offX, text.offY = nil, nil, nil
 	amount = Amount(amount)
 
-	-- Over one of the enemies with that name, else in a ring around the hero.
+	-- Over its hit (PlaceAnchored from the next frame on), else over one of the
+	-- enemies with that name, else in a ring around the hero.
 	local x, y
-	local plates = target and PlatesNamed(target) or {}
+	local plates = target and not text.anchor and PlatesNamed(target) or {}
 	local count = table.getn(plates)
 	if not target then
 		-- Under the hero (the camera keeps it in the middle of the screen), or
@@ -2913,8 +3203,12 @@ damageLayer:SetScript("OnUpdate", function()
 					alpha = 1 - part * part
 				end
 				local down = text.rise < 0 and -1 or 1
+				if text.away then
+					alpha = 0
+				end
+				text.offX, text.offY = text.drift * eased, text.rise * eased - down * lift
 				text:ClearAllPoints()
-				text:SetPoint("CENTER", UIParent, "BOTTOMLEFT", text.x + text.drift * eased, text.y + text.rise * eased - down * lift)
+				text:SetPoint("CENTER", UIParent, "BOTTOMLEFT", text.x + text.offX, text.y + text.offY)
 				text:SetAlpha(alpha)
 				text.icon:SetAlpha(alpha)
 			end
@@ -3729,6 +4023,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleJewelry then
 			SurvivorUI_ToggleJewelry()
 		end
+	elseif msg == "guide" then
+		if SurvivorUI_ToggleGuide then
+			SurvivorUI_ToggleGuide()
+		end
 	elseif msg == "history" or msg == "last" or msg == "runs" then
 		if SurvivorUI_ShowLastRuns then
 			SurvivorUI_ShowLastRuns()
@@ -3783,6 +4081,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui record  shows how a new best crit looks in the combat numbers"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui sample  shows a sample of every combat number as set"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui guardians  shows or hides the guardians' list; /sui guardians north  points its arrows north up; /sui guardians bar  makes it a bar in the run tracker"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui guide  opens the Guide: how Luck, Damage and Crit really work"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui collection  the Jewelry Collection: every amulet, ring and trinket found, and what is left to find; /sui collection reset  forgets it all"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui chat 10  sets the chat text size, 8 to 18 (default 10)"))

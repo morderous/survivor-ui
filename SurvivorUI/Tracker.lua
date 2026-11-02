@@ -75,11 +75,18 @@ end
 local head = CreateFrame("Frame", "SurvivorUITracker", UIParent)
 head:SetWidth(WIDTH)
 head:SetHeight(100)
-if Minimap then
-	head:SetPoint("TOPRIGHT", Minimap, "BOTTOMRIGHT", 0, -30)
-else
-	head:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -230)
+-- Under the kills line, until moved.
+local UNDER_LINE = 25
+
+local function DefaultPlace()
+	head:ClearAllPoints()
+	if Minimap then
+		head:SetPoint("TOPRIGHT", Minimap, "BOTTOMRIGHT", 0, -(SurvivorUI_UnderClock(head) + UNDER_LINE))
+	else
+		head:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -230)
+	end
 end
+DefaultPlace()
 head:SetMovable(true)
 head:EnableMouse(true)
 head:RegisterForDrag("LeftButton")
@@ -103,8 +110,11 @@ local function RestorePlace()
 	if settings.trackerRight then
 		head:ClearAllPoints()
 		head:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", settings.trackerRight, settings.trackerTop)
+	else
+		DefaultPlace()
 	end
 end
+SurvivorUI_PlaceTracker = RestorePlace
 
 head:SetScript("OnDragStart", function() if SurvivorUI_MoveKeyDown() then head:StartMoving() end end)
 head:SetScript("OnDragStop", function() head:StopMovingOrSizing() SavePlace() end)
@@ -1305,12 +1315,5 @@ loader:SetScript("OnEvent", function()
 end)
 
 if SurvivorUI_RegisterMover then
-	SurvivorUI_RegisterMover(head, "Run tracker", SavePlace, nil, function()
-		head:ClearAllPoints()
-		if Minimap then
-			head:SetPoint("TOPRIGHT", Minimap, "BOTTOMRIGHT", 0, -30)
-		else
-			head:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -230)
-		end
-	end)
+	SurvivorUI_RegisterMover(head, "Run tracker", SavePlace, nil, DefaultPlace)
 end

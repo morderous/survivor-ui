@@ -6,6 +6,11 @@
 
 if SurvivorUI_Standby then return end
 
+-- Every tooltip kept on the screen, for a piece moved to its foot or edge.
+if GameTooltip and GameTooltip.SetClampedToScreen then
+	GameTooltip:SetClampedToScreen(true)
+end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local MAX_WIDTH, MAX_HEIGHT = 520, 420  -- larger than this is a window, not an item
 
@@ -42,7 +47,7 @@ local SKIP = {}                 -- frames that are the background, not an item
 -- does not.
 local PANELS = {
 	SurvivorUILoot = true, SurvivorUIMeter = true, SurvivorUIRun = true,
-	SurvivorUICrits = true, SurvivorUIBosses = true, SurvivorUIBuild = true, SurvivorUIOptions = true,
+	SurvivorUICrits = true, SurvivorUIBosses = true, SurvivorUIBuild = true, SurvivorUIWorn = true, SurvivorUIOptions = true,
 }
 
 local function Wanted(frame)

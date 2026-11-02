@@ -56,6 +56,33 @@ function SurvivorUI_Language()
 	return language
 end
 
+-- A talent: the game's list of names has none, but its meter's loadout (its
+-- 0.132) says each one's English. Asked again now and then for a name not
+-- there, as the next card can bring it.
+local talents, talentsAt = {}, {}
+
+local function TalentEnglish(name)
+	if talents[name] then
+		return talents[name]
+	end
+	local now = GetTime()
+	if talentsAt[name] and now - talentsAt[name] < 5 then
+		return name
+	end
+	talentsAt[name] = now
+	local context = AZS_GetMeterContext and AZS_GetMeterContext()
+	if not (context and context.runId and AZS_GetMeterLoadout) then
+		return name
+	end
+	local loadout = AZS_GetMeterLoadout({ apiVersion = 1, runId = context.runId, ownerId = context.localOwnerId })
+	for _, source in pairs(loadout and loadout.sources or {}) do
+		if source.kind == "talent" and source.name and source.localizationKey then
+			talents[source.name] = source.localizationKey
+		end
+	end
+	return talents[name] or name
+end
+
 local names = {}     -- the answers so far
 function SurvivorUI_English(name)
 	if not name or name == "" then
@@ -82,6 +109,12 @@ function SurvivorUI_English(name)
 					break
 				end
 			end
+		end
+	end
+	if english == name and language then
+		english = TalentEnglish(name)
+		if english == name then
+			return name
 		end
 	end
 	names[name] = english
@@ -237,7 +270,9 @@ function SurvivorUI_Native(name)
 			native = before..": "..natives[boosted]
 		end
 	end
-	return native or name
+	-- A talent: the game's list of names has spells, pets and jewelry, so the
+	-- addon's own words hold these.
+	return native or Words()[name] or name
 end
 
 -- The texts already on screen as the language turns up (set before it was

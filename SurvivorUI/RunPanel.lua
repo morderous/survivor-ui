@@ -555,6 +555,9 @@ critTip:SetFrameStrata("TOOLTIP")
 if critTip.SetClampedToScreen then
 	critTip:SetClampedToScreen(true)
 end
+if critTip.SetClampedToScreen then
+	critTip:SetClampedToScreen(true)
+end
 critTip:SetWidth(TIP_WIDTH + 16)
 critTip:Hide()
 
@@ -645,7 +648,7 @@ local critHovered = nil
 -- combat log by name ("Holy Wrath").
 local SPELL_KEYS = {
 	["shadow word: pain"] = "sw_pain", ["power word: shield"] = "pw_shield",
-	["demoralizing shout"] = "demo_shout", ["hunter's mark"] = "hunters_mark",
+	["demoralizing shout"] = "demo_shout", ["hunter's mark"] = "hunters_mark", ["rockbiter weapon"] = "rockbiter",
 }
 
 -- Buffs: the game lists each one with its spell id and the seconds it has left
@@ -832,13 +835,19 @@ local function CritTooltip(row)
 	end
 
 	critTip:SetHeight(y + 8)
-	-- Beside the whole window the row belongs to, top edges together, on its
-	-- left: the right column sits at the screen's edge.
+	-- Beside the whole window the row belongs to, top edges together, towards
+	-- the screen's middle, where there is room wherever the window was moved
+	-- to (Run History's rows hold their own side, row.cardHeld).
+	local frame = row.cardFrame or row
+	local toRight = row.cardRight
+	if not row.cardHeld then
+		toRight = SurvivorUI_RoomOnRight(frame)
+	end
 	critTip:ClearAllPoints()
-	if row.cardRight then
-		critTip:SetPoint("TOPLEFT", row.cardFrame or row, "TOPRIGHT", 6, 0)
+	if toRight then
+		critTip:SetPoint("TOPLEFT", frame, "TOPRIGHT", 6, 0)
 	else
-		critTip:SetPoint("TOPRIGHT", row.cardFrame or row, "TOPLEFT", -6, 0)
+		critTip:SetPoint("TOPRIGHT", frame, "TOPLEFT", -6, 0)
 	end
 	critTip:Show()
 end
@@ -1237,7 +1246,6 @@ for index = 1, CRIT_ROWS do
 	row.divider:SetPoint("BOTTOM", row, "BOTTOMRIGHT", -46, 0)
 	-- The box sits on the left of the screen: its cards open on its right.
 	row.cardFrame = critBox
-	row.cardRight = true
 	row:EnableMouse(true)
 	row:SetScript("OnEnter", function()
 		critHovered = this
@@ -1542,6 +1550,19 @@ local function ReadCasts()
 	end
 end
 
+-- A summon the client has no name for yet comes in the log as Unknown, and its
+-- hit can reach the game's feed after that line: looked up a moment later, and
+-- left out if it is not there.
+local NAMELESS_WAIT = 0.25
+
+local function Nameless(name, message, amount, crit)
+	if name ~= "Unknown" then
+		return false
+	end
+	table.insert(held, { at = GetTime(), nameless = message, amount = amount, crit = crit })
+	return true
+end
+
 -- A line kept back to tell whose, or false to record it as it is.
 local function Hold(name, amount, crit)
 	local key, demon = SurvivorUI_PetCast and SurvivorUI_PetCast(name)
@@ -1573,8 +1594,17 @@ castWatch:SetScript("OnUpdate", function()
 	local index = 1
 	while index <= table.getn(held) do
 		local line = held[index]
-		local whose = Whose(line)
-		if whose then
+		local whose
+		if line.nameless then
+			if GetTime() - line.at >= NAMELESS_WAIT then
+				whose = SurvivorUI_HitLine and SurvivorUI_HitLine("Unknown", line.nameless) or false
+			end
+		else
+			whose = Whose(line)
+		end
+		if whose == false then
+			table.remove(held, index)
+		elseif whose then
 			table.remove(held, index)
 			if line.crit then
 				RecordCrit(whose, line.amount)
@@ -1612,7 +1642,7 @@ local function Hit(message)
 		_, _, ability, _, amount = string.find(message, "^(.+) hits (.+) for (%d+)")
 	end
 	local name = SurvivorUI_SourceOf and SurvivorUI_SourceOf(ability, message) or ability
-	if not Hold(name, amount, false) then
+	if not Nameless(name, message, amount, false) and not Hold(name, amount, false) then
 		RecordHit(name, amount)
 	end
 end
@@ -1651,7 +1681,7 @@ local function Crit(message)
 		_, _, ability, _, amount = string.find(message, "^(.+) crits (.+) for (%d+)")
 	end
 	local name = SurvivorUI_SourceOf and SurvivorUI_SourceOf(ability, message) or ability
-	if not Hold(name, amount, true) then
+	if not Nameless(name, message, amount, true) and not Hold(name, amount, true) then
 		RecordCrit(name, amount)
 	end
 end

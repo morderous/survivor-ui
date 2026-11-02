@@ -272,6 +272,25 @@ function SurvivorUI_PieceName(label)
 	return SurvivorUI_T(label or "?")
 end
 
+-- A piece with parts past its own edges (handle.sideRoom, a function giving
+-- how far on each side): the game keeps only the piece itself on the screen,
+-- so it is carried by hand, the parts held on the screen too.
+local function CarryByHand(handle, piece)
+	local scale = piece:GetEffectiveScale()
+	local startX, startY = GetCursorPosition()
+	local left, top = piece:GetLeft(), piece:GetTop()
+	handle:SetScript("OnUpdate", function()
+		local x, y = GetCursorPosition()
+		local room = this.sideRoom()
+		local ratio = UIParent:GetEffectiveScale() / scale
+		local wide, tall = GetScreenWidth() * ratio, GetScreenHeight() * ratio
+		local toLeft = math.max(room, math.min(wide - piece:GetWidth() - room, left + (x - startX) / scale))
+		local toTop = math.max(piece:GetHeight(), math.min(tall, top + (y - startY) / scale))
+		piece:ClearAllPoints()
+		piece:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", toLeft, toTop)
+	end)
+end
+
 function SurvivorUI_RegisterMover(frame, label, save, mover, default)
 	mover = mover or frame
 	local handle = MakeHandle(label)
@@ -284,11 +303,19 @@ function SurvivorUI_RegisterMover(frame, label, save, mover, default)
 		end
 		this.wasDragged = true
 		dragging = this
-		mover:StartMoving()
+		if this.sideRoom then
+			CarryByHand(this, mover)
+		else
+			mover:StartMoving()
+		end
 	end)
 	handle:SetScript("OnDragStop", function()
 		dragging = nil
-		mover:StopMovingOrSizing()
+		if this.sideRoom then
+			this:SetScript("OnUpdate", nil)
+		else
+			mover:StopMovingOrSizing()
+		end
 		Snap(mover, this)
 		if save then
 			save()
@@ -446,6 +473,9 @@ linker:SetScript("OnEvent", ApplyLink)
 KeepPiece(getglobal("SurvivorUIBuffs"), "Buffs", "buffsLeft", "buffsBottom", "BOTTOMLEFT", function()
 	SurvivorUIBuffs:SetPoint("BOTTOMLEFT", player, "TOPLEFT", 0, 5)
 end)
+KeepPiece(getglobal("SurvivorUITargetDebuffs"), "Target debuffs", "targetDebuffsLeft", "targetDebuffsBottom", "BOTTOMLEFT", function()
+	SurvivorUITargetDebuffs:SetPoint("BOTTOMLEFT", target, "TOPLEFT", 0, 4)
+end)
 
 -- Every one shown with Alt held, in configuration mode, or while a drag (of
 -- one held with Alt) is still going; the open tab's pieces while it is open.
@@ -589,6 +619,9 @@ local PARTS = {
 		places = { { "trackerRight", "trackerTop", "TOPRIGHT" } } },
 	{ key = "build", section = "Character", label = "Build list", frames = { "SurvivorUIBuild" },
 		places = { { "buildLeft", "buildTop", "TOPLEFT" } } },
+	-- Part of the build list until v3.0.49: at its size until given one.
+	{ key = "worn", section = "Run", label = "Jewelry worn", follows = "build", frames = { "SurvivorUIWorn" },
+		places = { { "wornLeft", "wornTop", "TOPLEFT" } } },
 	{ key = "meter", section = "Combat", label = "Damage meter", frames = { "SurvivorUIMeter", "SurvivorUICritTip" },
 		places = { { "meterRight", "meterBottom", "BOTTOMRIGHT" } } },
 	{ key = "run", section = "Combat", label = "This Run", frames = { "SurvivorUIRun" },
@@ -619,7 +652,8 @@ local PARTS = {
 		"BonusActionButton7", "BonusActionButton8", "BonusActionButton9", "BonusActionButton10", "BonusActionButton11", "BonusActionButton12" },
 		places = {}, extra = { "rowX", "rowY" }, restore = function() Restore() end, default = 0.85 },
 	{ key = "frames", section = "Center bar", label = "Player and target", group = "middle", frames = { "SurvivorUIPlayer", "SurvivorUITarget" },
-		places = { { "playerLeft", "playerTop", "TOPLEFT", "SurvivorUIPlayer" }, { "targetLeft", "targetTop", "TOPLEFT", "SurvivorUITarget" } } },
+		places = { { "playerLeft", "playerTop", "TOPLEFT", "SurvivorUIPlayer" }, { "targetLeft", "targetTop", "TOPLEFT", "SurvivorUITarget" },
+			{ "targetDebuffsLeft", "targetDebuffsBottom", "BOTTOMLEFT", "SurvivorUITargetDebuffs" } } },
 	{ key = "buffs", section = "Center bar", label = "Buffs", group = "middle", frames = { "SurvivorUIBuffs" },
 		places = { { "buffsLeft", "buffsBottom", "BOTTOMLEFT" } } },
 	-- Under the minimap now: a size of its own, out of the center bar's.
@@ -659,13 +693,17 @@ end
 
 -- A part's size on screen: the whole interface's times its group's (the
 -- whole center bar) times its own.
-local function Own(key)
+local Own
+function Own(key)
 	local set = PartScales()[key]
 	if set then
 		return set
 	end
 	for index = 1, table.getn(PARTS) do
 		if PARTS[index].key == key then
+			if PARTS[index].follows then
+				return Own(PARTS[index].follows)
+			end
 			return PARTS[index].default or 1
 		end
 	end
@@ -893,10 +931,10 @@ end
 
 local PLACES = {
 	"rowX", "rowY", "runLeft", "runTop", "runBottom", "trackerRight", "trackerTop",
-	"meterRight", "meterBottom", "bossLeft", "bossTop", "lootLeft", "lootTop",
+	"meterRight", "meterBottom", "bossLeft", "bossTop", "lootLeft", "lootTop", "wornLeft", "wornTop",
 	"chatLeft", "chatBottom", "mapRight", "mapTop", "tipRight", "tipBottom", "critsLeft", "critsBottom", "critsTop", "buildLeft", "buildTop",
 	"buffsLeft", "buffsBottom", "tallyLeft", "tallyX", "tallyTop", "playerLeft", "playerTop", "targetLeft", "targetTop",
-	"guardiansLeft", "guardiansTop", "recordLeft", "recordTop",
+	"targetDebuffsLeft", "targetDebuffsBottom", "guardiansLeft", "guardiansTop", "recordLeft", "recordTop",
 	"dealtLeft", "dealtTop", "critLeft", "critTop", "takenLeft", "takenTop", "healLeft", "healTop",
 	"mapButtonX", "mapButtonY", "xpBarX", "xpBarTop", "shardsX", "shardsTop",
 }
@@ -967,7 +1005,7 @@ end
 local CARDS = { left = 0.22, right = 0.78, bottom = 0, top = 0.80 }
 -- Over the cards with the pieces: the tooltips they show, and what goes with
 -- a piece (the chat's panel, ours, behind the game's chat).
-local OVER_TIPS = { "GameTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "SurvivorUICritTip", "SurvivorUILuckCard" }
+local OVER_TIPS = { "GameTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "SurvivorUICritTip", "SurvivorUILuckCard", "SurvivorUIMarksCard" }
 local OVER_WITH = { ChatFrame1 = "SurvivorUIChatPanel" }
 local over = {}                 -- [name] = true: kept over the cards by the game
 

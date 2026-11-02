@@ -66,32 +66,13 @@ local function Clock(seconds)
 	return string.format("%d:%02d", math.floor(seconds / 60), math.mod(seconds, 60))
 end
 
--- The computer's own clock. The game's is UTC (date() gives 23:44 for 20:44
--- in Brazil), and nothing in it tells the computer's time zone: its
--- GetGameTime() is a clock of the game's world (09:59 for 21:35). So the zone
--- is set in the options (This Run, "Your time zone", SurvivorUIDB.timeZone in
--- hours); until then, the zone date() gives against its "!" UTC, should the
--- game ever give the computer's; else none, and the times say UTC. A run
--- keeps its moment (time(), the same the world over) and is shown in it.
+-- The player's own clock. The game's date() is UTC (23:44 for 20:44 in Brazil),
+-- so the zone is the one set in the options (Run History, "Your time zone",
+-- SurvivorUIDB.timeZone in hours), else the computer's (SurvivorUI_TimeZone);
+-- with neither, the times say UTC. A run keeps its moment (time(), the same the
+-- world over) and is shown in it.
 local function Zone()
-	local hours = SurvivorUIDB and tonumber(SurvivorUIDB.timeZone)
-	if hours then
-		return hours * 3600
-	end
-	local ok, here, utc = pcall(function() return date("*t"), date("!*t") end)
-	if ok and type(here) == "table" and type(utc) == "table" and here.hour and utc.hour then
-		local apart = (here.hour * 60 + (here.min or 0)) - (utc.hour * 60 + (utc.min or 0))
-		while apart > 720 do
-			apart = apart - 1440
-		end
-		while apart <= -720 do
-			apart = apart + 1440
-		end
-		if apart ~= 0 then
-			return apart * 60
-		end
-	end
-	return nil
+	return SurvivorUI_TimeZone()
 end
 
 -- How long ago: "just now", "18 min ago", "3 h ago", "2 days ago".
@@ -165,6 +146,46 @@ local function ItemTip(link)
 	scanner:Hide()
 	return lines
 end
+
+-- The hero's talents as the game has them (its 0.132: the client's own talent
+-- calls know nothing of them), in a line kept with the run, the tree first:
+-- "0:Concussion:5|1:Flurry:3". Read every 15 sec in a run too: the run over, the
+-- game may no longer give them.
+local picksHeld
+
+function SurvivorUI_RunPicks()
+	if not (AZS_GetMeterLoadout and AZS_GetMeterContext) then
+		return nil
+	end
+	local context = AZS_GetMeterContext()
+	local loadout = context and AZS_GetMeterLoadout({ apiVersion = 1, runId = context.runId, ownerId = context.localOwnerId })
+	if not loadout then
+		return nil
+	end
+	local list = {}
+	for index = 1, table.getn(loadout.talents or {}) do
+		local talent = loadout.talents[index]
+		local source = loadout.sources and loadout.sources[talent.sourceKey]
+		local _, _, tree = string.find(talent.treeKey or "", "(%d+)$")
+		if source and tree then
+			table.insert(list, tree..":"..(source.localizationKey or source.name)..":"..Num(talent.rank))
+		end
+	end
+	table.sort(list)
+	return table.getn(list) > 0 and table.concat(list, "|") or nil
+end
+
+local picksWatch = CreateFrame("Frame")
+picksWatch.wait = 0
+picksWatch:SetScript("OnUpdate", function()
+	this.wait = this.wait + arg1
+	if this.wait >= 15 then
+		this.wait = 0
+		if AZS_GetPhase and AZS_GetPhase() == "playing" then
+			picksHeld = SurvivorUI_RunPicks() or picksHeld
+		end
+	end
+end)
 
 -- The run as it stands: its numbers and every panel's, with their tooltips
 -- as photos. "going" (an endless run's moment taken while it lasts): not the
@@ -241,6 +262,7 @@ local function Snapshot(phase)
 	record.jumps = SurvivorUI_RunJumps and (SurvivorUI_RunJumps()) or nil
 	-- A co-op run: the party, each hero's damage as the game's party meter had it (Party.lua).
 	record.party = SurvivorUI_PartySnapshot and SurvivorUI_PartySnapshot() or nil
+	record.picks = SurvivorUI_RunPicks() or picksHeld
 	-- Fallen: what struck last, the last hits, the damage taken by kind (RunPanel.lua).
 	if phase == "dead" and SurvivorUI_DeathRecap then
 		record.death = SurvivorUI_DeathRecap()
@@ -718,6 +740,7 @@ end
 local function CardRow(row, column)
 	row.cardFrame = window
 	row.cardRight = column > 2
+	row.cardHeld = true
 	row:EnableMouse(true)
 	row:SetScript("OnEnter", function()
 		if this.keptCard and SurvivorUI_CritCardShow then
@@ -856,7 +879,7 @@ before:SetPoint("RIGHT", pageButton, "LEFT", -6, 0)
 -- was. The game's own words over the world ("Move to begin." as a run waits)
 -- are drawn over any addon still.
 
-local HUD_PARTS = { "clock", "bosses", "tally", "build", "banners", "loot", "meter", "levels", "flag" }
+local HUD_PARTS = { "clock", "bosses", "tally", "build", "banners", "loot", "meter", "levels", "flag", "localClock" }
 
 -- The page's backing out to the screen's edges, and its edge round them.
 local shade = CreateFrame("Frame", nil, WorldFrame)
@@ -1569,6 +1592,8 @@ whenTip:SetScript("OnEnter", function()
 	local hours = SurvivorUIDB and tonumber(SurvivorUIDB.timeZone)
 	if hours then
 		GameTooltip:SetText(SurvivorUI_TF("Your time zone: {1}", SurvivorUI_ZoneLabel and SurvivorUI_ZoneLabel(hours) or hours), 1, 1, 1)
+	elseif SurvivorUI_ComputerZone() then
+		GameTooltip:SetText(SurvivorUI_T("Your computer's time"), 1, 1, 1)
 	else
 		GameTooltip:SetText(SurvivorUI_T("The game's clock is in UTC"), 1, 1, 1)
 		GameTooltip:AddLine(SurvivorUI_T("Set your time zone for your own clock's time."), 0.8, 0.8, 0.8, 1)
@@ -1603,6 +1628,9 @@ local RESULTS = {
 		sparks = { { 0.62, 0.84, 1.00 }, { 0.86, 0.94, 1.00 } }, breath = 2.8, motion = "drift", every = 0.28 },
 	going   = { word = "ENDLESS", fill = { 0.48, 0.18, 0.80 }, edge = { 0.86, 0.66, 1.00 }, glow = { 0.68, 0.38, 1.00 },
 		sparks = { { 0.80, 0.58, 1.00 } }, breath = 2, motion = "circle", every = 0.3, stars = 0.9 },
+	-- The Guide's note by the minimap (MinimapButton.lua): Victory's way, in gold.
+	guide   = { word = "GUIDE", fill = { 0.60, 0.42, 0.05 }, edge = { 1.00, 0.86, 0.45 }, glow = { 1.00, 0.76, 0.18 },
+		sparks = { { 1.00, 0.85, 0.30 }, { 1.00, 0.95, 0.65 } }, breath = 1.8, motion = "rise", every = 0.18, stars = 0.5, shine = 2.6 },
 	-- The options' Donate button (Options.lua): Left's drift, in a lighter blue.
 	donate  = { word = "DONATE", fill = { 0.26, 0.58, 0.88 }, edge = { 0.80, 0.93, 1.00 }, glow = { 0.48, 0.80, 1.00 },
 		sparks = { { 0.70, 0.88, 1.00 }, { 0.90, 0.97, 1.00 } }, breath = 2.8, motion = "drift", every = 0.28 },
@@ -3625,7 +3653,100 @@ end
 ------------------------------------------------------------------------------
 -- Drawing a run: the header, then each column's panels top to bottom.
 
-local BOXES = { tracker, runBox, buildBox, damageBox, critBox, lootBox, fallen.box, statsPanel.box }
+------------------------------------------------------------------------------
+-- The talents the hero had, from runs kept since the game's 0.132 gave them:
+-- the class's three trees side by side (TalentTrees.lua), each talent in its
+-- tier and column, the ones learned lit with their rank, the rest dim. Over
+-- the panel, the points in each tree. A talent no tree has any more (the game
+-- renamed it after the run) goes in a row under them. Hover one for its name.
+
+local talentBox = Box(SurvivorUI_T("Talents"))
+local PICK, PICK_STEP = 16, 18    -- four columns to a tree, three trees across a panel
+local TREE_WIDTH = math.floor(INNER / 3)
+local TREE_TOP = TOP + 13
+talentBox.labels = {}
+
+local function PickSpot(index)
+	local spot = talentBox.rows[index]
+	if spot then
+		return spot
+	end
+	spot = CreateFrame("Frame", nil, talentBox)
+	spot:SetWidth(PICK)
+	spot:SetHeight(PICK)
+	spot:EnableMouse(true)
+	spot.icon = spot:CreateTexture(nil, "ARTWORK")
+	spot.icon:SetAllPoints(spot)
+	spot.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	spot.rank = Font(spot, 9, WHITE, "OUTLINE", "RIGHT")
+	spot.rank:SetPoint("BOTTOMRIGHT", spot, "BOTTOMRIGHT", 0, 0)
+	spot:SetScript("OnEnter", function()
+		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+		GameTooltip:SetText(SurvivorUI_Native(this.name), 1, 0.82, 0)
+		GameTooltip:AddLine(SurvivorUI_TF("Rank {1}", this.points), 1, 1, 1)
+		GameTooltip:Show()
+	end)
+	spot:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	talentBox.rows[index] = spot
+	return spot
+end
+
+local function PaintPick(spot, name, rank, top)
+	local art = SurvivorUI_TALENT_ICONS and SurvivorUI_TALENT_ICONS[name]
+	spot.name = name
+	spot.points = (rank or 0)..(top and "/"..top or "")
+	spot.icon:SetTexture(art and ("Interface\\Icons\\"..art) or "Interface\\Icons\\INV_Misc_QuestionMark")
+	spot.icon:SetDesaturated(not rank and 1 or nil)
+	spot.icon:SetAlpha(rank and 1 or 0.35)
+	spot.rank:SetText(rank or "")
+	spot:ClearAllPoints()
+	spot:Show()
+end
+
+local function DrawTalents(run)
+	local trees = SurvivorUI_TALENT_TREES and SurvivorUI_TALENT_TREES[run.classKey or ""] or {}
+	local points = {}
+	for _, name, rank in string.gfind(run.picks, "(%d+):([^:|]+):(%d+)") do
+		points[name] = tonumber(rank)
+	end
+	local count, tiers, spent = 0, 0, {}
+	for index = 1, table.getn(trees) do
+		local tree = trees[index]
+		local left = 6 + (index - 1) * TREE_WIDTH
+		local label = talentBox.labels[index]
+		if not label then
+			label = Font(talentBox, 9, MUTED)
+			talentBox.labels[index] = label
+		end
+		label:SetPoint("TOPLEFT", talentBox, "TOPLEFT", left, -TOP)
+		label:SetText(SurvivorUI_Native(tree.name))
+		spent[index] = 0
+		for each = 1, table.getn(tree) do
+			local talent = tree[each]
+			local rank = points[talent[1]]
+			count = count + 1
+			local spot = PickSpot(count)
+			PaintPick(spot, talent[1], rank, talent[4])
+			spot:SetPoint("TOPLEFT", talentBox, "TOPLEFT", left + talent[3] * PICK_STEP, -TREE_TOP - talent[2] * PICK_STEP)
+			spent[index] = spent[index] + (rank or 0)
+			points[talent[1]] = nil
+			tiers = math.max(tiers, talent[2] + 1)
+		end
+	end
+	talentBox.note:SetText(table.concat(spent, " / "))
+	local y, across = -TREE_TOP - tiers * PICK_STEP, 0
+	for name, rank in pairs(points) do
+		count = count + 1
+		local spot = PickSpot(count)
+		PaintPick(spot, name, rank)
+		spot:SetPoint("TOPLEFT", talentBox, "TOPLEFT", 6 + across * PICK_STEP, y)
+		across = across + 1
+	end
+	HideRows(talentBox, count + 1)
+	return -y + (across > 0 and PICK_STEP or 0) + 6
+end
+
+local BOXES = { tracker, talentBox, runBox, buildBox, damageBox, critBox, lootBox, fallen.box, statsPanel.box }
 
 -- A panel at its column's next place, its height given; the place under it
 -- comes back.
@@ -3801,6 +3922,11 @@ local function DrawPanels(moment, base)
 	end
 	-- The hero's numbers, a column of their own.
 	local fourth = Stack(statsPanel.box, 4, first, statsPanel.Draw(moment))
+	if moment.picks then
+		fourth = Stack(talentBox, 4, fourth, DrawTalents(moment))
+	else
+		talentBox:Hide()
+	end
 	window:SetHeight(math.max(left, middle, right, fourth) - GAP + PAD + FOOTER)
 end
 

@@ -157,8 +157,9 @@ local function SavePlace()
 	Place()
 end
 
+local handle
 if SurvivorUI_RegisterMover then
-	SurvivorUI_RegisterMover(holder, "Class gems", SavePlace, nil, function()
+	handle = SurvivorUI_RegisterMover(holder, "Class gems", SavePlace, nil, function()
 		if SurvivorUIDB then
 			SurvivorUIDB.shardsX, SurvivorUIDB.shardsTop = nil, nil
 		end
@@ -779,6 +780,12 @@ watch:SetScript("OnUpdate", function()
 	local value, full, styled = Exact()
 	-- The game's proc's look, or the soul shards' counted.
 	Dress(styled or STYLES.soul_fire)
+	-- Faded under the level's cards (Mover.lua): put away, as each gem and font
+	-- here would bring its own alpha back through them (Discord).
+	if handle and handle.fadedFrom then
+		holder:Hide()
+		return
+	end
 	if not (On() and (value or Spells()) and (phase == "playing" or phase == "choosing" or phase == "paused")) then
 		holder:Hide()
 		return

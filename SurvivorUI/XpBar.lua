@@ -319,6 +319,9 @@ local card = CreateFrame("Frame", "SurvivorUILuckCard", UIParent)
 card:SetFrameStrata("TOOLTIP")
 card:SetWidth(CARD_WIDTH)
 card:Hide()
+if card.SetClampedToScreen then
+	card:SetClampedToScreen(true)
+end
 card.back = card:CreateTexture(nil, "BACKGROUND")
 card.back:SetTexture(FLAT)
 card.back:SetVertexColor(0.05, 0.05, 0.07, 0.94)
@@ -631,11 +634,22 @@ local function FillCard(only)
 	card:SetHeight(height)
 end
 
+-- The card under what it answers, its side lined up ("", "LEFT" or "RIGHT");
+-- over it when the screen has no room below, the bar moved to the screen's foot.
+local function SeatCard(owner, side)
+	card:ClearAllPoints()
+	local room = owner:GetBottom() * owner:GetEffectiveScale() / card:GetEffectiveScale()
+	if room >= card:GetHeight() + 6 then
+		card:SetPoint("TOP"..side, owner, "BOTTOM"..side, 0, -6)
+	else
+		card:SetPoint("BOTTOM"..side, owner, "TOP"..side, 0, 6)
+	end
+	card:Show()
+end
+
 hover:SetScript("OnEnter", function()
 	FillCard()
-	card:ClearAllPoints()
-	card:SetPoint("TOP", panel, "BOTTOM", 0, -6)
-	card:Show()
+	SeatCard(panel, "")
 end)
 hover:SetScript("OnLeave", function()
 	card:Hide()
@@ -650,13 +664,7 @@ for index = 1, 2 do
 	side.index = index
 	side:SetScript("OnEnter", function()
 		FillCard(this.index)
-		card:ClearAllPoints()
-		if this.index == 1 then
-			card:SetPoint("TOPRIGHT", this, "BOTTOMRIGHT", 0, -6)
-		else
-			card:SetPoint("TOPLEFT", this, "BOTTOMLEFT", 0, -6)
-		end
-		card:Show()
+		SeatCard(this, this.index == 1 and "RIGHT" or "LEFT")
 	end)
 	side:SetScript("OnLeave", function()
 		card:Hide()
@@ -773,20 +781,30 @@ local function RestorePlace()
 	end
 end
 
+-- How far the odds beside the bar reach past it, each side: they stay on the
+-- screen with it.
+local function SideRoom()
+	return SidesOn() and sides[1]:GetWidth() + 8 or 0
+end
+
 local function SavePlace()
 	local db = Settings()
-	db.xpBarX = math.floor(panel:GetLeft() + panel:GetWidth() / 2 + 0.5)
+	local half, room = panel:GetWidth() / 2, SideRoom()
+	local wide = GetScreenWidth() * UIParent:GetEffectiveScale() / panel:GetEffectiveScale()
+	local middle = math.max(half + room, math.min(wide - half - room, panel:GetLeft() + half))
+	db.xpBarX = math.floor(middle + 0.5)
 	db.xpBarTop = math.floor(panel:GetTop() + 0.5)
 	RestorePlace()
 end
 
 DefaultPlace()
 if SurvivorUI_RegisterMover then
-	SurvivorUI_RegisterMover(panel, "XP bar", SavePlace, nil, function()
+	local handle = SurvivorUI_RegisterMover(panel, "XP bar", SavePlace, nil, function()
 		local db = Settings()
 		db.xpBarX, db.xpBarTop = nil, nil
 		RestorePlace()
 	end)
+	handle.sideRoom = SideRoom
 end
 
 local loader = CreateFrame("Frame")

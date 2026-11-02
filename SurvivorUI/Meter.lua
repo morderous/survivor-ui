@@ -16,7 +16,9 @@
 --
 -- Reset starts the meter over from that moment and clears the crits; the run
 -- panel keeps the whole run. Its
--- size holds through a run: up to ten lines, fewer on a small screen. Hold Alt
+-- size holds through a run: up to ten lines, fewer on a small screen, or as
+-- many as set (the options, or its card in move mode); the lines that do not
+-- fit roll by the wheel or the scroll bar at its right. Hold Alt
 -- and drag to move. The game's own meter is put away while this one is on;
 -- /sui meter brings it back. Needs the API; without it nothing shows.
 
@@ -33,6 +35,9 @@ local MAX_LINES = 10
 -- lines (until set, as many as the layout fits).
 local WIDTH_LEAST, WIDTH_MOST = 180, 400
 local LINES_LEAST, LINES_MOST = 3, 20
+-- The scroll bar at a window's right, for the lines that do not fit: the bars
+-- give it this much of their width while it shows.
+local ROLL_WIDTH, ROLL_ROOM = 8, 6
 -- The bars start under the title and the strip of numbers (total, dps, now).
 local STRIP_TOP, STRIP_HEIGHT = 20, 14
 local BARS_TOP = STRIP_TOP + STRIP_HEIGHT + 2
@@ -158,9 +163,11 @@ local function Fit()
 		SetLines(MAX_LINES)
 		return
 	end
-	local build, tracker = SurvivorUIBuild, SurvivorUITracker
+	local build, worn, tracker = SurvivorUIBuild, SurvivorUIWorn, SurvivorUITracker
 	local above, shift = nil, 0
-	if build and build:IsShown() and build:GetBottom() then
+	if worn and worn:IsShown() and not settings.wornLeft and worn:GetBottom() then
+		above = worn
+	elseif build and build:IsShown() and build:GetBottom() then
 		above = build
 	elseif tracker and tracker:GetBottom() then
 		above, shift = tracker, 8
@@ -791,7 +798,7 @@ end
 -- for "Holy Wrath"): 12 in the meter, or XII (SurvivorUI_RankText).
 local SPELL_KEYS = {
 	["shadow word: pain"] = "sw_pain", ["power word: shield"] = "pw_shield",
-	["demoralizing shout"] = "demo_shout", ["hunter's mark"] = "hunters_mark",
+	["demoralizing shout"] = "demo_shout", ["hunter's mark"] = "hunters_mark", ["rockbiter weapon"] = "rockbiter",
 }
 
 -- A source's icon. A spell of the build: its action button's (the game puts
@@ -1099,6 +1106,70 @@ local function PlaceEdges(bar, share)
 	right:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", width - 1, 0)
 end
 
+-- A hero of the party in the game's meter feed (its 0.132): their id, by name
+-- or else by class. The feed comes from the game's server, so it reaches a
+-- friend, as addon messages do not.
+local function HeroOwner(line, context)
+	local party = AZS_GetMeterSnapshot({ apiVersion = 1, runId = context.runId, metric = "damage", scope = "party", period = "run",
+		groupBy = "owner", windowSeconds = 0 })
+	local byClass
+	for id, actor in pairs(party and party.actors or {}) do
+		if actor.name == line.name then
+			return id
+		end
+		if actor.classKey and line.class and string.upper(actor.classKey) == string.upper(tostring(line.class)) then
+			byClass = id
+		end
+	end
+	return byClass
+end
+
+-- A hero's lines on their card: the damage by spell, the jewelry, the talents.
+local function AddHeroDetail(line)
+	if not (AZS_GetMeterContext and AZS_GetMeterSnapshot and AZS_GetMeterLoadout) then
+		return
+	end
+	local context = AZS_GetMeterContext()
+	local owner = context and HeroOwner(line, context)
+	if not owner then
+		return
+	end
+	local spells = AZS_GetMeterSnapshot({ apiVersion = 1, runId = context.runId, metric = "damage", scope = "owner", ownerId = owner,
+		period = "run", groupBy = "source", windowSeconds = 0 })
+	local rows = spells and spells.rows or {}
+	if table.getn(rows) > 0 then
+		GameTooltip:AddLine(" ")
+		GameTooltip:AddLine(SurvivorUI_T("Damage by spell"), 1, 0.82, 0)
+		for index = 1, math.min(table.getn(rows), 8) do
+			local source = spells.sources and spells.sources[rows[index].sourceKey]
+			GameTooltip:AddDoubleLine(source and source.name or "?", math.floor(Num(rows[index].share) * 100 + 0.5).."%", 1, 1, 1, 0.8, 0.8, 0.8)
+		end
+	end
+	local loadout = AZS_GetMeterLoadout({ apiVersion = 1, runId = context.runId, ownerId = owner })
+	if not loadout then
+		return
+	end
+	local jewelry = loadout.runJewelry or {}
+	if table.getn(jewelry) > 0 then
+		GameTooltip:AddLine(" ")
+		GameTooltip:AddLine(SurvivorUI_T("Jewelry"), 1, 0.82, 0)
+		for index = 1, table.getn(jewelry) do
+			local source = loadout.sources and loadout.sources[jewelry[index].sourceKey]
+			if source then
+				GameTooltip:AddLine(source.name, 1, 1, 1)
+			end
+		end
+	end
+	local points = 0
+	for index = 1, table.getn(loadout.talents or {}) do
+		points = points + Num(loadout.talents[index].rank)
+	end
+	if points > 0 then
+		GameTooltip:AddLine(" ")
+		GameTooltip:AddDoubleLine(SurvivorUI_T("Talents"), points, 1, 0.82, 0, 1, 1, 1)
+	end
+end
+
 -- A bar in the meter's look, for any window (MeterWindows.lua too): its
 -- tooltip and the crit card beside its window, dragged with it (the
 -- window's StartMove and StopMove), the wheel rolling its list (its Wheel).
@@ -1241,6 +1312,7 @@ local function MakeBar(parent)
 				if this.line.top then
 					GameTooltip:AddDoubleLine(SurvivorUI_T("Top spell"), SurvivorUI_TF("{1}  ({2} dps)", this.line.top, Short(this.line.topdps)), 0.8, 0.8, 0.8, 1, 0.82, 0)
 				end
+				AddHeroDetail(this.line)
 			end
 			GameTooltip:Show()
 		elseif SurvivorUI_CritCardShow then
@@ -1376,6 +1448,7 @@ local function PartyLine(shown, line)
 	end
 	shown.color = { r, g, b }
 	shown.dps, shown.topdps = Num(line.dps), Num(line.topdps)
+	shown.class = line.class
 	if line.top and line.top ~= "" and line.top ~= 0 then
 		shown.top = English(tostring(line.top))
 	end
@@ -1414,8 +1487,9 @@ local function PaintBar(bar, line, top, key)
 	local proc = line.proc
 	local folded = line.others
 	local color = line.color or ColorOf(name)
-	-- As wide as its window (set on its card in move mode).
-	local width = bar:GetParent().barWidth or WIDTH
+	-- As wide as its window (set on its card in move mode), less the scroll
+	-- bar's room while it shows.
+	local width = (bar:GetParent().barWidth or WIDTH) - (bar:GetParent().rolling and ROLL_ROOM or 0)
 	if bar.width ~= width then
 		bar.width = width
 		bar:SetWidth(width)
@@ -1518,6 +1592,63 @@ local function PaintBar(bar, line, top, key)
 	bar:Show()
 end
 
+-- A window's scroll bar, there while its lines do not all fit: the thumb as
+-- long as the share of the lines that shows. Dragged or clicked, the window's
+-- list rolls as by the wheel (window.Roll).
+local function MakeRoll(window)
+	local roll = CreateFrame("Slider", nil, window)
+	roll:SetOrientation("VERTICAL")
+	roll:SetWidth(ROLL_WIDTH)
+	roll:SetPoint("TOPRIGHT", window, "TOPRIGHT", -1, -BARS_TOP)
+	roll:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -1, 4 + BAR_GAP)
+	roll:SetFrameLevel(window:GetFrameLevel() + 6)
+	roll:SetMinMaxValues(0, 1)
+	roll:SetValueStep(1)
+	roll:EnableMouse(true)
+	roll:EnableMouseWheel(true)
+	local track = roll:CreateTexture(nil, "BACKGROUND")
+	track:SetTexture(FLAT)
+	track:SetVertexColor(0, 0, 0, 0.45)
+	track:SetWidth(ROLL_WIDTH - 2)
+	track:SetPoint("TOP", roll, "TOP", 0, 0)
+	track:SetPoint("BOTTOM", roll, "BOTTOM", 0, 0)
+	roll.thumb = roll:CreateTexture(nil, "OVERLAY")
+	roll.thumb:SetTexture(FLAT)
+	roll.thumb:SetVertexColor(0.55, 0.55, 0.6, 1)
+	roll.thumb:SetWidth(ROLL_WIDTH - 2)
+	roll.thumb:SetHeight(16)
+	roll:SetThumbTexture(roll.thumb)
+	roll:SetScript("OnEnter", function() this.thumb:SetVertexColor(0.9, 0.9, 0.95, 1) end)
+	roll:SetScript("OnLeave", function() this.thumb:SetVertexColor(0.55, 0.55, 0.6, 1) end)
+	roll:SetScript("OnValueChanged", function()
+		if not this.quiet then
+			window.Roll(math.floor(this:GetValue() + 0.5))
+		end
+	end)
+	roll:SetScript("OnMouseWheel", function()
+		window.Wheel()
+	end)
+	roll:Hide()
+	window.roll = roll
+end
+
+-- Its list rolled to where it stands: called with window.most worked out,
+-- before its bars are painted (they make room for it).
+local function ShowRoll(window, skip, shown)
+	local roll, most = window.roll, window.most or 0
+	window.rolling = most > 0
+	if most == 0 then
+		roll:Hide()
+		return
+	end
+	roll.quiet = true
+	roll:SetMinMaxValues(0, most)
+	roll:SetValue(skip)
+	roll.quiet = nil
+	roll.thumb:SetHeight(math.max(14, math.floor(shown * (BAR_HEIGHT + BAR_GAP) * shown / (shown + most))))
+	roll:Show()
+end
+
 local function Draw()
 	-- The build list's shares are always the damage's.
 	local damage, damageTotal, damageRate = DamageLines()
@@ -1586,6 +1717,7 @@ local function Draw()
 	local skip = math.min(meter.scrolled or 0, meter.most)
 	local count = math.min(shownLines, table.getn(lines) - skip)
 	local top = count > 0 and lines[1].dmg or 0
+	ShowRoll(meter, skip, shownLines)
 	local firstBar = BARS_TOP
 	for index = 1, count do
 		local bar = Bar(index)
@@ -1622,7 +1754,14 @@ function SurvivorUI_SetMeterMainSize(width, lines)
 	if lines then
 		settings.meterLines = lines
 	end
+	local height = meter:GetHeight()
 	Fit()
+	-- Moved, the place kept is its bottom edge: that goes by what the height
+	-- changed, so its title stays where it is.
+	if settings.meterBottom and meter:GetHeight() ~= height then
+		settings.meterBottom = settings.meterBottom + height - meter:GetHeight()
+		Fit()
+	end
 	if meter:IsShown() then
 		Draw()
 	end
@@ -1630,6 +1769,14 @@ end
 
 function SurvivorUI_MeterNewBar(parent)
 	return MakeBar(parent)
+end
+
+function SurvivorUI_MeterNewRoll(window)
+	MakeRoll(window)
+end
+
+function SurvivorUI_MeterShowRoll(window, skip, shown)
+	ShowRoll(window, skip, shown)
 end
 
 function SurvivorUI_MeterPaintBar(bar, line, top, key)
@@ -1692,9 +1839,8 @@ end
 
 -- The wheel over the meter: down, the first line goes up out of sight and the
 -- next comes in at the bottom; up, back. A view chosen starts at the top.
-meter.Wheel = function()
-	local most = meter.most or 0
-	meter.scrolled = math.max(0, math.min(most, math.min(meter.scrolled or 0, most) - (arg1 or 0)))
+meter.Roll = function(to)
+	meter.scrolled = math.max(0, math.min(meter.most or 0, to))
 	Draw()
 	-- The line under the mouse now holds another source: its card closed,
 	-- open again on the next line the mouse goes to.
@@ -1703,8 +1849,12 @@ meter.Wheel = function()
 		SurvivorUI_CritCardHide()
 	end
 end
+meter.Wheel = function()
+	meter.Roll(math.min(meter.scrolled or 0, meter.most or 0) - (arg1 or 0))
+end
 meter:EnableMouseWheel(true)
 meter:SetScript("OnMouseWheel", meter.Wheel)
+MakeRoll(meter)
 
 local elapsed = 0
 local viewRestored

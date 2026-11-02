@@ -37,6 +37,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui meter` | SurvivorUI's damage meter, or Default |
 | `/sui bosses` | Boss bars: on or off |
 | `/sui bosses elites` | Adds every elite to the boss bars |
+| `/sui guide` | The Guide: how Luck, Damage and Crit really work |
 | `/sui tally` | Kills and gold line under the minimap, or the Default box |
 | `/sui pace` | Kill pace, the orb by the run tracker's clock: on or off |
 | `/sui pace class` | Kill pace against this class's runs only, or every class's (the default) |
@@ -111,7 +112,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - Combat text in place of Default: beside the hero, each hit with its source's icon (a weapon for melee and shots) in its damage meter color, the crits on the right, the heals rising over the hero and the hits taken falling under the action bar; each column moves where you want it, and one source's hits close together add up (`1.2k x3`). Where, how far, the look and what shows are all yours to set; or Default, or none at all.
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the Default clock.
 - A run panel on the left, under the loot list: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
-- A damage meter under the build list, in place of Default, as many lines as fit the screen: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, the damage to bosses in the last boss fight, or in a co-op run each hero's damage. The + at its corner opens more windows, each on a page of its own.
+- A damage meter under the build list, in place of Default, as many lines as fit the screen or as you set, a scroll bar for the rest: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, the damage to bosses in the last boss fight, or in a co-op run each hero's damage. The + at its corner opens more windows, each on a page of its own.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health and its debuffs (icons that drain to grey as they run out), at any distance. Click one to target it.
 - A DoT and fear counter over the action bar: over each damage over time spell's button, how many of it are out on the enemies, counted by their ticks; over a fear's (Psychic Scream, Intimidating Shout...), how many enemies it holds now. In the spell's damage meter color.
 - A guardians' list against the run tracker's left side, small and with no background: a line a lair, with a little arrow toward it, the guardian's name, how far it is, and asleep, awake with its health, or slain at its second and back in so many seconds. The arrows turn with the way you face (or point north up). Over it, the achievement "Slay four guardians before 8:00": how many fell before 8:00.
@@ -159,6 +160,7 @@ Commands:
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
 | `/sui bosses` | Switches the boss bars on or off (on by default from v3.0.12) |
 | `/sui bosses elites` | Lists every elite in the boss bars too |
+| `/sui guide` | Opens the Guide: how Luck, Damage and Crit really work |
 | `/sui tally` | Switches between the kills and gold line (the default) and the Default box |
 
 ### Healing and boss damage
@@ -224,6 +226,56 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.49, 2026-11-01
+
+The Guide comes to Survivor UI, in English and in Chinese. Crits now follow the game's own meter lines, the loot list counts your marks, your jewelry becomes a panel of its own, and the game's clock and the new Enhancement Shaman are in.
+
+**The Guide**
+- **The Guide:** six pages on how the game's numbers really work, Luck, Damage, Crit, DoTs, Not DoTs and Damage Reduction, with sliders to try and your own hero's numbers. The gold square on the minimap's stack opens it, with a ! while a page is unread, and so does `/sui guide`. The options' Minimap tab hides the button. Its words are in English for now.
+- **A word from the Guide:** the first time you play with this version, a small card beside the Guide's button says it is there. It shows once, and never again.
+- **The Guide in Chinese:** with the game in Chinese, all six pages, their tooltips and the names on them read in Chinese, in the game's own words. Talents such as Frostbrand Weapon now show their Chinese names across the addon too.
+
+**Crits and combat numbers**
+- **The Shaman's free casts in the crits, for real** (the game's 0.139): the game now says which meter line each hit belongs to, so Biggest Crits and the numbers name each hit exactly: a Fire Nova from Flametongue Weapon is the talent's even with Fire Nova in your build, and so is a Frost Shock from Frostbrand Weapon. The same goes for any proc that borrows a spell, like a Shadow Weaving strike or a Chastise from Holy Nova.
+- **Biggest Crits in the meter's own lines:** a Warlock's demons, a Hunter's traps and every summon read as they do on the meter: a Felguard's crits under Felguard, an Imp's Fireball under Imp, and no more Unknown line.
+- **Over the enemies, for real** (the game's 0.138): with Combat text's **Over the enemies**, each number stands over the very enemy it hit, with no nameplate needed. It stays over the spot where that enemy fell as you turn or move, and hides when that spot leaves your view.
+- **Talent icons in every language:** with the game in another language, a talent's line on the meter now shows its icon and color, in place of the addon's square.
+
+**Loot list**
+- **Your marks in the loot list:** its title shows the marks of this run, a boss's and those of pieces you already had. Hover them for a card with each boss's marks, one under the other, with the second they came.
+- **Repeats in the loot list:** the same piece again in a run is one bar, x2, x3, also in Run History.
+
+**Build list and jewelry**
+- **Jewelry worn, a panel of its own:** the jewelry leaves the build list. It has its own switch in Modules, its own tab under Run, and moves and sizes on its own. Left where it is, it sits under the build list as before, or in its place with the list off.
+- **Jewelry by its name:** in the Jewelry worn tab, **Each piece shows** can now be **Its name**: the piece's name alone, cut when long, with its stats on hover.
+- **The crits' card and the build list's tooltips open towards the screen's middle:** with Biggest Crits, the build list or the meter moved to either side, they no longer land on their own window.
+
+**Damage meter**
+- **The damage meter's height:** **Height** in the options' Damage meter tab, 3 to 20 lines. With more to show than lines, a scroll bar comes up at its right: drag it, click it or use the wheel. The other meter windows have it too.
+- **A friend's build on the meter:** in a co-op run, hover a hero on the Party Damage page for their damage by spell, their jewelry and their talent points. It comes from the game's own feed, so it needs nothing from their addons.
+
+**Minimap and clock**
+- **One clock on the minimap** (the game's 0.136): the game's new clock under the minimap is put away, and ours now reads your computer's time, with no time zone to set, and so do Run History's dates. Hover it to see what a click does: its box has **Your computer's time** to tick, or untick for a slider to any time zone you want, and **24-hour clock** to tick for 24 hours or untick for 12. Untick **Clock and FPS** in the options' Minimap tab and the game's clock comes back, the kills and gold line and the run tracker stepping down under it.
+- **Lair timers on the minimap:** tick **Lair timers** in the options' Minimap tab to see, under an empty lair's pin, how long till its guardian is back.
+- **The minimap's pins and the guardians' arrows follow you live** (the game's 0.132), in dungeons and raids too. They used to jump about once a second.
+
+**Run History**
+- **Your talents in Run History:** each run now keeps the talents you really had, from the game's own numbers, drawn as the class's three real trees: every talent in its place, the ones you learned lit with their rank, the rest dim, with the points in each tree over them. Hover one for its name and rank.
+
+**Frames and pieces**
+- **The target's debuffs move on their own:** a new **Target debuffs** piece in Move UI, so a target frame near the top of the screen no longer pushes them off it. Left where it is, the row follows the frame.
+- **The class bar stays out of the level's cards:** soul shards, combo points, the Lightwell and Bloodrage came through the cards when they sat behind them. They now go while you pick, as every other piece does.
+- **The XP bar's card stays on the screen:** with the bar at the foot of the screen it opens over the bar. Every tooltip and the crits' card are kept on the screen too, and dragging the bar stops with its odds still on the screen.
+
+**The new Enhancement Shaman**
+- **The new Enhancement Shaman** (the game's 0.134 to 0.137): Rockbiter Weapon goes by its full name in the build list, the meter and Biggest Crits, and its tooltip and Stormstrike's wear Nature's color. The new talents have their icons, and the game's new words are read in every language.
+- **Stormguard on the stats panel** (Earthen Bulwark until the game's 0.137): the Armor tooltip says whether it is active, in the game's own words.
+- **Call of Flame is out:** the Shaman no longer has that spell, so nothing is named after its blast.
+
+**Fixed**
+- The first click on the minimap's time did nothing: its box now opens at once.
+- With that box open, the FPS beside the time dropped to 1.
 
 ### v3.0.48, 2026-10-31
 
