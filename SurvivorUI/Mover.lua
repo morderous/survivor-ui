@@ -993,8 +993,11 @@ end
 -- whole, as the game draws a piece's art over the veil where a piece over it
 -- has the same (0.126: the player frame's bar and a totem's icon over the
 -- cards, seen 2026-10-28). The game reads its list as the cards open: the
--- pieces are looked at once a second, as they move or show. Off with the
--- options' Layout tab, "Over the game's cards".
+-- pieces are looked at once a second, as they move or show.
+-- Since v3.0.50 every piece hides while the cards are up, but those chosen in
+-- the options' Layout tab, "While choosing cards" (asked 2026-11-02: on a
+-- small screen the cards are large and the pieces stood on them). A piece
+-- shown still fades in the cards' part of the screen.
 
 -- The cards' part of the screen, in its shares from the bottom left: the
 -- level's three, its title over them and its buttons under them (0.29 to
@@ -1009,8 +1012,48 @@ local OVER_TIPS = { "GameTooltip", "ShoppingTooltip1", "ShoppingTooltip2", "Surv
 local OVER_WITH = { ChatFrame1 = "SurvivorUIChatPanel" }
 local over = {}                 -- [name] = true: kept over the cards by the game
 
+-- What can show over the cards, each by its pieces' names ("Damage meter 2"
+-- as "Damage meter"); every other piece is "Everything else".
+SurvivorUI_CARD_PIECES = {
+	{ key = "tracker", label = "Run tracker", names = { "Run tracker" } },
+	{ key = "build", label = "Build list", names = { "Build list" } },
+	{ key = "worn", label = "Jewelry worn", names = { "Jewelry worn" } },
+	{ key = "meter", label = "Damage meter", names = { "Damage meter", "Tooltip" } },
+	{ key = "run", label = "This Run", names = { "This Run" } },
+	{ key = "crits", label = "Biggest Crits", names = { "Biggest Crits", "New best crit" } },
+	{ key = "xpbar", label = "XP bar", names = { "XP bar" } },
+	{ key = "minimap", label = "Minimap", names = { "Minimap", "Minimap button", "Kills and gold line" } },
+	{ key = "chat", label = "Chat", names = { "Chat" } },
+	{ key = "bosses", label = "Boss bars and guardians", names = { "Boss bars", "Guardians" } },
+	{ key = "party", label = "Party frames", names = { "Party frames", "Revive bar" } },
+	{ key = "other", label = "Everything else" },
+}
+local cardGroup = {}            -- [piece name] = its key above
+for index = 1, table.getn(SurvivorUI_CARD_PIECES) do
+	local group = SurvivorUI_CARD_PIECES[index]
+	for _, name in pairs(group.names or {}) do
+		cardGroup[name] = group.key
+	end
+end
+
+-- The keys shown over the cards; none at first.
+function SurvivorUI_CardsShown()
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.cardsShow = SurvivorUIDB.cardsShow or {}
+	return SurvivorUIDB.cardsShow
+end
+
+local function ShownOverCards(handle)
+	local name = string.gsub(handle.name or "", " %d+$", "")
+	return SurvivorUI_CardsShown()[cardGroup[name] or "other"] == true
+end
+
+local function AnyShown()
+	return next(SurvivorUI_CardsShown()) ~= nil
+end
+
 local function OverOn()
-	return AZS_SetOnTopOfScreens ~= nil and not (SurvivorUIDB and SurvivorUIDB.overCards == false)
+	return AZS_SetOnTopOfScreens ~= nil
 end
 
 local function KeepOver(name, on)
@@ -1037,25 +1080,32 @@ local function ClearOfCards(frame)
 	return right <= CARDS.left or left >= CARDS.right or top <= CARDS.bottom or bottom >= CARDS.top
 end
 
--- Each piece over the cards or under them as it stands (under: faded out
--- while they are up); all as before while off.
+-- Each piece over the cards, chosen and clear of them, or under them (faded
+-- out while they are up).
 function SurvivorUI_PlaceOverCards()
-	if not AZS_SetOnTopOfScreens then
+	if not OverOn() then
 		return
 	end
-	local on = OverOn()
 	for index = 1, table.getn(handles) do
 		local handle = handles[index]
 		local piece = handle.mover or handle.frame
-		local clear = on and piece and ClearOfCards(handle.frame or piece)
+		local clear = piece and ClearOfCards(handle.frame or piece)
 		if clear ~= nil then
-			handle.underCards = on and not clear
-			KeepOver(piece.GetName and piece:GetName(), clear)
+			local name = piece.GetName and piece:GetName()
+			local shown = clear and ShownOverCards(handle)
+			handle.underCards = not shown
+			KeepOver(name, shown)
+			-- What goes with it hides with it: the chat's panel.
+			local with = name and OVER_WITH[name] and getglobal(OVER_WITH[name])
+			if with and not handle.fadesWith then
+				handle.fadesWith = { with }
+			end
 		end
 	end
+	local tips = AnyShown()
 	for index = 1, table.getn(OVER_TIPS) do
 		if getglobal(OVER_TIPS[index]) then
-			KeepOver(OVER_TIPS[index], on)
+			KeepOver(OVER_TIPS[index], tips)
 		end
 	end
 end
@@ -1137,6 +1187,16 @@ overWatch:SetScript("OnUpdate", function()
 		SurvivorUI_PlaceOverCards()
 	end
 end)
+
+-- A choice of the options' "While choosing cards": the pieces placed again,
+-- and faded again should the cards be up.
+function SurvivorUI_RefreshCards()
+	SurvivorUI_PlaceOverCards()
+	if overPhase == "choosing" then
+		FadeUnderCards(false)
+		FadeUnderCards(true)
+	end
+end
 
 -- The saved place comes back once the saved settings have.
 local loader = CreateFrame("Frame")

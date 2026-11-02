@@ -6,8 +6,8 @@
 -- middle of the screen. Each kind can be kept away, by the game's own event,
 -- so in every language the game speaks:
 --   Levels   "Congratulations, you have reached level 12!" and the "You have
---            gained +3% damage..." line right after it (the XP bar and the
---            run tracker show the level);
+--            gained +3% damage..." line that comes with each level (the XP
+--            bar and the run tracker show the level);
 --   Banners  the horde's moves, a boss or a guardian coming or slain, the
 --            run's title: the game's banners show them mid-screen;
 --   Yells    the bosses' lines;
@@ -31,14 +31,31 @@ end
 
 local lastLevelUp = 0
 
+-- The level's gains in English, the game's line in any language read back
+-- into it (Locale.lua). The game's 0.139 sends it with no PLAYER_LEVEL_UP
+-- before it (seen 2026-11-02: eight levels, eight lines, no event).
+local GAINS = "^You have gained .-%% damage, .- maximum health and .- health per second%.$"
+
+local function Gains(text)
+	if not text or not string.find(text, "%d") then
+		return false
+	end
+	-- Its numbers come signed ("+3"), and the translation tables' numbers take
+	-- no sign: read without them.
+	local plain = string.gsub(text, "%+", "")
+	local english = SurvivorUI_EnglishLine and SurvivorUI_EnglishLine(plain) or plain
+	return string.find(english, GAINS) ~= nil
+end
+
 local function Hidden(event, frame)
 	if event == "PLAYER_LEVEL_UP" then
 		lastLevelUp = GetTime()
 		return SurvivorUI_ChatFilter("Levels")
 	end
 	if event == "CHAT_MSG_SYSTEM" then
-		-- The level's gains, right after it: "+3% damage, +14 maximum health".
-		return GetTime() - lastLevelUp < 1 and arg1 ~= nil and string.find(arg1, "%+%d") ~= nil
+		-- The level's gains: "+3% damage, +14 maximum health", by its words, or
+		-- right after a level-up.
+		return (Gains(arg1) or (GetTime() - lastLevelUp < 1 and arg1 ~= nil and string.find(arg1, "%+%d") ~= nil))
 			and SurvivorUI_ChatFilter("Levels")
 	end
 	if event == "CHAT_MSG_RAID_BOSS_EMOTE" then

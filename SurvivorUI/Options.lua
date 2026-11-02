@@ -4570,13 +4570,26 @@ Inline(page, "Held to move", {
 }, function() return SurvivorUI_MoveKey and SurvivorUI_MoveKey() or "alt" end,
 	function(value) DB().moveKey = value end)
 Note(page, "The key held to see the grid and drag the pieces while you play. Another one, or none (Move UI only), when Alt is your push to talk.")
-Subheader(page, "Over the game's cards")
-Check(page, "Over the game's cards", OnUnlessOff("overCards"), function()
-	DB().overCards = DB().overCards == false
-	if SurvivorUI_PlaceOverCards then
-		SurvivorUI_PlaceOverCards()
+-- What stays over the cards (Mover.lua): nothing at first, the pieces ticked
+-- once the switch on top is off.
+Subheader(page, "While choosing cards")
+Check(page, "Hide everything while choosing cards", function() return next(SurvivorUI_CardsShown()) == nil end, function()
+	local shown = SurvivorUI_CardsShown()
+	local hide = next(shown) ~= nil
+	for index = 1, table.getn(SurvivorUI_CARD_PIECES) do
+		shown[SurvivorUI_CARD_PIECES[index].key] = (not hide) or nil
 	end
-end, "while a level's cards or a new piece of jewelry are up, the pieces around them stay lit over the game's dark veil, and take their clicks there: the build list, This Run, the XP bar's chances, the meter, the tracker, the chat, with their tooltips. A piece in the cards' part of the screen (the action bar, the player frame) fades out while they are up, so nothing covers a card. From the game's 0.126; the next cards to open follow a change.")
+	SurvivorUI_RefreshCards()
+end, "a level's cards and a new piece of jewelry: on a small screen they are large, and the pieces stood on them. Untick it for everything as before, or tick below only what you want over them.")
+for index = 1, table.getn(SurvivorUI_CARD_PIECES) do
+	local piece = SurvivorUI_CARD_PIECES[index]
+	Check(page, piece.label, function() return SurvivorUI_CardsShown()[piece.key] == true end, function()
+		local shown = SurvivorUI_CardsShown()
+		shown[piece.key] = (not shown[piece.key]) or nil
+		SurvivorUI_RefreshCards()
+	end)
+end
+Note(page, "A piece ticked stays lit over the game's dark veil and takes its clicks there, with its tooltips. In the cards' part of the screen (the action bar, the player frame) it fades out all the same, so nothing covers a card.")
 Subheader(page, "Reset")
 Button(page, "Every piece back in place", 220, 0, Asked("Every piece back in place?",
 	"Every piece you moved goes back where it first stood.", "Back in place",

@@ -27,6 +27,15 @@
 --     2026-10-31: Consecration 23.6% of 1725 hits at Crit 23.7%, Blizzard 20.3%
 --     at 21.1%, and two Consecrations striking the same enemies 0.13 sec apart;
 --     Corruption and Curse of Agony none of 897 ticks.
+--   Marks are kept per class. A star on a piece costs star x its rarity's base
+--     (1, 2, 3, 4, Legendary 6, PvP 5; below Legendary the 5th star's base is 6,
+--     so 30, and PvP's 25), the same on every slot, 5% less for each other class
+--     that owns all 8 pieces of that rarity with each at the star being bought
+--     or more, 40% at most (0.139: 0x145e5c2b0, the count 0x145e5c6f0), and
+--     rounded up to a tenth: ceil(cost x 10 - 0.001) / 10.
+--   Sets (sets.rs): six a class, 8 armor pieces each. The 4-piece bonus is one
+--     to a set whatever the class, the 8-piece bonus the class's own, and
+--     Empowered works it out at 1.5 strength, roundf for the whole numbers.
 --   Damage reduction: every source added, then min(sum, 0.6 + the cap's raises);
 --     Titan is the only raise. A hit x (1 - reduction) x (1 - the gear's "while
 --     5 or more enemies are within 8 yards"), which stands outside the cap, and
@@ -48,8 +57,11 @@ local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT = "Fonts\\FRIZQT__.TTF"
 local MARBLE = "Interface\\AddOns\\SurvivorUI\\Art\\Marble"
 local NEW_MARK = "Interface\\AddOns\\SurvivorUI\\Art\\GuideNew"
+local MAP_ICON = "Interface\\AddOns\\SurvivorUI\\Art\\MapIcon"
+local STAR = "Interface\\AddOns\\SurvivorUI\\Art\\Star"
 local GOLD = "|cffffd100"
 local GREEN = { 0.35, 0.95, 0.45 }  -- as on the character page
+local ZONE_GREEN = { 0.40, 1.00, 0.42 }  -- a zone's name, as Survivor UI's Run History writes it
 local PEACH = { 1, 0.67, 0.38 }
 local RED = { 1, 0.45, 0.4 }
 local BLUE = { 0.45, 0.75, 1 }
@@ -140,6 +152,107 @@ local WALL_HEIGHT = 16
 -- Hellfire looks the same and works another way: nothing stays on the ground.
 local HELLFIRE = { "Hellfire", "Spell_Fire_Incinerate", "WARLOCK", "Warlock spell" }
 local ROW_STEP = 14
+-- The six sets in the Collection Log's order: the rarity, its color, its two
+-- zones, the set's place in a class's list below, its 4-piece bonus, each
+-- star's marks on one piece at no discount, and the color an item tooltip
+-- gives that quality's name.
+local SET_KINDS = {
+	{ "Common", { 1, 1, 1 }, "Elwynn Forest", "Duskwood", 1, "+25% gold, +30% pickup range", { 1, 2, 3, 4, 30 }, { 1, 1, 1 } },
+	{ "Uncommon", { 0.12, 1, 0 }, "Warsong Gulch", "Un'Goro Crater", 2, "1.5% max health per second after 3 seconds unhurt", { 2, 4, 6, 8, 30 }, { 0.12, 1, 0 } },
+	{ "Rare", { 0.31, 0.64, 1 }, "Arathi Basin", "Feralas", 3, "+1 target to every ability", { 3, 6, 9, 12, 30 }, { 0, 0.44, 0.87 } },
+	{ "Epic", { 0.73, 0.54, 0.95 }, "Gurubashi Arena", "Scarlet Monastery", 4, "6% chance for an ability to strike twice", { 4, 8, 12, 16, 30 }, { 0.64, 0.21, 0.93 } },
+	{ "PvP", { 0.73, 0.54, 0.95 }, "Alterac Valley", "Blackrock Mountain", 6, "+12% damage reduction with 5 or more enemies close", { 5, 10, 15, 20, 25 }, { 0.64, 0.21, 0.93 } },
+	{ "Legendary", { 1, 0.6, 0.18 }, "Gates of Ahn'Qiraj", "Naxxramas", 5, "+30% critical damage", { 6, 12, 18, 24, 30 }, { 1, 0.5, 0 } },
+}
+local PVP_SET = "Field Marshal's / Warlord's"
+-- Each class: its key, its name, its five sets' names, and its six 8-piece
+-- bonuses, each with its numbers and, after them, the same Empowered.
+local SETS = {
+	{ "WARRIOR", "Warrior", { "Recruit's", "Valor", "Might", "Wrath", "Dreadnaught" }, {
+		{ "Cleave strikes {v} more enemies in a {v2}% wider arc.", 2, 30, 3, 45 },
+		{ "Thunder Clap claps again for {v}% of its damage.", 50, 0, 75, 0 },
+		{ "Whirlwind is {v}% wider and deals {v2}% more damage.", 50, 30, 75, 45 },
+		{ "Each Bloodthirst hit gives {v}% damage for 8 sec, stacking 5 times.", 5, 0, 7.5, 0 },
+		{ "Execute strikes {v} more of the most wounded enemies, and each of its kills takes {v2} sec off your other spells' cooldowns.", 2, 0.5, 3, 0.75 },
+		{ "Enemies hit by Mortal Strike take {v}% more damage from everything for 4 sec.", 20, 0, 30, 0 },
+	} },
+	{ "PALADIN", "Paladin", { "Squire's", "Lightforge", "Lawbringer", "Judgement", "Redemption" }, {
+		{ "Hammer of Wrath comes back, striking again for {v}%.", 60, 0, 90, 0 },
+		{ "Consecration moves with you and deals {v}% more damage.", 20, 0, 30, 0 },
+		{ "A Holy Shock kill fires another Holy Shock, once every {v} sec.", 1.5, 0, 1, 0 },
+		{ "Enemies killed by Judgement explode for {v}% of their max health on everything within 8 yards.", 15, 0, 22.5, 0 },
+		{ "Exorcism leaps to {v} more enemies for 75% of its damage.", 3, 0, 5, 0 },
+		{ "Hammer of Justice strikes {v} more enemies, deals 300% more damage and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 5, 100, 8, 150 },
+	} },
+	{ "HUNTER", "Hunter", { "Tracker's", "Beaststalker's", "Giantstalker's", "Dragonstalker's", "Cryptstalker" }, {
+		{ "Every {v} Auto Shots fire a free Multi-Shot.", 5, 0, 4, 0 },
+		{ "When its victim dies, Serpent Sting leaps to {v} enemies near it.", 2, 0, 3, 0 },
+		{ "Explosive Trap is {v}% wider and deals {v2}% more damage.", 50, 30, 75, 45 },
+		{ "Volley moves with you and lasts {v}% longer.", 50, 0, 75, 0 },
+		{ "Aimed Shot pierces to {v} more enemies for 60% of its damage.", 4, 0, 6, 0 },
+		{ "Concussive Shot strikes {v} more enemies, deals 150% more damage and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 5, 100, 8, 150 },
+	} },
+	{ "ROGUE", "Rogue", { "Footpad's", "Shadowcraft", "Nightslayer", "Bloodfang", "Bonescythe" }, {
+		{ "Every {v} Sinister Strikes strike twice.", 3, 0, 2, 0 },
+		{ "Enemies dying with your Rupture burst for {v}% of their max health on everything within 8 yards.", 15, 0, 22.5, 0 },
+		{ "Blade Flurry spins again for {v}% of its damage.", 60, 0, 90, 0 },
+		{ "An Eviscerate kill readies it again, once every {v} sec.", 1, 0, 0.67, 0 },
+		{ "Sinister Strike and Backstab have a {v}% chance to strike twice, and Adrenaline Rush lasts {v2}% longer.", 35, 50, 52.5, 75 },
+		{ "Kidney Shot strikes {v} more enemies, deals 200% more damage and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 5, 100, 8, 150 },
+	} },
+	{ "PRIEST", "Priest", { "Acolyte's", "Devout", "Prophecy", "Transcendence", "Faith" }, {
+		{ "Smite leaps to a second enemy for {v}% of its damage.", 50, 0, 75, 0 },
+		{ "When Power Word: Shield breaks it explodes for {v}% of what it absorbed on everything within 8 yards.", 200, 0, 300, 0 },
+		{ "Shadow Word: Pain strikes {v} more enemies and deals {v2}% more damage.", 2, 20, 3, 30 },
+		{ "Holy Nova rings twice, the second for {v}%, and is {v2}% wider.", 60, 30, 90, 45 },
+		{ "A Mind Flay kill fires a free Mind Blast, once every {v} sec.", 1, 0, 0.67, 0 },
+		{ "Psychic Scream deals 900% more damage and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 0, 100, 0, 150 },
+	} },
+	{ "SHAMAN", "Shaman", { "Primal", "Elements", "Earthfury", "Ten Storms", "Earthshatter" }, {
+		{ "Lightning Bolt forks to a second enemy for {v}% of its damage.", 50, 0, 75, 0 },
+		{ "Enemies dying with your Flame Shock explode for {v}% of their max health on everything within 8 yards.", 15, 0, 22.5, 0 },
+		{ "Searing Totem deals {v}% more damage and stands {v2}% longer.", 50, 50, 75, 75 },
+		{ "Chain Lightning jumps {v} more times and deals {v2}% more damage.", 3, 20, 5, 30 },
+		{ "Fire Nova is {v}% wider and deals {v2}% more damage.", 50, 30, 75, 45 },
+		{ "Earth Shock strikes 2 more enemies, and they take {v}% more damage for 5 sec.", 20, 0, 30, 0 },
+	} },
+	{ "MAGE", "Mage", { "Apprentice's", "Magister's", "Arcanist", "Netherwind", "Frostfire" }, {
+		{ "Arcane Missiles fires {v} more missiles.", 2, 0, 3, 0 },
+		{ "Every {v} Arcane Explosions, one goes off twice.", 3, 0, 2, 0 },
+		{ "Flamestrike's flames strike twice, the second for {v}%.", 50, 0, 75, 0 },
+		{ "Blizzard moves with you and deals {v}% more damage.", 20, 0, 30, 0 },
+		{ "Fireball splits, striking {v} more enemies for 60% of its damage.", 2, 0, 3, 0 },
+		{ "Frost Nova is {v}% wider, deals 400% more damage and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 50, 100, 75, 150 },
+	} },
+	{ "WARLOCK", "Warlock", { "Novice's", "Dreadmist", "Felheart", "Nemesis", "Plagueheart" }, {
+		{ "Shadow Bolt pierces to {v} more enemies for 50% of its damage.", 2, 0, 3, 0 },
+		{ "When its victim dies, Curse of Agony leaps to {v} enemies near it.", 2, 0, 3, 0 },
+		{ "Drain Life drains {v} more enemies at once.", 2, 0, 3, 0 },
+		{ "Rain of Fire sets enemies burning for {v}% of its hit over 3 sec.", 30, 0, 45, 0 },
+		{ "Corruption strikes {v} more enemies and deals {v2}% more damage.", 2, 25, 3, 37.5 },
+		{ "Death Coil strikes {v} more enemies, deals 50% more damage, horrifies them for 3 sec and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 5, 60, 8, 90 },
+	} },
+	{ "DRUID", "Druid", { "Thicket", "Wildheart", "Cenarion", "Stormrage", "Dreamwalker" }, {
+		{ "Every {v} Wraths, one strikes twice.", 4, 0, 3, 0 },
+		{ "Swipe is 50% wider and makes enemies bleed for {v}% of its hit over 6 sec.", 40, 0, 60, 0 },
+		{ "Entangling Roots strikes {v} more enemies.", 3, 0, 5, 0 },
+		{ "Starfire bursts on every enemy within 6 yards of its target for {v}% of its damage.", 35, 0, 52.5, 0 },
+		{ "Hurricane is {v}% wider and lasts {v2}% longer.", 40, 40, 60, 60 },
+		{ "Shred strikes {v} more enemies, has a 33% chance to stun them for 1 sec and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 2, 100, 3, 150 },
+	} },
+}
+-- Each a button: its label, the stars it asks of every piece, its rule.
+local SET_STEPS = {
+	{ "4 pieces", 1, "Wear 4 armor pieces of one set at 1/5 or more. The bonus is the same for every class." },
+	{ "8 pieces", 3, "Wear all 8 armor pieces of one set at 3/5 or more." },
+	{ "8 pieces, Empowered", 5, "All 8 pieces at 5/5: the 8-piece bonus is 50% stronger." },
+}
+local STAR_SIZE = 11
+local MARK_CARD = 86
+local OPEN_CARD = 72
+local COST_ROW = 16
+local SET_ROW, SET_TALL = 48, 61    -- a set's panel, and the PvP one's three lines
+local SET_CAPTION = 17              -- its name and zones, over the panel
 -- A panel tinted in its own color: thin edge, the ground a dark shade of it.
 local TINTED = { bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } }
 -- The game's font templates, as the pages name them: size, color.
@@ -1139,6 +1252,445 @@ local function BuildArmor(page)
 end
 
 ------------------------------------------------------------------------------
+-- Marks.
+
+-- A class's color lifted until words in it read on the dark ground.
+local function Readable(tint)
+	local lift = 0.35 * (1 - (0.3 * tint[1] + 0.59 * tint[2] + 0.11 * tint[3]))
+	return { math.min(tint[1] + lift, 1), math.min(tint[2] + lift, 1), math.min(tint[3] + lift, 1) }
+end
+
+local function ColorCode(tint)
+	return string.format("|cff%02x%02x%02x", math.floor(tint[1] * 255 + 0.5), math.floor(tint[2] * 255 + 0.5), math.floor(tint[3] * 255 + 0.5))
+end
+
+-- A star's marks at a discount, rounded up to a tenth as the game does.
+local function StarCost(cost, off)
+	return math.ceil(cost * (1 - off) * 10 - 0.001) / 10
+end
+
+-- Marks as the Armory writes them: whole, or to a tenth.
+local function Tenths(value)
+	local whole = math.floor(value + 0.5)
+	if math.abs(value - whole) < 0.01 then
+		return string.format("%d", whole)
+	end
+	return string.format("%.1f", value)
+end
+
+local function Discount(value)
+	if value == 0 then
+		return "0"
+	end
+	return string.format(SurvivorUI_T("%d, %d%% off"), value, value * 5)
+end
+
+-- An 8-piece bonus in words, its numbers in the color.
+local function SetWords(line, strong, color)
+	local v, v2 = line[2], line[3]
+	if strong then
+		v, v2 = line[4], line[5]
+	end
+	local words = string.gsub(SurvivorUI_T(line[1]), "{v2}", color..v2.."|r")
+	words = string.gsub(words, "{v}", color..v.."|r")
+	return words
+end
+
+local function HeroSet()
+	local _, key = UnitClass("player")
+	for index = 1, table.getn(SETS) do
+		if SETS[index][1] == key then
+			return index
+		end
+	end
+	return 1
+end
+
+-- Dark words on a bright color, white on a dark one.
+local function Fore(tint)
+	if 0.3 * tint[1] + 0.59 * tint[2] + 0.11 * tint[3] > 0.5 then
+		return { 0.08, 0.07, 0.05 }
+	end
+	return { 1, 1, 1 }
+end
+
+-- An 8-piece bonus of the hero's class that reads in percents, for the example.
+local function ExampleLine()
+	local lines = SETS[HeroSet()][4]
+	for index = 1, table.getn(lines) do
+		if string.find(lines[index][1], "{v}%", 1, true) then
+			return lines[index]
+		end
+	end
+	return lines[1]
+end
+
+local function EmpoweredTip()
+	local line = ExampleLine()
+	GameTooltip:SetOwner(this, "ANCHOR_NONE")
+	GameTooltip:ClearAllPoints()
+	GameTooltip:SetPoint("BOTTOMLEFT", this, "TOPLEFT", 0, 4)
+	GameTooltip:SetText(SurvivorUI_T("Empowered"))
+	GameTooltip:AddLine(SurvivorUI_T("All 8 pieces of a set at 5/5 make its 8-piece bonus 50% stronger."), 1, 1, 1, 1)
+	GameTooltip:AddLine(" ")
+	GameTooltip:AddLine(SurvivorUI_T("At 3/5 or 4/5:"), 1, 0.82, 0)
+	GameTooltip:AddLine(SetWords(line, false, GOLD), 1, 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T("At 5/5, Empowered:"), 1, 0.82, 0)
+	GameTooltip:AddLine(SetWords(line, true, GOLD), 1, 1, 1, 1)
+	GameTooltip:AddLine(" ")
+	GameTooltip:AddLine(SurvivorUI_T("Numbers that count things round to a whole number."), 0.7, 0.7, 0.7, 1)
+	GameTooltip:Show()
+	SolidTip()
+end
+
+local function BuildMarks(page)
+	Title(page, SurvivorUI_T("Marks: what stars cost"))
+	Para(page, SurvivorUI_T("Marks are what bosses pay you, and what your gear's stars cost."), 1)
+	local width = math.floor((PAGE_WIDTH - 2 * CARD_GAP) / 3)
+	local steps = {
+		{ SurvivorUI_T("1. Earn"), SurvivorUI_T("Bosses pay marks when they fall. A piece you already own pays marks instead. Heroic pays more.") },
+		{ SurvivorUI_T("2. Keep"), SurvivorUI_T("Marks stay with the class that earned them. Each class saves its own.") },
+		{ SurvivorUI_T("3. Spend"), SurvivorUI_T("In the Armory, each piece goes up one star at a time, up to 5.") },
+	}
+	for index = 1, 3 do
+		local card = Tinted(page, YELLOW, (index - 1) * (width + CARD_GAP), page.y, width, MARK_CARD)
+		Band(card, YELLOW, "TOP", 20)
+		local title = Text(card, "GameFontNormal", TEXT)
+		title:SetPoint("CENTER", card, "TOP", 0, -14)
+		title:SetText(steps[index][1])
+		Words(card, 9, -26, width - 18, steps[index][2], SMALL + 1)
+	end
+	page.y = page.y - MARK_CARD - 8
+	Heading(page, SurvivorUI_T("What stars open on a set"))
+	local opens = {
+		{ SurvivorUI_T("1/5: 4-piece bonus"), SurvivorUI_T("4 pieces of one set at 1/5 or more") },
+		{ SurvivorUI_T("3/5: 8-piece bonus"), SurvivorUI_T("All 8 pieces at 3/5 or more") },
+		{ SurvivorUI_T("5/5: Empowered"), SurvivorUI_T("The 8-piece bonus gets 50% stronger: 20% becomes 30%. Hover for your class.") },
+	}
+	for index = 1, 3 do
+		local card = Tinted(page, YELLOW, (index - 1) * (width + CARD_GAP), page.y, width, OPEN_CARD)
+		Tint(card, YELLOW, 0.5)
+		Words(card, 9, -7, width - 18, opens[index][1], TEXT, YELLOW)
+		Words(card, 9, -25, width - 18, opens[index][2], SMALL)
+		if index == 3 then
+			card:EnableMouse(true)
+			card:SetScript("OnEnter", EmpoweredTip)
+			card:SetScript("OnLeave", CloseTip)
+		end
+	end
+	page.y = page.y - OPEN_CARD - 8
+	Heading(page, SurvivorUI_T("Cost per upgrade, per piece"))
+	-- The discount to play with: the game counts it for each star on its own,
+	-- the page takes one count for all of them.
+	try.others = try.others or 0
+	page.y = page.y - 14
+	local others = Try(page, 8, page.y, 180, SurvivorUI_T("Other classes done"), 0, 8, 1, Discount, function(value) try.others = value end)
+	Words(page, 212, page.y + 12, PAGE_WIDTH - 212, SurvivorUI_T("|cffffd100Your other classes make it cheaper:|r each one with all 8 pieces of that rarity at that star or higher takes 5% off, up to 40%."), SMALL + 1)
+	page.y = page.y - 30
+	local count = table.getn(SET_KINDS)
+	local table_height = (count + 1) * COST_ROW + 10
+	local panel = Tinted(page, GREY, 0, page.y, PAGE_WIDTH, table_height)
+	Tint(panel, GREY, 0.5)
+	local function Cell(x, y, words, color)
+		local cell = Text(panel, "GameFontHighlight", SMALL + 1)
+		cell:SetPoint("TOPRIGHT", panel, "TOPLEFT", x, y)
+		cell:SetText(words)
+		if color then
+			Paint(cell, color)
+		end
+		return cell
+	end
+	Words(panel, 9, -6, 120, SurvivorUI_T("Rarity"), SMALL + 1, GREY)
+	for star = 1, 5 do
+		Cell(140 + star * 44, -6, star.."/5", GREY)
+	end
+	Cell(490, -6, SurvivorUI_T("8 pieces at 3/5"), GREY)
+	Cell(PAGE_WIDTH - 10, -6, SurvivorUI_T("8 pieces at 5/5"), GREY)
+	local cells = {}
+	for index = 1, count do
+		local kind = SET_KINDS[index]
+		local y = -6 - index * COST_ROW
+		Words(panel, 9, y, 120, SurvivorUI_T(kind[1]), SMALL + 1, kind[2])
+		local row = {}
+		for star = 1, 5 do
+			row[star] = Cell(140 + star * 44, y, "", kind[2])
+		end
+		row[6] = Cell(490, y, "", kind[2])
+		row[7] = Cell(PAGE_WIDTH - 10, y, "", kind[2])
+		cells[index] = row
+	end
+	page.y = page.y - table_height - 6
+	Tip(page, SurvivorUI_T("|cffffd100Stars open with Heroic:|r beat Heroic N in a zone, and this class's gear from there can go to N stars."), 2)
+
+	function page.Draw()
+		others.Read(try.others)
+		local off = math.min(0.05 * try.others, 0.4)
+		for index = 1, count do
+			local costs = SET_KINDS[index][7]
+			local row = cells[index]
+			local three, five = 0, 0
+			for star = 1, 5 do
+				local cost = StarCost(costs[star], off)
+				row[star]:SetText(Tenths(cost))
+				five = five + cost
+				if star <= 3 then
+					three = three + cost
+				end
+			end
+			row[6]:SetText(Tenths(three * 8))
+			row[7]:SetText(Tenths(five * 8))
+		end
+	end
+end
+
+------------------------------------------------------------------------------
+-- Sets.
+
+-- A set's name as an item tooltip writes an item's: the tooltip's own font
+-- (read in the game's 0.139: 14, the quality's color, no outline, no shadow).
+local function ItemName(text, size)
+	local font = GameTooltipTextLeft1 and GameTooltipTextLeft1:GetFont()
+	if font then
+		text:SetFont(font, size)
+	end
+	text:SetShadowOffset(0, 0)
+end
+
+-- A button of the Sets page: its edge, and a color filling it inside the
+-- edge; with stars, five of them before its words.
+local function SetButton(page, x, y, width, height, stars)
+	local button = CreateFrame("Button", nil, page)
+	button.noHoverOutline = true
+	button:SetWidth(width)
+	button:SetHeight(height)
+	button:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+	button:SetBackdrop(TINTED)
+	-- Over the panel's ground: on the same layer the two can land either way.
+	button.fill = button:CreateTexture(nil, "BORDER")
+	button.fill:SetTexture(FLAT)
+	button.fill:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+	button.fill:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -2, 2)
+	if stars then
+		button.stars = {}
+		for each = 1, 5 do
+			local star = button:CreateTexture(nil, "ARTWORK")
+			star:SetTexture(STAR)
+			star:SetWidth(STAR_SIZE)
+			star:SetHeight(STAR_SIZE)
+			button.stars[each] = star
+		end
+	end
+	button.text = Text(button, "GameFontNormal", SMALL)
+	button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button.text:SetShadowOffset(0, 0)
+	return button
+end
+
+-- The one chosen: a white edge, the only mark; the others a grey one. A star
+-- button's stars, count of them full, and its words in its middle: dark on
+-- the chosen one's gold, gold and grey on the others.
+local function Chosen(button, lit, count)
+	button:SetBackdropColor(0, 0, 0, 0.9)
+	if lit then
+		button:SetBackdropBorderColor(1, 1, 1, 1)
+	else
+		button:SetBackdropBorderColor(0.7, 0.7, 0.7, 0.6)
+	end
+	if not button.stars then
+		return
+	end
+	local x = (button:GetWidth() - 5 * STAR_SIZE - 6 - button.text:GetStringWidth()) / 2
+	for each = 1, 5 do
+		local star = button.stars[each]
+		star:ClearAllPoints()
+		star:SetPoint("LEFT", button, "LEFT", x + (each - 1) * STAR_SIZE, 0)
+		if lit then
+			star:SetVertexColor(0.25, 0.15, 0, each <= count and 1 or 0.3)
+		elseif each <= count then
+			star:SetVertexColor(1, 0.82, 0, 1)
+		else
+			star:SetVertexColor(0.5, 0.5, 0.5, 0.45)
+		end
+	end
+	button.text:ClearAllPoints()
+	button.text:SetPoint("LEFT", button, "LEFT", x + 5 * STAR_SIZE + 6, 0)
+end
+
+-- A column of a set's panel: its own ground and edge, its name at its top
+-- left, its bonus under it.
+local CELL = { bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } }
+local function SetCell(row, x, width, head)
+	local cell = CreateFrame("Frame", nil, row)
+	cell.noHoverOutline = true
+	cell:SetPoint("TOPLEFT", row, "TOPLEFT", x, -3)
+	cell:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", x, 3)
+	cell:SetWidth(width)
+	cell:SetBackdrop(CELL)
+	cell.head = Words(cell, 7, -3, width - 12, head, SMALL - 1)
+	cell.text = Words(cell, 7, -14, width - 12, "", SMALL)
+	return cell
+end
+
+-- A set's panel at y: its name and zones over it, its two columns in it.
+local function SetRow(page, kind, y)
+	local height = kind[5] == 6 and SET_TALL or SET_ROW
+	local row = Tinted(page, YELLOW, 0, y - SET_CAPTION, PAGE_WIDTH, height)
+	-- Over the panel: the set's name in its rarity's color, as a tooltip has
+	-- an item's, "(Epic set)" beside it; the zones it drops in to the right,
+	-- by the Run History's map.
+	row.name = Text(page, "GameFontNormal", TEXT)
+	row.name:SetPoint("BOTTOMLEFT", row, "TOPLEFT", 2, 3)
+	Paint(row.name, kind[8])
+	row.rarity = Text(page, "GameFontHighlight", SMALL - 1)
+	row.rarity:SetPoint("BOTTOMLEFT", row.name, "BOTTOMRIGHT", 5, 0)
+	row.rarity:SetText(SurvivorUI_TF("({1} set)", SurvivorUI_T(kind[1])))
+	Paint(row.rarity, kind[8])
+	row.zones = Text(page, "GameFontHighlight", SMALL)
+	row.zones:SetPoint("BOTTOMRIGHT", row, "TOPRIGHT", -2, 4)
+	row.zones:SetText(SurvivorUI_T(kind[3])..", "..SurvivorUI_T(kind[4]))
+	Paint(row.zones, ZONE_GREEN)
+	row.map = page:CreateTexture(nil, "ARTWORK")
+	row.map:SetTexture(MAP_ICON)
+	row.map:SetWidth(16)
+	row.map:SetHeight(16)
+	row.map:SetPoint("RIGHT", row.zones, "LEFT", -3, 0)
+	row.four = SetCell(row, 3, 198, SurvivorUI_T("4 pieces"))
+	row.four.text:SetText(SurvivorUI_T(kind[6]))
+	row.eight = SetCell(row, 203, PAGE_WIDTH - 206, SurvivorUI_T("8 pieces"))
+	return row, height
+end
+
+-- A column lit, dim, or in gold.
+local function Lit(cell, how, base, tint)
+	if how == "dim" then
+		cell:SetBackdropColor(0, 0, 0, 0.25)
+		cell:SetBackdropBorderColor(1, 1, 1, 0.06)
+		cell.head:SetTextColor(GREY[1], GREY[2], GREY[3], 0.7)
+		cell.text:SetTextColor(GREY[1], GREY[2], GREY[3], 0.8)
+	elseif how == "gold" then
+		cell:SetBackdropColor(1, 0.82, 0, 0.12)
+		cell:SetBackdropBorderColor(1, 0.82, 0, 0.9)
+		cell.head:SetTextColor(1, 0.82, 0, 1)
+		cell.text:SetTextColor(tint[1], tint[2], tint[3], 1)
+	else
+		cell:SetBackdropColor(base[1], base[2], base[3], 0.2)
+		cell:SetBackdropBorderColor(base[1], base[2], base[3], 0.55)
+		cell.head:SetTextColor(tint[1], tint[2], tint[3], 0.85)
+		cell.text:SetTextColor(tint[1], tint[2], tint[3], 1)
+	end
+end
+
+-- A set's panel for the class and the star chosen: the panel washed in the
+-- class's color, as This Run's rows are in theirs. The 4 pieces lit at every
+-- star; the 8 pieces dim at 4 pieces, lit at 8, and at Empowered in gold, the
+-- numbers that grow in gold.
+local function PaintSetRow(row, kind, entry, step, base, tint)
+	row.name:SetText(SurvivorUI_T(entry[3][kind[5]] or PVP_SET))
+	-- The set's name and its rarity, one size.
+	ItemName(row.name, 14)
+	ItemName(row.rarity, 14)
+	row:SetBackdropColor(0.04 + (base[1] - 0.04) * 0.16, 0.04 + (base[2] - 0.04) * 0.16, 0.04 + (base[3] - 0.04) * 0.16, 0.95)
+	row:SetBackdropBorderColor(base[1], base[2], base[3], 0.4)
+	Lit(row.four, "lit", base, tint)
+	local line = entry[4][kind[5]]
+	if step == 1 then
+		Lit(row.eight, "dim", base, tint)
+		row.eight.text:SetText(SetWords(line, false, ColorCode(GREY)))
+	elseif step == 2 then
+		Lit(row.eight, "lit", base, tint)
+		row.eight.text:SetText(SetWords(line, false, ColorCode({ 1, 1, 1 })))
+	else
+		Lit(row.eight, "gold", base, tint)
+		row.eight.text:SetText(SetWords(line, true, GOLD))
+	end
+end
+
+local function BuildSets(page)
+	page.class = HeroSet()
+	page.step = 1
+	-- Each time the page opens, on the hero's class.
+	function page.Again()
+		page.class = HeroSet()
+	end
+	Title(page, SurvivorUI_T("Sets: six for each class, 8 armor pieces each"))
+	local count = table.getn(SETS)
+	local width = math.floor((PAGE_WIDTH - (count - 1) * 4) / count)
+	local chips, steps, rows = {}, {}, {}
+	for index = 1, count do
+		local chip = SetButton(page, (index - 1) * (width + 4), page.y, width, CHIP_HEIGHT)
+		chip.tint = ClassTint(SETS[index][1])
+		chip.text:SetText(SurvivorUI_T(SETS[index][2]))
+		chip.index = index
+		chip:SetScript("OnClick", function()
+			page.class = this.index
+			page.Draw()
+		end)
+		chips[index] = chip
+	end
+	page.y = page.y - CHIP_HEIGHT - 4
+	local third = math.floor((PAGE_WIDTH - 2 * 4) / 3)
+	for index = 1, 3 do
+		local step = SetButton(page, (index - 1) * (third + 4), page.y, third, CHIP_HEIGHT, true)
+		step.text:SetText(SurvivorUI_T(SET_STEPS[index][1]))
+		step.index = index
+		step:SetScript("OnClick", function()
+			page.step = this.index
+			page.Draw()
+		end)
+		steps[index] = step
+	end
+	page.y = page.y - CHIP_HEIGHT - 4
+	-- The star's rule in green, underlined.
+	page.rule = Words(page, 2, page.y, PAGE_WIDTH - 4, "", SMALL + 1, GREEN)
+	page.underline = page:CreateTexture(nil, "ARTWORK")
+	page.underline:SetTexture(FLAT)
+	page.underline:SetVertexColor(GREEN[1], GREEN[2], GREEN[3], 0.8)
+	page.underline:SetHeight(1)
+	page.underline:SetPoint("TOPLEFT", page.rule, "BOTTOMLEFT", 0, -1)
+	page.y = page.y - 20
+	local y = page.y
+	for index = 1, table.getn(SET_KINDS) do
+		local row, height = SetRow(page, SET_KINDS[index], y)
+		rows[index] = row
+		y = y - SET_CAPTION - height - 2
+	end
+
+	function page.Draw()
+		local entry = SETS[page.class]
+		local base = ClassTint(entry[1])
+		local tint = Readable(base)
+		for index = 1, count do
+			local chip = chips[index]
+			local color = chip.tint
+			Chosen(chip, index == page.class)
+			Paint(chip.text, Fore(color))
+			if index == page.class then
+				chip.fill:SetVertexColor(color[1], color[2], color[3], 1)
+			else
+				chip.fill:SetVertexColor(color[1] * 0.72, color[2] * 0.72, color[3] * 0.72, 1)
+			end
+		end
+		-- The star chosen in gold, its words dark; the others dark and grey.
+		for index = 1, 3 do
+			local step = steps[index]
+			Chosen(step, index == page.step, SET_STEPS[index][2])
+			if index == page.step then
+				step.fill:SetVertexColor(1, 0.82, 0, 1)
+				Paint(step.text, { 0.08, 0.07, 0.05 })
+			else
+				step.fill:SetVertexColor(1, 0.82, 0, 0.08)
+				Paint(step.text, { 0.6, 0.6, 0.6 })
+			end
+		end
+		page.rule:SetText(SurvivorUI_T(SET_STEPS[page.step][3]))
+		page.underline:SetWidth(page.rule:GetStringWidth())
+		for index = 1, table.getn(SET_KINDS) do
+			PaintSetRow(rows[index], SET_KINDS[index], entry, page.step, base, tint)
+		end
+	end
+end
+
+------------------------------------------------------------------------------
 -- The window: the pages' names down its left, as the options' tabs.
 
 local PAGES = {
@@ -1148,6 +1700,8 @@ local PAGES = {
 	{ "DoTs", "dots", BuildDots },
 	{ "Not DoTs", "ground", BuildGround },
 	{ "Reduction", "armor", BuildArmor },
+	{ "Marks", "marks", BuildMarks },
+	{ "Sets", "sets", BuildSets },
 }
 
 local divider = window:CreateTexture(nil, "ARTWORK")
@@ -1221,6 +1775,9 @@ local function Select(index)
 	tabs[index].unread:Hide()
 	FromHero()
 	local page = Build(index)
+	if page.Again then
+		page.Again()
+	end
 	page:Show()
 	page.Draw()
 	numbered:SetText(SurvivorUI_TF("(page {1} of {2})", index, table.getn(PAGES)))

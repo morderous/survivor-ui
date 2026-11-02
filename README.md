@@ -37,7 +37,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui meter` | SurvivorUI's damage meter, or Default |
 | `/sui bosses` | Boss bars: on or off |
 | `/sui bosses elites` | Adds every elite to the boss bars |
-| `/sui guide` | The Guide: how Luck, Damage and Crit really work |
+| `/sui guide` | The Guide: how Luck, Damage and Crit really work, and what marks and sets give |
 | `/sui tally` | Kills and gold line under the minimap, or the Default box |
 | `/sui pace` | Kill pace, the orb by the run tracker's clock: on or off |
 | `/sui pace class` | Kill pace against this class's runs only, or every class's (the default) |
@@ -160,7 +160,7 @@ Commands:
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
 | `/sui bosses` | Switches the boss bars on or off (on by default from v3.0.12) |
 | `/sui bosses elites` | Lists every elite in the boss bars too |
-| `/sui guide` | Opens the Guide: how Luck, Damage and Crit really work |
+| `/sui guide` | Opens the Guide: how Luck, Damage and Crit really work, and what marks and sets give |
 | `/sui tally` | Switches between the kills and gold line (the default) and the Default box |
 
 ### Healing and boss damage
@@ -226,6 +226,23 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.50, 2026-11-02
+
+Two new Guide pages on your gear, Marks and Sets, and the level's cards come clean: nothing of ours over them unless you ask for it.
+
+**The Guide**
+- **Marks:** what each star of a piece costs, rarity by rarity, and what all 8 pieces cost to 3 and to 5 stars. **Other classes done** sets how many of your other classes have that set done: each takes 5% off, up to 40%, as the game counts it. The three stars that open something on a set are there too, and hovering Empowered shows what it does for your class.
+- **Sets:** every class's six sets, their 4-piece and 8-piece bonuses with the numbers, and the zones each one drops in. Pick a class, opened on yours, and the stars: 4 pieces, 8 pieces or Empowered. The part of each set those stars give lights up, and at Empowered the numbers that grow turn gold. Each set's name wears its color, as an item's does in a tooltip.
+- **In Chinese:** both pages read in Chinese with the game in Chinese, in the game's own words for the sets, the zones and the bonuses.
+
+**The level's cards**
+- **Hidden while you choose a card:** on a small screen the game's cards are large, and Survivor UI's pieces stood on them. Every piece now hides while you choose a card or a new piece of jewelry, and comes back after.
+- **Your pick of what stays:** in the options' Layout tab, **While choosing cards** has **Hide everything while choosing cards**, and under it a box for each piece: the run tracker, the build list, the jewelry worn, the damage meter, This Run, Biggest Crits, the XP bar, the minimap, the chat, the boss bars, the party frames and everything else. Untick the first for everything as before, or tick only the meter, say.
+- **A note, once:** the first time you wait in town or at **Move to begin**, a box says so, with **Keep it hidden**, **Show as before** and **Choose pieces**.
+
+**Fixed**
+- **The level-up line in the chat** (the game's 0.139): "You have gained +3% damage..." came back with every level, as the game no longer sends its level-up event in a run. With **Level-ups** on in the options' Chat tab, it is kept away again, in every language.
 
 ### Azeroth SurvivorUI Launcher 1.9.0, 2026-11-01
 
