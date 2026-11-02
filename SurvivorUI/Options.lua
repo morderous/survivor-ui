@@ -279,6 +279,7 @@ local TABS = {
 	{ key = "tooltips", label = "Tooltips", color = { 0.90, 0.86, 0.62 } },
 	{ key = "plates", label = "Nameplates", color = { 0.70, 0.55, 1.00 } },
 	{ key = "marks", label = "Raid marks", color = { 0.95, 0.60, 0.50 } },
+	{ key = "world", label = "World markers", color = { 0.50, 0.85, 0.95 } },
 }
 
 local pages, tabButtons, widgets = {}, {}, {}
@@ -3534,6 +3535,7 @@ Kit.Chips(page, {
 	{ "Damage over time", CTGet("ctPeriodic"), CTToggle("ctPeriodic"), "Your DoTs' ticks, a little smaller, in grey." },
 	{ "Heals", CTGet("ctHeals"), CTToggle("ctHeals"), "The heals you get, green, over you." },
 	{ "Damage taken", CTGet("ctTaken"), CTToggle("ctTaken"), "What hits you, red, under you." },
+	{ "Far numbers fade", CTGet("ctFar"), CTToggle("ctFar"), "Over the enemies: hits on enemies more than 20 yards from you grow fainter, down to a third at 60. From the game's 0.139.2." },
 	{ "Buff notices", function() return SurvivorUI_CombatTextAuras and SurvivorUI_CombatTextAuras() end,
 		function() if SurvivorUI_SetCombatTextAuras then SurvivorUI_SetCombatTextAuras(not SurvivorUI_CombatTextAuras()) end end,
 		"The game's own notices as a buff comes or goes, <Power Word: Shield>, and its debuffs. Off by default." },
@@ -4543,6 +4545,9 @@ for slot = 1, 5 do
 end
 Note(page, "The heroes take the marks by their names in alphabetical order, Hero 1 the first, so every Survivor UI in the party gives the same; a hero already marked keeps that mark. Every mark belongs to one row: picked here, it leaves the other rows; the last box, a dash, leaves a row with no mark.")
 Subheader(page, "Enemies")
+Check(page, "Draw the enemies' marks", function() return SurvivorUI_MarksDrawn and SurvivorUI_MarksDrawn() end,
+	function() if SurvivorUI_ToggleWorld then SurvivorUI_ToggleWorld("markDrawn") end end,
+	"From the game's 0.139.2: every boss, guardian and elite of a kind ticked below wears its mark at once, drawn over it, and no target is taken; only you see them. Off: the game's raid marks, one enemy a mark at a time, seen by the whole party.")
 MarkRow("boss", "Bosses")
 MarkRow("guardian", "Lair guardians")
 MarkRow("elite", "Elites")
@@ -4555,6 +4560,28 @@ Button(page, "Uncheck all", 150, 0, function()
 end)
 page.y = page.y - 30
 Note(page, "Every row off and with no mark; the marks on the heroes and on your target come off. A mark on an enemy out of reach stays until it falls.")
+
+------------------------------------------------------------------------------
+-- World markers (WorldMarks.lua): what is drawn on the world itself.
+
+page = pages.world
+Header(page, "World markers", "From the game's 0.139.2: marks drawn on the world itself, over what they point at, wherever the camera turns, with no nameplate and no target taken. Only you see them.")
+do
+	local function WorldCheck(label, key, note)
+		Check(page, label, function() return SurvivorUI_WorldOn and SurvivorUI_WorldOn(key) end,
+			function() if SurvivorUI_ToggleWorld then SurvivorUI_ToggleWorld(key) end end, note)
+	end
+	Subheader(page, "Co-op")
+	WorldCheck("Friends down", "worldDowned", "a gold cross over a friend who is down, their name and how far; their party frame says how far too")
+	Subheader(page, "The map")
+	WorldCheck("Caches", "worldCaches", "a chest over each cache still there, and how far")
+	WorldCheck("Lairs", "worldLairs", "the guardian's name over its lair while it sleeps, grey; awake, over the guardian itself, orange, following it; slain, back over the lair with the time until it comes back")
+	WorldCheck("Arrows", "worldArrows", "for friends down, caches and lairs out of sight: an arrow on a ring round you toward the nearest few, with how far")
+	Subheader(page, "Enemies")
+	WorldCheck("Explosive orbs", "worldOrbs", "in a run with the Explosive affix, a pulsing mark over each orb: only direct hits hurt them")
+	WorldCheck("Bars over elites, guardians and bosses", "worldBars", "a test: their name and health over them, in their kind's color, with no nameplate")
+	Note(page, "The enemies' marks are on the Raid marks tab: with \"Draw the enemies' marks\" on, they are drawn here too.")
+end
 
 ------------------------------------------------------------------------------
 -- Layout.

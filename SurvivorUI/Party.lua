@@ -329,6 +329,11 @@ local function Paint(row, friend)
 		row.health:SetValue(1)
 		row.health:SetStatusBarColor(DOWN_FILL[1], DOWN_FILL[2], DOWN_FILL[3], 1)
 		value, color = "DOWN", DOWN_TEXT
+		-- How far, from the game's 0.139.2 (WorldMarks.lua).
+		local yards = SurvivorUI_DownedYards and SurvivorUI_DownedYards(friend.name)
+		if yards then
+			value = "DOWN "..SurvivorUI_TF("{1} yd", yards)
+		end
 	else
 		row.health:SetValue(share)
 		row.health:SetStatusBarColor(r, g, b, 1)

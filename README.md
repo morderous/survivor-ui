@@ -37,7 +37,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui meter` | SurvivorUI's damage meter, or Default |
 | `/sui bosses` | Boss bars: on or off |
 | `/sui bosses elites` | Adds every elite to the boss bars |
-| `/sui guide` | The Guide: how Luck, Damage and Crit really work, and what marks and sets give |
+| `/sui guide` | The Guide: how Luck, Damage, Crit, Haste and Speed really work, and what marks and sets give |
 | `/sui tally` | Kills and gold line under the minimap, or the Default box |
 | `/sui pace` | Kill pace, the orb by the run tracker's clock: on or off |
 | `/sui pace class` | Kill pace against this class's runs only, or every class's (the default) |
@@ -160,7 +160,7 @@ Commands:
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
 | `/sui bosses` | Switches the boss bars on or off (on by default from v3.0.12) |
 | `/sui bosses elites` | Lists every elite in the boss bars too |
-| `/sui guide` | Opens the Guide: how Luck, Damage and Crit really work, and what marks and sets give |
+| `/sui guide` | Opens the Guide: how Luck, Damage, Crit, Haste and Speed really work, and what marks and sets give |
 | `/sui tally` | Switches between the kills and gold line (the default) and the Default box |
 
 ### Healing and boss damage
@@ -226,6 +226,29 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.52, 2026-11-02
+
+Marks on the world itself with the game's 0.139.2: friends down, caches, lairs and your enemies' marks, right where they are. Two new Guide pages, Haste and Speed.
+
+**World markers** (a new tab in the options, Interface)
+- **Friends down:** in a co-op run, a gold cross over a friend who is down, with their name and how far. Their party frame says how far too: DOWN 23 yd.
+- **Caches:** a chest over each cache still there, and how far.
+- **Lairs:** the guardian's name over its lair while it sleeps. Awake, the name follows the guardian out of its lair; slain, it goes back over the lair with the time until the guardian comes back.
+- **Arrows:** for friends down, caches and lairs out of sight, an arrow on a ring round you toward the nearest few, with how far.
+- **Explosive orbs:** in a run with the Explosive affix, a pulsing mark over each orb.
+- **Bars over elites, guardians and bosses** (off at first, a test): their name and health over them, with no nameplate.
+
+**Raid marks**
+- **Drawn marks:** with **Draw the enemies' marks** on, as it comes, every boss, guardian and elite of a kind ticked in the Raid marks tab wears its mark at once, drawn over it, and your target is never taken. Only you see them. Off, the game's raid marks as before. The co-op heroes keep the game's.
+
+**Combat text**
+- **Far numbers fade** (Shows): with the numbers over the enemies, hits on enemies more than 20 yards away grow fainter.
+
+**The Guide**
+- **Haste:** every cooldown bonus is added into one number, and every wait is divided by 1 plus it. The game shows Haste as how much sooner, so its 50% already means twice as many spells, and 75% four times as many. There is no cap, but no spell comes back faster than 0.25 sec. **Echo** has no cap either: past 100% every spell strikes twice and the rest is the chance of a third, and each strike is a whole cast, aiming again and rolling its own Crit. Sliders for both, a spell's casts a minute in marbles, and the strikes of one cast.
+- **Speed:** Speed stops at +120%, 15.4 yards a second. Pickup bonuses multiply each other, so two give more than their sum. Area widens every radius and reach: +100% doubles the radius and covers four times the ground.
+- **In Chinese:** both pages read in Chinese with the game in Chinese.
 
 ### v3.0.51, 2026-11-02
 

@@ -3063,10 +3063,14 @@ do
 			return
 		end
 		local ratio = WorldFrame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+		-- Far numbers fade (Combat text, Shows): from 20 yards away, down to a
+		-- third at 60 (the game's 0.139.2 tells the hero's distance).
+		local far = CT().ctFar
 		for index = 1, table.getn(result.entries or {}) do
 			local entry = result.entries[index]
 			local text = held[entry.anchorId]
 			if text then
+				text.far = far and entry.playerDistance and math.max(0.33, math.min(1, 1 - (entry.playerDistance - 20) / 60)) or nil
 				text.away = entry.state ~= "onScreen" or not entry.x
 				if not text.away then
 					text.x, text.y = entry.x * ratio, entry.y * ratio
@@ -3098,7 +3102,7 @@ local function SpawnDamage(target, amount, crit, periodic, source)
 	text.side = nil
 	text.addKey = nil
 	text.anchor = target and HitAnchor(target, amount, crit) or nil
-	text.away, text.offX, text.offY = nil, nil, nil
+	text.away, text.offX, text.offY, text.far = nil, nil, nil, nil
 	amount = Amount(amount)
 
 	-- Over its hit (PlaceAnchored from the next frame on), else over one of the
@@ -3206,6 +3210,7 @@ damageLayer:SetScript("OnUpdate", function()
 				if text.away then
 					alpha = 0
 				end
+				alpha = alpha * (text.far or 1)
 				text.offX, text.offY = text.drift * eased, text.rise * eased - down * lift
 				text:ClearAllPoints()
 				text:SetPoint("CENTER", UIParent, "BOTTOMLEFT", text.x + text.offX, text.y + text.offY)

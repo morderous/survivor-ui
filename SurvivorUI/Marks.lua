@@ -25,6 +25,11 @@
 -- keeps that mark. Every mark is one row's: picked on a row it goes from the
 -- others, and a row may have none (its "No mark"), marking nothing then.
 --
+-- From the game's 0.139.2 the enemies' marks are drawn over them by default
+-- (WorldMarks.lua, SurvivorUI_MarksDrawn): every enemy of a kind ticked at
+-- once, no target taken, seen by this player alone; here only the heroes are
+-- marked then.
+--
 -- The marks known, each enemy's (marked here, or read off the target and the
 -- mouseover), show on Survivor UI's boss bars (SurvivorUI_RaidMarkOf), and the
 -- target's over its frame; Survivor Plates shows the client's own on a plate.
@@ -259,8 +264,29 @@ local function Read(unit)
 	end
 end
 
+-- Its kind's mark while the marks are drawn (WorldMarks.lua): every enemy of
+-- a kind ticked wears it, in the fight or not.
+local function DrawnMark(entry)
+	local kind = Field(entry, "kind", 1)
+	if kind == "final" then
+		kind = "boss"
+	end
+	if (kind == "boss" or kind == "guardian" or kind == "elite") and SurvivorUI_AutoMarkOn(kind) then
+		return SurvivorUI_AutoMarkIcon(kind)
+	end
+end
+
 function SurvivorUI_RaidMarkOf(id)
-	return id and known[tonumber(id)]
+	id = tonumber(id)
+	if not id then
+		return nil
+	end
+	if known[id] then
+		return known[id]
+	end
+	if alive[id] and SurvivorUI_MarksDrawn and SurvivorUI_MarksDrawn() then
+		return DrawnMark(alive[id])
+	end
 end
 
 -- Whether a mark is worn by another enemy still alive, or about to be.
@@ -469,6 +495,11 @@ watch:SetScript("OnUpdate", function()
 		return
 	end
 	MarkParty()
+	-- The enemies' marks drawn over them instead (WorldMarks.lua): none taken
+	-- as the target.
+	if SurvivorUI_MarksDrawn and SurvivorUI_MarksDrawn() then
+		return
+	end
 	MarkTarget()
 	if TargetByName then
 		Aim()
