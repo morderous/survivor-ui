@@ -228,6 +228,27 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.54, 2026-11-03
+
+Bosses and awake guardians that move on the minimap, your shield in your health numbers, your friends' buffs and distance on the party frames, debuffs inside the nameplates and a button for your range ring.
+
+**Minimap**
+- **On the move** (asked by ZA5TEESH): an awake guardian's lair pin follows the guardian while it fights, and goes back to its lair once it is slain. Each boss gets a horned skull that goes where it goes, the final boss in an orange glow. Elites can get a bone skull too (off). The options' Minimap tab: **Lairs follow their guardian**, **Bosses** and **Elites**.
+- **Range ring button** (asked by Silveryxd and sh1Neee): a ring over the sound button hides your range ring, on the minimap and round you, in a click; the next click brings back the rings you had on. A key of its own too, none by default. The options' Minimap tab: **Range ring button** and **Range ring key**.
+
+**Nameplates** (Survivor Plates)
+- **Debuffs inside:** on elites, guardians and bosses, our debuffs in small icons inside the bar, from left to right. Your target among the rank and file keeps them over its plate. Off with **Debuffs inside the plates** (Nameplates, Look).
+
+**Unit frames**
+- **Your shield in the numbers:** while a shield is on you, your health numbers count it too, in light blue, the share going past 100%: `878 | 155%`. Off with **Shield in the health text** (Unit frames).
+
+**Party frames** (asked by Jocke and ebgl_menios)
+- **Buffs:** each friend's buffs in small icons beside their frame; hover one for what it is.
+- **Distance:** past 30 yards a friend's frame fades and says how far (`33 yd | 73%`); hover it for the yards. Heals and shields in this game are only your own, so this is to keep the party together. The Party tab: **Party buffs** and **Party distance**.
+
+**Cards**
+- **Stats panel over the cards:** the Stats panel can stay in sight while you choose a level's cards (the options' **While choosing cards**).
+
 ### v3.0.53, 2026-11-02
 
 New nameplates in SurvivorUI Classic's look, each elite, guardian and boss told apart by the game itself. Light beams over the caches, a ring for your range, the mouse cursor over the game's screens and the marks in Run History.

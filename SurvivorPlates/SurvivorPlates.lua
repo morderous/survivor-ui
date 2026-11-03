@@ -521,8 +521,16 @@ end
 -- Debuffs on the target's plate, with their stacks. The 1.12 client only tells
 -- an addon about the debuffs of a unit it can name, and of all the plates on
 -- screen only the target's can be told apart (it alone keeps full alpha).
-local PLATE_DEBUFFS = 6
+-- On an elite, a guardian or a boss they sit inside its bar instead, small,
+-- left to right, clear of the health's share (Lucas, 2026-11-03): a
+-- guardian's and a boss's from the game by its unit's id (AZS_GetDebuffs, as
+-- Survivor UI's boss bars read them), whether it is your target or not; an
+-- elite's while it is your target or under the mouse.
+local PLATE_DEBUFFS = 8
 local DEBUFF_SIZE = 15
+local INSIDE_KINDS = { elite = true, guardian = true, boss = true, final = true }
+local INSIDE_EVERY = 0.2
+local INSIDE_ROOM = 24          -- the health's share, at the bar's right end
 
 -- The bosses' plates over the guardians', theirs over the elites', and those
 -- over the rest: in a crowd the plate that matters is in front; the one under
@@ -621,8 +629,116 @@ local function Dress(overlay, kind)
 	overlay.across, overlay.percent, overlay.painted = nil, nil, nil
 end
 
+local function DebuffIcon(overlay, index)
+	local icons = overlay.debuffs
+	local icon = icons[index]
+	if icon then
+		return icon
+	end
+	icon = CreateFrame("Frame", nil, overlay.bar)
+	icon:SetFrameLevel(overlay.bar:GetFrameLevel() + 1)
+	icon.edge = icon:CreateTexture(nil, "BACKGROUND")
+	icon.edge:SetTexture(FLAT)
+	icon.edge:SetVertexColor(0, 0, 0, 1)
+	icon.texture = icon:CreateTexture(nil, "ARTWORK")
+	icon.texture:SetAllPoints(icon)
+	icon.texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	icon.count = icon:CreateFontString(nil, "OVERLAY")
+	icons[index] = icon
+	return icon
+end
+
+-- An icon's size, edge and stacks: over the plate (15, its stacks 9) or inside.
+local function SizeIcon(icon, size, edge, font)
+	if icon.size == size then
+		return
+	end
+	icon.size = size
+	icon:SetWidth(size)
+	icon:SetHeight(size)
+	icon.edge:ClearAllPoints()
+	icon.edge:SetPoint("TOPLEFT", icon, "TOPLEFT", -edge, edge)
+	icon.edge:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", edge, -edge)
+	icon.count:SetFont(SurvivorUI_FONT or FONT, font, "OUTLINE")
+	icon.count:ClearAllPoints()
+	icon.count:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", edge == 1 and 1 or 2, -1)
+end
+
+local function DebuffArt(art)
+	art = art or ""
+	if art ~= "" and not string.find(art, "\\", 1, true) then
+		art = "Interface\\Icons\\"..art
+	end
+	return art ~= "" and art or "Interface\\Icons\\INV_Misc_QuestionMark"
+end
+
+local function InsideList(overlay, isTarget)
+	if overlay.kind ~= "elite" and overlay.unit and overlay.claimName == overlay.lastName and AZS_GetDebuffs then
+		local ok, list = pcall(AZS_GetDebuffs, tonumber(overlay.unit) or overlay.unit)
+		if ok and type(list) == "table" then
+			return list
+		end
+	end
+	local token
+	if isTarget then
+		token = "target"
+	elseif UnitExists("mouseover") and UnitName("mouseover") == overlay.lastName then
+		token = "mouseover"
+	end
+	local list = {}
+	if token then
+		for index = 1, PLATE_DEBUFFS do
+			local texture, count = UnitDebuff(token, index)
+			if not texture then
+				break
+			end
+			list[index] = { icon = texture, stacks = count }
+		end
+	end
+	return list
+end
+
+local function UpdateInside(overlay, isTarget, settings)
+	local now = GetTime()
+	if overlay.insideAt and now - overlay.insideAt < INSIDE_EVERY then
+		return
+	end
+	overlay.insideAt = now
+	overlay.debuffs = overlay.debuffs or {}
+	overlay.debuffsShown = true
+	local size = overlay.height - 1
+	local font = math.max(6, math.floor(7 * settings.scale + 0.5))
+	local room = math.min(PLATE_DEBUFFS, math.floor((overlay.width - INSIDE_ROOM * settings.scale - 2) / (size + 1)))
+	local list = InsideList(overlay, isTarget)
+	local count = math.max(0, math.min(room, table.getn(list)))
+	for index = 1, count do
+		local debuff = list[index]
+		local icon = DebuffIcon(overlay, index)
+		SizeIcon(icon, size, 0.5, font)
+		icon:ClearAllPoints()
+		icon:SetPoint("LEFT", overlay.bar, "LEFT", 2 + (index - 1) * (size + 1), 0)
+		icon.texture:SetTexture(DebuffArt(debuff.icon))
+		local stacks = tonumber(debuff.stacks) or 0
+		icon.count:SetText(stacks > 1 and stacks or "")
+		icon:Show()
+	end
+	for index = count + 1, PLATE_DEBUFFS do
+		if overlay.debuffs[index] then
+			overlay.debuffs[index]:Hide()
+		end
+	end
+end
+
 local function UpdatePlateDebuffs(overlay, isTarget, settings)
 	local icons = overlay.debuffs
+	local inside = settings.insideDebuffs ~= false and INSIDE_KINDS[overlay.kind]
+	if inside ~= overlay.inside then
+		overlay.inside, overlay.insideAt = inside, nil
+	end
+	if inside then
+		UpdateInside(overlay, isTarget, settings)
+		return
+	end
 	if not isTarget then
 		if icons and overlay.debuffsShown then
 			for index = 1, PLATE_DEBUFFS do
@@ -653,25 +769,9 @@ local function UpdatePlateDebuffs(overlay, isTarget, settings)
 	for index = 1, PLATE_DEBUFFS do
 		local texture, count = UnitDebuff("target", index)
 		local icon = icons[index]
-		if texture then
-			if not icon then
-				icon = CreateFrame("Frame", nil, overlay.bar)
-				icon:SetFrameLevel(overlay.bar:GetFrameLevel() + 1)
-				icon:SetWidth(DEBUFF_SIZE)
-				icon:SetHeight(DEBUFF_SIZE)
-				icon.edge = icon:CreateTexture(nil, "BACKGROUND")
-				icon.edge:SetTexture(FLAT)
-				icon.edge:SetVertexColor(0, 0, 0, 1)
-				icon.edge:SetPoint("TOPLEFT", icon, "TOPLEFT", -1, 1)
-				icon.edge:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
-				icon.texture = icon:CreateTexture(nil, "ARTWORK")
-				icon.texture:SetAllPoints(icon)
-				icon.texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-				icon.count = icon:CreateFontString(nil, "OVERLAY")
-				icon.count:SetFont(SurvivorUI_FONT or FONT, 9 + FONT_BUMP, "OUTLINE")
-				icon.count:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
-				icons[index] = icon
-			end
+		if texture and index <= 6 then
+			icon = DebuffIcon(overlay, index)
+			SizeIcon(icon, DEBUFF_SIZE, 1, 9 + FONT_BUMP)
 			icon:ClearAllPoints()
 			icon:SetPoint("BOTTOMLEFT", overlay.bar, "TOPLEFT", (index - 1) * (DEBUFF_SIZE + 2), lift)
 			icon.texture:SetTexture(texture)

@@ -404,6 +404,51 @@ local function WayTo(place, px, py, heroX, heroY, span)
 	end
 end
 
+------------------------------------------------------------------------------
+-- The ones on the move (the game's 0.139.2 world anchors, as WorldMarks.lua
+-- reads them; ZA5TEESH, 2026-11-03): an awake guardian's lair pin follows it
+-- as it leaves the lair to fight, and the bosses (elites too, with "Elites")
+-- get a pin of their own that goes where they go. On an older game, none.
+
+local MOVING = { "guardian", "elite", "boss", "finalBoss", "guardianLair" }
+local UNIT_PIN = {
+	boss = { art = "PinBoss", title = "Boss", size = 4 },
+	finalBoss = { art = "PinBoss", title = "Final boss", size = 4, glow = { 1, 0.5, 0 } },
+	elite = { art = "PinElite", title = "Elite", size = -2 },
+}
+
+-- The guardians away from their lairs ([lair index] = the guardian's anchor)
+-- and the bosses and elites, alive, from the game's anchors now.
+local function Moving()
+	local away, units = {}, {}
+	if not AZS_GetWorldAnchors then
+		return away, units
+	end
+	local ok, result = pcall(AZS_GetWorldAnchors, { kinds = MOVING }, nil, 256)
+	if not (ok and type(result) == "table" and result.entries) then
+		return away, units
+	end
+	local byId = {}
+	for index = 1, table.getn(result.entries) do
+		local entry = result.entries[index]
+		if entry.unitId and entry.state == "alive" then
+			byId[tonumber(entry.unitId)] = entry
+			if UNIT_PIN[entry.kind] then
+				table.insert(units, entry)
+			end
+		end
+	end
+	for index = 1, table.getn(result.entries) do
+		local entry = result.entries[index]
+		local guardian = entry.kind == "guardianLair" and entry.state == "awake" and entry.occupantUnitId
+			and byId[tonumber(entry.occupantUnitId)]
+		if guardian and entry.lairIndex then
+			away[tonumber(entry.lairIndex)] = guardian
+		end
+	end
+	return away, units
+end
+
 local function Clock(seconds)
 	seconds = math.max(0, math.floor(seconds + 0.5))
 	return string.format("%d:%02d", math.floor(seconds / 60), math.mod(seconds, 60))
@@ -452,9 +497,15 @@ local function Update()
 			-- The game's seconds left are from its last word; while it plays they
 			-- run on from there (Guardians.lua).
 			local since = AZS_LAIRS_UPDATED and AZS_GetPhase() == "playing" and GetTime() - AZS_LAIRS_UPDATED or 0
+			local away, units = Moving()
+			if settings.pinFollow == false or not px then
+				away = {}
+			end
 			for index = 1, table.getn(lairs) do
 				local lair = lairs[index]
-				local east, south = WayTo(lair, px, py, heroX, heroY, span)
+				-- Awake and out to fight: where its guardian is.
+				local guardian = lair.active and away[tonumber(lair.index) or index]
+				local east, south = WayTo(guardian or lair, px, py, heroX, heroY, span)
 				if east and (lair.active or settings.pinEmpty ~= "hide") then
 					shown = shown + 1
 					local pin = Pin(shown)
@@ -472,7 +523,9 @@ local function Update()
 							pin.art:SetVertexColor(0.45, 0.45, 0.45)
 						end
 					end
-					if lair.active then
+					if guardian then
+						pin.note = SurvivorUI_TF("Awake: {1}, on the move", guardian.name or lair.name or "?")
+					elseif lair.active then
 						pin.note = "Guardian's lair: "..(lair.name and lair.name ~= "" and lair.name or "a guardian holds it")
 					else
 						pin.note = "Empty lair"
@@ -488,11 +541,48 @@ local function Update()
 						pin.timer:Hide()
 					end
 					if pin.flagged and FlagChoice() == "ours" then
+						pin.glow:SetVertexColor(1, 0.82, 0.2)
 						flaggedPin = pin
 					else
 						pin.glow:Hide()
 					end
 					Place(pin, east, south, yardsAcross, lairSize)
+				end
+			end
+			-- The bosses, and the elites with "Elites", where they are.
+			for index = 1, table.getn(px and units or {}) do
+				local unit = units[index]
+				local look = UNIT_PIN[unit.kind]
+				local on
+				if unit.kind == "elite" then
+					on = settings.pinElites == true
+				else
+					on = settings.pinBosses ~= false
+				end
+				local x, y = tonumber(unit.x), tonumber(unit.y)
+				if on and x and y then
+					shown = shown + 1
+					local pin = Pin(shown)
+					pin.art:SetTexture(ART..look.art)
+					pin.art:SetTexCoord(0, 1, 0, 1)
+					pin.art:SetVertexColor(1, 1, 1)
+					pin.title = SurvivorUI_T(look.title)
+					pin.note = unit.name
+					pin.flagged = nil
+					pin.timer:Hide()
+					if look.glow then
+						-- The final boss: an orange glow behind, as its plate's color.
+						local size = (lairSize + look.size) * 2.2
+						pin.glow:SetWidth(size)
+						pin.glow:SetHeight(size)
+						pin.glow:SetVertexColor(look.glow[1], look.glow[2], look.glow[3])
+						pin.glow:SetAlpha(0.8)
+						pin.glow:Show()
+					else
+						pin.glow:Hide()
+					end
+					local east, south = WorldWay(px, py, x, y)
+					Place(pin, east, south, yardsAcross, math.max(10, lairSize + look.size))
 				end
 			end
 		end

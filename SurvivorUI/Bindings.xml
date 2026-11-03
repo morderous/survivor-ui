@@ -5,4 +5,7 @@
 	<Binding name="SURVIVORUI_SOUNDEFFECTS">
 		if SurvivorUI_ToggleSoundEffects then SurvivorUI_ToggleSoundEffects() end
 	</Binding>
+	<Binding name="SURVIVORUI_RANGERING">
+		if SurvivorUI_ToggleRangeRing then SurvivorUI_ToggleRangeRing() end
+	</Binding>
 </Bindings>

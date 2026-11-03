@@ -982,8 +982,15 @@ local function UpdateUnitFrame(frame)
 	-- numbers (AZS_TARGET); the client alone only its share. The name gets the
 	-- room the numbers leave.
 	local hp, hpm, style = health, healthMax, nil
+	local shielded = false
 	if unit == "player" then
 		style = SurvivorUIDB and SurvivorUIDB.playerHealth or "absolutePercent"
+		-- Shielded (ٴٴ, 2026-11-03): the health and the shield together, in the
+		-- shield's light blue, its share past 100% ("Shield in the health text").
+		local held = tonumber((AZS_RUN or {}).sh) or 0
+		if held >= 1 and not (SurvivorUIDB and SurvivorUIDB.shieldText == false) then
+			hp, shielded = health + held, true
+		end
 	else
 		style = SurvivorUIDB and SurvivorUIDB.targetHealth or "absolutePercent"
 		if AZS_TARGET and AZS_TARGET.name == UnitName(unit) and (tonumber(AZS_TARGET.hpm) or 0) > 0 then
@@ -1018,8 +1025,14 @@ local function UpdateUnitFrame(frame)
 	if UnitIsDead(unit) or UnitIsGhost(unit) then
 		-- Down in a co-op run (the game's 0.113): a friend can bring you back.
 		frame.value:SetText((unit == "player" and SurvivorUI_IsDown and SurvivorUI_IsDown()) and SurvivorUI_T("Down") or SurvivorUI_T("Dead"))
+		frame.value:SetTextColor(1, 1, 1)
 	else
 		frame.value:SetText(SurvivorUI_HealthText(hp, hpm, style))
+		if shielded then
+			frame.value:SetTextColor(0.59, 0.82, 1)
+		else
+			frame.value:SetTextColor(1, 1, 1)
+		end
 	end
 
 	-- Rage has no bar here while the Bloodrage module shows it (SoulShards.lua):

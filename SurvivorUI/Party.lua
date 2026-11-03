@@ -202,6 +202,9 @@ local function Tip(row)
 	end
 	if not row.sample then
 		GameTooltip:AddDoubleLine(SurvivorUI_T("Health"), Short(UnitHealth(unit)).." / "..Short(UnitHealthMax(unit)), 0.8, 0.8, 0.8, 1, 1, 1)
+		if row.yards then
+			GameTooltip:AddLine(SurvivorUI_TF("{1} yards away", math.floor(row.yards + 0.5)), 0.8, 0.8, 0.8)
+		end
 	end
 	local line = row.sample or LineOf(name)
 	if line and line.dmg then
@@ -261,6 +264,8 @@ local function Row(index)
 	row.name:SetJustifyH("LEFT")
 	row.value = Text(row.texts, 10, "RIGHT", -5, 0)
 
+	row.buffs = {}
+
 	row:RegisterForClicks("LeftButtonUp")
 	row:SetScript("OnClick", function()
 		if not this.sample and UnitExists(this.unit) then
@@ -271,6 +276,92 @@ local function Row(index)
 	row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	rows[index] = row
 	return row
+end
+
+------------------------------------------------------------------------------
+-- A friend's buffs and how far (Jocke, ebgl_menios, 2026-11-02): the game
+-- shares a friend's buffs with the client (UnitBuff "party1", seen in a local
+-- co-op run, 2026-11-03), not the shield's amount. Their icons in a line on
+-- the row's far side from your frame, the newest outermost; hover one for
+-- what it is. Past 30 yards the row fades and its value says how far: the
+-- yards from the zone's map (GetPlayerMapPosition of the friend, the minimap
+-- pins' yards a map unit spans, MapPins.lua), else the client's 30 yards
+-- (CheckInteractDistance 4). "Party buffs" and "Party distance", the Party
+-- tab.
+
+local BUFF_SIZE = 16
+local BUFFS_MOST = 8
+local FAR = 30                   -- yards: past this the row fades
+
+local function Buff(row, index)
+	local icon = row.buffs[index]
+	if icon then
+		return icon
+	end
+	icon = CreateFrame("Frame", nil, row)
+	icon:SetWidth(BUFF_SIZE)
+	icon:SetHeight(BUFF_SIZE)
+	icon:SetPoint("RIGHT", row.icon, "LEFT", -3 - (index - 1) * (BUFF_SIZE + 2), 0)
+	Border(icon)
+	icon.texture = icon:CreateTexture(nil, "ARTWORK")
+	icon.texture:SetAllPoints(icon)
+	icon.texture:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+	icon.count = Text(icon, 8, "BOTTOMRIGHT", 1, -1)
+	icon:EnableMouse(true)
+	icon:SetScript("OnEnter", function()
+		GameTooltip:SetOwner(this, "ANCHOR_TOPLEFT")
+		if not (GameTooltip.SetUnitBuff and pcall(GameTooltip.SetUnitBuff, GameTooltip, this.unit, this.index)) then
+			GameTooltip:SetText(SurvivorUI_T("Buff"), 1, 0.82, 0)
+		end
+		GameTooltip:Show()
+	end)
+	icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	row.buffs[index] = icon
+	return icon
+end
+
+local function PaintBuffs(row, unit)
+	local shown = 0
+	if unit and not (SurvivorUIDB and SurvivorUIDB.partyBuffs == false) then
+		for index = 1, BUFFS_MOST do
+			local ok, texture, count = pcall(UnitBuff, unit, index)
+			if not (ok and texture) then
+				break
+			end
+			shown = index
+			local icon = Buff(row, index)
+			icon.unit, icon.index = unit, index
+			icon.texture:SetTexture(texture)
+			icon.count:SetText(count and count > 1 and count or "")
+			icon:Show()
+		end
+	end
+	for index = shown + 1, table.getn(row.buffs) do
+		row.buffs[index]:Hide()
+	end
+end
+
+-- How far a friend is: yards when the map tells, else true past the client's
+-- 30 yards, nil within them (or untold).
+local function Reach(unit)
+	if not unit or (SurvivorUIDB and SurvivorUIDB.partyRange == false) then
+		return nil
+	end
+	if not (SurvivorUI_HeroPlace and SurvivorUI_MapSpan) then
+		return nil
+	end
+	local heroX, heroY = SurvivorUI_HeroPlace()
+	local span = heroX and heroY and SurvivorUI_MapSpan()
+	local ok, mx, my = pcall(GetPlayerMapPosition, unit)
+	if span and ok and mx and my and (mx ~= 0 or my ~= 0) then
+		local east, south = (mx - heroX) * span.across, (my - heroY) * span.down
+		return math.sqrt(east * east + south * south)
+	end
+	local okNear, near = pcall(CheckInteractDistance, unit, 4)
+	if okNear and not near then
+		return true
+	end
+	return nil
 end
 
 -- Top to bottom (the Party tab's Order), or bottom to top.
@@ -338,6 +429,21 @@ local function Paint(row, friend)
 		row.health:SetValue(share)
 		row.health:SetStatusBarColor(r, g, b, 1)
 	end
+	-- Far: faded, and how far before the share.
+	local yards = friend.yards
+	local far = yards == true or (type(yards) == "number" and yards > FAR)
+	row.yards = type(yards) == "number" and yards or nil
+	if far and not friend.offline and not friend.down then
+		if row.yards then
+			value = SurvivorUI_TF("{1} yd", math.floor(row.yards + 0.5)).." | "..value
+		else
+			value = SurvivorUI_T("Far").." | "..value
+		end
+		row:SetAlpha(0.55)
+	else
+		row:SetAlpha(1)
+	end
+	PaintBuffs(row, friend.unit)
 	if friend.down and friend.rescue then
 		row.revive:SetValue(friend.rescue)
 		row.revive:Show()
@@ -379,7 +485,7 @@ local function Friend(index, revive)
 	local name = UnitName(unit)
 	local className, class = UnitClass(unit)
 	local friend = {
-		name = name, class = class, className = className,
+		name = name, class = class, className = className, unit = unit, yards = Reach(unit),
 		health = Num(UnitHealth(unit)), most = Num(UnitHealthMax(unit)),
 		leader = Safe(UnitIsPartyLeader, unit) and true or false,
 	}

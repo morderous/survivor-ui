@@ -3896,6 +3896,8 @@ Inline(page, "Order", {
 		end
 	end)
 Note(page, "Bottom to top, each friend who joins goes over the last; top to bottom, under it, the first one where the fourth stands bottom to top. A full party takes the same place either way.")
+Check(page, "Party buffs", OnUnlessOff("partyBuffs"), Flip("partyBuffs"), "each friend's buffs in a line beside their frame; hover one for what it is")
+Check(page, "Party distance", OnUnlessOff("partyRange"), Flip("partyRange"), "past 30 yards a friend's frame fades and says how far")
 Subheader(page, "Revive bar")
 Check(page, "Revive bar", ReviveIsOn, Call("SurvivorUI_ToggleRevive"),
 	"while you are down: how far a friend has brought you back, and who; while you bring one back: how far. It puts the game's slim revive bar away (the game's 0.115 on; before it, the game's could not be put away, so ours was off unless chosen). Moved on its own: move mode, Revive bar.")
@@ -4084,6 +4086,7 @@ Subheader(page, "Health numbers")
 Note(page, "The percent, the health left, the health left of the whole, or the health left and the percent. Always short: 1.2M for 1,200,000.")
 HealthRow("Player", "playerHealth", "absolutePercent")
 HealthRow("Target", "targetHealth", "absolutePercent")
+Check(page, "Shield in the health text", OnUnlessOff("shieldText"), Flip("shieldText"), "shielded, your numbers count the shield too, in light blue: 851 | 155%")
 Note(page, "The boss bars' health: the Boss bars tab.")
 Subheader(page, "Action bar")
 Check(page, "Cooldown numbers on the buttons", FeatureOn("cooldownNumbers"), FeatureToggle("cooldownNumbers"), "OmniCC, when installed, does it instead")
@@ -4162,10 +4165,18 @@ Check(page, "Sound effects button", OnUnlessOff("soundMapButton"), function()
 		SurvivorUI_PlaceMapButtons()
 	end
 end, "a speaker: mutes spells, hits and clicks; music stays")
+Check(page, "Range ring button", OnUnlessOff("rangeMapButton"), function()
+	DB().rangeMapButton = DB().rangeMapButton == false
+	if SurvivorUI_PlaceMapButtons then
+		SurvivorUI_PlaceMapButtons()
+	end
+end, "a ring: your range on the minimap and round you, in a click")
 KeyButton(page, "Spell effects key", "SURVIVORUI_SPELLEFFECTS",
 	"A key of your own for the spell effects, on or off, as the sparkles' button. None by default; Key Bindings in the game's menu lists it as well.")
 KeyButton(page, "Sound effects key", "SURVIVORUI_SOUNDEFFECTS",
 	"A key of your own for the sound effects, muted or back, as the speaker's button. None by default; Key Bindings in the game's menu lists it as well.")
+KeyButton(page, "Range ring key", "SURVIVORUI_RANGERING",
+	"A key of your own for the range ring, hidden or back, as the ring's button. None by default; Key Bindings in the game's menu lists it as well.")
 Check(page, "Clock and FPS", OnUnlessOff("minimapClock"), function()
 	Flip("minimapClock")()
 	SurvivorUI_GameHud.localClock()
@@ -4202,6 +4213,9 @@ Inline(page, "An empty lair", { { "dim", "Dimmed" }, { "hide", "Hidden" } },
 	function() return DB().pinEmpty == "hide" and "hide" or "dim" end,
 	function(value) DB().pinEmpty = value == "hide" and "hide" or nil end)
 Check(page, "Lair timers", OnlyIfOn("pinTimers"), function() DB().pinTimers = not DB().pinTimers end, "under an empty lair's pin, how long till its guardian is back")
+Check(page, "Lairs follow their guardian", OnUnlessOff("pinFollow"), Flip("pinFollow"), "an awake guardian's pin goes where it goes, back to the lair once slain")
+Check(page, "Bosses", OnUnlessOff("pinBosses"), Flip("pinBosses"), "a horned skull on each boss, where it is; the final boss in an orange glow")
+Check(page, "Elites", OnlyIfOn("pinElites"), function() DB().pinElites = not DB().pinElites end, "a bone skull on each elite, where it is (off by default)")
 Check(page, "Caches", OnUnlessOff("pinCaches"), Flip("pinCaches"), "a chest for each one on the field")
 PinSizeSlider("Cache size", "cache")
 Inline(page, "Out of reach", { { "edge", "On the edge" }, { "hide", "Hidden" } },
@@ -4403,6 +4417,11 @@ if PlatesThere() then
 	Subheader(page, "Look")
 	Check(page, "Names on every plate", function() return SurvivorPlatesDB and SurvivorPlatesDB.names == true end,
 		function() Plates("names") end, "off: only on elites, guardians, bosses and friends")
+	Check(page, "Debuffs inside the plates", function() return not (SurvivorPlatesDB and SurvivorPlatesDB.insideDebuffs == false) end,
+		function()
+			SurvivorPlatesDB = SurvivorPlatesDB or {}
+			SurvivorPlatesDB.insideDebuffs = SurvivorPlatesDB.insideDebuffs == false
+		end, "small icons of the debuffs on a guardian or a boss, left to right inside its bar; an elite's while it is your target or under the mouse. Off: over your target's plate, as on the others")
 	if SurvivorPlates_LayoutThere and SurvivorPlates_LayoutThere() then
 		Check(page, "Overlapping plates", function() return SurvivorPlates_Overlapping() end,
 			function() Plates("overlap") end, "each plate stays right over its enemy; off, they move apart in a crowd (the game's Nameplate Layout)")

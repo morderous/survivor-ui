@@ -220,6 +220,46 @@ local function FlipSound()
 	end
 end
 
+-- The range rings (WorldMarks.lua), the minimap's and the ground's: on while
+-- either is. Off, the ones that were on are kept, and the way back brings
+-- those (both when none was kept).
+local RANGE_KEYS = { "rangeMinimap", "rangeWorld" }
+
+local function RangeOn()
+	if not SurvivorUI_WorldOn then
+		return false
+	end
+	return SurvivorUI_WorldOn("rangeMinimap") or SurvivorUI_WorldOn("rangeWorld")
+end
+
+local function FlipRange()
+	if not SurvivorUI_ToggleWorld then
+		return
+	end
+	SurvivorUIDB = SurvivorUIDB or {}
+	local db = SurvivorUIDB
+	if RangeOn() then
+		db.rangeKept = {}
+		for _, key in pairs(RANGE_KEYS) do
+			if SurvivorUI_WorldOn(key) then
+				db.rangeKept[key] = true
+				SurvivorUI_ToggleWorld(key)
+			end
+		end
+	else
+		local kept = db.rangeKept
+		if not (kept and next(kept)) then
+			kept = { rangeMinimap = true, rangeWorld = true }
+		end
+		for key in pairs(kept) do
+			if not SurvivorUI_WorldOn(key) then
+				SurvivorUI_ToggleWorld(key)
+			end
+		end
+		db.rangeKept = nil
+	end
+end
+
 local function PaintSwitch(switch)
 	local on = switch.read()
 	if switch.shownOn ~= on then
@@ -287,6 +327,10 @@ local soundSwitch = Switch({ name = "SurvivorUISoundButton", art = "Sound", opti
 	binding = "SURVIVORUI_SOUNDEFFECTS", read = SoundOn, flip = FlipSound, title = "Sound effects",
 	onLine = "On. Click: mute them, the music and the ambience kept", offLine = "Muted. Click: back to their volume",
 	note = "The game keeps no sound of the spells apart: the hits and the clicks go with them." })
+local rangeSwitch = Switch({ name = "SurvivorUIRangeButton", art = "Range", option = "rangeMapButton",
+	binding = "SURVIVORUI_RANGERING", read = RangeOn, flip = FlipRange, title = "Range ring",
+	onLine = "Shown. Click: hide it, on the minimap and round you", offLine = "Hidden. Click: show it again",
+	note = "Which rings show: options, World markers." })
 
 if SurvivorUI_OnAccent then
 	SurvivorUI_OnAccent(function()
@@ -312,6 +356,7 @@ end
 BINDING_HEADER_SURVIVORUI = "Survivor UI"
 BINDING_NAME_SURVIVORUI_SPELLEFFECTS = "Spell effects on or off"
 BINDING_NAME_SURVIVORUI_SOUNDEFFECTS = "Sound effects on or off"
+BINDING_NAME_SURVIVORUI_RANGERING = "Range ring on or off"
 
 function SurvivorUI_ToggleSpellEffects()
 	KeyFlip(effectsSwitch)
@@ -319,6 +364,10 @@ end
 
 function SurvivorUI_ToggleSoundEffects()
 	KeyFlip(soundSwitch)
+end
+
+function SurvivorUI_ToggleRangeRing()
+	KeyFlip(rangeSwitch)
 end
 
 -- The top of the switches: the last one shown, else Run History's, else ours.
