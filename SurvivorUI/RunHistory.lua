@@ -1072,9 +1072,9 @@ function pick.Line(run)
 	if SurvivorUI_ClassColor and run.classKey then
 		r, g, b = SurvivorUI_ClassColor(run.classKey)
 	end
-	return pick.Hex(ending[2])..ending[1]..",|r "..pick.Hex({ r, g, b })..(run.class or "?").." "..Num(final.level).."|r"
+	return pick.Hex(ending[2])..SurvivorUI_T(ending[1])..",|r "..pick.Hex({ r, g, b })..SurvivorUI_T(run.class or "?").." "..Num(final.level).."|r"
 		.." |cff9a9aa2-|r "..pick.Hex({ 0.40, 1.00, 0.42 })..pick.Short(run.zone).."|r"
-		..(run.party and ("  |cff8fc3ffParty "..table.getn(run.party).."|r") or "")
+		..(run.party and ("  |cff8fc3ff"..SurvivorUI_TF("Party {1}", table.getn(run.party)).."|r") or "")
 end
 
 pick.arrow = CreateFrame("Button", nil, window)
@@ -1395,7 +1395,7 @@ function del.Item(index, label, kind)
 	end)
 	return row
 end
-del.one = del.Item(1, "Delete this run", "one")
+del.one = del.Item(1, SurvivorUI_T("Delete this run"), "one")
 del.all = del.Item(2, "Clear all runs", "all")
 
 function del.Toggle()
@@ -2137,7 +2137,7 @@ local function DrawMods(label, heroic, affixes)
 			chip.name:SetText(SurvivorUI_T("Modifiers"))
 			chip.value:SetText(SurvivorUI_T("normal"))
 		else
-			chip.name:SetText(MODS[index][2])
+			chip.name:SetText(SurvivorUI_T(MODS[index][2]))
 			chip.value:SetText(value.."%")
 		end
 		chip.value:SetTextColor(color[1], color[2], color[3])
@@ -2202,7 +2202,7 @@ end
 
 local function Nothing(box, text)
 	if text then
-		box.none:SetText(text)
+		box.none:SetText(SurvivorUI_T(text))
 		box.none:Show()
 		return TOP + 18
 	end
@@ -2719,10 +2719,10 @@ local function DrawRun(run, base)
 	local dealtTip = run.rowTips and run.rowTips.dealt
 	if run.meterTotal and Num(run.dealt) > Dealt(run) + 0.5 then
 		local red = { 1, 0.35, 0.35 }
-		local tip = { (dealtTip and dealtTip[1]) or { l = "Damage dealt", lc = { 1, 0.76, 0.08 } } }
-		table.insert(tip, { l = "Damage with overkill", r = Short(run.dealt), lc = red, rc = red })
-		table.insert(tip, { l = "As the game's end of the run shows it. "..Short(Num(run.dealt) - Dealt(run))
-			.." of it is overkill: blows past what each enemy had left.", lc = MUTED })
+		local tip = { (dealtTip and dealtTip[1]) or { l = SurvivorUI_T("Damage dealt"), lc = { 1, 0.76, 0.08 } } }
+		table.insert(tip, { l = SurvivorUI_T("Damage with overkill"), r = Short(run.dealt), lc = red, rc = red })
+		table.insert(tip, { l = SurvivorUI_TF("As the game's end of the run shows it. {1} of it is overkill: blows past what each enemy had left.",
+			Short(Num(run.dealt) - Dealt(run))), lc = MUTED })
 		table.insert(tip, { l = " " })
 		for index = 2, table.getn(dealtTip or {}) do
 			table.insert(tip, dealtTip[index])
@@ -3420,7 +3420,7 @@ local function LootRow(index)
 				local color = this.color or WHITE
 				GameTooltip:SetText(this.itemName or "?", color[1], color[2], color[3])
 				if this.qualityName then
-					GameTooltip:AddLine(string.upper(string.sub(this.qualityName, 1, 1))..string.sub(this.qualityName, 2), color[1], color[2], color[3])
+					GameTooltip:AddLine(SurvivorUI_T(string.upper(string.sub(this.qualityName, 1, 1))..string.sub(this.qualityName, 2)), color[1], color[2], color[3])
 				end
 				GameTooltip:AddLine(SurvivorUI_T("Not yet seen equipped in a run: its details show here once you have worn it in one."), 0.62, 0.62, 0.68, 1)
 			end
@@ -3551,16 +3551,17 @@ local function DrawFallen(run)
 	end
 	local killer = death.killer
 	if killer then
-		local name = killer.area and "A ground effect" or ((killer.who or "?")..(killer.what and ("  \194\183  "..killer.what) or ""))
-		Line(name, (killer.amount and Short(killer.amount) or "")..(killer.crit and " crit" or ""), { 1.00, 0.36, 0.30 }, nil, true)
+		local name = killer.area and SurvivorUI_T("A ground effect") or ((killer.who or "?")..(killer.what and ("  \194\183  "..killer.what) or ""))
+		local amount = killer.amount and Short(killer.amount) or ""
+		Line(name, killer.crit and SurvivorUI_TF("{1} crit", amount) or amount, { 1.00, 0.36, 0.30 }, nil, true)
 	end
 	local hits = death.hits or {}
 	if table.getn(hits) > 0 then
 		Head(SurvivorUI_T("ITS LAST 10 SECONDS"))
 		for index = 1, math.min(4, table.getn(hits)) do
 			local hit = hits[index]
-			Line(string.format("%.1fs  ", Num(hit.ago))..(hit.who or "?")..(hit.what and ("  \194\183  "..hit.what) or ""),
-				Short(hit.amount)..(hit.crit and " crit" or ""), { 0.86, 0.86, 0.90 })
+			Line(SurvivorUI_TF("{1}s", string.format("%.1f", Num(hit.ago))).."  "..(hit.who or "?")..(hit.what and ("  \194\183  "..hit.what) or ""),
+				hit.crit and SurvivorUI_TF("{1} crit", Short(hit.amount)) or Short(hit.amount), { 0.86, 0.86, 0.90 })
 		end
 	end
 	local kinds = death.kinds or {}
@@ -3619,7 +3620,7 @@ function statsPanel.Row(index)
 			local color = this.color
 			Aside(this, 4)
 			GameTooltip:SetText(this.tipTitle, color[1], color[2], color[3])
-			GameTooltip:AddLine(this.tipText, 0.62, 0.62, 0.68, 1)
+			GameTooltip:AddLine(SurvivorUI_T(this.tipText), 0.62, 0.62, 0.68, 1)
 			-- Its parts as the run stood: the gear worn, and the rest.
 			if this.gear then
 				GameTooltip:AddDoubleLine(SurvivorUI_T("Worn gear"), this.gear, 0.12, 1, 0, 0.12, 1, 0)
@@ -3677,7 +3678,7 @@ function statsPanel.Draw(run)
 				y = y + 4
 			end
 			-- The group's name, a rule of its color under it.
-			local head = Place(statsPanel.HEAD, string.upper(SurvivorUI_T(section.title)), nil, color, nil)
+			local head = Place(statsPanel.HEAD, SurvivorUI_Upper(SurvivorUI_T(section.title)), nil, color, nil)
 			head.wash:SetVertexColor(color[1], color[2], color[3], 0)
 			head.rule:SetVertexColor(color[1], color[2], color[3], 0.6)
 			for each = 1, table.getn(lines) do

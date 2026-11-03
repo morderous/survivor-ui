@@ -17,13 +17,25 @@ if SurvivorUI_Standby then return end
 
 local LOCALE = SurvivorUI_LOCALE or {}
 
--- The game's language: told by the hero's race as the game names it
--- (AZS_ZONE.rname), read again whenever that name changes (the game set to
--- another language between runs). Until it is known, every language is tried.
+-- The game's language: the game's own (AZS_MLang), known before any run. In a
+-- game without it, or set to English, told by the hero's race as the game
+-- names it (AZS_ZONE.rname), read again whenever that name changes (the game
+-- set to another language between runs). Until it is known, every language is
+-- tried. Read on first use, then again by the watch at the bottom.
 local language
 local raceSeen
+local detected, fromGame = false, false
 
-local function Languages()
+local function Detect()
+	detected = true
+	local code = AZS_MLang and AZS_MLang()
+	if code and code ~= "en" and LOCALE[code] then
+		language, fromGame = code, true
+		return
+	end
+	if fromGame then
+		language, raceSeen, fromGame = nil, nil, false
+	end
 	local race = AZS_ZONE and AZS_ZONE.rname
 	if race and race ~= raceSeen then
 		raceSeen = race
@@ -43,6 +55,12 @@ local function Languages()
 			language = nil
 		end
 	end
+end
+
+local function Languages()
+	if not detected then
+		Detect()
+	end
 	if language then
 		return { LOCALE[language] }
 	end
@@ -50,7 +68,7 @@ local function Languages()
 end
 
 -- The game's language as LocaleData names it ("de", "ru", "zh"...): nil for
--- English, or until the hero's race has told.
+-- English, or until the game or the hero's race has told.
 function SurvivorUI_Language()
 	Languages()
 	return language
@@ -164,7 +182,7 @@ end
 -- languages the addon is translated into (Locale_zh.lua: Chinese, its game
 -- terms the game's own words, the rest translated for it). Every text the
 -- addon shows goes through these; in any other language, or until the
--- hero's race has told, it stays English.
+-- language is known, it stays English.
 --
 --   SurvivorUI_T("Biggest Crits")                  "最高暴击"
 --   SurvivorUI_TF("{1} more to find", 3)          "还有3件待发现"
@@ -173,7 +191,7 @@ end
 -- The table of the game's language, if the addon speaks it.
 local function Words()
 	local words = SurvivorUI_WORDS
-	if not (words and AZS_ZONE and AZS_ZONE.rname) then
+	if not words then
 		return nil
 	end
 	Languages()
@@ -195,11 +213,32 @@ function SurvivorUI_T(text)
 	return text
 end
 
+-- A word after a number in the form the number asks for: {1:забег/забега/забегов}
+-- is the first for 1, 21, 31..., the second for 2 to 4, 22 to 24..., the third
+-- for the rest (5 to 20, 25 to 30..., 0), as Russian counts.
+local function Counted(number, forms)
+	local _, _, one, few, many = string.find(forms, "^([^/]*)/([^/]*)/([^/]*)$")
+	if not one then
+		return forms
+	end
+	number = math.abs(math.floor(tonumber(number) or 0))
+	local units, tens = math.mod(number, 10), math.mod(number, 100)
+	if units == 1 and tens ~= 11 then
+		return one
+	elseif units >= 2 and units <= 4 and (tens < 12 or tens > 14) then
+		return few
+	end
+	return many
+end
+
 -- A text with values in it, {1} to {4} where each goes, so a language can put
--- them in its own order.
+-- them in its own order; {1:...} a word counted by {1}.
 function SurvivorUI_TF(text, ...)
 	local values = arg
-	return (string.gsub(SurvivorUI_T(text), "{(%d)}", function(index)
+	local counted = string.gsub(SurvivorUI_T(text), "{(%d):([^}]*)}", function(index, forms)
+		return Counted(values[tonumber(index)], forms)
+	end)
+	return (string.gsub(counted, "{(%d)}", function(index)
 		local value = values[tonumber(index)]
 		return value ~= nil and tostring(value) or ""
 	end))
@@ -218,9 +257,90 @@ function SurvivorUI_Cut(text, count)
 	return string.sub(text, 1, index - 1)
 end
 
+-- Uppercases ASCII as well as UTF-8 Cyrillic characters.
+function SurvivorUI_Upper(text)
+	if not text then return text end
+	local res = string.upper(text)
+	local len = string.len(res)
+	local i = 1
+	local out = {}
+	while i <= len do
+		local b1 = string.byte(res, i)
+		if b1 == 208 and i < len then
+			local b2 = string.byte(res, i + 1)
+			if b2 >= 176 and b2 <= 191 then
+				table.insert(out, string.char(208, b2 - 32))
+			else
+				table.insert(out, string.char(b1, b2))
+			end
+			i = i + 2
+		elseif b1 == 209 and i < len then
+			local b2 = string.byte(res, i + 1)
+			if b2 >= 128 and b2 <= 143 then
+				table.insert(out, string.char(208, b2 + 32))
+			elseif b2 == 145 then
+				table.insert(out, string.char(208, 129))
+			elseif b2 == 150 then
+				table.insert(out, string.char(208, 134))
+			elseif b2 == 151 then
+				table.insert(out, string.char(208, 135))
+			elseif b2 == 148 then
+				table.insert(out, string.char(208, 132))
+			else
+				table.insert(out, string.char(b1, b2))
+			end
+			i = i + 2
+		else
+			table.insert(out, string.char(b1))
+			i = i + 1
+		end
+	end
+	return table.concat(out)
+end
+
+-- Lowercases ASCII and UTF-8 Cyrillic as SurvivorUI_Upper uppercases them,
+-- for the options' search.
+function SurvivorUI_Lower(text)
+	if not text then return text end
+	local res = string.lower(text)
+	local len = string.len(res)
+	local i = 1
+	local out = {}
+	while i <= len do
+		local b1 = string.byte(res, i)
+		if b1 == 208 and i < len then
+			local b2 = string.byte(res, i + 1)
+			if b2 >= 144 and b2 <= 159 then
+				table.insert(out, string.char(208, b2 + 32))
+			elseif b2 >= 160 and b2 <= 175 then
+				table.insert(out, string.char(209, b2 - 32))
+			elseif b2 == 129 then
+				table.insert(out, string.char(209, 145))
+			elseif b2 == 132 or b2 == 134 or b2 == 135 then
+				table.insert(out, string.char(209, b2 + 16))
+			else
+				table.insert(out, string.char(b1, b2))
+			end
+			i = i + 2
+		else
+			table.insert(out, string.char(b1))
+			i = i + 1
+		end
+	end
+	return table.concat(out)
+end
+
 -- Whether the addon speaks the game's language (its words not English).
 function SurvivorUI_Translated()
 	return Words() ~= nil
+end
+
+-- The languages the options window is translated into; in any other it stays
+-- English, not half of it in another language.
+SurvivorUI_OPTIONS_LANGUAGES = { ru = true }
+
+function SurvivorUI_OptionsTranslated()
+	return Words() ~= nil and SurvivorUI_OPTIONS_LANGUAGES[language] == true
 end
 
 -- A name of the game's (a spell, a pet, a piece of jewelry) as the game writes
@@ -277,9 +397,9 @@ end
 
 -- The texts already on screen as the language turns up (set before it was
 -- known, as the files ran) put in it: every font string of the addon's
--- frames whose text is one of its words, the options window's left out
--- (it stays English for now, not half of it in another language). Each
--- keeps its English, so the game set back to English puts that back.
+-- frames whose text is one of its words, the options window's left out in a
+-- language it is not translated into (it stays English there). Each keeps its
+-- English, so the game set back to English puts that back.
 local function Ours(frame)
 	local at = frame
 	while at do
@@ -290,7 +410,8 @@ local function Ours(frame)
 		end
 		local name = at:GetName()
 		if name then
-			return string.find(name, "^SurvivorUI") ~= nil and string.find(name, "^SurvivorUIOptions") == nil
+			return string.find(name, "^SurvivorUI") ~= nil
+				and (string.find(name, "^SurvivorUIOptions") == nil or SurvivorUI_OptionsTranslated())
 				and name ~= "SurvivorUILinkBox"
 		end
 		at = at:GetParent()
@@ -324,12 +445,10 @@ end
 
 local spoken = false
 local languageWatch = CreateFrame("Frame")
-local zoneSeen
-languageWatch:SetScript("OnUpdate", function()
-	if AZS_ZONE_UPDATED == zoneSeen then
-		return
-	end
-	zoneSeen = AZS_ZONE_UPDATED
+local zoneSeen, elapsed = nil, 0
+
+local function CheckLanguage()
+	Detect()
 	local now = Words() or false
 	if now == spoken then
 		return
@@ -342,4 +461,20 @@ languageWatch:SetScript("OnUpdate", function()
 		end
 		frame = EnumerateFrames(frame)
 	end
+end
+
+languageWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
+languageWatch:RegisterEvent("VARIABLES_LOADED")
+languageWatch:SetScript("OnEvent", function()
+	CheckLanguage()
+end)
+
+languageWatch:SetScript("OnUpdate", function()
+	elapsed = elapsed + (arg1 or 0)
+	if elapsed < 0.5 and AZS_ZONE_UPDATED == zoneSeen then
+		return
+	end
+	elapsed = 0
+	zoneSeen = AZS_ZONE_UPDATED
+	CheckLanguage()
 end)

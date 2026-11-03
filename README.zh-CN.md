@@ -1,6 +1,6 @@
 # Survivor UI 与 Survivor Plates
 
-[English](README.md) | 简体中文
+[English](README.md) | 简体中文 | [Русский](README.ru.md)
 
 [![Latest release](https://img.shields.io/github/v/release/morderous/survivor-ui?label=download&color=2ea44f)](https://github.com/morderous/survivor-ui/releases/latest) [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/morderous)
 
@@ -34,7 +34,7 @@
 
 还没有游戏？点击 **Get the game**：它从作者 Aethus 自己的服务器（wow.aethus.pl，经他同意）或镜像下载《Azeroth Survivors》，先测速：优先使用我们自己的镜像（速度过慢时除外），否则选最快的，按 Aethus 给出的大小和 sha256 校验后放到常用位置，并一起装好 Survivor UI。
 
-安装器（Azeroth SurvivorUI Launcher）还可以：启动游戏（**Play**）、在托盘中等待并每半小时检查一次更新、自我更新、备份和恢复存档（**Savegame**）、显示游戏时长与存档统计（**Statistics**）、查看 Survivor UI 的冒险历史（**Run History**），并在 **Addons** 标签页安装 morderous 检查过的其他插件，每个都取自作者自己的最新版本（只放入插件自己的文件夹和插件类文件，从不放程序）；也可以用 **Add from GitHub...** 粘贴一个 GitHub 仓库链接，把插件加入自己的列表（只保存在你的电脑上，不会发送到任何地方）。在从未用过本安装器的电脑上，它会在游戏就绪后自动安装 Survivor UI 和 SurvivorUI Classic；这些插件有新版本时，只要游戏已关闭就会自动更新（在 **Addons** 标签页取消勾选 **Auto Update when ready** 即可关闭）。界面支持英文和中文：在 **Play** 标签页的 **Language** 中切换，未选择时跟随游戏语言。
+安装器（Azeroth SurvivorUI Launcher）还可以：启动游戏（**Play**）、在托盘中等待并每半小时检查一次更新、自我更新、备份和恢复存档（**Savegame**）、显示游戏时长与存档统计（**Statistics**）、查看 Survivor UI 的冒险历史（**Run History**），并在 **Addons** 标签页安装 morderous 检查过的其他插件，每个都取自作者自己的最新版本（只放入插件自己的文件夹和插件类文件，从不放程序）；也可以用 **Add from GitHub...** 粘贴一个 GitHub 仓库链接，把插件加入自己的列表（只保存在你的电脑上，不会发送到任何地方）。在从未用过本安装器的电脑上，它会在游戏就绪后自动安装 Survivor UI 和 SurvivorUI Classic；这些插件有新版本时，只要游戏已关闭就会自动更新（在 **Addons** 标签页取消勾选 **Auto Update when ready** 即可关闭）。界面支持英文、中文和俄文：在 **Play** 标签页的 **Language** 中切换，未选择时跟随游戏语言。
 
 ### 手动安装
 
@@ -66,11 +66,11 @@
 | `/splates none` | 无姓名板（默认）或开启姓名板 |
 | `/splates all` | 所有敌人都显示姓名板，或只显示精英、守护者和首领 |
 | `/splates suggested` | 推荐设置：友方姓名板开，敌方姓名板关 |
-| `/splates scale 1.3` | 姓名板大小，0.6 到 2 |
+| `/splates scale 1.3` | 姓名板大小，0.5 到 2 |
 
 ## Survivor UI
 
-- **冒险追踪**（小地图下方，类似大秘境计时器）：区域、剩余生命、已用时间与区域总时长、每个首领的时间轴和出现时间、英雄难度与本周词缀（激励、血池、易爆），以及无尽模式。
+- **冒险追踪**（小地图下方，类似大秘境计时器）：区域、剩余生命、已用时间与区域总时长、每个首领的时间轴和出现时间、英雄难度与词缀（激励、血池、易爆），以及无尽模式。
 - **伤害统计**：每个伤害来源一条，显示伤害和占比；悬停查看每秒伤害和暴击。点击标题切换为治疗量、首领伤害，或合作模式中的队伍伤害。天赋和项链的触发效果带有游戏自己的图标，并标注（天赋）或（项链）。
 - **首领血条**：屏幕顶部显示所有存活的首领和已苏醒的巢穴守护者，带生命值和减益效果，不限距离。
 - **构筑列表**：每个技能槽位的图标、等级和伤害占比，以及首饰（项链、戒指、饰品）的品质和属性。

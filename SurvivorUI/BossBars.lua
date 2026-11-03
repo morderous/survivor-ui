@@ -220,7 +220,7 @@ local VALUE_ROOM = 38           -- the health's share at the bar's right end
 
 local function TimeLeft(seconds)
 	if seconds >= 60 then
-		return math.floor(seconds / 60 + 0.5).."m"
+		return SurvivorUI_TF("{1}m", math.floor(seconds / 60 + 0.5))
 	end
 	return math.floor(seconds + 0.5)
 end
@@ -268,7 +268,7 @@ local function DebuffIcon(bar, index)
 		GameTooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT")
 		GameTooltip:SetText(this.name or "", 1, 0.3, 0.3)
 		if this.dispel then
-			GameTooltip:AddLine(this.dispel, 0.7, 0.7, 0.7)
+			GameTooltip:AddLine(SurvivorUI_T(this.dispel), 0.7, 0.7, 0.7)
 		end
 		if this.left then
 			GameTooltip:AddLine(SurvivorUI_TF("{1} sec left", math.floor(this.left + 0.5)), 0.8, 0.8, 0.8)
@@ -368,7 +368,7 @@ local function Fill(bar, unit)
 		Light(bar)
 	end
 	bar.color = style.color
-	bar.kindLabel = KIND_LABELS[kind]
+	bar.kindLabel = SurvivorUI_T(KIND_LABELS[kind])
 	bar.health:SetStatusBarColor(style.color[1], style.color[2], style.color[3], 0.9)
 	bar.health:SetValue(share)
 
@@ -504,11 +504,11 @@ function SurvivorUI_BossBars(argument)
 	local settings = Settings()
 	if argument == "elites" then
 		settings.bossBarsElites = not settings.bossBarsElites
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: boss bars "..(settings.bossBarsElites and "list elites too." or "leave elites out."))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.bossBarsElites and "Survivor UI: boss bars list elites too." or "Survivor UI: boss bars leave elites out."))
 	else
 		settings.bossBars = not settings.bossBars
 		ApplyGameHud()
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.bossBars and "boss bars on; the Default ones are put away." or (settings.noGameBosses and "boss bars off, and the Default ones stay away." or "boss bars off; the Default ones are back.")))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.bossBars and "Survivor UI: boss bars on; the Default ones are put away." or (settings.noGameBosses and "Survivor UI: boss bars off, and the Default ones stay away." or "Survivor UI: boss bars off; the Default ones are back.")))
 	end
 	Update()
 end

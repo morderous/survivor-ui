@@ -64,9 +64,9 @@ end
 
 local function TimeText(seconds)
 	if seconds >= 3600 then
-		return math.floor(seconds / 3600 + 0.5).."h"
+		return SurvivorUI_TF("{1}h", math.floor(seconds / 3600 + 0.5))
 	elseif seconds >= 60 then
-		return math.floor(seconds / 60 + 0.5).."m"
+		return SurvivorUI_TF("{1}m", math.floor(seconds / 60 + 0.5))
 	elseif seconds >= 10 then
 		return math.floor(seconds)
 	end

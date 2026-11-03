@@ -918,6 +918,10 @@ local function Piece(row, entry)
 	row.icon:Show()
 	row.name:ClearAllPoints()
 	row.name:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
+	-- Up to the row's end, on one line: a longer language's name is cut
+	-- there instead of running into the other column.
+	row.name:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+	row.name:SetHeight(ROW - 1)
 	-- In a language the addon speaks, the game's own name, whole; a class
 	-- amulet by its spell, as the ones still to find (its name is in no
 	-- table of the game's the addon has).

@@ -245,7 +245,8 @@ local function Report()
 	holder:SetAlpha(why and 0.45 or 1)
 	if why and not told[why] then
 		told[why] = true
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..why.." The soul shard count may be off.")
+		DEFAULT_CHAT_FRAME:AddMessage(reworded and SurvivorUI_T("Survivor UI: Soulfire's tooltip reads differently now. The soul shard count may be off.")
+			or SurvivorUI_TF("Survivor UI: {1} also speaks of soul shards. The soul shard count may be off.", rival))
 	end
 end
 

@@ -866,8 +866,8 @@ function SurvivorUI_TogglePace(argument)
 	local settings = Settings()
 	if argument == "class" then
 		settings.paceClassOnly = not settings.paceClassOnly or nil
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the kill pace holds a run against "..(settings.paceClassOnly
-			and "your runs of the same class on its zone." or "all your runs on its zone, every class's."))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.paceClassOnly
+			and "Survivor UI: the kill pace holds a run against your runs of the same class on its zone." or "Survivor UI: the kill pace holds a run against all your runs on its zone, every class's."))
 		return
 	end
 	-- The options' Forget this zone's runs: the runs counted, asked once first.
@@ -884,12 +884,15 @@ function SurvivorUI_TogglePace(argument)
 			SurvivorUI_TogglePace("reset")
 			return
 		end
-		local whose = settings.paceClassOnly and ((AZS_ZONE.cname or "this class").."'s") or "every class's"
+		local runs = SurvivorUI_TF(count == 1 and "{1} run" or "{1} runs", count)
+		local zone = AZS_ZONE.zname or SurvivorUI_T("this zone")
 		SurvivorUI_Confirm({
-			title = "Forget this zone's runs?",
-			text = "The kill pace forgets "..count..(count == 1 and " run" or " runs").." of "..(AZS_ZONE.zname or "this zone")
-				.." ("..whose..", these modifiers). The runs from now on teach it again.",
-			yes = "Forget",
+			title = SurvivorUI_T("Forget this zone's runs?"),
+			text = settings.paceClassOnly
+				and SurvivorUI_TF("The kill pace forgets {1} of {2} ({3}'s, these modifiers). The runs from now on teach it again.",
+					runs, zone, AZS_ZONE.cname or SurvivorUI_T("this class"))
+				or SurvivorUI_TF("The kill pace forgets {1} of {2} (every class's, these modifiers). The runs from now on teach it again.", runs, zone),
+			yes = SurvivorUI_T("Forget"),
 			onYes = function() SurvivorUI_TogglePace("reset") end,
 		})
 		return
@@ -908,14 +911,16 @@ function SurvivorUI_TogglePace(argument)
 			end
 		end
 		run, recording = nil, false
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the kill pace forgot your "..(settings.paceClassOnly and ((AZS_ZONE.cname or "").." ") or "")
-			.."runs on "..(AZS_ZONE.zname or "this zone")..".")
+		local zone = AZS_ZONE.zname or SurvivorUI_T("this zone")
+		DEFAULT_CHAT_FRAME:AddMessage(settings.paceClassOnly
+			and SurvivorUI_TF("Survivor UI: the kill pace forgot your {1} runs on {2}.", AZS_ZONE.cname or "", zone)
+			or SurvivorUI_TF("Survivor UI: the kill pace forgot your runs on {1}.", zone))
 		return
 	end
 	settings.pace = not settings.pace
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.pace
-		and "the kill pace is on, right of the run tracker's clock."
-		or "the kill pace is off."))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.pace
+		and "Survivor UI: the kill pace is on, right of the run tracker's clock."
+		or "Survivor UI: the kill pace is off."))
 end
 
 -- On the run tracker, right of its clock (the cache's coin is on its left):

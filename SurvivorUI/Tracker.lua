@@ -1302,9 +1302,9 @@ function SurvivorUI_ToggleTracker()
 	local settings = Settings()
 	settings.tracker = not settings.tracker
 	ApplyGameHud()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.tracker
-		and "run tracker on; the Default clock is put away."
-		or (settings.noGameClock and "run tracker off, and the Default clock stays away." or "run tracker off; the Default clock is back.")))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.tracker
+		and "Survivor UI: run tracker on; the Default clock is put away."
+		or (settings.noGameClock and "Survivor UI: run tracker off, and the Default clock stays away." or "Survivor UI: run tracker off; the Default clock is back.")))
 end
 
 local loader = CreateFrame("Frame")

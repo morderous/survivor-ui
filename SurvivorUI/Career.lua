@@ -30,7 +30,7 @@ local WIDTH, PAD, ROW = 720, 12, 18
 local INNER = WIDTH - 2 * PAD
 -- The columns after the name: their titles, where each ends (from the left).
 local COLUMNS = {
-	{ "Runs", 236 }, { "Won", 290 }, { "Fallen", 344 }, { "Left", 398 },
+	{ "Runs", 236 }, { "@column:Won", 290 }, { "@column:Fallen", 344 }, { "@column:Left", 398 },
 	{ "Longest", 470 }, { "Most kills", 548 }, { "Best DPS", 626 }, { "Kills in all", INNER },
 }
 
@@ -138,10 +138,10 @@ end
 
 local runs
 if SurvivorUI_GoldButton then
-	runs = SurvivorUI_GoldButton(window, 62, "Interface\\AddOns\\SurvivorUI\\Art\\HistoryIconWhite", nil, "Runs")
+	runs = SurvivorUI_GoldButton(window, 62, "Interface\\AddOns\\SurvivorUI\\Art\\HistoryIconWhite", nil, SurvivorUI_T("Runs"))
 	runs.icon:SetVertexColor(1, 0.85, 0.4)
-	runs.tipTitle = "Run History"
-	runs.tipText = "Back to the runs, one by one."
+	runs.tipTitle = SurvivorUI_T("Run History")
+	runs.tipText = SurvivorUI_T("Back to the runs, one by one.")
 	runs:SetScript("OnClick", BackToRuns)
 else
 	runs = TextButton(SurvivorUI_T("Runs"), 50, BackToRuns)
@@ -201,7 +201,7 @@ local function Head(index)
 	for column = 1, table.getn(COLUMNS) do
 		local cell = Font(head, 8, MUTED, "RIGHT")
 		cell:SetPoint("BOTTOMRIGHT", head, "BOTTOMLEFT", COLUMNS[column][2] - 4, 2)
-		cell:SetText(string.upper(SurvivorUI_T(COLUMNS[column][1])))
+		cell:SetText(SurvivorUI_Upper(SurvivorUI_T(COLUMNS[column][1])))
 		head.cells[column] = cell
 	end
 	head.rule = head:CreateTexture(nil, "BORDER")

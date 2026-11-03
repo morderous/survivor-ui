@@ -93,7 +93,7 @@ end
 local function Clock(seconds)
 	seconds = math.floor(seconds + 0.5)
 	if seconds >= 3600 then
-		return math.floor(seconds / 3600).."h "..math.floor(math.mod(seconds, 3600) / 60).."m"
+		return SurvivorUI_TF("{1}h {2}m", math.floor(seconds / 3600), math.floor(math.mod(seconds, 3600) / 60))
 	end
 	return math.floor(seconds / 60)..":"..string.format("%02d", math.mod(seconds, 60))
 end
@@ -405,7 +405,7 @@ for index = 1, table.getn(SOURCES) do
 		local value = CardText(9, LUCK_COLOR[1], LUCK_COLOR[2], LUCK_COLOR[3])
 		value:SetPoint("TOPRIGHT", label, "TOPLEFT", CARD_WIDTH - 20, 0)
 		value:SetJustifyH("RIGHT")
-		value:SetText(SOURCES[index][2])
+		value:SetText(SurvivorUI_T(SOURCES[index][2]))
 		label.value = value
 	end
 	card.sources[index] = label
@@ -762,7 +762,7 @@ end)
 function SurvivorUI_ToggleXpBar()
 	local settings = Settings()
 	settings.xpBar = not settings.xpBar
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the XP bar "..(settings.xpBar and "shows." or "is put away."))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.xpBar and "Survivor UI: the XP bar shows." or "Survivor UI: the XP bar is put away."))
 end
 
 -- Its place: the top of the screen, in the middle, until moved; once moved,

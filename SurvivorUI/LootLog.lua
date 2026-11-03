@@ -239,7 +239,7 @@ local function Bar(index)
 			local color = this.color or { 1, 1, 1 }
 			GameTooltip:SetText(this.itemName or "?", color[1], color[2], color[3])
 			if this.qualityName then
-				GameTooltip:AddLine(string.upper(string.sub(this.qualityName, 1, 1))..string.sub(this.qualityName, 2), color[1], color[2], color[3])
+				GameTooltip:AddLine(SurvivorUI_T(string.upper(string.sub(this.qualityName, 1, 1))..string.sub(this.qualityName, 2)), color[1], color[2], color[3])
 			end
 			GameTooltip:AddLine(SurvivorUI_T("Not yet seen equipped in a run: its details show here once you have worn it in one."), 0.62, 0.62, 0.68, 1)
 		end
@@ -863,9 +863,9 @@ function SurvivorUI_ToggleLoot()
 	local settings = Settings()
 	settings.lootLog = not settings.lootLog
 	ApplyGameHud()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.lootLog
-		and "loot list shown; the Default loot notices are put away."
-		or (settings.noGameLoot and "loot list hidden, and the Default loot notices stay away." or "loot list hidden; the Default loot notices are back.")))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.lootLog
+		and "Survivor UI: loot list shown; the Default loot notices are put away."
+		or (settings.noGameLoot and "Survivor UI: loot list hidden, and the Default loot notices stay away." or "Survivor UI: loot list hidden; the Default loot notices are back.")))
 end
 
 if SurvivorUI_RegisterMover then

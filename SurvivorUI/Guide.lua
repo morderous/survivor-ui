@@ -470,9 +470,81 @@ local function Words(parent, x, y, width, text, size, color)
 	return words
 end
 
+-- Words made for English, in a wider language: their lines counted word by
+-- word, as the game breaks them, and their size taken down until they fit.
+local Lines, Fit
+do
+	local scratch
+
+	-- Measured in the window, at its scale: the game draws a font in whole
+	-- pixels, so a width read at another scale is off by a few of them.
+	local function Measure(text, words)
+		if not scratch then
+			scratch = window:CreateFontString(nil, "OVERLAY")
+			scratch:SetTextColor(0, 0, 0, 0)
+		end
+		scratch:SetFont(text:GetFont())
+		scratch:SetText(words)
+		return scratch:GetStringWidth()
+	end
+
+	function Lines(text, width)
+		local words = string.gsub(text:GetText() or "", "|c%x%x%x%x%x%x%x%x", "")
+		words = string.gsub(words, "|r", "")
+		local space = Measure(text, "a a") - Measure(text, "aa")
+		local count = 0
+		for line in string.gfind(words.."\n", "([^\n]*)\n") do
+			count = count + 1
+			local used = 0
+			for word in string.gfind(line, "%S+") do
+				local wide = Measure(text, word)
+				if used > 0 and used + space + wide > width then
+					count = count + 1
+					used = 0
+				end
+				if used > 0 then
+					used = used + space + wide
+				else
+					used = wide
+				end
+				-- A word wider than the line is broken where the line ends.
+				while used > width do
+					count = count + 1
+					used = used - width
+				end
+			end
+		end
+		return count
+	end
+
+	-- On one line no wider than width, or, given a height, with its lines no
+	-- taller than that; from its own size each time, so a text set again
+	-- starts whole.
+	function Fit(text, width, height)
+		local file, size, flags = text:GetFont()
+		text.fullSize = text.fullSize or size
+		size = text.fullSize
+		local least = math.max(8, math.floor(size * 0.7 + 0.5))
+		while true do
+			text:SetFont(file, size, flags)
+			local fits
+			if height then
+				-- A line is taken as its size and 2 more, the game's own spacing.
+				fits = Lines(text, width) * (size + 2) <= height
+			else
+				fits = Measure(text, text:GetText() or "") <= width
+			end
+			if fits or size <= least then
+				return
+			end
+			size = math.max(size - 1, least)
+		end
+	end
+end
+
 local function Para(page, text, lines)
-	Words(page, 0, page.y, PAGE_WIDTH, text)
-	page.y = page.y - lines * LINE - 6
+	local words = Words(page, 0, page.y, PAGE_WIDTH, text)
+	page.y = page.y - math.max(lines, Lines(words, PAGE_WIDTH)) * LINE - 6
 end
 
 local function Title(page, text)
@@ -483,8 +555,8 @@ local function Title(page, text)
 end
 
 local function Tip(page, text, lines)
-	Words(page, 0, page.y, PAGE_WIDTH, text, SMALL + 1)
-	page.y = page.y - (lines or 1) * 15 - 3
+	local words = Words(page, 0, page.y, PAGE_WIDTH, text, SMALL + 1)
+	page.y = page.y - math.max(lines or 1, Lines(words, PAGE_WIDTH)) * 15 - 3
 end
 
 local function Heading(page, text)
@@ -767,6 +839,7 @@ local function HitBox(page, step, x, top, width)
 		dot:SetHeight(8)
 		dot:SetPoint("TOPLEFT", box, "TOPLEFT", 9, y - 2)
 		box.rows[each] = Words(box, 20, y, width - 22, SurvivorUI_T(row[1]), SMALL)
+		Fit(box.rows[each], width - 22)
 	end
 	Band(box, color, "BOTTOM", 26)
 	box.foot = Text(box, "GameFontHighlight", 16)
@@ -805,17 +878,40 @@ local function BuildDamage(page)
 	page.sum:SetPoint("CENTER", strip, "CENTER", 0, 0)
 	page.y = page.y - 28 - 10
 	Heading(page, SurvivorUI_T("Buffs go in the |cff59f273green box|r"))
+	local icons, names = {}, {}
+	local room, wide = PAGE_WIDTH + 12, 0
+	for index = 1, table.getn(BUFFS) do
+		local icon = page:CreateTexture(nil, "ARTWORK")
+		icon:SetTexture(BUFFS[index][2])
+		icon:SetWidth(24)
+		icon:SetHeight(24)
+		local name = Text(page, "GameFontHighlight", SMALL)
+		name:SetPoint("LEFT", icon, "RIGHT", 4, 0)
+		name:SetText(SurvivorUI_Native(BUFFS[index][1]))
+		icons[index], names[index] = icon, name
+		room = room - 24 - 4 - 12
+		wide = wide + name:GetStringWidth()
+	end
+	-- Each name to its share of the row, then all at the smallest size of them.
+	if wide > room then
+		local file, size, flags
+		for index = 1, table.getn(names) do
+			local name = names[index]
+			Fit(name, name:GetStringWidth() * room / wide)
+			local _, now = name:GetFont()
+			if not size or now < size then
+				file, size, flags = name:GetFont()
+			end
+		end
+		for index = 1, table.getn(names) do
+			names[index]:SetFont(file, size, flags)
+		end
+	end
 	local x = 0
 	for index = 1, table.getn(BUFFS) do
 		local buff = BUFFS[index]
-		local icon = page:CreateTexture(nil, "ARTWORK")
-		icon:SetTexture(buff[2])
-		icon:SetWidth(24)
-		icon:SetHeight(24)
+		local icon, name = icons[index], names[index]
 		icon:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
-		local name = Text(page, "GameFontHighlight", SMALL)
-		name:SetPoint("LEFT", icon, "RIGHT", 4, 0)
-		name:SetText(SurvivorUI_Native(buff[1]))
 		local spot = CreateFrame("Frame", nil, page)
 		spot.noHoverOutline = true
 		spot:SetWidth(24 + 4 + name:GetStringWidth())
@@ -841,6 +937,8 @@ local function BuildDamage(page)
 		boxes[3].foot:SetText(string.format("x %.2f", average))
 		boxes[3].rows[1]:SetText(SurvivorUI_T("How often: ")..Whole(chance))
 		boxes[3].rows[2]:SetText(SurvivorUI_T("How hard: ")..Whole(real))
+		Fit(boxes[3].rows[1], width - 22)
+		Fit(boxes[3].rows[2], width - 22)
 		boxes[4].foot:SetText(SurvivorUI_T("x 1 or more"))
 		page.sum:SetText(string.format(SurvivorUI_T("Your hero: 100 x %.2f x %.2f = |cffffd100%.0f|r on average, more on the right enemy."),
 			try.damage, average, 100 * all))
@@ -912,6 +1010,7 @@ local function BuildCrit(page)
 		else
 			page.plays:SetText(string.format(SurvivorUI_T("%s of your hits are critical, for %s. An average hit is x %.2f."), Whole(chance), Whole(real), average))
 		end
+		Fit(page.plays, PAGE_WIDTH - 92, 2 * LINE)
 		local more, withCrit = Worth(try.damage, try.crit + 0.1, try.double)
 		local deeper, withDouble = Worth(try.damage, try.crit, try.double + 0.1)
 		local gains = { (try.damage + 0.1) / try.damage - 1, more / base - 1, deeper / base - 1 }
@@ -942,7 +1041,8 @@ local function Fact(page, color, x, y, width, title, words)
 	head:SetPoint("CENTER", box, "TOP", 0, -14)
 	head:SetText(title)
 	Paint(head, color)
-	Words(box, 9, -28, width - 18, words, SMALL + 1)
+	local body = Words(box, 9, -28, width - 18, words, SMALL + 1)
+	Fit(body, width - 18, FACT_HEIGHT - 32)
 end
 
 -- What must not be missed: a band in its color whose light comes and goes,
@@ -957,6 +1057,9 @@ local function Warning(page, color, big, small)
 	local line = Text(box, "GameFontHighlight", TEXT)
 	line:SetPoint("CENTER", box, "TOP", 0, -37)
 	line:SetText(small)
+	-- Both between the two marks, which reach 42 in from each side.
+	Fit(head, PAGE_WIDTH - 92)
+	Fit(line, PAGE_WIDTH - 92)
 	for index = 1, 2 do
 		local mark = box:CreateTexture(nil, "ARTWORK")
 		mark:SetTexture(NEW_MARK)
@@ -1032,6 +1135,8 @@ local function BuildDots(page)
 		end
 		page.one:SetText(string.format(SurvivorUI_T("%d ticks of %.0f = |cffffd100%.0f|r"), ticks, total / ticks, total))
 		page.all:SetText(string.format("%d %s: "..GOLD.."%.0f|r", copies, SurvivorUI_T(copies > 1 and "copies" or "copy"), total * copies))
+		Fit(page.one, PAGE_WIDTH - right - 92)
+		Fit(page.all, PAGE_WIDTH - right - 92)
 	end
 end
 
@@ -1081,7 +1186,7 @@ end
 
 -- A row's name, then its marbles, hidden until drawn.
 local function MarbleRow(page, y, name, count, size, step, color)
-	Words(page, 0, y - math.floor((size - 12) / 2), ROW_LABEL - 6, name, SMALL + 1)
+	Fit(Words(page, 0, y - math.floor((size - 12) / 2), ROW_LABEL - 6, name, SMALL + 1), ROW_LABEL - 6)
 	local row = {}
 	for index = 1, count do
 		local marble = page:CreateTexture(nil, "ARTWORK")
@@ -1194,12 +1299,15 @@ local function BuildHaste(page)
 			page.spell:SetText(string.format(SurvivorUI_T("This spell: %s becomes |cffffd100%s|r: %s casts a minute instead of %s. A marble is a cast:"),
 				Seconds(try.wait), Seconds(real), Count(after), Count(before)))
 		end
+		Fit(page.shown, PAGE_WIDTH)
+		Fit(page.spell, PAGE_WIDTH)
 		DrawCasts(slow, before)
 		DrawCasts(fast, after)
 		local strikes = DrawStrikes(plain, Echoes(try.echo, 0))
 		DrawStrikes(cascade, Echoes(try.echo, CASCADE))
 		page.together:SetText(string.format(SurvivorUI_T("Together they multiply: %s casts a minute x %.2f strikes = |cffffd100%s strikes a minute|r."),
 			Count(after), strikes, Count(after * strikes)))
+		Fit(page.together, PAGE_WIDTH)
 	end
 end
 
@@ -1264,6 +1372,8 @@ local function SpellCard(page, spell, x, y, width, words, marks, tip)
 	local tags = Text(card, "GameFontNormal", SMALL)
 	tags:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -7)
 	tags:SetText(marks)
+	Fit(name, width - 58 - tags:GetStringWidth())
+	Fit(line, width - 50)
 end
 
 local function BuildGround(page)
@@ -1360,6 +1470,7 @@ local function Chips(page, list)
 		local name = Text(chip, "GameFontHighlight", SMALL)
 		name:SetPoint("LEFT", icon, "RIGHT", 4, 0)
 		name:SetText(SurvivorUI_Native(spell[1]))
+		Fit(name, width - 32)
 	end
 	page.y = page.y - math.ceil(table.getn(list) / 4) * (CHIP_HEIGHT + CHIP_GAP)
 end
@@ -1455,6 +1566,7 @@ local function BuildArmor(page)
 		local gone = over > 0 and string.format(SurvivorUI_T("  |cffff7366%.0f points past the cap are lost.|r"), over * 100) or ""
 		page.land:SetText(string.format(SurvivorUI_T("A hit of 100 lands for |cffffd100%.0f|r, so your health counts |cffffd100%.1f|r times.%s"),
 			lands, 100 / math.max(lands, 1), gone))
+		Fit(page.land, PAGE_WIDTH)
 	end
 end
 
@@ -1536,6 +1648,7 @@ local function BuildReach(page)
 		DrawWall(wall, kept / 2, over / 2, (MOST_SPEED - 1) / 2)
 		local gone = over > 0 and string.format(SurvivorUI_T("  |cffff7366%.0f points past the cap are lost.|r"), over * 100) or ""
 		page.run:SetText(string.format(SurvivorUI_T("You run |cffffd100%.1f yards a second|r, x%.2f.%s"), RUN * (1 + kept), 1 + kept, gone))
+		Fit(page.run, PAGE_WIDTH)
 		local times = PICKUP * (1 + try.pickup) * (1 + try.pickup2)
 		page.times:SetText(string.format(SurvivorUI_T("9 yd x %.2f x %.2f = |cffffd100%s|r"), 1 + try.pickup, 1 + try.pickup2, Yards(times)))
 		page.added:SetText(string.format(SurvivorUI_T("Added up, they would make %s."), Yards(PICKUP * (1 + try.pickup + try.pickup2))))
@@ -1663,7 +1776,7 @@ local function BuildMarks(page)
 		local title = Text(card, "GameFontNormal", TEXT)
 		title:SetPoint("CENTER", card, "TOP", 0, -14)
 		title:SetText(steps[index][1])
-		Words(card, 9, -26, width - 18, steps[index][2], SMALL + 1)
+		Fit(Words(card, 9, -26, width - 18, steps[index][2], SMALL + 1), width - 18, MARK_CARD - 30)
 	end
 	page.y = page.y - MARK_CARD - 8
 	Heading(page, SurvivorUI_T("What stars open on a set"))
@@ -1675,8 +1788,8 @@ local function BuildMarks(page)
 	for index = 1, 3 do
 		local card = Tinted(page, YELLOW, (index - 1) * (width + CARD_GAP), page.y, width, OPEN_CARD)
 		Tint(card, YELLOW, 0.5)
-		Words(card, 9, -7, width - 18, opens[index][1], TEXT, YELLOW)
-		Words(card, 9, -25, width - 18, opens[index][2], SMALL)
+		Fit(Words(card, 9, -7, width - 18, opens[index][1], TEXT, YELLOW), width - 18)
+		Fit(Words(card, 9, -25, width - 18, opens[index][2], SMALL), width - 18, OPEN_CARD - 29)
 		if index == 3 then
 			card:EnableMouse(true)
 			card:SetScript("OnEnter", EmpoweredTip)
@@ -1709,8 +1822,9 @@ local function BuildMarks(page)
 	for star = 1, 5 do
 		Cell(140 + star * 44, -6, star.."/5", GREY)
 	end
-	Cell(490, -6, SurvivorUI_T("8 pieces at 3/5"), GREY)
-	Cell(PAGE_WIDTH - 10, -6, SurvivorUI_T("8 pieces at 5/5"), GREY)
+	-- Each head in its own column, right of the 5/5 one and of each other.
+	Fit(Cell(490, -6, SurvivorUI_T("8 pieces at 3/5"), GREY), 490 - 370)
+	Fit(Cell(PAGE_WIDTH - 10, -6, SurvivorUI_T("8 pieces at 5/5"), GREY), PAGE_WIDTH - 10 - 500)
 	local cells = {}
 	for index = 1, count do
 		local kind = SET_KINDS[index]
@@ -1862,6 +1976,8 @@ local function SetRow(page, kind, y)
 	row.four = SetCell(row, 3, 198, SurvivorUI_T("4 pieces"))
 	row.four.text:SetText(SurvivorUI_T(kind[6]))
 	row.eight = SetCell(row, 203, PAGE_WIDTH - 206, SurvivorUI_T("8 pieces"))
+	-- Under the 8 pieces' head, down to its column's foot.
+	row.room = height - 20
 	return row, height
 end
 
@@ -1890,10 +2006,14 @@ end
 -- star; the 8 pieces dim at 4 pieces, lit at 8, and at Empowered in gold, the
 -- numbers that grow in gold.
 local function PaintSetRow(row, kind, entry, step, base, tint)
-	row.name:SetText(SurvivorUI_T(entry[3][kind[5]] or PVP_SET))
+	row.name:SetText(SurvivorUI_TF("@set:{1}", SurvivorUI_T(entry[3][kind[5]] or PVP_SET)))
 	-- The set's name and its rarity, one size.
 	ItemName(row.name, 14)
 	ItemName(row.rarity, 14)
+	-- Left of the zones and their map; the rarity follows the name's size.
+	Fit(row.name, PAGE_WIDTH - 36 - row.zones:GetStringWidth() - row.rarity:GetStringWidth())
+	local _, size = row.name:GetFont()
+	ItemName(row.rarity, size)
 	row:SetBackdropColor(0.04 + (base[1] - 0.04) * 0.16, 0.04 + (base[2] - 0.04) * 0.16, 0.04 + (base[3] - 0.04) * 0.16, 0.95)
 	row:SetBackdropBorderColor(base[1], base[2], base[3], 0.4)
 	Lit(row.four, "lit", base, tint)
@@ -1908,6 +2028,7 @@ local function PaintSetRow(row, kind, entry, step, base, tint)
 		Lit(row.eight, "gold", base, tint)
 		row.eight.text:SetText(SetWords(line, true, GOLD))
 	end
+	Fit(row.eight.text, PAGE_WIDTH - 218, row.room)
 end
 
 local function BuildSets(page)
@@ -1925,6 +2046,7 @@ local function BuildSets(page)
 		local chip = SetButton(page, (index - 1) * (width + 4), page.y, width, CHIP_HEIGHT)
 		chip.tint = ClassTint(SETS[index][1])
 		chip.text:SetText(SurvivorUI_T(SETS[index][2]))
+		Fit(chip.text, width - 2)
 		chip.index = index
 		chip:SetScript("OnClick", function()
 			page.class = this.index
@@ -1937,6 +2059,8 @@ local function BuildSets(page)
 	for index = 1, 3 do
 		local step = SetButton(page, (index - 1) * (third + 4), page.y, third, CHIP_HEIGHT, true)
 		step.text:SetText(SurvivorUI_T(SET_STEPS[index][1]))
+		-- Past the stars and the 6 after them, 4 in from each edge.
+		Fit(step.text, third - 5 * STAR_SIZE - 6 - 8)
 		step.index = index
 		step:SetScript("OnClick", function()
 			page.step = this.index
@@ -2068,6 +2192,14 @@ end
 
 local function Select(index)
 	current = index
+	-- Fitted when first opened, the addon's font read by then: each name left
+	-- of the unread mark.
+	if not tabs.fitted then
+		for each = 1, table.getn(PAGES) do
+			Fit(tabs[each].text, LEFT - 34 - 8 - 20)
+		end
+		tabs.fitted = true
+	end
 	for each = 1, table.getn(PAGES) do
 		if pages[each] then
 			pages[each]:Hide()

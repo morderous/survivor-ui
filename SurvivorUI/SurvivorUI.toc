@@ -12,6 +12,7 @@ SurvivorUI.lua
 LocaleData.lua
 Locale.lua
 Locale_zh.lua
+Locale_ru.lua
 Mover.lua
 Hover.lua
 Tally.lua

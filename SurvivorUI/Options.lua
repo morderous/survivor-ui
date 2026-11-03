@@ -42,6 +42,30 @@ local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local FONT_BUMP = SurvivorUI_FONT_BUMP or 0
 local ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 
+-- The window's words in the game's language only where the window is
+-- translated into it (Locale.lua); else its English, "@word:" left out.
+local function T(text)
+	if SurvivorUI_OptionsTranslated and SurvivorUI_OptionsTranslated() then
+		return SurvivorUI_T(text)
+	end
+	if text and string.sub(text, 1, 1) == "@" then
+		local _, _, rest = string.find(text, "^@%a+:(.*)$")
+		return rest or text
+	end
+	return text
+end
+
+local function TF(text, ...)
+	local values = arg
+	if SurvivorUI_OptionsTranslated and SurvivorUI_OptionsTranslated() then
+		return SurvivorUI_TF(text, unpack(values))
+	end
+	return (string.gsub(T(text), "{(%d)}", function(index)
+		local value = values[tonumber(index)]
+		return value ~= nil and tostring(value) or ""
+	end))
+end
+
 local WIDTH, HEIGHT = 740, 740
 local SIDEBAR = 184
 local PAGE_X = SIDEBAR + 20               -- the pages' left edge
@@ -305,7 +329,13 @@ local function Asked(title, text, yes, action, word)
 			RefreshAll()
 		end
 		if SurvivorUI_Confirm then
-			SurvivorUI_Confirm({ title = title, text = text, yes = yes, word = word, onYes = Done })
+			SurvivorUI_Confirm({
+				title = T(title),
+				text = T(text),
+				yes = T(yes),
+				word = word,
+				onYes = Done
+			})
 		else
 			Done()
 		end
@@ -419,7 +449,7 @@ for index = 1, table.getn(TABS) do
 		head.arrow:SetPoint("LEFT", head, "LEFT", 6, 0)
 		head.label = Text(head, 10, TEXT)
 		head.label:SetPoint("LEFT", head, "LEFT", 23, 0)
-		head.label:SetText(string.upper(tab.group))
+		head.label:SetText(SurvivorUI_Upper(T(tab.group)))
 		head.count = Text(head, 9, MUTED)
 		head.count:SetPoint("RIGHT", head, "RIGHT", -7, 0)
 		head.group = group
@@ -458,8 +488,10 @@ for index = 1, table.getn(TABS) do
 		page:Hide()
 		pages[tab.key] = page
 		-- Found by its name too.
-		table.insert(side.index, { page = page, key = tab.key, label = tab.label, y = 0, height = 22,
-			words = string.lower(tab.label.." "..group.name), order = table.getn(side.index) })
+		local trLabel = T(tab.label)
+		local trGroup = T(group.name)
+		table.insert(side.index, { page = page, key = tab.key, label = trLabel, y = 0, height = 22,
+			words = SurvivorUI_Lower(trLabel.." "..trGroup.." "..tab.label.." "..group.name), order = table.getn(side.index) })
 
 		-- The tab: its name, a bar of its color at the left, a wash when chosen;
 		-- set in its place as its group opens.
@@ -479,7 +511,7 @@ for index = 1, table.getn(TABS) do
 		button.bar:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
 		button.label = Text(button, 11, TEXT)
 		button.label:SetPoint("LEFT", button, "LEFT", 12, 0)
-		button.label:SetText(tab.label)
+		button.label:SetText(trLabel)
 		button.key = tab.key
 		button.color = tab.color
 		function button:Refresh()
@@ -563,7 +595,7 @@ searchBox.glass:SetPoint("LEFT", searchBox, "LEFT", 8, 0)
 searchBox.glass:SetVertexColor(MUTED[1], MUTED[2], MUTED[3], 1)
 searchBox.hint = Text(searchBox, 9, MUTED, "")
 searchBox.hint:SetPoint("LEFT", searchBox, "LEFT", 24, 0)
-searchBox.hint:SetText("Search: crit, size, sound")
+searchBox.hint:SetText(T("Search: crit, size, sound"))
 searchBox:SetScript("OnEditFocusGained", function()
 	this.hint:Hide()
 	this:SetBackdropBorderColor(ACCENT[1], ACCENT[2], ACCENT[3], 1)
@@ -602,7 +634,7 @@ results:SetHeight(HEIGHT - 70)
 results:Hide()
 results.title = Text(results, 13, ACCENT)
 results.title:SetPoint("TOPLEFT", results, "TOPLEFT", 0, 0)
-results.title:SetText("Search")
+results.title:SetText(T("Search"))
 results.line = Text(results, 9, MUTED)
 results.line:SetPoint("TOPLEFT", results.title, "BOTTOMLEFT", 0, -6)
 results.rows = {}
@@ -645,12 +677,12 @@ function side.Index(page, label, note, y, height)
 	end
 	local clean = string.gsub(string.gsub(label, "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
 	table.insert(side.index, { page = page, key = page.key, label = clean, y = y or 0, height = height or ROW,
-		advanced = page.advanced, words = string.lower(clean.." "..(note or "").." "..(page.label or "")),
+		advanced = page.advanced, words = SurvivorUI_Lower(clean.." "..(note or "").." "..(page.label or "")),
 		order = table.getn(side.index) })
 end
 
 function side.Search(text)
-	local query = string.lower(string.gsub(text or "", "^%s*(.-)%s*$", "%1"))
+	local query = SurvivorUI_Lower((string.gsub(text or "", "^%s*(.-)%s*$", "%1")))
 	if query == "" then
 		side.found = nil
 		if results:IsShown() then
@@ -677,7 +709,7 @@ function side.Search(text)
 			end
 		end
 		if all then
-			entry.score = string.find(string.lower(entry.label), query, 1, true) and 0 or 1
+			entry.score = string.find(SurvivorUI_Lower(entry.label), query, 1, true) and 0 or 1
 			table.insert(found, entry)
 		end
 	end
@@ -690,11 +722,11 @@ function side.Search(text)
 	side.found = found
 	local count = table.getn(found)
 	if count == 0 then
-		results.line:SetText("Nothing found for \""..text.."\".")
+		results.line:SetText(TF("Nothing found for \"{1}\".", text))
 	elseif count > RESULT_ROWS then
-		results.line:SetText(count.." found; the first "..RESULT_ROWS.." here. Another word narrows them.")
+		results.line:SetText(TF("{1} found; the first {2} here. Another word narrows them.", count, RESULT_ROWS))
 	else
-		results.line:SetText(count.." found.")
+		results.line:SetText(TF("{1} found.", count))
 	end
 	for index = 1, RESULT_ROWS do
 		local row, entry = results.rows[index], found[index]
@@ -704,7 +736,7 @@ function side.Search(text)
 			row.dot:SetVertexColor(c[1], c[2], c[3], 1)
 			row.label:SetText(entry.label)
 			local tab = pages[entry.key]
-			row.where:SetText(tab.group.."  >  "..tab.label..(entry.advanced and "  >  Advanced" or ""))
+			row.where:SetText(T(tab.group).."  >  "..T(tab.label)..(entry.advanced and ("  >  "..T("Advanced")) or ""))
 			row:Show()
 		else
 			row:Hide()
@@ -767,6 +799,7 @@ local function Lines(text, width)
 end
 
 local function Header(page, text, note)
+	text = T(text)
 	local header = Text(page, 13, page.color)
 	header:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 	header:SetText(text)
@@ -779,6 +812,7 @@ local function Header(page, text, note)
 	rule:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, page.y - 19)
 	page.y = page.y - 27
 	if note then
+		note = T(note)
 		local hint = Text(page, 9, MUTED)
 		hint:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 		hint:SetWidth(PAGE_WIDTH)
@@ -794,8 +828,9 @@ local function Subheader(page, text)
 	page.y = page.y - 8
 	local header = Text(page, 9, page.color)
 	header:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
-	header:SetText(string.upper(text))
-	side.Index(page, text, nil, page.y, 16)
+	local trText = T(text)
+	header:SetText(SurvivorUI_Upper(trText))
+	side.Index(page, trText, nil, page.y, 16)
 	local rule = Fill(page, "ARTWORK", page.color[1], page.color[2], page.color[3], 0.15)
 	if page.color == ACCENT then
 		table.insert(accented, function() rule:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.15) end)
@@ -809,6 +844,7 @@ end
 
 -- Grey words across the page, as many lines as they take.
 local function Note(page, text)
+	text = T(text)
 	local hint = Text(page, 9, MUTED)
 	hint:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 	hint:SetWidth(PAGE_WIDTH)
@@ -823,6 +859,8 @@ end
 -- for a button the caller puts there.
 local ALERT = { 1.00, 0.70, 0.20 }
 local function Callout(page, title, text, room)
+	title = T(title)
+	text = T(text)
 	room = room or 0
 	local box = CreateFrame("Frame", nil, page)
 	box:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
@@ -848,6 +886,8 @@ end
 -- color, a priest's white too), and its label; a note in grey beside it, or
 -- under it when it does not fit.
 local function Check(page, label, isOn, toggle, note)
+	label = T(label)
+	note = note and T(note)
 	local check = CreateFrame("Button", nil, page)
 	check:SetWidth(PAGE_WIDTH)
 	check:SetHeight(ROW)
@@ -918,6 +958,8 @@ local function Choice(page, options, get, set)
 	for index = 1, table.getn(options) do
 		local option = options[index]
 		local value = option[1]
+		local optLabel = T(option[2])
+		local optNote = option[3] and T(option[3])
 		local row = CreateFrame("Button", nil, page)
 		row:SetWidth(PAGE_WIDTH)
 		row:SetHeight(ROW)
@@ -938,13 +980,13 @@ local function Choice(page, options, get, set)
 
 		row.label = Text(row, 11, TEXT)
 		row.label:SetPoint("TOPLEFT", row.ring, "TOPRIGHT", 9, 0)
-		row.label:SetText(option[2])
-		if option[3] then
+		row.label:SetText(optLabel)
+		if optNote then
 			row.note = Text(row, 9, MUTED)
 			row.note:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -2)
 			row.note:SetWidth(PAGE_WIDTH - 26)
 			row.note:SetJustifyH("LEFT")
-			row.note:SetText(option[3])
+			row.note:SetText(optNote)
 			row:SetHeight(20 + 13 * Lines(row.note, PAGE_WIDTH - 26))
 		end
 
@@ -967,7 +1009,7 @@ local function Choice(page, options, get, set)
 			end
 		end
 		table.insert(widgets, row)
-		side.Index(page, option[2], option[3], page.y, row:GetHeight())
+		side.Index(page, optLabel, optNote, page.y, row:GetHeight())
 		page.y = page.y - row:GetHeight() - 2
 	end
 end
@@ -978,6 +1020,7 @@ end
 local function Inline(page, label, options, get, set, labelWidth)
 	local color = page.color
 	local x = 0
+	label = label and T(label)
 	if label then
 		local text = Text(page, 10, TEXT)
 		text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 3)
@@ -987,6 +1030,7 @@ local function Inline(page, label, options, get, set, labelWidth)
 	for index = 1, table.getn(options) do
 		local option = options[index]
 		local value = option[1]
+		local optLabel = T(option[2])
 		local row = CreateFrame("Button", nil, page)
 		row:SetHeight(ROW)
 		row:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
@@ -1002,7 +1046,7 @@ local function Inline(page, label, options, get, set, labelWidth)
 		row.dot:SetPoint("BOTTOMRIGHT", row.ring, "BOTTOMRIGHT", -4, 4)
 		row.label = Text(row, 10, TEXT)
 		row.label:SetPoint("TOPLEFT", row.ring, "TOPRIGHT", 6, 0)
-		row.label:SetText(option[2])
+		row.label:SetText(optLabel)
 		local width = 2 + 13 + 6 + row.label:GetStringWidth() + 18
 		row:SetWidth(width)
 		x = x + width
@@ -1028,7 +1072,7 @@ local function Inline(page, label, options, get, set, labelWidth)
 	end
 	local names = {}
 	for index = 1, table.getn(options) do
-		table.insert(names, options[index][2])
+		table.insert(names, T(options[index][2]))
 	end
 	names = table.concat(names, " / ")
 	side.Index(page, (label and label ~= "") and label or names, names, page.y, ROW)
@@ -1039,6 +1083,7 @@ end
 local function InlineChecks(page, items, label)
 	local color = page.color
 	local x, gap = 0, 22
+	label = label and T(label)
 	if label then
 		local text = Text(page, 10, TEXT)
 		text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 3)
@@ -1047,6 +1092,7 @@ local function InlineChecks(page, items, label)
 	end
 	for index = 1, table.getn(items) do
 		local item = items[index]
+		local itemLabel = T(item[1])
 		local isOn, toggle = item[2], item[3]
 		local check = CreateFrame("Button", nil, page)
 		check:SetHeight(ROW)
@@ -1063,7 +1109,7 @@ local function InlineChecks(page, items, label)
 		check.mark:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -3, 3)
 		check.label = Text(check, 11, TEXT)
 		check.label:SetPoint("LEFT", check.edge, "RIGHT", 9, 0)
-		check.label:SetText(item[1])
+		check.label:SetText(itemLabel)
 		local width = 2 + 13 + 9 + check.label:GetStringWidth() + gap
 		check:SetWidth(width)
 		x = x + width
@@ -1091,7 +1137,7 @@ local function InlineChecks(page, items, label)
 			end
 		end
 		table.insert(widgets, check)
-		side.Index(page, item[1], label, page.y, ROW)
+		side.Index(page, itemLabel, label, page.y, ROW)
 	end
 	page.y = page.y - ROW
 end
@@ -1100,13 +1146,14 @@ end
 -- the class's color}, ...}; the chosen one in a white edge, the name as a
 -- tooltip.
 local function Swatches(page, label, colors, get, set)
+	label = T(label)
 	local text = Text(page, 10, TEXT)
 	text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 3)
 	text:SetText(label)
 	local x = 140
 	for index = 1, table.getn(colors) do
 		local entry = colors[index]
-		local key, name, color = entry[1], entry[2], entry[3]
+		local key, name, color = entry[1], T(entry[2]), entry[3]
 		if not color then
 			local _, class = UnitClass("player")
 			local r, g, b = 1, 0.82, 0
@@ -1163,6 +1210,7 @@ end
 -- A slider: its label, a flat track filled in the page's color up to the
 -- thumb, and the value on the right. set() runs as it moves.
 local function Slider(page, label, low, high, step, get, set, format)
+	label = T(label)
 	local holder = CreateFrame("Frame", nil, page)
 	holder:SetWidth(PAGE_WIDTH)
 	holder:SetHeight(20)
@@ -1243,6 +1291,7 @@ local function Slider(page, label, low, high, step, get, set, format)
 end
 
 local function Button(page, text, width, x, onClick, color)
+	text = T(text)
 	local button = CreateFrame("Button", nil, page)
 	button:SetWidth(width)
 	button:SetHeight(24)
@@ -1310,6 +1359,8 @@ keyCapture:SetScript("OnKeyDown", function()
 end)
 
 local function KeyButton(page, label, command, note)
+	label = T(label)
+	note = note and T(note)
 	local text = Text(page, 10, TEXT)
 	text:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 5)
 	text:SetText(label)
@@ -1347,7 +1398,7 @@ local function KeyButton(page, label, command, note)
 		if note then
 			GameTooltip:AddLine(note, 0.8, 0.8, 0.8, 1)
 		end
-		GameTooltip:AddLine("Click, then press the key (Alt, Ctrl or Shift with it if you like). Escape leaves it as it was; a right click clears it.", 0.8, 0.8, 0.8, 1)
+		GameTooltip:AddLine(T("Click, then press the key (Alt, Ctrl or Shift with it if you like). Escape leaves it as it was; a right click clears it."), 0.8, 0.8, 0.8, 1)
 		GameTooltip:Show()
 	end)
 	button:SetScript("OnLeave", function()
@@ -1360,13 +1411,13 @@ local function KeyButton(page, label, command, note)
 		local waiting = keyCapture:IsShown() and keyCapture.command == command
 		local key = GetBindingKey and GetBindingKey(command)
 		if waiting then
-			self.label:SetText("Press a key...")
+			self.label:SetText(T("Press a key..."))
 			self.label:SetTextColor(color[1], color[2], color[3])
 		elseif key then
 			self.label:SetText(key)
 			self.label:SetTextColor(1, 1, 1)
 		else
-			self.label:SetText("Not set")
+			self.label:SetText(T("Not set"))
 			self.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
 		end
 		if waiting or self.hot then
@@ -1385,6 +1436,7 @@ end
 -- muted word on its right) }; get() the value chosen, set(value) on a pick.
 -- Values match without regard to case; the first item when none does.
 local function Dropdown(page, label, Items, get, set, width)
+	label = T(label)
 	local color = page.color
 	width = width or 220
 	local holder = CreateFrame("Frame", nil, page)
@@ -1461,10 +1513,10 @@ local function Dropdown(page, label, Items, get, set, width)
 			item.on = Same(chosen, entry.value)
 			-- Each in its own font and color, if it has one; the one chosen lit.
 			item.text:SetFont(entry.font or SurvivorUI_FONT, (entry.font and 12 or 11) + FONT_BUMP, "OUTLINE")
-			item.text:SetText(entry.name)
+			item.text:SetText(T(entry.name))
 			local tint = item.on and color or entry.color or TEXT
 			item.text:SetTextColor(tint[1], tint[2], tint[3])
-			item.note:SetText(entry.note or "")
+			item.note:SetText(entry.note and T(entry.note) or "")
 			item.wash:SetVertexColor(color[1], color[2], color[3], item.on and 0.12 or 0)
 			item:Show()
 		end
@@ -1484,7 +1536,7 @@ local function Dropdown(page, label, Items, get, set, width)
 				shown = list[index]
 			end
 		end
-		button.text:SetText(shown and shown.name or "")
+		button.text:SetText(shown and T(shown.name) or "")
 		local tint = shown and shown.color or TEXT
 		button.text:SetTextColor(tint[1], tint[2], tint[3])
 	end
@@ -1494,7 +1546,7 @@ local function Dropdown(page, label, Items, get, set, width)
 	local listed, list = pcall(Items)
 	if listed and type(list) == "table" then
 		for index = 1, table.getn(list) do
-			table.insert(names, list[index].name or "")
+			table.insert(names, T(list[index].name or ""))
 		end
 	end
 	side.Index(page, label, table.concat(names, " "), page.y, 22)
@@ -1509,8 +1561,11 @@ local function FontPicker(page, label, get, set)
 		local list, faces = {}, SurvivorUI_FontList and SurvivorUI_FontList(true) or {}
 		for index = 1, table.getn(faces) do
 			local face = faces[index]
-			table.insert(list, { value = face.path, name = face.name,
-				font = face.path or SurvivorUI_DEFAULT_FONT or SurvivorUI_FONT })
+			-- The first, "Default: Friz Quadrata", put together here to be translated.
+			local name = face.path and face.name
+				or TF("Default: {1}", SurvivorUI_DefaultFontName and SurvivorUI_DefaultFontName() or "Friz Quadrata")
+			table.insert(list, { value = face.path, name = name,
+				font = face.path or (SurvivorUI_DefaultFont and SurvivorUI_DefaultFont()) or SurvivorUI_DEFAULT_FONT or SurvivorUI_FONT })
 		end
 		return list
 	end, get, set)
@@ -1526,7 +1581,7 @@ FontPicker(page, "Global font",
 	function() return SurvivorUI_GlobalFont and SurvivorUI_GlobalFont() end,
 	function(path) if SurvivorUI_SetGlobalFont then SurvivorUI_SetGlobalFont(path) end end)
 Note(page, "Changes every text of the addon at once. A piece given a font of its own, on its card in move mode, keeps that one.")
-Note(page, "Playing in English? Any font works. With the game in Chinese or Japanese, the addon switches by itself to Noto Sans SC, a font that has those letters: the other fonts don't, and the game mixes them up with English letters and numbers."):SetTextColor(1, 0.35, 0.35)
+Note(page, "Playing in English? Any font works. With the game in Russian, the addon switches by itself to Exo 2, a font with Cyrillic letters. With the game in Chinese or Japanese, it switches to Noto Sans SC, a font that has those letters: the other fonts don't, and the game mixes them up with English letters and numbers."):SetTextColor(1, 0.35, 0.35)
 Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"), "the game's windows too, after a reload")
 page.y = page.y - 6
 Button(page, "Every font back to default", 200, 0, Asked("Every font back to default?",
@@ -1537,7 +1592,7 @@ page.y = page.y - 28
 Subheader(page, "Color")
 Choice(page, {
 	{ "class", "Your class color", "Worn by the menus, the cards, move mode and the minimap button." },
-	{ "gold", "Gold", "The addon's color up to v2.11." },
+	{ "gold", "@color:Gold", "The addon's color up to v2.11." },
 }, function() return DB().accent == "gold" and "gold" or "class" end,
 	function(mode) if SurvivorUI_SetAccent then SurvivorUI_SetAccent(mode) end end)
 
@@ -1657,6 +1712,7 @@ end
 
 -- The Default's tick: a small square and its name, what it is on hover.
 local function GameTick(page, x, y, width, label, game, oursOn, oursToggle)
+	label = T(label)
 	local color = page.color
 	local tick = CreateFrame("Button", nil, page)
 	tick:SetWidth(width)
@@ -1683,9 +1739,8 @@ local function GameTick(page, x, y, width, label, game, oursOn, oursToggle)
 		this.hot = true
 		this:Refresh()
 		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-		GameTooltip:SetText("The game's "..game.name, color[1], color[2], color[3])
-		GameTooltip:AddLine("The game's own "..game.name..", shown while SurvivorUI's is off. Ticked, SurvivorUI's goes"
-			..(game.also and " (and the run tracker's boss health)" or "").."; untick both for neither.", 1, 1, 1, 1)
+		GameTooltip:SetText(TF("The game's {1}", T(game.name)), color[1], color[2], color[3])
+		GameTooltip:AddLine(TF("The game's own {1}, shown while SurvivorUI's is off. Ticked, SurvivorUI's goes{2}; untick both for neither.", T(game.name), game.also and T(" (and the run tracker's boss health)") or ""), 1, 1, 1, 1)
 		GameTooltip:Show()
 	end)
 	tick:SetScript("OnLeave", function()
@@ -1712,7 +1767,7 @@ end
 -- A module's tick: its name (* after a reload), what it does on hover; for a
 -- part the game has its own of, the Default's tick beside it.
 local function ModuleCheck(page, x, y, item)
-	local label, isOn, toggle, tip, reload, usable, game = item[1], item[2], item[3], item[4], item[5], item[6], item[7]
+	local label, isOn, toggle, tip, reload, usable, game = T(item[1]), item[2], item[3], T(item[4]), item[5], item[6], item[7]
 	local color = page.color
 	local check = CreateFrame("Button", nil, page)
 	check:SetWidth(PAGE_WIDTH / 2 - (game and 84 or 6))
@@ -1742,9 +1797,9 @@ local function ModuleCheck(page, x, y, item)
 		GameTooltip:SetText(label, color[1], color[2], color[3])
 		GameTooltip:AddLine(tip, 1, 1, 1, 1)
 		if usable and not usable() then
-			GameTooltip:AddLine("Not installed: it comes in the same download.", 1, 0.45, 0.4, 1)
+			GameTooltip:AddLine(T("Not installed: it comes in the same download."), 1, 0.45, 0.4, 1)
 		elseif reload then
-			GameTooltip:AddLine("Takes hold after a reload.", 0.6, 0.6, 0.65, 1)
+			GameTooltip:AddLine(T("Takes hold after a reload."), 0.6, 0.6, 0.65, 1)
 		end
 		GameTooltip:Show()
 	end)
@@ -1898,7 +1953,7 @@ local function HealthRow(label, key, default)
 	local color = page.color
 	local name = Text(page, 10, TEXT)
 	name:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 3)
-	name:SetText(label)
+	name:SetText(T(label))
 	local x = 96
 	for index = 1, table.getn(HEALTH_LOOKS) do
 		local look = HEALTH_LOOKS[index]
@@ -1943,7 +1998,7 @@ local function HealthRow(label, key, default)
 		end
 		table.insert(widgets, option)
 	end
-	side.Index(page, label.." health", "health numbers percent", page.y, ROW)
+	side.Index(page, TF("{1} health", T(label)), "health numbers percent", page.y, ROW)
 	page.y = page.y - ROW - 2
 end
 
@@ -1951,6 +2006,7 @@ end
 -- A part's size, compact for two columns (the Size and Character tabs): its
 -- name and value over the bar.
 local function SizeSlider(page, x, y, width, label, low, high, step, get, set, format)
+	label = T(label)
 	local holder = CreateFrame("Frame", nil, page)
 	holder:SetWidth(width)
 	holder:SetHeight(30)
@@ -2035,12 +2091,12 @@ end
 -- A piece's text size: its card's step (A- and A+), -4 to +8, by its name
 -- (EditCard.lua); a window with no card by the name its tab gives it.
 local function TextSize(page, name, get, set, label)
-	Slider(page, label or "Text size", -4, 8, 1,
+	Slider(page, label or T("Text size"), -4, 8, 1,
 		get or function() return SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep(name) or 0 end,
 		set or function(value) if SurvivorUI_SetPieceTextStep then SurvivorUI_SetPieceTextStep(name, value) end end,
 		function(value)
 			value = math.floor(value + 0.5)
-			return value == 0 and "normal" or ((value > 0 and "+" or "")..value)
+			return value == 0 and T("normal") or ((value > 0 and "+" or "")..value)
 		end)
 end
 
@@ -2072,7 +2128,7 @@ local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads, game, 
 	switch.label:SetPoint("LEFT", switch.edge, "RIGHT", 9, 0)
 	switch.note = Text(switch, 9, MUTED)
 	switch.note:SetPoint("LEFT", switch.label, "RIGHT", 8, 0)
-	switch.note:SetText(reloads and "after a reload" or "")
+	switch.note:SetText(reloads and T("after a reload") or "")
 	switch:SetScript("OnClick", function()
 		if toggle then
 			toggle()
@@ -2083,7 +2139,7 @@ local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads, game, 
 	switch:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
 	function switch:Refresh()
 		local on = not isOn or isOn()
-		self.label:SetText(on and "On" or "Off")
+		self.label:SetText(on and T("On") or T("Off"))
 		if on then
 			self.edge:SetVertexColor(color[1], color[2], color[3], 1)
 			self.mark:SetVertexColor(color[1], color[2], color[3], 1)
@@ -2101,7 +2157,7 @@ local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads, game, 
 	end
 	table.insert(widgets, switch)
 	if pieceName or extra.back then
-		Button(page, "Back to its place", 150, PAGE_WIDTH - 150, extra.back or function()
+		Button(page, T("Back to its place"), 150, PAGE_WIDTH - 150, extra.back or function()
 			if SurvivorUI_ResetPiece then
 				SurvivorUI_ResetPiece(pieceName)
 			end
@@ -2109,11 +2165,11 @@ local function PanelHead(page, isOn, toggle, partKey, pieceName, reloads, game, 
 	end
 	-- A part the game has its own of: The game's tick, beside the switch.
 	if game then
-		GameTick(page, 92, page.y - 2, 210, "The game's", game, isOn or function() return true end, toggle)
+		GameTick(page, 92, page.y - 2, 210, T("The game's"), game, isOn or function() return true end, toggle)
 	end
 	page.y = page.y - 30
 	if partKey then
-		Slider(page, "Size", 0.5, 2, 0.05,
+		Slider(page, T("Size"), 0.5, 2, 0.05,
 			function() return SurvivorUI_GetScale and SurvivorUI_GetScale(partKey) or 1 end,
 			function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale(partKey, value) end end)
 	end
@@ -2173,6 +2229,8 @@ end
 
 -- A "?" in a ring after a piece's words: what it is, on hover.
 function Kit.Help(parent, anchor, title, text, color)
+	title = T(title)
+	text = T(text)
 	color = color or parent.color or MUTED
 	local help = CreateFrame("Button", nil, parent)
 	help:SetWidth(14)
@@ -2207,11 +2265,13 @@ function Kit.Section(page, text, help)
 	page.y = page.y - 4
 	local label = Text(page, 9, MUTED)
 	label:SetPoint("TOPLEFT", page, "TOPLEFT", left, page.y)
-	label:SetText(string.upper(text))
+	local trText = T(text)
+	label:SetText(SurvivorUI_Upper(trText))
+	help = help and T(help)
 	if help then
-		Kit.Help(page, label, text, help)
+		Kit.Help(page, label, trText, help)
 	end
-	side.Index(page, text, help, page.y, 14)
+	side.Index(page, trText, help, page.y, 14)
 	page.y = page.y - 17
 	return label
 end
@@ -2236,7 +2296,8 @@ local function Segs(parent, options, get, set, color)
 		part.bar:SetPoint("BOTTOMRIGHT", part, "BOTTOMRIGHT", 0, 0)
 		part.label = Text(part, 10, TEXT)
 		part.label:SetPoint("CENTER", part, "CENTER", 0, 0)
-		part.label:SetText(options[index][2])
+		local optName = T(options[index][2])
+		part.label:SetText(optName)
 		part:SetWidth(math.ceil(part.label:GetStringWidth()) + 24)
 		part.value = options[index][1]
 		x = x + part:GetWidth()
@@ -2275,7 +2336,7 @@ function Kit.Segments(page, options, get, set)
 	holder:SetPoint("TOPLEFT", page, "TOPLEFT", left, page.y)
 	local names = {}
 	for index = 1, table.getn(options) do
-		table.insert(names, options[index][2])
+		table.insert(names, T(options[index][2]))
 	end
 	names = table.concat(names, " / ")
 	side.Index(page, names, names, page.y, 26)
@@ -2315,14 +2376,16 @@ function Kit.Tiles(page, options, get, set)
 		if option[4] then
 			option[4](tile, tile.ground)
 		end
+		local optName = T(option[2])
+		local optLine = option[3] and T(option[3]) or ""
 		tile.name = Text(tile, 11, TEXT)
 		tile.name:SetPoint("TOPLEFT", tile.ground, "TOPRIGHT", 10, -5)
-		tile.name:SetText(option[2])
+		tile.name:SetText(optName)
 		tile.line = Text(tile, 9, MUTED)
 		tile.line:SetPoint("TOPLEFT", tile.name, "BOTTOMLEFT", 0, -4)
 		tile.line:SetWidth(each - 72 - 26)
 		tile.line:SetJustifyH("LEFT")
-		tile.line:SetText(option[3] or "")
+		tile.line:SetText(optLine)
 		tile.value = option[1]
 		tile:SetScript("OnClick", function()
 			set(this.value)
@@ -2349,7 +2412,7 @@ function Kit.Tiles(page, options, get, set)
 			end
 		end
 		table.insert(widgets, tile)
-		side.Index(page, option[2], option[3], page.y, 56)
+		side.Index(page, optName, optLine, page.y, 56)
 	end
 	page.y = page.y - 56 - 10
 end
@@ -2363,6 +2426,8 @@ function Kit.Chips(page, items)
 	local x, row = 0, 0
 	for index = 1, table.getn(items) do
 		local item = items[index]
+		local chipName = T(item[1])
+		local chipHelp = item[4] and T(item[4])
 		local chip = CreateFrame("Button", nil, page)
 		chip:SetHeight(22)
 		Boxed(chip, WELL, EDGE)
@@ -2376,7 +2441,7 @@ function Kit.Chips(page, items)
 		chip.plus:SetText("+")
 		chip.label = Text(chip, 10, TEXT)
 		chip.label:SetPoint("LEFT", chip, "LEFT", 24, 0)
-		chip.label:SetText(item[1])
+		chip.label:SetText(chipName)
 		local chipWidth = 24 + math.ceil(chip.label:GetStringWidth()) + 11
 		chip:SetWidth(chipWidth)
 		if x > 0 and x + chipWidth > width then
@@ -2384,7 +2449,7 @@ function Kit.Chips(page, items)
 		end
 		chip:SetPoint("TOPLEFT", page, "TOPLEFT", left + x, page.y - row * 27)
 		x = x + chipWidth + 6
-		chip.name, chip.isOn, chip.toggle, chip.help = item[1], item[2], item[3], item[4]
+		chip.name, chip.isOn, chip.toggle, chip.help = chipName, item[2], item[3], chipHelp
 		chip:SetScript("OnClick", function()
 			this.toggle()
 			RefreshAll()
@@ -2428,7 +2493,7 @@ function Kit.Chips(page, items)
 			end
 		end
 		table.insert(widgets, chip)
-		side.Index(page, item[1], item[4], page.y - row * 27, 22)
+		side.Index(page, chipName, chipHelp, page.y - row * 27, 22)
 	end
 	page.y = page.y - (row + 1) * 27 - 5
 end
@@ -2506,7 +2571,8 @@ function Kit.Size(page, label, low, high, step, get, set, presets, format)
 	local top = page.y - 4
 	local title = Text(page, 9, MUTED)
 	title:SetPoint("TOPLEFT", page, "TOPLEFT", left, top)
-	title:SetText(string.upper(label))
+	local trLabel = T(label)
+	title:SetText(SurvivorUI_Upper(trLabel))
 	local x = left + width
 	for index = table.getn(presets), 1, -1 do
 		local preset = presets[index]
@@ -2548,7 +2614,7 @@ function Kit.Size(page, label, low, high, step, get, set, presets, format)
 		table.insert(widgets, button)
 	end
 	local bar = Kit.Bar(page, left, top - 20, width, low, high, step, get, set, format)
-	side.Index(page, label, "size small medium large", top, 40)
+	side.Index(page, trLabel, "size small medium large", top, 40)
 	page.y = top - 46
 	return bar
 end
@@ -2579,6 +2645,7 @@ end
 function Kit.Stepper(page, label, low, high, step, get, set, format)
 	local left = Span(page)
 	local x = left
+	label = label and T(label)
 	if label then
 		local text = Text(page, 10, TEXT)
 		text:SetPoint("TOPLEFT", page, "TOPLEFT", left + 2, page.y - 5)
@@ -2672,7 +2739,7 @@ function Kit.Switch(page, x, y, isOn, toggle)
 			self.knob:SetPoint("LEFT", self.track, "LEFT", 2, 0)
 			self.knob:SetVertexColor(0.62, 0.62, 0.66, 1)
 		end
-		self.label:SetText(on and "On" or "Off")
+		self.label:SetText(on and T("On") or T("Off"))
 		if self.hot then
 			self.label:SetTextColor(1, 1, 1)
 		elseif on then
@@ -2688,6 +2755,7 @@ end
 -- A quiet button (an outline) and the page's one strong button (filled in
 -- its color).
 function Kit.Quiet(page, text, width, onClick)
+	text = T(text)
 	local button = CreateFrame("Button", nil, page)
 	button:SetWidth(width)
 	button:SetHeight(24)
@@ -2708,6 +2776,7 @@ function Kit.Quiet(page, text, width, onClick)
 end
 
 function Kit.Strong(page, text, width, onClick)
+	text = T(text)
 	local color = page.color
 	local button = CreateFrame("Button", nil, page)
 	button:SetWidth(width)
@@ -2736,7 +2805,7 @@ function Kit.Head(page, spec)
 	local color = page.color
 	local title = Text(page, 15, color)
 	title:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
-	title:SetText(spec.title or page.label)
+	title:SetText(T(spec.title or page.label))
 	if spec.advanced then
 		Kit.Mode(page)
 	end
@@ -2746,7 +2815,7 @@ function Kit.Head(page, spec)
 		line:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 		line:SetWidth(PAGE_WIDTH)
 		line:SetJustifyH("LEFT")
-		line:SetText(spec.line)
+		line:SetText(T(spec.line))
 		page.y = page.y - 13 * Lines(line, PAGE_WIDTH) - 9
 	end
 	if spec.isOn then
@@ -2756,20 +2825,21 @@ function Kit.Head(page, spec)
 		if spec.reloads then
 			local note = Text(page, 9, MUTED)
 			note:SetPoint("TOPLEFT", page, "TOPLEFT", x, y - 5)
-			note:SetText("after a reload")
+			note:SetText(T("after a reload"))
 			x = x + math.ceil(note:GetStringWidth()) + 16
 		end
 		if spec.game then
-			GameTick(page, x, y, 120, "The game's", spec.game, spec.isOn, spec.toggle)
+			GameTick(page, x, y, 120, T("The game's"), spec.game, spec.isOn, spec.toggle)
 		end
 		if spec.piece or spec.back then
-			local back = Kit.Quiet(page, "Back to its place", 140, spec.back or function()
+			local backText = T("Back to its place")
+			local back = Kit.Quiet(page, backText, 140, spec.back or function()
 				if SurvivorUI_ResetPiece then
 					SurvivorUI_ResetPiece(spec.piece)
 				end
 			end)
 			back:SetPoint("TOPLEFT", page, "TOPLEFT", PAGE_WIDTH - 140, y + 2)
-			side.Index(page, "Back to its place", "reset place position", y, 22)
+			side.Index(page, backText, "reset place position", y, 22)
 		end
 		page.y = y - 30
 	end
@@ -2793,7 +2863,7 @@ function Kit.Preview(page, height, Paint)
 	Boxed(preview, { 0.085, 0.115, 0.075 }, { 0.17, 0.23, 0.15 })
 	preview.tag = Text(preview, 8, { 0.55, 0.66, 0.50 }, "")
 	preview.tag:SetPoint("TOPLEFT", preview, "TOPLEFT", 8, -6)
-	preview.tag:SetText("LIVE PREVIEW")
+	preview.tag:SetText(T("LIVE PREVIEW"))
 	preview.words, preview.boxes = {}, {}
 	function preview:Begin()
 		for index = 1, table.getn(self.words) do
@@ -2861,7 +2931,7 @@ function Kit.Link(page, text, key)
 	link.text = Text(link, 9, MUTED)
 	link.text:SetPoint("LEFT", link, "LEFT", 0, 0)
 	local target = pages[key]
-	link.text:SetText(text.."  |cffd8d8de"..target.label.."  >|r")
+	link.text:SetText(T(text).."  |cffd8d8de"..T(target.label).."  >|r")
 	link:SetWidth(math.ceil(link.text:GetStringWidth()) + 4)
 	link:SetScript("OnEnter", function() this.text:SetTextColor(1, 1, 1) end)
 	link:SetScript("OnLeave", function() this.text:SetTextColor(MUTED[1], MUTED[2], MUTED[3]) end)
@@ -2887,7 +2957,7 @@ function Kit.Advanced(page, holds)
 	more:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y - 2)
 	more.text = Text(more, 9, MUTED)
 	more.text:SetPoint("LEFT", more, "LEFT", 0, 0)
-	more.text:SetText("Advanced: "..holds.."  |cffd8d8de>|r")
+	more.text:SetText(TF("Advanced: {1}  |cffd8d8de>|r", T(holds)))
 	more:SetWidth(math.ceil(more.text:GetStringWidth()) + 4)
 	more:SetScript("OnEnter", function() this.text:SetTextColor(1, 1, 1) end)
 	more:SetScript("OnLeave", function() this.text:SetTextColor(MUTED[1], MUTED[2], MUTED[3]) end)
@@ -2896,7 +2966,7 @@ function Kit.Advanced(page, holds)
 		RefreshAll()
 	end)
 	box.more = more
-	Kit.Section(box, "Fine-tuning")
+	Kit.Section(box, T("Fine-tuning"))
 	return box
 end
 
@@ -2920,13 +2990,15 @@ end
 -- spec: { reset = its action, resetText, strong = { text, action } }.
 function Kit.Foot(page, spec)
 	if spec.reset then
-		local reset = Kit.Quiet(page, spec.resetText or "Reset this page", 140, spec.reset)
+		local resetText = T(spec.resetText or "Reset this page")
+		local reset = Kit.Quiet(page, resetText, 140, spec.reset)
 		reset:SetHeight(28)
 		reset:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", PAGE_X, 12)
-		side.Index(page, spec.resetText or "Reset this page", "default", -(HEIGHT - 16 - 40), 28)
+		side.Index(page, resetText, "default", -(HEIGHT - 16 - 40), 28)
 	end
 	if spec.strong then
-		local strong = Kit.Strong(page, spec.strong[1], 150, spec.strong[2])
+		local strongText = T(spec.strong[1])
+		local strong = Kit.Strong(page, strongText, 150, spec.strong[2])
 		strong:SetHeight(28)
 		strong:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14 - 170 - 10, 12)
 	end
@@ -3006,7 +3078,7 @@ Slider(page, "Bar thickness", 4, 16, 1, function() return DB().guardiansBarHeigh
 -- The list's Back to its place, on a row of its own.
 local listPlace = Text(page, 10, TEXT)
 listPlace:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y - 6)
-listPlace:SetText("List place")
+listPlace:SetText(T("List place"))
 Button(page, "Back to its place", 150, PAGE_WIDTH - 150, function()
 	if SurvivorUI_ResetPiece then
 		SurvivorUI_ResetPiece("Guardians")
@@ -3053,7 +3125,7 @@ Choice(page, {
 }, function() return DB().paceClassOnly and "class" or "account" end,
 	function(choice) DB().paceClassOnly = choice == "class" or nil end)
 Slider(page, "Rate over", 10, 60, 5, function() return DB().paceWindow or 20 end,
-	function(value) DB().paceWindow = math.floor(value + 0.5) end, "%d s")
+	function(value) DB().paceWindow = math.floor(value + 0.5) end, function(value) return TF("{1} s", string.format("%d", value)) end)
 Slider(page, "Runs needed", 1, 10, 1, function() return DB().paceMinRuns or 3 end,
 	function(value) DB().paceMinRuns = math.floor(value + 0.5) end, "%d")
 Note(page, "The orb stays white until that many of your runs have reached the same minute.")
@@ -3069,7 +3141,7 @@ Subheader(page, "Each boss's stretch")
 Check(page, "A banner as each boss comes", OnUnlessOff("paceBanner"),
 	function() DB().paceBanner = DB().paceBanner == false end, "how the stretch just ended went, left of the tracker")
 Slider(page, "Banner stays", 3, 15, 1, function() return DB().paceBannerHold or 6 end,
-	function(value) DB().paceBannerHold = math.floor(value + 0.5) end, "%d s")
+	function(value) DB().paceBannerHold = math.floor(value + 0.5) end, function(value) return TF("{1} s", string.format("%d", value)) end)
 page.y = page.y - 6
 Button(page, "Forget this zone's runs", 200, 0, function()
 	if SurvivorUI_TogglePace then
@@ -3091,7 +3163,7 @@ Kit.Head(page, { line = "At the top of the screen: the bosses and the awake guar
 function Paint.Bosses(self)
 	self:Begin()
 	if DB().bossBars == false then
-		self:Word(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], "No boss bars"):SetPoint("CENTER", self, "CENTER", 0, 0)
+		self:Word(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], T("No boss bars")):SetPoint("CENTER", self, "CENTER", 0, 0)
 		return
 	end
 	local scale = SurvivorUI_GetScale and SurvivorUI_GetScale("bosses") or 1
@@ -3126,7 +3198,7 @@ function Paint.Bosses(self)
 		rest:SetWidth(width - filled)
 		rest:SetHeight(height)
 		local size = (10 + FONT_BUMP + step) * math.max(0.7, scale)
-		self:Word(SurvivorUI_FONT, size, "OUTLINE", 1, 1, 1, bar[2]):SetPoint("LEFT", border, "LEFT", 6, 0)
+		self:Word(SurvivorUI_FONT, size, "OUTLINE", 1, 1, 1, T(bar[2])):SetPoint("LEFT", border, "LEFT", 6, 0)
 		local value = SurvivorUI_HealthText and SurvivorUI_HealthText(bar[3], bar[4], look) or ""
 		self:Word(SurvivorUI_FONT, size, "OUTLINE", 1, 1, 1, value):SetPoint("RIGHT", border, "RIGHT", -6, 0)
 		y = y - height - 4
@@ -3159,7 +3231,7 @@ do
 	Kit.Stepper(box, "Text size", -4, 8, 1,
 		function() return SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Boss bars") or 0 end,
 		function(value) if SurvivorUI_SetPieceTextStep then SurvivorUI_SetPieceTextStep("Boss bars", value) end end,
-		function(value) return value == 0 and "normal" or ((value > 0 and "+" or "")..value) end)
+		function(value) return value == 0 and T("normal") or ((value > 0 and "+" or "")..value) end)
 	Kit.EndAdvanced(page, box)
 end
 Kit.Foot(page, { reset = Asked("Boss bars back to default?",
@@ -3360,7 +3432,7 @@ function Paint.Combat(self)
 	end
 	local mode = SurvivorUI_DamageMode and SurvivorUI_DamageMode() or "survivor"
 	if mode == "none" then
-		self:Word(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], "No combat numbers"):SetPoint("CENTER", self, "CENTER", 0, 0)
+		self:Word(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], T("No combat numbers")):SetPoint("CENTER", self, "CENTER", 0, 0)
 		return
 	end
 	local middle = -math.floor(self:GetHeight() / 2) - 4
@@ -3394,7 +3466,7 @@ function Paint.Combat(self)
 		self:Word(font, 16, "OUTLINE", 1, 1, 1, "1234"):SetPoint("BOTTOM", self, "TOPLEFT", foes[1], middle + 6)
 		self:Word(font, 16, "OUTLINE", 1, 1, 1, "348"):SetPoint("BOTTOM", self, "TOPLEFT", foes[2], middle + 14)
 		self:Word(font, 24, "OUTLINE", 1, 1, 1, "12960"):SetPoint("BOTTOM", self, "TOPLEFT", foes[3], middle + 6)
-		self:Word(SurvivorUI_FONT, 9 + FONT_BUMP, "", MUTED[1], MUTED[2], MUTED[3], "The game's own numbers"):SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -8, 6)
+		self:Word(SurvivorUI_FONT, 9 + FONT_BUMP, "", MUTED[1], MUTED[2], MUTED[3], T("The game's own numbers")):SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -8, 6)
 		return
 	end
 	local size = CT("ctSize") or 0.85
@@ -3492,7 +3564,7 @@ Kit.Segments(page, { { 100, "100%" }, { 90, "90%" }, { 80, "80%" }, { 70, "70%" 
 do
 	local later = Text(page, 9, MUTED)
 	later:SetPoint("TOPLEFT", page, "TOPLEFT", Span(page), page.y + 4)
-	later:SetText("From your next run: the game reads the face as a run begins. The game's own face keeps its size.")
+	later:SetText(T("From your next run: the game reads the face as a run begins. The game's own face keeps its size."))
 	page.y = page.y - 16
 end
 
@@ -3556,10 +3628,10 @@ do
 	})
 	Kit.Fine(box, {
 		{ "Crit size", 0.6, 1.6, 0.05, CTGet("ctCritSize"), CTSet("ctCritSize") },
-		{ "Add up within", 50, 500, 25, CTGet("ctAddWindow"), CTSet("ctAddWindow"), "%d ms" },
+		{ "Add up within", 50, 500, 25, CTGet("ctAddWindow"), CTSet("ctAddWindow"), function(value) return TF("{1} ms", string.format("%d", value)) end },
 		{ "Distance from hero", 60, 320, 10, CTGet("ctDistance"), CTSet("ctDistance"), "%d" },
 		{ "How high they rise", 80, 320, 10, CTGet("ctRise"), CTSet("ctRise"), "%d" },
-		{ "Smallest heal", 0, 10, 1, CTGet("ctHealMin"), CTSet("ctHealMin"), "%d%% HP" },
+		{ "Smallest heal", 0, 10, 1, CTGet("ctHealMin"), CTSet("ctHealMin"), function(value) return TF("{1}% HP", string.format("%d", value)) end },
 	})
 	Kit.EndAdvanced(page, box)
 end
@@ -3588,7 +3660,7 @@ Slider(page, "Height", 3, 20, 1,
 		return lines
 	end,
 	function(value) SurvivorUI_SetMeterMainSize(nil, math.floor(value + 0.5)) end,
-	function(value) return string.format("%d lines", value) end)
+	function(value) return TF("{1} lines", string.format("%d", value)) end)
 Note(page, "With more to show than lines, roll them with the mouse wheel or the bar at its right. Move mode sets each window's height and width on its own, and its Reset gives back the lines the screen fits.")
 -- Others: the share under which the fold button in the meter's title folds
 -- the lines into one (Meter.lua's Folded).
@@ -3699,7 +3771,7 @@ Inline(page, "A best is", {
 	{ "run", "the run's biggest" },
 }, CTGet("ctRecordKind"), CTSet("ctRecordKind"))
 FxRow("crit", ShowCrit)
-Slider(page, "Stays", 1, 4, 0.1, CTGet("ctRecordHold"), CTSet("ctRecordHold"), "%.1f s")
+Slider(page, "Stays", 1, 4, 0.1, CTGet("ctRecordHold"), CTSet("ctRecordHold"), function(value) return TF("{1} s", string.format("%.1f", value)) end)
 Slider(page, "Size", 0.6, 1.6, 0.05, CTGet("ctRecordSize"), CTSet("ctRecordSize"))
 Button(page, "Show it", 150, 0, ShowCrit)
 page.y = page.y - 34
@@ -3709,7 +3781,7 @@ Check(page, "New jump record", OnUnlessOff("jumpRecord"), Flip("jumpRecord"),
 	"at every 50 jumps in a run (50, 100, 150...) the first time ever, under the new best crit; your jumps are counted in This Run")
 FxRow("jump", ShowJump)
 Slider(page, "Stays", 1, 4, 0.1, function() return tonumber(DB().jumpRecordHold) or 3.2 end,
-	function(value) DB().jumpRecordHold = math.floor(value * 10 + 0.5) / 10 end, "%.1f s")
+	function(value) DB().jumpRecordHold = math.floor(value * 10 + 0.5) / 10 end, function(value) return TF("{1} s", string.format("%.1f", value)) end)
 Slider(page, "Size", 0.6, 1.6, 0.05, function() return tonumber(DB().jumpRecordSize) or 1 end,
 	function(value) DB().jumpRecordSize = math.floor(value * 100 + 0.5) / 100 end)
 Check(page, "Winged boot", OnUnlessOff("jumpRecordIcon"), Flip("jumpRecordIcon"),
@@ -3768,11 +3840,11 @@ local function ShowClock()
 	local now = time() + (zone or 0)
 	local clock = string.format("%02d:%02d", math.floor(math.mod(now, 86400) / 3600), math.floor(math.mod(now, 3600) / 60))
 	if hours then
-		clockLine:SetText("Your time now: |cffffffff"..clock.."|r in this zone. The minimap's clock and the runs' dates take it.")
+		clockLine:SetText(TF("Your time now: |cffffffff{1}|r in this zone. The minimap's clock and the runs' dates take it.", clock))
 	elseif zone then
-		clockLine:SetText("Your computer's time: |cffffffff"..clock.."|r now. The minimap's clock and the runs' dates take it. Untick it for another zone.")
+		clockLine:SetText(TF("Your computer's time: |cffffffff{1}|r now. The minimap's clock and the runs' dates take it. Untick it for another zone.", clock))
 	else
-		clockLine:SetText("Not set: the runs' dates are in UTC (|cffffffff"..clock.."|r now), the game's own clock. Set yours: Brazil UTC-3, Portugal UTC+0 or +1.")
+		clockLine:SetText(TF("Not set: the runs' dates are in UTC (|cffffffff{1}|r now), the game's own clock. Set yours: Brazil UTC-3, Portugal UTC+0 or +1.", clock))
 	end
 end
 Check(page, "Your computer's time", function() return DB().timeZone == nil end, function()
@@ -3821,13 +3893,14 @@ function statsHolder:Refresh()
 		return
 	end
 	local count, won, pinned, photos, bytes = SurvivorUI_HistoryStats()
-	local size = bytes >= 1048576 and string.format("%.1f MB", bytes / 1048576) or math.max(1, math.floor(bytes / 1024 + 0.5)).." kB"
-	local dot = "  |cff8a8a8a\194\183|r  "
-	historyStats:SetText("|cffffffff"..count.."|r"..(count == 1 and " run" or " runs")
-		..dot.."|cff73f280"..won.."|r won"
-		..dot.."|cffffd100"..pinned.."|r pinned"
-		..dot.."|cffffffff"..photos.."|r with their tooltips"
-		..dot.."about |cffffffff"..size.."|r")
+	local size = bytes >= 1048576 and TF("{1} MB", string.format("%.1f", bytes / 1048576)) or TF("{1} kB", math.max(1, math.floor(bytes / 1024 + 0.5)))
+	if count == 1 then
+		historyStats:SetText(TF("|cffffffff{1}|r run  |cff8a8a8a\194\183|r  |cff73f280{2}|r won  |cff8a8a8a\194\183|r  |cffffd100{3}|r pinned  |cff8a8a8a\194\183|r  |cffffffff{4}|r with their tooltips  |cff8a8a8a\194\183|r  about |cffffffff{5}|r",
+			count, won, pinned, photos, size))
+	else
+		historyStats:SetText(TF("|cffffffff{1}|r runs  |cff8a8a8a\194\183|r  |cff73f280{2}|r won  |cff8a8a8a\194\183|r  |cffffd100{3}|r pinned  |cff8a8a8a\194\183|r  |cffffffff{4}|r with their tooltips  |cff8a8a8a\194\183|r  about |cffffffff{5}|r",
+			count, won, pinned, photos, size))
+	end
 end
 table.insert(widgets, statsHolder)
 page.y = page.y - 24
@@ -3838,7 +3911,7 @@ local clearAll = Button(page, "Clear all runs", 170, 0, function()
 end, { 0.95, 0.40, 0.35 })
 local clearNote = Text(page, 9, MUTED)
 clearNote:SetPoint("LEFT", clearAll, "RIGHT", 12, 0)
-clearNote:SetText("Every run, the pinned ones too: the word clear typed first.")
+clearNote:SetText(T("Every run, the pinned ones too: the word clear typed first."))
 page.y = page.y - 30
 
 ------------------------------------------------------------------------------
@@ -3861,7 +3934,7 @@ Check(page, "DoTs", OnUnlessOff("dotCounter"), Flip("dotCounter"), "how many of 
 Check(page, "Fears", OnUnlessOff("fearCounter"), Flip("fearCounter"), "how many enemies each one holds; the game writes a fear's hit but not its end, so each enemy hit counts for the fear's full time")
 Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, and the seconds until the next one ends, as the game tells them (its 0.124 on); with an older game each cast counts a totem for its tooltip's time, two with Call of the Elements, and Totemic Wrath's Searing Totem every 14 sec, told by the spells a run starts with")
 Check(page, "Shouts", OnUnlessOff("shoutCounter"), Flip("shoutCounter"), "Demoralizing Shout: how many enemies its last cast weakened, for its time; Battle Shout: the seconds it has left")
-Check(page, "Marks", OnUnlessOff("markCounter"), Flip("markCounter"), "Faerie Fire: how many enemies carry it, bosses too; each one it hits counts for the mark's time (its tooltip's), so one hit again before it fades counts twice until it does")
+Check(page, "@debuff:Marks", OnUnlessOff("markCounter"), Flip("markCounter"), "Faerie Fire: how many enemies carry it, bosses too; each one it hits counts for the mark's time (its tooltip's), so one hit again before it fades counts twice until it does")
 
 Subheader(page, "Look")
 Slider(page, "Size", 0.5, 2, 0.05, function() return tonumber(DB().counterSize) or 1 end,
@@ -3894,7 +3967,7 @@ Note(page, "Left of your frame, the first friend level with it and each next one
 -- sizes, at 0.8. Each friend: name, class, health, its words, buffs, leader.
 Paint.PARTY = {
 	{ "Friend", "WARRIOR", 0.82, nil, 4, true },
-	{ "Another", "MAGE", 0, "Reviving 45%", 1 },
+	{ "Another", "MAGE", 0, "45%", 1 },
 	{ "Healer", "PRIEST", 0.46, nil, 3 },
 	{ "Hunter", "HUNTER", 1, "far", 5 },
 }
@@ -3903,7 +3976,7 @@ Paint.PARTY_BUFFS = { "Spell_Holy_WordFortitude", "Spell_Nature_Regeneration", "
 function Paint.Party(self)
 	self:Begin()
 	if SurvivorUI_Feature and not SurvivorUI_Feature("partyFrames") then
-		self:Word(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], "Party frames off"):SetPoint("CENTER", self, "CENTER", 0, 0)
+		self:Word(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], T("Party frames off")):SetPoint("CENTER", self, "CENTER", 0, 0)
 		return
 	end
 	local S = 0.8
@@ -3978,7 +4051,7 @@ function Paint.Party(self)
 			crown:SetHeight(11)
 		end
 		local barX = x0 + iconWide + 1
-		local value = friend[4] or (math.floor(friend[3] * 100 + 0.5).."%")
+		local value = friend[4] and TF("Reviving {1}", friend[4]) or (math.floor(friend[3] * 100 + 0.5).."%")
 		if friend[3] <= 0 then
 			-- Down, a friend bringing them back: the gold over the red.
 			local back = Edged(barX, top, barWide, high, 0.30, 0.07, 0.07)
@@ -3994,9 +4067,9 @@ function Paint.Party(self)
 			fill:SetHeight(high)
 		end
 		if friend[4] == "far" then
-			value = far and "34 yd | 100%" or "100%"
+			value = far and (TF("{1} yd", 34).." | 100%") or "100%"
 		end
-		self:Word(SurvivorUI_FONT, font, "OUTLINE", dim, dim, dim, friend[1]):SetPoint("LEFT", self, "TOPLEFT", barX + 4, top - high / 2)
+		self:Word(SurvivorUI_FONT, font, "OUTLINE", dim, dim, dim, T(friend[1])):SetPoint("LEFT", self, "TOPLEFT", barX + 4, top - high / 2)
 		self:Word(SurvivorUI_FONT, font, "OUTLINE", dim, dim, dim, value):SetPoint("RIGHT", self, "TOPLEFT", barX + barWide - 4, top - high / 2)
 		if buffsOn then
 			for slot = 1, friend[5] do
@@ -4021,7 +4094,7 @@ function Paint.Party(self)
 	local youX = x0 + math.floor((ICON + 1 + BAR + right + 14) * S + 0.5)
 	local youWide, youHigh = math.floor(you[1] * S + 0.5), math.floor(you[2] * S + 0.5)
 	local frame = Edged(youX, math.floor(roomBottom + youHigh + 0.5), youWide, youHigh, hr * 0.7, hg * 0.7, hb * 0.7)
-	self:Word(SurvivorUI_FONT, font, "OUTLINE", 1, 1, 1, "Your frame"):SetPoint("CENTER", frame, "CENTER", 0, 0)
+	self:Word(SurvivorUI_FONT, font, "OUTLINE", 1, 1, 1, T("Your frame")):SetPoint("CENTER", frame, "CENTER", 0, 0)
 end
 Kit.Preview(page, 184, Paint.Party)
 
@@ -4043,7 +4116,7 @@ Check(page, "Party buffs", OnUnlessOff("partyBuffs"), function()
 	end
 end, "each friend's buffs in a line beside their frame; hover one for what it is")
 Inline(page, "Buffs", {
-	{ "left", "Left" },
+	{ "left", "@side:Left" },
 	{ "right", "Right" },
 	{ "top", "Top" },
 	{ "bottom", "Bottom" },
@@ -4130,7 +4203,8 @@ local classTitle = Subheader(page, "Stats for this class")
 local classWidget = {}
 function classWidget:Refresh()
 	local name = UnitClass and UnitClass("player")
-	classTitle:SetText(string.upper("Stats for "..(name or "this class")))
+	local text = name and TF("Stats for {1}", T(name)) or T("Stats for this class")
+	classTitle:SetText(SurvivorUI_Upper(text))
 end
 table.insert(widgets, classWidget)
 Note(page, "In the character pane and on the panel alike. Each class keeps its own; a number switched off never shows. For their order, drag a number or a group's title in either, in move mode or holding the move key (Alt unless chosen in Layout).")
@@ -4225,7 +4299,7 @@ local forget = Button(page, "Forget the collection", 170, 0, function()
 end, { 0.95, 0.40, 0.35 })
 local forgetNote = Text(page, 9, MUTED)
 forgetNote:SetPoint("LEFT", forget, "RIGHT", 12, 0)
-forgetNote:SetText("Every piece, for every class and account on this game: the word forget typed first.")
+forgetNote:SetText(T("Every piece, for every class and account on this game: the word forget typed first."))
 page.y = page.y - 30
 
 ------------------------------------------------------------------------------
@@ -4377,7 +4451,7 @@ pinPreview.timer = Text(pinPreview, 9, TEXT)
 pinPreview.timer:SetText("1:30")
 pinPreview.none = Text(pinPreview, 10, MUTED)
 pinPreview.none:SetPoint("CENTER", pinPreview, "CENTER", 0, 0)
-pinPreview.none:SetText("No pins")
+pinPreview.none:SetText(T("No pins"))
 function pinPreview:Refresh()
 	local pinsOn = not SurvivorUI_Feature or SurvivorUI_Feature("mapPins")
 	local lairsOn = pinsOn and DB().pinLairs ~= false
@@ -4477,8 +4551,8 @@ function Kit.Key(parent, color, Command)
 		this.hot = true
 		this:Refresh()
 		GameTooltip:SetOwner(this, "ANCHOR_TOP")
-		GameTooltip:SetText("Its key", 1, 1, 1)
-		GameTooltip:AddLine("Click, then press the key (Alt, Ctrl or Shift with it if you like). Escape leaves it as it was; a right click clears it. Key Bindings in the game's menu lists it as well.", 0.8, 0.8, 0.8, 1)
+		GameTooltip:SetText(T("Its key"), 1, 1, 1)
+		GameTooltip:AddLine(T("Click, then press the key (Alt, Ctrl or Shift with it if you like). Escape leaves it as it was; a right click clears it. Key Bindings in the game's menu lists it as well."), 0.8, 0.8, 0.8, 1)
 		GameTooltip:Show()
 	end)
 	button:SetScript("OnLeave", function()
@@ -4496,13 +4570,13 @@ function Kit.Key(parent, color, Command)
 		local waiting = keyCapture:IsShown() and keyCapture.command == command
 		local key = GetBindingKey and GetBindingKey(command)
 		if waiting then
-			self.label:SetText("Press a key...")
+			self.label:SetText(T("Press a key..."))
 			self.label:SetTextColor(color[1], color[2], color[3])
 		elseif key then
 			self.label:SetText(key)
 			self.label:SetTextColor(1, 1, 1)
 		else
-			self.label:SetText("No key")
+			self.label:SetText(T("No key"))
 			self.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
 		end
 		if waiting or self.hot then
@@ -4591,10 +4665,10 @@ do
 		map:SetPoint("TOPLEFT", self, "TOPLEFT", mapX, mapTop)
 		map:SetWidth(mapSide)
 		map:SetHeight(mapSide)
-		self:Word(SurvivorUI_FONT, 9 + FONT_BUMP, "", 0.45, 0.55, 0.35, "Minimap"):SetPoint("CENTER", map, "CENTER", 0, 0)
+		self:Word(SurvivorUI_FONT, 9 + FONT_BUMP, "", 0.45, 0.55, 0.35, T("Minimap")):SetPoint("CENTER", map, "CENTER", 0, 0)
 		if count == 0 then
 			self:Word(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3],
-				"None shown: /sui opens these options"):SetPoint("RIGHT", map, "LEFT", -16, 0)
+				T("None shown: /sui opens these options")):SetPoint("RIGHT", map, "LEFT", -16, 0)
 			return
 		end
 		local column = way == "up" or way == "down"
@@ -4641,8 +4715,8 @@ do
 				hit:SetScript("OnClick", function() Pick(this.key) end)
 				hit:SetScript("OnEnter", function()
 					GameTooltip:SetOwner(this, "ANCHOR_TOP")
-					GameTooltip:SetText(this.title, 1, 1, 1)
-					GameTooltip:AddLine("Click: its color, under the buttons", 0.8, 0.8, 0.8)
+					GameTooltip:SetText(T(this.title), 1, 1, 1)
+					GameTooltip:AddLine(T("Click: its color, under the buttons"), 0.8, 0.8, 0.8)
 					GameTooltip:Show()
 				end)
 				hit:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -4765,22 +4839,22 @@ do
 			end
 			self.icon:SetAlpha(info.shown and 1 or 0.35)
 			self.mark:SetAlpha(info.shown and 1 or 0.35)
-			self.name:SetText(info.title)
+			self.name:SetText(T(info.title))
 			if info.shown then
 				self.name:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
 			else
 				self.name:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
 			end
 			if key == "options" and not info.shown then
-				self.line:SetText("Hidden: /sui still opens these options.")
+				self.line:SetText(T("Hidden: /sui still opens these options."))
 			else
-				self.line:SetText(LINES[key] or "")
+				self.line:SetText(LINES[key] and T(LINES[key]) or "")
 			end
 			self.earlier:SetAlpha(self.slot > 1 and 1 or 0.3)
 			self.later:SetAlpha(order[self.slot + 1] and 1 or 0.3)
 		end
 		table.insert(widgets, row)
-		side.Index(tab, BUTTONS[slot][2], BUTTONS[slot][3], tab.y, 28)
+		side.Index(tab, T(BUTTONS[slot][2]), T(BUTTONS[slot][3]), tab.y, 28)
 		tab.y = tab.y - 30
 	end
 
@@ -4803,7 +4877,7 @@ do
 	function which:Refresh()
 		local info = Info(Picked())
 		if info then
-			self.text:SetText(info.title)
+			self.text:SetText(T(info.title))
 			self.text:SetTextColor(Kit.Light({ info.r, info.g, info.b }, 0.2))
 		else
 			self.text:SetText("")
@@ -4833,7 +4907,7 @@ do
 			this.hot = true
 			this:Refresh()
 			GameTooltip:SetOwner(this, "ANCHOR_TOP")
-			GameTooltip:SetText(this.name or "", 1, 1, 1)
+			GameTooltip:SetText(this.name and T(this.name) or "", 1, 1, 1)
 			GameTooltip:Show()
 		end)
 		swatch:SetScript("OnLeave", function()
@@ -4872,7 +4946,7 @@ do
 		RefreshAll()
 	end)
 	all:SetPoint("TOPLEFT", tab, "TOPLEFT", PAGE_WIDTH - 130, tab.y + 2)
-	side.Index(tab, "Color", "class color gold white red orange green teal blue purple pink all", tab.y, ROW)
+	side.Index(tab, T("Color"), "class color gold white red orange green teal blue purple pink all", tab.y, ROW)
 	tab.y = tab.y - ROW - 10
 
 	-- How they line up, their size and the gap: the buttons and the preview
@@ -4890,7 +4964,7 @@ do
 	end
 	Kit.Split(tab)
 	Kit.Section(tab, "Line up", "From the first, the one by the minimap's corner: up and down in a column, left and right in a row. The first one stays where it is.")
-	Kit.Segments(tab, { { "up", "Up" }, { "down", "Down" }, { "left", "Left" }, { "right", "Right" } },
+	Kit.Segments(tab, { { "up", "Up" }, { "down", "@way:Down" }, { "left", "@way:Left" }, { "right", "@way:Right" } },
 		function() return DB().mapButtonWay or "up" end,
 		Follow(function(way) DB().mapButtonWay = way ~= "up" and way or nil end))
 	Kit.Right(tab)
@@ -4902,14 +4976,14 @@ do
 	Kit.Join(tab)
 	local y = tab.y
 	Kit.Stepper(tab, "Gap", 0, 12, 1, function() return DB().mapButtonGap or 5 end,
-		Follow(function(value) DB().mapButtonGap = value ~= 5 and value or nil end), "%d px")
+		Follow(function(value) DB().mapButtonGap = value ~= 5 and value or nil end), T("%d px"))
 	local back = Kit.Quiet(tab, "Back to its place", 140, function()
 		if SurvivorUI_ResetPiece then
 			SurvivorUI_ResetPiece("Minimap buttons")
 		end
 	end)
 	back:SetPoint("TOPLEFT", tab, "TOPLEFT", PAGE_WIDTH - 140, y)
-	side.Index(tab, "Back to its place", "reset place position", y, 24)
+	side.Index(tab, T("Back to its place"), "reset place position", y, 24)
 
 	Kit.Foot(tab, { reset = Asked("Minimap buttons back to default?",
 		"All of them shown, in their first order and colors, lined up upward at the first size and gap. Where they stand stays: Back to its place for that.", "Back to default",
@@ -4960,7 +5034,7 @@ Kit.Split(page)
 Kit.Section(page, "Text size")
 Kit.Stepper(page, nil, 8, 18, 1,
 	function() return SurvivorUI_ChatSize and SurvivorUI_ChatSize() or 8 end,
-	function(value) if SurvivorUI_SetChatSize then SurvivorUI_SetChatSize(value) end end, "%d pt")
+	function(value) if SurvivorUI_SetChatSize then SurvivorUI_SetChatSize(value) end end, function(value) return TF("{1} pt", string.format("%d", value)) end)
 Kit.Right(page)
 -- The look's own: each look keeps its strength.
 Kit.Section(page, "Background", "How dark behind the lines. Text on the world: 0% is the text alone.")
@@ -5096,7 +5170,7 @@ local function MarkPicker(page, x, get, set, taken)
 			this.hot = true
 			this:Refresh()
 			GameTooltip:SetOwner(this, "ANCHOR_TOP")
-			GameTooltip:SetText(name, 1, 1, 1)
+			GameTooltip:SetText(T(name), 1, 1, 1)
 			GameTooltip:Show()
 		end)
 		mark:SetScript("OnLeave", function()
@@ -5144,7 +5218,7 @@ local function HeroRow(slot)
 	local y = page.y
 	local text = Text(page, 11, TEXT)
 	text:SetPoint("TOPLEFT", page, "TOPLEFT", 24, y - 3)
-	text:SetText("Hero "..slot)
+	text:SetText(TF("Hero {1}", slot))
 	MarkPicker(page, 150, function() return SurvivorUI_PartyMarkIcon and SurvivorUI_PartyMarkIcon(slot) end,
 		function(value) if SurvivorUI_SetPartyMarkIcon then SurvivorUI_SetPartyMarkIcon(slot, value) end end,
 		function(value) return SurvivorUI_MarkTakenElsewhere and SurvivorUI_MarkTakenElsewhere(value, nil, slot) end)
@@ -5296,7 +5370,7 @@ local function MakeMoveButton(parent)
 	function button:Refresh()
 		local on = SurvivorUI_EditMode and SurvivorUI_EditMode()
 		self.on = on
-		self.text:SetText(on and "DONE MOVING" or "MOVE UI")
+		self.text:SetText(on and T("DONE MOVING") or T("MOVE UI"))
 		local fill = on and 0.4 or (self.hot and 0.85 or 0.62)
 		self:SetBackdropColor(MOVE[1] * fill, MOVE[2] * fill, MOVE[3] * fill, 1)
 		self:SetBackdropBorderColor(1, 1, 1, (on or self.hot) and 1 or 0.75)
@@ -5322,7 +5396,7 @@ if SurvivorUI_CanChangeUI and SurvivorUI_CanChangeUI() then
 	change:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
 	change.text = Text(change, 10, TEXT)
 	change.text:SetPoint("CENTER", change, "CENTER", 0, 0)
-	change.text:SetText(SurvivorUI_T("Change UI"))
+	change.text:SetText(T("Change UI"))
 	change:SetScript("OnClick", function()
 		panel:Hide()
 		SurvivorUI_ChangeUI()
@@ -5331,8 +5405,8 @@ if SurvivorUI_CanChangeUI and SurvivorUI_CanChangeUI() then
 		this.hot = true
 		this:Refresh()
 		GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-		GameTooltip:SetText(SurvivorUI_T("Change UI"), ACCENT[1], ACCENT[2], ACCENT[3])
-		GameTooltip:AddLine(SurvivorUI_T("Pick Survivor UI or SurvivorUI Classic. The other one runs from the next time the game starts."), 1, 1, 1, 1)
+		GameTooltip:SetText(T("Change UI"), ACCENT[1], ACCENT[2], ACCENT[3])
+		GameTooltip:AddLine(T("Pick Survivor UI or SurvivorUI Classic. The other one runs from the next time the game starts."), 1, 1, 1, 1)
 		GameTooltip:Show()
 	end)
 	change:SetScript("OnLeave", function()
@@ -5373,12 +5447,12 @@ doneButton:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
 doneButton:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
 function doneButton:Refresh()
 	if needsReload then
-		self.text:SetText("Reload & Close")
+		self.text:SetText(T("Reload & Close"))
 		self.text:SetTextColor(1, self.hot and 1 or 0.85, self.hot and 1 or 0.8)
 		self:SetBackdropColor(0.5, 0.14, 0.1, 1)
 		self:SetBackdropBorderColor(1, 0.38, 0.32, 1)
 	else
-		self.text:SetText("Save & Close")
+		self.text:SetText(T("Save & Close"))
 		if self.hot then
 			self.text:SetTextColor(1, 1, 1)
 		else
@@ -5442,7 +5516,7 @@ local function MiniButton(text, width, onClick)
 	button:SetBackdropBorderColor(0.4, 0.4, 0.45, 0.8)
 	button.text = Text(button, 10, TEXT)
 	button.text:SetPoint("CENTER", button, "CENTER", 0, 0)
-	button.text:SetText(text)
+	button.text:SetText(T(text))
 	button:SetScript("OnEnter", function()
 		this.text:SetTextColor(1, 1, 1)
 		this:SetBackdropBorderColor(0.4, 0.4, 0.45, 1)
@@ -5491,7 +5565,11 @@ local miniDone = MiniButton("Save & Close", 116, function()
 end)
 miniDone:SetPoint("LEFT", miniMove, "RIGHT", 8, 0)
 miniDone:SetScript("OnShow", function()
-	this.text:SetText(needsReload and "Reload & Close" or "Save & Close")
+	this.text:SetText(T(needsReload and "Reload & Close" or "Save & Close"))
+	-- A longer language's words: the button, and the bar with it, widen to them
+	local width = math.max(116, math.ceil(this.text:GetStringWidth()) + 16)
+	this:SetWidth(width)
+	mini:SetWidth(380 - 116 + width)
 end)
 
 -- The - beside the x, in Move UI's teal.
@@ -5500,8 +5578,8 @@ minimize:SetPoint("RIGHT", close, "LEFT", -6, 0)
 minimize:SetScript("OnEnter", function()
 	this:Light(true)
 	GameTooltip:SetOwner(this, "ANCHOR_BOTTOMLEFT")
-	GameTooltip:SetText("Minimize", 1, 1, 1)
-	GameTooltip:AddLine("Down to Maximize, Move UI and Save & Close, to set the pieces with the screen free.", 0.8, 0.8, 0.8, 1)
+	GameTooltip:SetText(T("Minimize"), 1, 1, 1)
+	GameTooltip:AddLine(T("Down to Maximize, Move UI and Save & Close, to set the pieces with the screen free."), 0.8, 0.8, 0.8, 1)
 	GameTooltip:Show()
 end)
 minimize:SetScript("OnLeave", function()
@@ -5516,7 +5594,7 @@ credit:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 12, 8)
 credit:SetWidth(SIDEBAR - 18)
 credit:SetJustifyH("LEFT")
 credit:SetTextColor(0.42, 0.42, 0.47)
-credit:SetText("by morderous \194\183 GPL-3.0\ngithub.com/morderous/\nsurvivor-ui")
+credit:SetText(T("by morderous \194\183 GPL-3.0\ngithub.com/morderous/\nsurvivor-ui"))
 
 -- Donate, for the Ko-fi, in a light blue. The game opens no link: it shows in
 -- a box, selected, for Ctrl+C.
@@ -5560,7 +5638,7 @@ local function ShowLink(title, url)
 		edit:SetScript("OnEscapePressed", function() linkBox:Hide() end)
 		linkBox.hint = Text(linkBox, 9, MUTED)
 		linkBox.hint:SetPoint("TOP", edit, "BOTTOM", 0, -8)
-		linkBox.hint:SetText("Ctrl+C copies it; paste it in your browser.")
+		linkBox.hint:SetText(T("Ctrl+C copies it; paste it in your browser."))
 		local shut = CreateFrame("Button", nil, linkBox)
 		shut:SetWidth(18)
 		shut:SetHeight(18)
@@ -5571,7 +5649,7 @@ local function ShowLink(title, url)
 		shut:SetScript("OnClick", function() linkBox:Hide() end)
 		linkBox:SetScript("OnHide", function() this.edit:ClearFocus() end)
 	end
-	linkBox.title:SetText(title)
+	linkBox.title:SetText(T(title))
 	linkBox.edit.url = url
 	linkBox.edit:SetText(url)
 	linkBox:Show()
@@ -5615,7 +5693,7 @@ donate:SetScript("OnEnter", function()
 		this.badge.hot = true
 	end
 	GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-	GameTooltip:SetText("If you want to support this love project, feel free.", DONATE_BLUE[1], DONATE_BLUE[2], DONATE_BLUE[3])
+	GameTooltip:SetText(T("If you want to support this love project, feel free."), DONATE_BLUE[1], DONATE_BLUE[2], DONATE_BLUE[3])
 	GameTooltip:Show()
 end)
 donate:SetScript("OnLeave", function()

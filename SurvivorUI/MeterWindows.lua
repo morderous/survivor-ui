@@ -608,7 +608,7 @@ function SurvivorUI_MeterAddWindow()
 		end
 	end
 	if not index then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: three more meter windows at most; close one with its - first.")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: three more meter windows at most; close one with its - first."))
 		return
 	end
 	-- The first preferred page the game shares and no window shows; else any

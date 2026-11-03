@@ -128,5 +128,5 @@ end)
 function SurvivorUI_ToggleHover()
 	local settings = Settings()
 	settings.hover = not settings.hover
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: hover outline "..(settings.hover and "on." or "off."))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.hover and "Survivor UI: hover outline on." or "Survivor UI: hover outline off."))
 end
