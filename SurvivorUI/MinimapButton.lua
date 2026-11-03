@@ -9,19 +9,43 @@
 -- over them, upward, in the same square look: the game's battleground button
 -- (the crossed swords). On top of the switches, the Guide's: the one square
 -- filled in gold, whatever the class.
+-- That is their first order and look: the options' Minimap buttons tab sets
+-- which show, their order, each one's color, the way they line up (up, down,
+-- left or right), their size and the gap between them. A frame of their own
+-- holds them all ("Minimap buttons" in move mode), so they move as one.
 
 if SurvivorUI_Standby then return end
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 local ICON = "Interface\\AddOns\\SurvivorUI\\Art\\SurvivorIconWhite"
-local SIZE = 16              -- the stock 22, smaller
 local ACCENT = SurvivorUI_ACCENT or { 1, 0.82, 0 }   -- the addon's own color, the class's
 
--- A square, flat frame around an icon: a black edge, the addon's color under
+-- Their size (the stock 22, smaller), the gap between two, and the way the
+-- line grows from the first.
+local function Size()
+	return SurvivorUIDB and SurvivorUIDB.mapButtonSize or 16
+end
+
+local function Gap()
+	return SurvivorUIDB and SurvivorUIDB.mapButtonGap or 5
+end
+
+-- Each way: its step, the holder's side the first sits against, the far side.
+local WAYS = {
+	up = { 0, 1, "BOTTOM", "TOP" }, down = { 0, -1, "TOP", "BOTTOM" },
+	left = { -1, 0, "RIGHT", "LEFT" }, right = { 1, 0, "LEFT", "RIGHT" },
+}
+
+local function Way()
+	local way = SurvivorUIDB and SurvivorUIDB.mapButtonWay
+	return WAYS[way] and way or "up"
+end
+
+-- A square, flat frame around an icon: a black edge, the button's color under
 -- the mouse.
 local function Square(frame, icon)
-	frame:SetWidth(SIZE)
-	frame:SetHeight(SIZE)
+	frame:SetWidth(Size())
+	frame:SetHeight(Size())
 	if not frame.squareEdge then
 		frame.squareEdge = frame:CreateTexture(nil, "BACKGROUND")
 		frame.squareEdge:SetTexture(FLAT)
@@ -42,11 +66,138 @@ end
 local function Lit(frame, lit)
 	if frame.squareEdge then
 		if lit then
-			frame.squareEdge:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3], 1)
+			local tint = frame.tint or ACCENT
+			frame.squareEdge:SetVertexColor(tint[1], tint[2], tint[3], 1)
 		else
 			frame.squareEdge:SetVertexColor(0, 0, 0, 1)
 		end
 	end
+end
+
+-- The colors to pick for each (the options' Minimap buttons tab): the class's
+-- (the addon's own, gold if Global says so) or one of these.
+SurvivorUI_MAPBUTTON_COLORS = {
+	{ "class", "Class color", nil },
+	{ "gold", "Gold", { 1.00, 0.78, 0.15 } },
+	{ "white", "White", { 1.00, 1.00, 1.00 } },
+	{ "red", "Red", { 1.00, 0.28, 0.22 } },
+	{ "orange", "Orange", { 1.00, 0.55, 0.15 } },
+	{ "green", "Green", { 0.40, 1.00, 0.45 } },
+	{ "teal", "Teal", { 0.30, 0.95, 0.90 } },
+	{ "blue", "Blue", { 0.40, 0.65, 1.00 } },
+	{ "purple", "Purple", { 0.72, 0.48, 1.00 } },
+	{ "pink", "Pink", { 1.00, 0.50, 0.80 } },
+}
+
+-- Ours by key, each made below: { frame, the option that hides it (false),
+-- its first color, its name }; and their first order, the first at the foot.
+local stack = {}
+local ORDER = { "options", "history", "effects", "sound", "range", "guide" }
+
+local function Shown(key)
+	return not (SurvivorUIDB and SurvivorUIDB[stack[key].option] == false)
+end
+
+-- The order kept, any key it lacks after it in its first place's turn.
+local function Order()
+	local order, seen = {}, {}
+	local saved = SurvivorUIDB and SurvivorUIDB.mapButtonOrder
+	if type(saved) == "table" then
+		for index = 1, table.getn(saved) do
+			local key = saved[index]
+			if stack[key] and not seen[key] then
+				table.insert(order, key)
+				seen[key] = true
+			end
+		end
+	end
+	for index = 1, table.getn(ORDER) do
+		if not seen[ORDER[index]] then
+			table.insert(order, ORDER[index])
+		end
+	end
+	return order
+end
+
+local function ColorKey(key)
+	local colors = SurvivorUIDB and SurvivorUIDB.mapButtonColors
+	return colors and colors[key] or stack[key].color or "class"
+end
+
+-- A button's color: r, g, b.
+local function Tint(key)
+	local chosen = ColorKey(key)
+	for index = 1, table.getn(SurvivorUI_MAPBUTTON_COLORS) do
+		local entry = SurvivorUI_MAPBUTTON_COLORS[index]
+		if entry[1] == chosen and entry[3] then
+			return entry[3][1], entry[3][2], entry[3][3]
+		end
+	end
+	return ACCENT[1], ACCENT[2], ACCENT[3]
+end
+
+-- The frame that holds them all, sized to them: what moves (Move UI, or
+-- dragged while the Minimap buttons tab is open). Its place is the first
+-- one's middle against the minimap's (mapButtonX and mapButtonY, as the
+-- button alone had it), so it follows the minimap. First, outside the
+-- minimap's bottom left corner; down, its top left; right, the row ends at
+-- the bottom left corner.
+local holder = CreateFrame("Frame", "SurvivorUIMapButtons", Minimap or UIParent)
+holder:SetFrameStrata("MEDIUM")
+holder:SetWidth(16)
+holder:SetHeight(16)
+holder:SetMovable(true)
+
+local function PlaceHolder()
+	holder:ClearAllPoints()
+	local db = SurvivorUIDB
+	local way = WAYS[Way()]
+	local half = Size() / 2
+	if Minimap and db and db.mapButtonX and db.mapButtonY then
+		holder:SetPoint(way[3], Minimap, "CENTER", db.mapButtonX - way[1] * half, db.mapButtonY - way[2] * half)
+	elseif Minimap and Way() == "down" then
+		holder:SetPoint("TOPRIGHT", Minimap, "TOPLEFT", -5, 0)
+	elseif Minimap then
+		holder:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMLEFT", -5, 0)
+	else
+		holder:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -12, -12)
+	end
+end
+
+local function SaveHolder()
+	local left, bottom = holder:GetLeft(), holder:GetBottom()
+	local mx, my
+	if Minimap then
+		mx, my = Minimap:GetCenter()
+	end
+	if not (left and mx) then
+		return
+	end
+	local width, height, half = holder:GetWidth(), holder:GetHeight(), Size() / 2
+	local x, y = left + width / 2, bottom + height / 2
+	local way = Way()
+	if way == "up" then
+		y = bottom + half
+	elseif way == "down" then
+		y = bottom + height - half
+	elseif way == "left" then
+		x = left + width - half
+	else
+		x = left + half
+	end
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.mapButtonX = math.floor(x - mx + 0.5)
+	SurvivorUIDB.mapButtonY = math.floor(y - my + 0.5)
+	PlaceHolder()
+end
+
+if SurvivorUI_RegisterMover then
+	SurvivorUI_RegisterMover(holder, "Minimap buttons", SaveHolder, nil, function()
+		if SurvivorUIDB then
+			SurvivorUIDB.mapButtonX, SurvivorUIDB.mapButtonY = nil, nil
+		end
+		PlaceHolder()
+	end)
 end
 
 ------------------------------------------------------------------------------
@@ -55,53 +206,11 @@ end
 local button = CreateFrame("Button", "SurvivorUIMinimapButton", Minimap or UIParent)
 button:SetFrameStrata("MEDIUM")
 button:SetFrameLevel((Minimap and Minimap:GetFrameLevel() or 1) + 5)
--- Outside the minimap, its bottom left corner; the stack grows upward. Moved
--- (the Frames & bar tab, or Move UI), it keeps its place against the minimap's
--- middle, so it follows the minimap.
-local function PlaceButton()
-	button:ClearAllPoints()
-	local db = SurvivorUIDB
-	if Minimap and db and db.mapButtonX and db.mapButtonY then
-		button:SetPoint("CENTER", Minimap, "CENTER", db.mapButtonX, db.mapButtonY)
-	elseif Minimap then
-		button:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMLEFT", -5, 0)
-	else
-		button:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -12, -12)
-	end
-end
-PlaceButton()
-button:SetMovable(true)
-
-local function SaveButton()
-	local x, y = button:GetCenter()
-	local mx, my
-	if Minimap then
-		mx, my = Minimap:GetCenter()
-	end
-	if not (x and mx) then
-		return
-	end
-	SurvivorUIDB = SurvivorUIDB or {}
-	SurvivorUIDB.mapButtonX = math.floor(x - mx + 0.5)
-	SurvivorUIDB.mapButtonY = math.floor(y - my + 0.5)
-	PlaceButton()
-end
-
-if SurvivorUI_RegisterMover then
-	SurvivorUI_RegisterMover(button, "Minimap button", SaveButton, nil, function()
-		if SurvivorUIDB then
-			SurvivorUIDB.mapButtonX, SurvivorUIDB.mapButtonY = nil, nil
-		end
-		PlaceButton()
-	end)
-end
 button.icon = button:CreateTexture(nil, "ARTWORK")
 button.icon:SetTexture(ICON)
-button.ownIcon = button.icon
+button.ownIcon, button.iconPath = button.icon, ICON
 Square(button, button.icon)
-if SurvivorUI_OnAccent then
-	SurvivorUI_OnAccent(function() button.icon:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3]) end)
-end
+stack.options = { frame = button, option = "optionsMapButton", title = "Survivor UI" }
 
 button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 button:SetScript("OnClick", function()
@@ -122,7 +231,7 @@ end)
 button:SetScript("OnEnter", function()
 	Lit(this, true)
 	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
-	GameTooltip:SetText(SurvivorUI_T("Survivor UI"), ACCENT[1], ACCENT[2], ACCENT[3])
+	GameTooltip:SetText(SurvivorUI_T("Survivor UI"), this.tint[1], this.tint[2], this.tint[3])
 	GameTooltip:AddLine(SurvivorUI_T("Click: options"), 1, 1, 1)
 	GameTooltip:AddLine(SurvivorUI_T("Right click: move the whole UI"), 0.7, 0.7, 0.7)
 	GameTooltip:Show()
@@ -135,19 +244,17 @@ end)
 ------------------------------------------------------------------------------
 -- Run History's: the same square over ours, an hourglass in its frame
 -- (Art\HistoryIconWhite, ours with the S taken out, tinted as ours); a click
--- opens Run History. Off with "Run History button" (the options' Minimap tab).
+-- opens Run History. Off in the options' Minimap buttons tab.
 
 local historyButton = CreateFrame("Button", "SurvivorUIHistoryButton", Minimap or UIParent)
 historyButton:SetFrameStrata("MEDIUM")
 historyButton:SetFrameLevel((Minimap and Minimap:GetFrameLevel() or 1) + 5)
-historyButton:SetPoint("BOTTOM", button, "TOP", 0, 5)
 historyButton.icon = historyButton:CreateTexture(nil, "ARTWORK")
-historyButton.icon:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\HistoryIconWhite")
+historyButton.iconPath = "Interface\\AddOns\\SurvivorUI\\Art\\HistoryIconWhite"
+historyButton.icon:SetTexture(historyButton.iconPath)
 historyButton.ownIcon = historyButton.icon
 Square(historyButton, historyButton.icon)
-if SurvivorUI_OnAccent then
-	SurvivorUI_OnAccent(function() historyButton.icon:SetVertexColor(ACCENT[1], ACCENT[2], ACCENT[3]) end)
-end
+stack.history = { frame = historyButton, option = "historyMapButton", title = "Run History" }
 historyButton:SetScript("OnClick", function()
 	if SurvivorUI_ShowLastRuns then
 		SurvivorUI_ShowLastRuns()
@@ -156,7 +263,7 @@ end)
 historyButton:SetScript("OnEnter", function()
 	Lit(this, true)
 	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
-	GameTooltip:SetText(SurvivorUI_T("Run History"), ACCENT[1], ACCENT[2], ACCENT[3])
+	GameTooltip:SetText(SurvivorUI_T("Run History"), this.tint[1], this.tint[2], this.tint[3])
 	GameTooltip:AddLine(SurvivorUI_T("Click: your runs, each as it ended"), 1, 1, 1)
 	GameTooltip:Show()
 end)
@@ -165,15 +272,44 @@ historyButton:SetScript("OnLeave", function()
 	GameTooltip:Hide()
 end)
 
--- Shown or not by its option; what stacks over it then sits over it.
-local function HistoryShown()
-	return not (SurvivorUIDB and SurvivorUIDB.historyMapButton == false)
+-- What the run's note (below) sits beside: Run History's when it shows, else
+-- the first one shown, else the holder.
+local function NoteAnchor()
+	if Shown("history") then
+		return historyButton
+	end
+	local order = Order()
+	for index = 1, table.getn(order) do
+		if Shown(order[index]) then
+			return stack[order[index]].frame
+		end
+	end
+	return holder
 end
 
--- Run History's when it shows, else ours: the note's level (below), and the
--- switches' foot.
-local function HistoryTop()
-	return HistoryShown() and historyButton or button
+-- A note beside a button, away from the line they make: in a column, at its
+-- side with the room, level with its foot; in a row, under it (over it in the
+-- screen's lower half).
+local function Beside(note, frame)
+	note:ClearAllPoints()
+	local right = SurvivorUI_RoomOnRight(frame)
+	local way = Way()
+	if way == "up" or way == "down" then
+		if right then
+			note:SetPoint("BOTTOMLEFT", frame, "BOTTOMRIGHT", 6, 0)
+		else
+			note:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", -6, 0)
+		end
+		return
+	end
+	local _, middle = frame:GetCenter()
+	local low = middle and middle * frame:GetEffectiveScale() < GetScreenHeight() * UIParent:GetEffectiveScale() / 2
+	local side = right and "LEFT" or "RIGHT"
+	if low then
+		note:SetPoint("BOTTOM"..side, frame, "TOP"..side, 0, 6)
+	else
+		note:SetPoint("TOP"..side, frame, "BOTTOM"..side, 0, -6)
+	end
 end
 
 ------------------------------------------------------------------------------
@@ -186,10 +322,9 @@ end
 -- - the sound effects: the game's Sound Volume down to nothing, and back to
 --   where it was. The game keeps no sound of the spells apart, so the hits
 --   and the clicks go with them; the music and the ambience stay.
--- A key each too (Bindings.xml; the options' Minimap tab sets them). The
--- game's pages switch them as well: each read again twice a second. Off with
--- "Spell effects button" and "Sound effects button" (the options' Minimap
--- tab).
+-- A key each too (Bindings.xml; the options' Minimap buttons tab sets them).
+-- The game's pages switch them as well: each read again twice a second. Off
+-- in the options' Minimap buttons tab.
 
 local SWITCH_ART = "Interface\\AddOns\\SurvivorUI\\Art\\"
 local switches = {}
@@ -264,19 +399,22 @@ local function PaintSwitch(switch)
 	local on = switch.read()
 	if switch.shownOn ~= on then
 		switch.shownOn = on
-		switch.icon:SetTexture(SWITCH_ART..switch.art..(on and "IconWhite" or "OffIconWhite"))
+		switch.iconPath = SWITCH_ART..switch.art..(on and "IconWhite" or "OffIconWhite")
+		switch.icon:SetTexture(switch.iconPath)
 	end
+	local tint = switch.tint or ACCENT
 	local dim = on and 1 or 0.55
-	switch.icon:SetVertexColor(ACCENT[1] * dim, ACCENT[2] * dim, ACCENT[3] * dim)
+	switch.icon:SetVertexColor(tint[1] * dim, tint[2] * dim, tint[3] * dim)
 end
 
 local function SwitchTip(switch)
 	local on = switch.read()
 	GameTooltip:SetOwner(switch, "ANCHOR_LEFT")
-	GameTooltip:SetText(SurvivorUI_T(switch.title), ACCENT[1], ACCENT[2], ACCENT[3])
+	local tint = switch.tint or ACCENT
+	GameTooltip:SetText(SurvivorUI_T(switch.title), tint[1], tint[2], tint[3])
 	GameTooltip:AddLine(SurvivorUI_T(on and switch.onLine or switch.offLine), 1, 1, 1)
 	local key = GetBindingKey and GetBindingKey(switch.binding)
-	GameTooltip:AddLine(key and SurvivorUI_TF("Key: {1}", key) or SurvivorUI_T("A key for it: options, Minimap"), 0.7, 0.7, 0.7)
+	GameTooltip:AddLine(key and SurvivorUI_TF("Key: {1}", key) or SurvivorUI_T("A key for it: options, Minimap buttons"), 0.7, 0.7, 0.7)
 	if switch.note then
 		GameTooltip:AddLine(SurvivorUI_T(switch.note), 0.6, 0.6, 0.65, 1)
 	end
@@ -317,32 +455,21 @@ local function Switch(spec)
 	end)
 	PaintSwitch(switch)
 	table.insert(switches, switch)
+	stack[spec.key] = { frame = switch, option = spec.option, title = spec.title, binding = spec.binding }
 	return switch
 end
 
-local effectsSwitch = Switch({ name = "SurvivorUIEffectsButton", art = "Effects", option = "effectsMapButton",
+local effectsSwitch = Switch({ key = "effects", name = "SurvivorUIEffectsButton", art = "Effects", option = "effectsMapButton",
 	binding = "SURVIVORUI_SPELLEFFECTS", read = EffectsOn, flip = FlipEffects, title = "Spell effects",
 	onLine = "Shown. Click: hide them (no explosions, missiles, glows or beams)", offLine = "Hidden. Click: show them" })
-local soundSwitch = Switch({ name = "SurvivorUISoundButton", art = "Sound", option = "soundMapButton",
+local soundSwitch = Switch({ key = "sound", name = "SurvivorUISoundButton", art = "Sound", option = "soundMapButton",
 	binding = "SURVIVORUI_SOUNDEFFECTS", read = SoundOn, flip = FlipSound, title = "Sound effects",
 	onLine = "On. Click: mute them, the music and the ambience kept", offLine = "Muted. Click: back to their volume",
 	note = "The game keeps no sound of the spells apart: the hits and the clicks go with them." })
-local rangeSwitch = Switch({ name = "SurvivorUIRangeButton", art = "Range", option = "rangeMapButton",
+local rangeSwitch = Switch({ key = "range", name = "SurvivorUIRangeButton", art = "Range", option = "rangeMapButton",
 	binding = "SURVIVORUI_RANGERING", read = RangeOn, flip = FlipRange, title = "Range ring",
 	onLine = "Shown. Click: hide it, on the minimap and round you", offLine = "Hidden. Click: show it again",
 	note = "Which rings show: options, World markers." })
-
-if SurvivorUI_OnAccent then
-	SurvivorUI_OnAccent(function()
-		for index = 1, table.getn(switches) do
-			PaintSwitch(switches[index])
-		end
-	end)
-end
-
-local function SwitchShown(switch)
-	return not (SurvivorUIDB and SurvivorUIDB[switch.option] == false)
-end
 
 -- The keys (Bindings.xml): each switch as its click, said in the chat, as a
 -- key gives no other sign of it.
@@ -370,32 +497,20 @@ function SurvivorUI_ToggleRangeRing()
 	KeyFlip(rangeSwitch)
 end
 
--- The top of the switches: the last one shown, else Run History's, else ours.
-local function SwitchTop()
-	local top = HistoryTop()
-	for index = 1, table.getn(switches) do
-		if SwitchShown(switches[index]) then
-			top = switches[index]
-		end
-	end
-	return top
-end
-
 ------------------------------------------------------------------------------
 -- The Guide's (Guide.lua): the same square, filled in gold with a dark mark,
 -- so it stands apart from the class's colors around it: a ! that breathes
--- while a page is unread, a ? once all are read. Off with "Guide button" (the
--- options' Minimap tab).
+-- while a page is unread, a ? once all are read. Off, or in another color, in
+-- the options' Minimap buttons tab.
 
-local GUIDE_GOLD = { 1, 0.78, 0.15 }
 local guideButton = CreateFrame("Button", "SurvivorUIGuideButton", Minimap or UIParent)
 guideButton:SetFrameStrata("MEDIUM")
 guideButton:SetFrameLevel((Minimap and Minimap:GetFrameLevel() or 1) + 5)
 guideButton.icon = guideButton:CreateTexture(nil, "ARTWORK")
 guideButton.icon:SetTexture(FLAT)
-guideButton.icon:SetVertexColor(GUIDE_GOLD[1], GUIDE_GOLD[2], GUIDE_GOLD[3])
 guideButton.ownIcon = guideButton.icon
 Square(guideButton, guideButton.icon)
+stack.guide = { frame = guideButton, option = "guideMapButton", color = "gold", title = "Guide" }
 guideButton.mark = guideButton:CreateFontString(nil, "OVERLAY")
 guideButton.mark:SetFont("Fonts\\FRIZQT__.TTF", 13)
 guideButton.mark:SetTextColor(0.13, 0.08, 0)
@@ -413,10 +528,10 @@ end)
 guideButton:SetScript("OnEnter", function()
 	Lit(this, true)
 	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
-	GameTooltip:SetText(SurvivorUI_T("Guide"), GUIDE_GOLD[1], GUIDE_GOLD[2], GUIDE_GOLD[3])
+	GameTooltip:SetText(SurvivorUI_T("Guide"), this.tint[1], this.tint[2], this.tint[3])
 	GameTooltip:AddLine(SurvivorUI_T("How Luck, Damage and Crit really work."), 1, 1, 1)
 	if SurvivorUI_GuideUnread and SurvivorUI_GuideUnread() then
-		GameTooltip:AddLine(SurvivorUI_T("Something new to read!"), GUIDE_GOLD[1], GUIDE_GOLD[2], GUIDE_GOLD[3])
+		GameTooltip:AddLine(SurvivorUI_T("Something new to read!"), this.tint[1], this.tint[2], this.tint[3])
 	end
 	GameTooltip:Show()
 end)
@@ -441,10 +556,6 @@ guideButton:SetScript("OnUpdate", function()
 		this.icon:SetAlpha(0.8 + 0.2 * math.sin(this.wait * 4))
 	end
 end)
-
-local function GuideShown()
-	return not (SurvivorUIDB and SurvivorUIDB.guideMapButton == false)
-end
 
 -- A note beside the button, once for each player, some seconds into their
 -- first run with it: as Run History's note below, the result box in the Guide's
@@ -551,28 +662,19 @@ hintWatch:SetScript("OnUpdate", function()
 		SurvivorUIDB.guideHintSeen = true
 		HintParts()
 		hint:SetWidth(math.max(hint.title:GetStringWidth() + 24, hint.line:GetStringWidth() + 16))
-		hint:ClearAllPoints()
-		if SurvivorUI_RoomOnRight(guideButton) then
-			hint:SetPoint("BOTTOMLEFT", guideButton, "BOTTOMRIGHT", 6, 0)
-		else
-			hint:SetPoint("BOTTOMRIGHT", guideButton, "BOTTOMLEFT", -6, 0)
-		end
+		Beside(hint, guideButton)
 		hint.age = 0
 		hint:SetAlpha(0)
 		hint:Show()
 	end
 end)
 
--- The top of the stack: the Guide's when it shows, else the switches'.
-local function StackTop()
-	return GuideShown() and guideButton or SwitchTop()
-end
-
 ------------------------------------------------------------------------------
 -- The game's battleground button: square, beside ours. The stock code shows it
--- and hides it as queues come and go; only its look and place change.
+-- and hides it as queues come and go; only its look and place change: after
+-- the last of ours, a gap on (last nil: in the first one's place).
 
-local function RestyleBattlefield()
+local function RestyleBattlefield(last)
 	local frame = getglobal("MiniMapBattlefieldFrame")
 	if not frame then
 		return
@@ -583,9 +685,13 @@ local function RestyleBattlefield()
 		border:SetAlpha(0)
 	end
 	Square(frame, getglobal("MiniMapBattlefieldIcon"))
-	-- Over ours (and Run History's), in the stack outside the minimap.
+	local way = WAYS[Way()]
 	frame:ClearAllPoints()
-	frame:SetPoint("BOTTOM", StackTop(), "TOP", 0, 5)
+	if last then
+		frame:SetPoint(way[3], last, way[4], way[1] * Gap(), way[2] * Gap())
+	else
+		frame:SetPoint(way[3], holder, way[3], 0, 0)
+	end
 	if not frame.squareHooked then
 		frame.squareHooked = true
 		local stockEnter, stockLeave = frame:GetScript("OnEnter"), frame:GetScript("OnLeave")
@@ -604,44 +710,145 @@ local function RestyleBattlefield()
 	end
 end
 
--- The stack laid out again: Run History's shown or not, the switches shown
--- over it, the battleground's over the top. For the options' Minimap tab too.
-function SurvivorUI_PlaceMapButtons()
-	if HistoryShown() then
-		historyButton:Show()
-	else
-		historyButton:Hide()
-	end
-	local under = HistoryTop()
-	for index = 1, table.getn(switches) do
-		local switch = switches[index]
-		switch:ClearAllPoints()
-		switch:SetPoint("BOTTOM", under, "TOP", 0, 5)
-		if SwitchShown(switch) then
-			switch:Show()
-			under = switch
+-- Each one in its color: ours and Run History's icons, the switches' (dimmed
+-- while off), the Guide's square.
+local function PaintButtons()
+	for key, entry in pairs(stack) do
+		local frame = entry.frame
+		frame.tint = frame.tint or {}
+		frame.tint[1], frame.tint[2], frame.tint[3] = Tint(key)
+		if frame.read then
+			PaintSwitch(frame)
 		else
-			switch:Hide()
+			frame.icon:SetVertexColor(frame.tint[1], frame.tint[2], frame.tint[3])
 		end
 	end
-	guideButton:ClearAllPoints()
-	guideButton:SetPoint("BOTTOM", under, "TOP", 0, 5)
-	if GuideShown() then
-		guideButton:Show()
-	else
-		guideButton:Hide()
-	end
-	SurvivorUI_PaintGuideButton()
-	RestyleBattlefield()
 end
+
+-- The line laid out again: the ones shown, in their order, from the holder's
+-- first side on, each at its size; the holder sized to them; the
+-- battleground's after the last. For the options' Minimap buttons tab too.
+function SurvivorUI_PlaceMapButtons()
+	local way = WAYS[Way()]
+	local size, gap = Size(), Gap()
+	local order = Order()
+	local count, last = 0, nil
+	for index = 1, table.getn(order) do
+		local frame = stack[order[index]].frame
+		if Shown(order[index]) then
+			Square(frame, frame.ownIcon)
+			frame:ClearAllPoints()
+			frame:SetPoint(way[3], holder, way[3], way[1] * count * (size + gap), way[2] * count * (size + gap))
+			frame:Show()
+			count = count + 1
+			last = frame
+		else
+			frame:Hide()
+		end
+	end
+	local length = math.max(1, count) * (size + gap) - gap
+	holder:SetWidth(way[1] ~= 0 and length or size)
+	holder:SetHeight(way[2] ~= 0 and length or size)
+	PlaceHolder()
+	guideButton.mark:SetFont("Fonts\\FRIZQT__.TTF", math.max(8, math.floor(13 * size / 16 + 0.5)))
+	PaintButtons()
+	SurvivorUI_PaintGuideButton()
+	RestyleBattlefield(last)
+end
+
+-- For the options' tab: the keys in their order, and each one as it stands
+-- (its name, its icon or the Guide's mark, dimmed while off, shown, its
+-- color's key and r, g, b, the key that flips it).
+function SurvivorUI_MapButtonOrder()
+	return Order()
+end
+
+function SurvivorUI_MapButtonInfo(key)
+	local entry = stack[key]
+	if not entry then
+		return nil
+	end
+	local frame = entry.frame
+	local r, g, b = Tint(key)
+	local info = { title = entry.title, icon = frame.iconPath, dim = 1, shown = Shown(key), color = ColorKey(key),
+		r = r, g = g, b = b, binding = entry.binding }
+	if frame.read and not frame.read() then
+		info.dim = 0.55
+	end
+	if key == "guide" then
+		info.mark = guideButton.mark:GetText() or "?"
+	end
+	return info
+end
+
+-- One a step toward the first (-1) or the last (1).
+function SurvivorUI_MoveMapButton(key, by)
+	local order = Order()
+	for index = 1, table.getn(order) do
+		if order[index] == key then
+			local other = index + by
+			if order[other] then
+				order[index], order[other] = order[other], order[index]
+			end
+			break
+		end
+	end
+	local first = true
+	for index = 1, table.getn(ORDER) do
+		first = first and order[index] == ORDER[index]
+	end
+	SurvivorUIDB = SurvivorUIDB or {}
+	SurvivorUIDB.mapButtonOrder = not first and order or nil
+	SurvivorUI_PlaceMapButtons()
+end
+
+function SurvivorUI_ShowMapButton(key)
+	local entry = stack[key]
+	if entry then
+		SurvivorUIDB = SurvivorUIDB or {}
+		if Shown(key) then
+			SurvivorUIDB[entry.option] = false
+		else
+			SurvivorUIDB[entry.option] = nil
+		end
+		SurvivorUI_PlaceMapButtons()
+	end
+end
+
+-- One's color, or all of them (key nil), by its key in the colors above.
+function SurvivorUI_SetMapButtonColor(key, color)
+	SurvivorUIDB = SurvivorUIDB or {}
+	local colors = SurvivorUIDB.mapButtonColors or {}
+	for each, entry in pairs(stack) do
+		if not key or each == key then
+			colors[each] = color ~= (entry.color or "class") and color or nil
+		end
+	end
+	SurvivorUIDB.mapButtonColors = next(colors) and colors or nil
+	SurvivorUI_PlaceMapButtons()
+end
+
+-- All of them back as they came: shown, in their first order and colors, up,
+-- at the first size and gap. Their place stays (Back to its place for that).
+function SurvivorUI_ResetMapButtons()
+	SurvivorUIDB = SurvivorUIDB or {}
+	local db = SurvivorUIDB
+	for _, entry in pairs(stack) do
+		db[entry.option] = nil
+	end
+	db.mapButtonOrder, db.mapButtonColors, db.mapButtonWay, db.mapButtonSize, db.mapButtonGap = nil, nil, nil, nil, nil
+	SurvivorUI_PlaceMapButtons()
+end
+
+if SurvivorUI_OnAccent then
+	SurvivorUI_OnAccent(PaintButtons)
+end
+SurvivorUI_PlaceMapButtons()
 
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
-loader:SetScript("OnEvent", function()
-	PlaceButton()
-	SurvivorUI_PlaceMapButtons()
-end)
+loader:SetScript("OnEvent", SurvivorUI_PlaceMapButtons)
 
 ------------------------------------------------------------------------------
 -- A note beside Run History's button as a run begins, when the last run kept
@@ -771,9 +978,8 @@ function SurvivorUI_HistoryNotice(force, look)
 		run.zone or "", MinSec(seconds),
 		math.floor(color[1] * 255), math.floor(color[2] * 255), math.floor(color[3] * 255), RESULT_WORDS[kind]))
 	notice:SetWidth(math.max(notice.title:GetStringWidth() + 24, notice.line:GetStringWidth() + 16))
-	-- Level with Run History's button at its foot, growing up: apart from ours.
-	notice:ClearAllPoints()
-	notice:SetPoint("BOTTOMRIGHT", HistoryTop(), "BOTTOMLEFT", -6, 0)
+	-- Beside Run History's button, apart from the line they make.
+	Beside(notice, NoteAnchor())
 	notice.age = 0
 	notice:SetAlpha(0)
 	notice:Show()

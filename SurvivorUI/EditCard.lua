@@ -53,7 +53,7 @@ local PIECES = {
 	["Crit numbers"] = { places = { "critLeft", "critTop" }, noFont = true },
 	["Damage taken"] = { places = { "takenLeft", "takenTop" }, key = "ctTaken", toggle = "SurvivorUI_ToggleTakenNumbers", noFont = true },
 	["Healing"] = { places = { "healLeft", "healTop" }, key = "ctHeals", toggle = "SurvivorUI_ToggleHealNumbers", noFont = true },
-	["Minimap button"] = { places = { "mapButtonX", "mapButtonY" }, noFont = true },
+	["Minimap buttons"] = { places = { "mapButtonX", "mapButtonY" }, noFont = true },
 	["XP bar"] = { places = { "xpBarX", "xpBarTop" }, key = "xpBar", offUnlessOn = true, toggle = "SurvivorUI_ToggleXpBar" },
 	["Level Up!"] = { part = "levelup", places = { "levelUpX", "levelUpTop" }, key = "levelUp", offUnlessOn = true, toggle = "SurvivorUI_ToggleLevelUp" },
 	["Class gems"] = { places = { "shardsX", "shardsTop" }, noFont = true },

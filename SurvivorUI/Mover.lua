@@ -1023,7 +1023,7 @@ SurvivorUI_CARD_PIECES = {
 	{ key = "crits", label = "Biggest Crits", names = { "Biggest Crits", "New best crit" } },
 	{ key = "xpbar", label = "XP bar", names = { "XP bar" } },
 	{ key = "stats", label = "Stats panel", names = { "Stats" } },
-	{ key = "minimap", label = "Minimap", names = { "Minimap", "Minimap button", "Kills and gold line" } },
+	{ key = "minimap", label = "Minimap", names = { "Minimap", "Minimap buttons", "Kills and gold line" } },
 	{ key = "chat", label = "Chat", names = { "Chat" } },
 	{ key = "bosses", label = "Boss bars and guardians", names = { "Boss bars", "Guardians" } },
 	{ key = "party", label = "Party frames", names = { "Party frames", "Revive bar" } },

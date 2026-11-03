@@ -194,7 +194,8 @@ local function Tip(row)
 	end
 	local r, g, b = ClassColor(class)
 	GameTooltip:SetOwner(row, "ANCHOR_NONE")
-	GameTooltip:SetPoint("BOTTOMLEFT", row, "TOPLEFT", 0, 6)
+	-- Over the row's buffs when they line up over it.
+	GameTooltip:SetPoint("BOTTOMLEFT", row, "TOPLEFT", 0, 6 + (row.lift or 0))
 	GameTooltip:SetText(name or "?", r, g, b)
 	local kind = (race and (race.." ") or "")..(row.className or "")
 	if kind ~= "" then
@@ -281,17 +282,65 @@ end
 ------------------------------------------------------------------------------
 -- A friend's buffs and how far (Jocke, ebgl_menios, 2026-11-02): the game
 -- shares a friend's buffs with the client (UnitBuff "party1", seen in a local
--- co-op run, 2026-11-03), not the shield's amount. Their icons in a line on
--- the row's far side from your frame, the newest outermost; hover one for
--- what it is. Past 30 yards the row fades and its value says how far: the
--- yards from the zone's map (GetPlayerMapPosition of the friend, the minimap
--- pins' yards a map unit spans, MapPins.lua), else the client's 30 yards
--- (CheckInteractDistance 4). "Party buffs" and "Party distance", the Party
--- tab.
+-- co-op run, 2026-11-03), not the shield's amount. Their icons in a line, the
+-- newest outermost; hover one for what it is. The line's side (the Party
+-- tab's "Buffs", SurvivorUIDB.partyBuffSide): left of the row by default,
+-- the far side from your frame; right of it; over it or under it, the rows
+-- then standing a line of buffs further apart. Past 30 yards the row fades
+-- and its value says how far: the yards from the zone's map
+-- (GetPlayerMapPosition of the friend, the minimap pins' yards a map unit
+-- spans, MapPins.lua), else the client's 30 yards (CheckInteractDistance 4).
+-- "Party buffs" and "Party distance", the Party tab.
 
 local BUFF_SIZE = 16
+local BUFF_GAP = 2               -- between two buffs, and from the row over or under it
 local BUFFS_MOST = 8
 local FAR = 30                   -- yards: past this the row fades
+
+local function BuffsOn()
+	return not (SurvivorUIDB and SurvivorUIDB.partyBuffs == false)
+end
+
+-- "left" (the default), "right", "top" or "bottom".
+local function BuffSide()
+	local side = SurvivorUIDB and SurvivorUIDB.partyBuffSide
+	if side == "right" or side == "top" or side == "bottom" then
+		return side
+	end
+	return "left"
+end
+
+-- The room a line of buffs over or under each row adds between two rows.
+local function BuffBand()
+	local side = BuffSide()
+	if BuffsOn() and (side == "top" or side == "bottom") then
+		return BUFF_SIZE + BUFF_GAP
+	end
+	return 0
+end
+
+-- How far a full line of buffs reaches beside a row, on its right.
+local BUFF_REACH = 3 + BUFFS_MOST * (BUFF_SIZE + BUFF_GAP) - BUFF_GAP
+
+-- The buff's place in the line, on the side chosen: left and right from the
+-- row's middle outward, over and under it from its left end on.
+local function PlaceBuff(icon, row, index, side)
+	if icon.side == side then
+		return
+	end
+	icon.side = side
+	local step = (index - 1) * (BUFF_SIZE + BUFF_GAP)
+	icon:ClearAllPoints()
+	if side == "right" then
+		icon:SetPoint("LEFT", row.health, "RIGHT", 3 + step, 0)
+	elseif side == "top" then
+		icon:SetPoint("BOTTOMLEFT", row, "TOPLEFT", step, BUFF_GAP)
+	elseif side == "bottom" then
+		icon:SetPoint("TOPLEFT", row, "BOTTOMLEFT", step, -BUFF_GAP)
+	else
+		icon:SetPoint("RIGHT", row.icon, "LEFT", -3 - step, 0)
+	end
+end
 
 local function Buff(row, index)
 	local icon = row.buffs[index]
@@ -301,7 +350,6 @@ local function Buff(row, index)
 	icon = CreateFrame("Frame", nil, row)
 	icon:SetWidth(BUFF_SIZE)
 	icon:SetHeight(BUFF_SIZE)
-	icon:SetPoint("RIGHT", row.icon, "LEFT", -3 - (index - 1) * (BUFF_SIZE + 2), 0)
 	Border(icon)
 	icon.texture = icon:CreateTexture(nil, "ARTWORK")
 	icon.texture:SetAllPoints(icon)
@@ -320,16 +368,22 @@ local function Buff(row, index)
 	return icon
 end
 
-local function PaintBuffs(row, unit)
+-- The friend's buffs, or a sample's (its icons, being placed).
+local function PaintBuffs(row, unit, sample)
 	local shown = 0
-	if unit and not (SurvivorUIDB and SurvivorUIDB.partyBuffs == false) then
+	if (unit or sample) and BuffsOn() then
+		local side = BuffSide()
 		for index = 1, BUFFS_MOST do
-			local ok, texture, count = pcall(UnitBuff, unit, index)
+			local ok, texture, count = true, sample and sample[index], nil
+			if not sample then
+				ok, texture, count = pcall(UnitBuff, unit, index)
+			end
 			if not (ok and texture) then
 				break
 			end
 			shown = index
 			local icon = Buff(row, index)
+			PlaceBuff(icon, row, index, side)
 			icon.unit, icon.index = unit, index
 			icon.texture:SetTexture(texture)
 			icon.count:SetText(count and count > 1 and count or "")
@@ -370,13 +424,21 @@ local function Down()
 end
 
 -- The first friend by your frame, each next one over it (or under it, top to
--- bottom), so a friend joining never moves the others.
+-- bottom), so a friend joining never moves the others. With the buffs over or
+-- under the rows, each row's line of them is in the holder too: the first
+-- row lifted off its end by a line when its buffs are on that end.
 local function PlaceRow(row, down)
-	if row.down == down then
+	local band, side = BuffBand(), BuffSide()
+	local lead = 0
+	if (down and side == "top") or (not down and side == "bottom") then
+		lead = band
+	end
+	row.lift = side == "top" and band or 0
+	local step = lead + (row.index - 1) * (ROW_HEIGHT + band + ROW_GAP)
+	if row.down == down and row.step == step then
 		return
 	end
-	row.down = down
-	local step = (row.index - 1) * (ROW_HEIGHT + ROW_GAP)
+	row.down, row.step = down, step
 	row:ClearAllPoints()
 	if down then
 		row:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, -step)
@@ -443,7 +505,7 @@ local function Paint(row, friend)
 	else
 		row:SetAlpha(1)
 	end
-	PaintBuffs(row, friend.unit)
+	PaintBuffs(row, friend.unit, friend.buffs)
 	if friend.down and friend.rescue then
 		row.revive:SetValue(friend.rescue)
 		row.revive:Show()
@@ -505,14 +567,19 @@ local function Friend(index, revive)
 end
 
 -- Being placed with no party: three friends as samples, one down and being
--- brought back.
+-- brought back, with some buffs to show where they go.
+local SAMPLE_BUFFS = {
+	"Interface\\Icons\\Spell_Holy_WordFortitude", "Interface\\Icons\\Spell_Nature_Regeneration",
+	"Interface\\Icons\\Ability_Warrior_BattleShout", "Interface\\Icons\\Spell_Holy_PowerWordShield",
+}
 local SAMPLES = {
 	{ name = "Friend", class = "WARRIOR", className = "Warrior", health = 820, most = 1000, leader = true,
-		dmg = 182000, dps = 640, share = 0.36, top = "Whirlwind", topdps = 310 },
+		dmg = 182000, dps = 640, share = 0.36, top = "Whirlwind", topdps = 310, buffs = SAMPLE_BUFFS },
 	{ name = "Another", class = "MAGE", className = "Mage", health = 0, most = 700, down = true, rescue = 0.45,
-		dmg = 151000, dps = 530, share = 0.30, top = "Frostbolt", topdps = 280 },
+		dmg = 151000, dps = 530, share = 0.30, top = "Frostbolt", topdps = 280, buffs = { SAMPLE_BUFFS[1] } },
 	{ name = "Healer", class = "PRIEST", className = "Priest", health = 350, most = 760,
-		dmg = 64000, dps = 225, share = 0.13, top = "Holy Fire", topdps = 120 },
+		dmg = 64000, dps = 225, share = 0.13, top = "Holy Fire", topdps = 120,
+		buffs = { SAMPLE_BUFFS[1], SAMPLE_BUFFS[2], SAMPLE_BUFFS[4] } },
 }
 
 local function Placing(name)
@@ -572,8 +639,11 @@ local function DrawFrames(revive)
 	local samples = count == 0 and Placing("Party frames")
 	local shown = 0
 	local down = Down()
-	if holder.down ~= down then
-		holder.down = down
+	local band = BuffBand()
+	-- The order or the buffs' side changed: the holder's place again.
+	local placed = (down and "down" or "up")..BuffSide()..band..(BuffsOn() and "on" or "off")
+	if holder.placed ~= placed then
+		holder.placed = placed
 		PlaceFrames()
 	end
 	if samples then
@@ -601,7 +671,7 @@ local function DrawFrames(revive)
 		rows[index]:Hide()
 	end
 	if shown > 0 then
-		holder:SetHeight(shown * (ROW_HEIGHT + ROW_GAP) - ROW_GAP)
+		holder:SetHeight(shown * (ROW_HEIGHT + band + ROW_GAP) - ROW_GAP)
 		holder:Show()
 	else
 		holder:SetHeight(ROW_HEIGHT)
@@ -609,21 +679,27 @@ local function DrawFrames(revive)
 	end
 end
 
--- The room a full party takes: four friends, one over the other.
-local FULL = MOST * ROW_HEIGHT + (MOST - 1) * ROW_GAP
+-- The room a full party takes: four friends, one over the other, with their
+-- lines of buffs between them when these go over or under the rows.
+local function Full()
+	return MOST * (ROW_HEIGHT + BuffBand()) + (MOST - 1) * ROW_GAP
+end
 
 -- Left of your frame, the party's room level with the frame's bottom, until
 -- moved: bottom to top, held by its bottom, it grows upward as friends join;
 -- top to bottom, held by the room's top (where the fourth friend stands bottom
 -- to top), it grows downward. The place kept is the room's bottom left
--- (partyLeft, partyBottom), so the order changes nothing else.
+-- (partyLeft, partyBottom), so the order changes nothing else. The buffs on
+-- the rows' right, the room stands a full line of them further left of your
+-- frame, for them to fit.
 PlaceFrames = function()
 	holder:ClearAllPoints()
 	local db = SurvivorUIDB
 	local down = Down()
+	local full = Full()
 	if db and db.partyLeft and db.partyBottom then
 		if down then
-			holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", db.partyLeft, db.partyBottom + FULL)
+			holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", db.partyLeft, db.partyBottom + full)
 		else
 			holder:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", db.partyLeft, db.partyBottom)
 		end
@@ -631,19 +707,23 @@ PlaceFrames = function()
 	end
 	local player = getglobal("SurvivorUIPlayer")
 	if player and player:IsVisible() then
+		local away = -14
+		if BuffsOn() and BuffSide() == "right" then
+			away = away - BUFF_REACH
+		end
 		if down then
-			holder:SetPoint("TOPRIGHT", player, "BOTTOMLEFT", -14, FULL)
+			holder:SetPoint("TOPRIGHT", player, "BOTTOMLEFT", away, full)
 		else
-			holder:SetPoint("BOTTOMRIGHT", player, "BOTTOMLEFT", -14, 0)
+			holder:SetPoint("BOTTOMRIGHT", player, "BOTTOMLEFT", away, 0)
 		end
 	elseif down then
-		holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", 12, 260 + FULL)
+		holder:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", 12, 260 + full)
 	else
 		holder:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 12, 260)
 	end
 end
 
--- For the sizes (Mover.lua) and the Party tab's Order.
+-- For the sizes (Mover.lua) and the Party tab's Order and Buffs.
 function SurvivorUI_PlacePartyFrames()
 	PlaceFrames()
 end
@@ -652,7 +732,7 @@ local function SaveFrames()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.partyLeft = math.floor(holder:GetLeft() + 0.5)
 	if Down() then
-		SurvivorUIDB.partyBottom = math.floor(holder:GetTop() - FULL + 0.5)
+		SurvivorUIDB.partyBottom = math.floor(holder:GetTop() - Full() + 0.5)
 	else
 		SurvivorUIDB.partyBottom = math.floor(holder:GetBottom() + 0.5)
 	end

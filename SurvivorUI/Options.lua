@@ -275,6 +275,7 @@ local TABS = {
 	{ group = "Interface", color = { 0.45, 0.72, 1.00 } },
 	{ key = "units", label = "Frames & bar", color = { 1.00, 0.62, 0.25 } },
 	{ key = "minimap", label = "Minimap", color = { 0.55, 0.82, 0.40 } },
+	{ key = "mapbuttons", label = "Minimap buttons", color = { 0.45, 0.88, 0.66 } },
 	{ key = "chat", label = "Chat", color = { 0.60, 0.80, 0.95 } },
 	{ key = "tooltips", label = "Tooltips", color = { 0.90, 0.86, 0.62 } },
 	{ key = "plates", label = "Nameplates", color = { 0.70, 0.55, 1.00 } },
@@ -331,7 +332,8 @@ local TAB_PIECES = {
 	character = { "Character pane" },
 	stats = { "Stats" },
 	units = { "Player frame", "Target frame", "Target debuffs", "Buffs" },
-	minimap = { "Minimap", "Minimap button" },
+	minimap = { "Minimap", "Minimap buttons" },
+	mapbuttons = { "Minimap buttons" },
 	chat = { "Chat" },
 }
 
@@ -3885,6 +3887,144 @@ page = pages.party
 Header(page, "Party", "For co-op runs, from the game's 0.113: a frame for each friend in your party, and a bar while you are down or bring a friend back. The damage meter's title opens a Party Damage page too, and Run History names the party of a run played in one. Out of a party nothing shows; while this tab is open, a sample does.")
 PanelHead(page, FeatureOn("partyFrames"), FeatureToggle("partyFrames", true), "party", "Party frames", nil, nil, { font = false })
 Note(page, "Left of your frame, the first friend level with it and each next one over it, or from the top down (Order, below). Each friend's class icon, their health in the class's color and what is left of it; DOWN in red while down, a gold fill while you bring them back, Reviving you on the one bringing you back. Hover one for their damage this run and their top spell; click to target. The game's party frames are put away while these are on.")
+
+-- The preview: a full party of four left of your frame as Party.lua lays it
+-- out until moved, in its order, each friend's buffs on the side chosen (over
+-- or under, the rows that much further apart), the far one faded. Party.lua's
+-- sizes, at 0.8. Each friend: name, class, health, its words, buffs, leader.
+Paint.PARTY = {
+	{ "Friend", "WARRIOR", 0.82, nil, 4, true },
+	{ "Another", "MAGE", 0, "Reviving 45%", 1 },
+	{ "Healer", "PRIEST", 0.46, nil, 3 },
+	{ "Hunter", "HUNTER", 1, "far", 5 },
+}
+Paint.PARTY_BUFFS = { "Spell_Holy_WordFortitude", "Spell_Nature_Regeneration", "Ability_Warrior_BattleShout",
+	"Spell_Holy_PowerWordShield", "Spell_Nature_Rejuvenation" }
+function Paint.Party(self)
+	self:Begin()
+	if SurvivorUI_Feature and not SurvivorUI_Feature("partyFrames") then
+		self:Word(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], "Party frames off"):SetPoint("CENTER", self, "CENTER", 0, 0)
+		return
+	end
+	local S = 0.8
+	local ICON, BAR, HIGH, GAP, BUFF, BUFF_GAP = 24, 140, 24, 5, 16, 2
+	local buffsOn = DB().partyBuffs ~= false
+	local side = DB().partyBuffSide
+	if side ~= "right" and side ~= "top" and side ~= "bottom" then
+		side = "left"
+	end
+	local down = DB().partyDown == true
+	local band = (buffsOn and (side == "top" or side == "bottom")) and (BUFF + BUFF_GAP) or 0
+	local lead = ((down and side == "top") or (not down and side == "bottom")) and band or 0
+	local cell = HIGH + band + GAP
+	local room = 4 * (HIGH + band) + 3 * GAP
+	-- Across: the buffs on the left, the rows, the room the right's take (a
+	-- full line), the gap, your frame.
+	local most = 0
+	for index = 1, table.getn(Paint.PARTY) do
+		most = math.max(most, Paint.PARTY[index][5])
+	end
+	local left = (buffsOn and side == "left") and (3 + most * (BUFF + BUFF_GAP) - BUFF_GAP) or 0
+	local right = (buffsOn and side == "right") and (3 + 8 * (BUFF + BUFF_GAP) - BUFF_GAP) or 0
+	local you = { 120, 36 }
+	local across = left + ICON + 1 + BAR + right + 14 + you[1]
+	local x0 = math.floor((PAGE_WIDTH - across * S) / 2 + left * S)
+	local roomTop = -22 - math.floor((self:GetHeight() - 32 - room * S) / 2)
+	local roomBottom = roomTop - room * S
+	local font = 10 * S + FONT_BUMP
+	local high, iconWide, barWide = math.floor(HIGH * S + 0.5), math.floor(ICON * S + 0.5), math.floor(BAR * S + 0.5)
+	local size, step = math.floor(BUFF * S + 0.5), (BUFF + BUFF_GAP) * S
+	-- A box with a black edge a layer under it.
+	local function Edged(x, y, width, height, r, g, b, texture, layer)
+		local edge = self:Box(0, 0, 0, 1, nil, "BORDER")
+		edge:SetPoint("TOPLEFT", self, "TOPLEFT", x - 1, y + 1)
+		edge:SetWidth(width + 2)
+		edge:SetHeight(height + 2)
+		local box = self:Box(r, g, b, 1, texture, layer)
+		box:SetPoint("TOPLEFT", self, "TOPLEFT", x, y)
+		box:SetWidth(width)
+		box:SetHeight(height)
+		return box
+	end
+	local rangeOn = DB().partyRange ~= false
+	for index = 1, table.getn(Paint.PARTY) do
+		local friend = Paint.PARTY[index]
+		local top
+		if down then
+			top = roomTop - (lead + (index - 1) * cell) * S
+		else
+			top = roomBottom + (lead + (index - 1) * cell + HIGH) * S
+		end
+		top = math.floor(top + 0.5)
+		local far = friend[4] == "far" and rangeOn
+		local dim = far and 0.55 or 1
+		local r, g, b = 0.6, 0.6, 0.6
+		if SurvivorUI_ClassColor then
+			r, g, b = SurvivorUI_ClassColor(friend[2])
+		end
+		local art, coords
+		if SurvivorUI_ClassIcon then
+			art, coords = SurvivorUI_ClassIcon(friend[2])
+		end
+		local icon = Edged(x0, top, iconWide, high, dim, dim, dim, art)
+		if coords then
+			local cutX, cutY = (coords[2] - coords[1]) * 0.1, (coords[4] - coords[3]) * 0.1
+			icon:SetTexCoord(coords[1] + cutX, coords[2] - cutX, coords[3] + cutY, coords[4] - cutY)
+		end
+		if friend[6] then
+			local crown = self:Box(1, 1, 1, 1, "Interface\\GroupFrame\\UI-Group-LeaderIcon", "OVERLAY")
+			crown:SetPoint("TOPLEFT", self, "TOPLEFT", x0 - 4, top + 5)
+			crown:SetWidth(11)
+			crown:SetHeight(11)
+		end
+		local barX = x0 + iconWide + 1
+		local value = friend[4] or (math.floor(friend[3] * 100 + 0.5).."%")
+		if friend[3] <= 0 then
+			-- Down, a friend bringing them back: the gold over the red.
+			local back = Edged(barX, top, barWide, high, 0.30, 0.07, 0.07)
+			local gold = self:Box(1, 0.76, 0.18, 0.85, nil, "OVERLAY")
+			gold:SetPoint("TOPLEFT", back, "TOPLEFT", 0, 0)
+			gold:SetWidth(math.floor(barWide * 0.45 + 0.5))
+			gold:SetHeight(high)
+		else
+			local back = Edged(barX, top, barWide, high, 0.08 * dim, 0.08 * dim, 0.1 * dim)
+			local fill = self:Box(r * dim, g * dim, b * dim, 1)
+			fill:SetPoint("TOPLEFT", back, "TOPLEFT", 0, 0)
+			fill:SetWidth(math.max(1, math.floor(barWide * friend[3] + 0.5)))
+			fill:SetHeight(high)
+		end
+		if friend[4] == "far" then
+			value = far and "34 yd | 100%" or "100%"
+		end
+		self:Word(SurvivorUI_FONT, font, "OUTLINE", dim, dim, dim, friend[1]):SetPoint("LEFT", self, "TOPLEFT", barX + 4, top - high / 2)
+		self:Word(SurvivorUI_FONT, font, "OUTLINE", dim, dim, dim, value):SetPoint("RIGHT", self, "TOPLEFT", barX + barWide - 4, top - high / 2)
+		if buffsOn then
+			for slot = 1, friend[5] do
+				local x, y
+				if side == "right" then
+					x, y = barX + barWide + 3 * S + (slot - 1) * step, top - (high - size) / 2
+				elseif side == "top" then
+					x, y = x0 + (slot - 1) * step, top + BUFF_GAP * S + size
+				elseif side == "bottom" then
+					x, y = x0 + (slot - 1) * step, top - high - BUFF_GAP * S
+				else
+					x, y = x0 - 3 * S - size - (slot - 1) * step, top - (high - size) / 2
+				end
+				local buff = Edged(math.floor(x + 0.5), math.floor(y + 0.5), size, size, dim, dim, dim,
+					"Interface\\Icons\\"..Paint.PARTY_BUFFS[slot])
+				buff:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+			end
+		end
+	end
+	-- Your frame, its bottom level with the party's room.
+	local hr, hg, hb = Paint.HeroColor()
+	local youX = x0 + math.floor((ICON + 1 + BAR + right + 14) * S + 0.5)
+	local youWide, youHigh = math.floor(you[1] * S + 0.5), math.floor(you[2] * S + 0.5)
+	local frame = Edged(youX, math.floor(roomBottom + youHigh + 0.5), youWide, youHigh, hr * 0.7, hg * 0.7, hb * 0.7)
+	self:Word(SurvivorUI_FONT, font, "OUTLINE", 1, 1, 1, "Your frame"):SetPoint("CENTER", frame, "CENTER", 0, 0)
+end
+Kit.Preview(page, 184, Paint.Party)
+
 Inline(page, "Order", {
 	{ "up", "Bottom to top" },
 	{ "down", "Top to bottom" },
@@ -3896,7 +4036,27 @@ Inline(page, "Order", {
 		end
 	end)
 Note(page, "Bottom to top, each friend who joins goes over the last; top to bottom, under it, the first one where the fourth stands bottom to top. A full party takes the same place either way.")
-Check(page, "Party buffs", OnUnlessOff("partyBuffs"), Flip("partyBuffs"), "each friend's buffs in a line beside their frame; hover one for what it is")
+Check(page, "Party buffs", OnUnlessOff("partyBuffs"), function()
+	Flip("partyBuffs")()
+	if SurvivorUI_PlacePartyFrames then
+		SurvivorUI_PlacePartyFrames()
+	end
+end, "each friend's buffs in a line beside their frame; hover one for what it is")
+Inline(page, "Buffs", {
+	{ "left", "Left" },
+	{ "right", "Right" },
+	{ "top", "Top" },
+	{ "bottom", "Bottom" },
+}, function()
+	local side = DB().partyBuffSide
+	return (side == "right" or side == "top" or side == "bottom") and side or "left"
+end, function(value)
+	DB().partyBuffSide = value ~= "left" and value or nil
+	if SurvivorUI_PlacePartyFrames then
+		SurvivorUI_PlacePartyFrames()
+	end
+end)
+Note(page, "Left: the far side from your frame. Right: until moved, the frames stand a line of buffs further left of yours, for them to fit. Top or bottom: a line over or under each friend, the frames that much further apart.")
 Check(page, "Party distance", OnUnlessOff("partyRange"), Flip("partyRange"), "past 30 yards a friend's frame fades and says how far")
 Subheader(page, "Revive bar")
 Check(page, "Revive bar", ReviveIsOn, Call("SurvivorUI_ToggleRevive"),
@@ -4134,49 +4294,14 @@ SizeGrid(page, {
 -- Minimap: its look and size, and the pins a run puts on it (MapPins.lua).
 
 page = pages.minimap
-Header(page, "Minimap", "Its look and its size, and the pins a run puts on it: each guardian's lair its own mark, a chest for each cache. While this tab is open, drag the minimap or its button to move them.")
+Header(page, "Minimap", "Its look and its size, and the pins a run puts on it: each guardian's lair its own mark, a chest for each cache. While this tab is open, drag the minimap or its buttons to move them.")
 Button(page, "Back to its place", 150, PAGE_WIDTH - 150, function()
 	if SurvivorUI_ResetPiece then
 		SurvivorUI_ResetPiece("Minimap")
 	end
 end)
 Check(page, "Square minimap", FeatureOn("minimap"), FeatureToggle("minimap"), "its buttons tidied; after a reload")
-Check(page, "Run History button", OnUnlessOff("historyMapButton"), function()
-	DB().historyMapButton = DB().historyMapButton == false
-	if SurvivorUI_PlaceMapButtons then
-		SurvivorUI_PlaceMapButtons()
-	end
-end, "the hourglass over the [S], opening Run History")
-Check(page, "Guide button", OnUnlessOff("guideMapButton"), function()
-	DB().guideMapButton = DB().guideMapButton == false
-	if SurvivorUI_PlaceMapButtons then
-		SurvivorUI_PlaceMapButtons()
-	end
-end, "the gold square, a ! with unread pages; /sui guide too")
-Check(page, "Spell effects button", OnUnlessOff("effectsMapButton"), function()
-	DB().effectsMapButton = DB().effectsMapButton == false
-	if SurvivorUI_PlaceMapButtons then
-		SurvivorUI_PlaceMapButtons()
-	end
-end, "sparkles: no explosions, missiles, glows or beams, in a click")
-Check(page, "Sound effects button", OnUnlessOff("soundMapButton"), function()
-	DB().soundMapButton = DB().soundMapButton == false
-	if SurvivorUI_PlaceMapButtons then
-		SurvivorUI_PlaceMapButtons()
-	end
-end, "a speaker: mutes spells, hits and clicks; music stays")
-Check(page, "Range ring button", OnUnlessOff("rangeMapButton"), function()
-	DB().rangeMapButton = DB().rangeMapButton == false
-	if SurvivorUI_PlaceMapButtons then
-		SurvivorUI_PlaceMapButtons()
-	end
-end, "a ring: your range on the minimap and round you, in a click")
-KeyButton(page, "Spell effects key", "SURVIVORUI_SPELLEFFECTS",
-	"A key of your own for the spell effects, on or off, as the sparkles' button. None by default; Key Bindings in the game's menu lists it as well.")
-KeyButton(page, "Sound effects key", "SURVIVORUI_SOUNDEFFECTS",
-	"A key of your own for the sound effects, muted or back, as the speaker's button. None by default; Key Bindings in the game's menu lists it as well.")
-KeyButton(page, "Range ring key", "SURVIVORUI_RANGERING",
-	"A key of your own for the range ring, hidden or back, as the ring's button. None by default; Key Bindings in the game's menu lists it as well.")
+Kit.Link(page, "Its buttons: which show, their order, their colors and their keys, in", "mapbuttons")
 Check(page, "Clock and FPS", OnUnlessOff("minimapClock"), function()
 	Flip("minimapClock")()
 	SurvivorUI_GameHud.localClock()
@@ -4313,6 +4438,488 @@ function pinPreview:Refresh()
 end
 table.insert(widgets, pinPreview)
 page.y = page.y - 46
+
+------------------------------------------------------------------------------
+-- Minimap buttons (MinimapButton.lua): which show, their order, each one's
+-- color, the way they line up, their size and the gap between them.
+
+-- Made with the kit: the preview draws them as the game will, beside a corner
+-- of the minimap; under it a row each, in their order, with its arrows, its
+-- switch and, for the three switches, its key; then the colors of the one
+-- picked (a click on its row, or on its square in the preview).
+
+-- A key of the game's (Bindings.xml) in a small box: a click, then the key; a
+-- right click clears it. Command() names the binding; with none, it hides.
+function Kit.Key(parent, color, Command)
+	local button = CreateFrame("Button", nil, parent)
+	button:SetWidth(84)
+	button:SetHeight(20)
+	Boxed(button, WELL, EDGE)
+	button.label = Text(button, 9, TEXT)
+	button.label:SetPoint("CENTER", button, "CENTER", 0, 0)
+	button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	button:SetScript("OnClick", function()
+		local command = Command()
+		if arg1 == "RightButton" then
+			local old = GetBindingKey and GetBindingKey(command)
+			if old then
+				SetBinding(old)
+				SaveBindings(GetCurrentBindingSet())
+			end
+			keyCapture:Hide()
+		else
+			keyCapture.command = command
+			keyCapture:Show()
+		end
+		RefreshAll()
+	end)
+	button:SetScript("OnEnter", function()
+		this.hot = true
+		this:Refresh()
+		GameTooltip:SetOwner(this, "ANCHOR_TOP")
+		GameTooltip:SetText("Its key", 1, 1, 1)
+		GameTooltip:AddLine("Click, then press the key (Alt, Ctrl or Shift with it if you like). Escape leaves it as it was; a right click clears it. Key Bindings in the game's menu lists it as well.", 0.8, 0.8, 0.8, 1)
+		GameTooltip:Show()
+	end)
+	button:SetScript("OnLeave", function()
+		this.hot = nil
+		this:Refresh()
+		GameTooltip:Hide()
+	end)
+	function button:Refresh()
+		local command = Command()
+		if not command then
+			self:Hide()
+			return
+		end
+		self:Show()
+		local waiting = keyCapture:IsShown() and keyCapture.command == command
+		local key = GetBindingKey and GetBindingKey(command)
+		if waiting then
+			self.label:SetText("Press a key...")
+			self.label:SetTextColor(color[1], color[2], color[3])
+		elseif key then
+			self.label:SetText(key)
+			self.label:SetTextColor(1, 1, 1)
+		else
+			self.label:SetText("No key")
+			self.label:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+		end
+		if waiting or self.hot then
+			self:SetBackdropBorderColor(color[1], color[2], color[3], 1)
+		else
+			self:SetBackdropBorderColor(EDGE[1], EDGE[2], EDGE[3], 1)
+		end
+	end
+	table.insert(widgets, button)
+	return button
+end
+
+page = pages.mapbuttons
+Kit.Head(page, { line = "The squares beside the minimap: which show, their order, each one's color and the way they line up. While this tab is open, drag them to move them all." })
+
+do
+	local tab = page
+	local color = tab.color
+	-- Each one in its first order: its key, its name for the search, its line
+	-- in its row (what it does).
+	local BUTTONS = {
+		{ "options", "Survivor UI button", "Click: these options. Right click: move the UI." },
+		{ "history", "Run History button", "Your runs, each as it ended." },
+		{ "effects", "Spell effects button", "No explosions, missiles, glows or beams, in a click." },
+		{ "sound", "Sound effects button", "Mutes spells, hits and clicks; the music stays." },
+		{ "range", "Range ring button", "Your range on the minimap and round you." },
+		{ "guide", "Guide button", "How the game's numbers work; a ! with a page unread." },
+	}
+	local LINES = {}
+	for index = 1, table.getn(BUTTONS) do
+		LINES[BUTTONS[index][1]] = BUTTONS[index][3]
+	end
+	local picked                       -- the key whose colors show under the rows
+
+	local function Order()
+		return SurvivorUI_MapButtonOrder and SurvivorUI_MapButtonOrder() or {}
+	end
+
+	local function Info(key)
+		return key and SurvivorUI_MapButtonInfo and SurvivorUI_MapButtonInfo(key)
+	end
+
+	-- The one picked: the first one until a click picks another.
+	local function Picked()
+		if not Info(picked) then
+			picked = Order()[1]
+		end
+		return picked
+	end
+
+	local function Pick(key)
+		picked = key
+		RefreshAll()
+	end
+
+	-- The shown ones as the game lines them up, beside the minimap's corner
+	-- (its bottom left; its top left, down), as large as the room lets up to
+	-- half again their size: each its edge, its icon in its color (dimmed
+	-- while off) or the Guide's fill and mark, its place in the order beside
+	-- it, a white ring round the one picked. A click on one picks it.
+	function Paint.MapButtons(self)
+		self:Begin()
+		self.hits = self.hits or {}
+		for index = 1, table.getn(self.hits) do
+			self.hits[index]:Hide()
+		end
+		local way = DB().mapButtonWay or "up"
+		local size, gap = DB().mapButtonSize or 16, DB().mapButtonGap or 5
+		local order, shown = Order(), {}
+		for index = 1, table.getn(order) do
+			local info = Info(order[index])
+			if info and info.shown then
+				info.key = order[index]
+				table.insert(shown, info)
+			end
+		end
+		local count = table.getn(shown)
+		local height = self:GetHeight()
+		local mapX, mapSide = 330, 100
+		local mapTop = way == "down" and -8 or -(height - 8 - mapSide)
+		local edge = self:Box(0, 0, 0, 1, nil, "BACKGROUND")
+		edge:SetPoint("TOPLEFT", self, "TOPLEFT", mapX - 1, mapTop + 1)
+		edge:SetWidth(mapSide + 2)
+		edge:SetHeight(mapSide + 2)
+		local map = self:Box(0.20, 0.26, 0.13, 1, nil, "BORDER")
+		map:SetPoint("TOPLEFT", self, "TOPLEFT", mapX, mapTop)
+		map:SetWidth(mapSide)
+		map:SetHeight(mapSide)
+		self:Word(SurvivorUI_FONT, 9 + FONT_BUMP, "", 0.45, 0.55, 0.35, "Minimap"):SetPoint("CENTER", map, "CENTER", 0, 0)
+		if count == 0 then
+			self:Word(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3],
+				"None shown: /sui opens these options"):SetPoint("RIGHT", map, "LEFT", -16, 0)
+			return
+		end
+		local column = way == "up" or way == "down"
+		local length = count * size + (count - 1) * gap
+		local zoom = math.min(1.5, ((column and height or mapX) - 20) / length)
+		local s, g, off = size * zoom, gap * zoom, 5 * zoom
+		local x, y, stepX, stepY = mapX - off - s, mapTop - mapSide + s, 0, s + g
+		if way == "down" then
+			y, stepY = mapTop, -(s + g)
+		elseif way == "left" then
+			stepX, stepY = -(s + g), 0
+		elseif way == "right" then
+			x, stepX, stepY = mapX - off - length * zoom, s + g, 0
+		end
+		for index = 1, count do
+			local info = shown[index]
+			local left, top = x + (index - 1) * stepX, y + (index - 1) * stepY
+			if info.key == Picked() then
+				local ring = self:Box(1, 1, 1, 1, nil, "BACKGROUND")
+				ring:SetPoint("TOPLEFT", self, "TOPLEFT", left - 2, top + 2)
+				ring:SetWidth(s + 4)
+				ring:SetHeight(s + 4)
+			end
+			local rim = self:Box(0, 0, 0, 1, nil, "BORDER")
+			rim:SetPoint("TOPLEFT", self, "TOPLEFT", left - 1, top + 1)
+			rim:SetWidth(s + 2)
+			rim:SetHeight(s + 2)
+			local icon = self:Box(info.r * info.dim, info.g * info.dim, info.b * info.dim, 1, info.icon)
+			icon:SetPoint("TOPLEFT", self, "TOPLEFT", left, top)
+			icon:SetWidth(s)
+			icon:SetHeight(s)
+			if info.mark then
+				self:Word("Fonts\\FRIZQT__.TTF", 13 * s / 16, "", 0.13, 0.08, 0, info.mark):SetPoint("CENTER", icon, "CENTER", 0, 0)
+			end
+			local number = self:Word(SurvivorUI_FONT, 8 + FONT_BUMP, "", MUTED[1], MUTED[2], MUTED[3], tostring(index))
+			if column then
+				number:SetPoint("RIGHT", icon, "LEFT", -5, 0)
+			else
+				number:SetPoint("BOTTOM", icon, "TOP", 0, 5)
+			end
+			local hit = self.hits[index]
+			if not hit then
+				hit = CreateFrame("Button", nil, self)
+				hit:SetScript("OnClick", function() Pick(this.key) end)
+				hit:SetScript("OnEnter", function()
+					GameTooltip:SetOwner(this, "ANCHOR_TOP")
+					GameTooltip:SetText(this.title, 1, 1, 1)
+					GameTooltip:AddLine("Click: its color, under the buttons", 0.8, 0.8, 0.8)
+					GameTooltip:Show()
+				end)
+				hit:SetScript("OnLeave", function() GameTooltip:Hide() end)
+				self.hits[index] = hit
+			end
+			hit.key, hit.title = info.key, info.title
+			hit:ClearAllPoints()
+			hit:SetPoint("TOPLEFT", self, "TOPLEFT", left, top)
+			hit:SetWidth(s)
+			hit:SetHeight(s)
+			hit:Show()
+		end
+	end
+	Kit.Preview(tab, 160, Paint.MapButtons)
+
+	-- An arrow that moves its row's button a step toward the first (up) or
+	-- the last.
+	local function Arrow(row, earlier)
+		local arrow = CreateFrame("Button", nil, row)
+		arrow:SetWidth(20)
+		arrow:SetHeight(20)
+		arrow.wash = Fill(arrow, "BACKGROUND", color[1], color[2], color[3], 0)
+		arrow.wash:SetAllPoints(arrow)
+		arrow.icon = arrow:CreateTexture(nil, "ARTWORK")
+		arrow.icon:SetTexture(ART.."DropArrow")
+		arrow.icon:SetWidth(10)
+		arrow.icon:SetHeight(10)
+		arrow.icon:SetPoint("CENTER", arrow, "CENTER", 0, 0)
+		if earlier then
+			arrow.icon:SetTexCoord(0, 1, 1, 0)
+		end
+		arrow.by = earlier and -1 or 1
+		arrow:SetScript("OnClick", function()
+			local slot = this:GetParent().slot
+			local order = Order()
+			if order[slot] and order[slot + this.by] and SurvivorUI_MoveMapButton then
+				picked = order[slot]
+				SurvivorUI_MoveMapButton(order[slot], this.by)
+			end
+			RefreshAll()
+		end)
+		arrow:SetScript("OnEnter", function() this.wash:SetVertexColor(color[1], color[2], color[3], 0.25) end)
+		arrow:SetScript("OnLeave", function() this.wash:SetVertexColor(color[1], color[2], color[3], 0) end)
+		return arrow
+	end
+
+	-- A row each, its button as the order has it at that place.
+	local function Row(slot)
+		local row = CreateFrame("Button", nil, tab)
+		row.slot = slot
+		row:SetWidth(PAGE_WIDTH)
+		row:SetHeight(28)
+		row:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, tab.y)
+		row.wash = Fill(row, "BACKGROUND", color[1], color[2], color[3], 0)
+		row.wash:SetAllPoints(row)
+		row.number = Text(row, 9, MUTED)
+		row.number:SetPoint("LEFT", row, "LEFT", 6, 0)
+		row.edge = Fill(row, "BORDER", 0, 0, 0, 1)
+		row.edge:SetWidth(20)
+		row.edge:SetHeight(20)
+		row.edge:SetPoint("LEFT", row, "LEFT", 22, 0)
+		row.icon = row:CreateTexture(nil, "ARTWORK")
+		row.icon:SetPoint("TOPLEFT", row.edge, "TOPLEFT", 1, -1)
+		row.icon:SetPoint("BOTTOMRIGHT", row.edge, "BOTTOMRIGHT", -1, 1)
+		row.mark = row:CreateFontString(nil, "OVERLAY")
+		row.mark:SetFont("Fonts\\FRIZQT__.TTF", 14)
+		row.mark:SetTextColor(0.13, 0.08, 0)
+		row.mark:SetPoint("CENTER", row.edge, "CENTER", 0, 0)
+		row.name = Text(row, 10, TEXT)
+		row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 52, -2)
+		row.line = Text(row, 8, MUTED)
+		row.line:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
+		-- Its controls, over the row: the key, the arrows, the switch.
+		row.key = Kit.Key(row, color, function()
+			local info = Info(Order()[row.slot])
+			return info and info.binding
+		end)
+		row.key:SetPoint("RIGHT", row, "RIGHT", -132, 0)
+		row.earlier = Arrow(row, true)
+		row.earlier:SetPoint("LEFT", row.key, "RIGHT", 4, 0)
+		row.later = Arrow(row, false)
+		row.later:SetPoint("LEFT", row.earlier, "RIGHT", 2, 0)
+		row.switch = Kit.Switch(tab, PAGE_WIDTH - 72, tab.y - 4, function()
+			local info = Info(Order()[row.slot])
+			return info and info.shown
+		end, function()
+			local key = Order()[row.slot]
+			if key and SurvivorUI_ShowMapButton then
+				SurvivorUI_ShowMapButton(key)
+			end
+		end)
+		row.switch:SetFrameLevel(row:GetFrameLevel() + 2)
+		row:SetScript("OnClick", function() Pick(Order()[this.slot]) end)
+		row:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+		row:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+		function row:Refresh()
+			local order = Order()
+			local key = order[self.slot]
+			local info = Info(key)
+			if not info then
+				self:Hide()
+				self.switch:Hide()
+				return
+			end
+			self:Show()
+			self.switch:Show()
+			local on = key == Picked()
+			self.wash:SetVertexColor(color[1], color[2], color[3], on and 0.16 or (self.hot and 0.06 or 0))
+			self.number:SetText(tostring(self.slot))
+			self.edge:SetVertexColor(on and 1 or 0, on and 1 or 0, on and 1 or 0, 1)
+			if info.icon then
+				self.icon:SetTexture(info.icon)
+				self.icon:SetVertexColor(info.r * info.dim, info.g * info.dim, info.b * info.dim)
+				self.mark:Hide()
+			else
+				self.icon:SetTexture(FLAT)
+				self.icon:SetVertexColor(info.r, info.g, info.b)
+				self.mark:SetText(info.mark or "?")
+				self.mark:Show()
+			end
+			self.icon:SetAlpha(info.shown and 1 or 0.35)
+			self.mark:SetAlpha(info.shown and 1 or 0.35)
+			self.name:SetText(info.title)
+			if info.shown then
+				self.name:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+			else
+				self.name:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
+			end
+			if key == "options" and not info.shown then
+				self.line:SetText("Hidden: /sui still opens these options.")
+			else
+				self.line:SetText(LINES[key] or "")
+			end
+			self.earlier:SetAlpha(self.slot > 1 and 1 or 0.3)
+			self.later:SetAlpha(order[self.slot + 1] and 1 or 0.3)
+		end
+		table.insert(widgets, row)
+		side.Index(tab, BUTTONS[slot][2], BUTTONS[slot][3], tab.y, 28)
+		tab.y = tab.y - 30
+	end
+
+	Kit.Section(tab, "Buttons", "In their order from the first, the one by the minimap's corner. The arrows move one; its switch shows or hides it; a click on a row picks it for the colors under them.")
+	for slot = 1, table.getn(BUTTONS) do
+		Row(slot)
+	end
+
+	-- A color for the one picked, its name after the section's: the class's
+	-- first, then the others (MinimapButton.lua's, read as they refresh: it
+	-- loads after this file); at the right, every button in it.
+	tab.y = tab.y - 4
+	local head = Kit.Section(tab, "Color", "The picked button's: the class's (the addon's own color: gold if the Global tab says so) or one of these. All in this color: every button in it.")
+	local which = CreateFrame("Frame", nil, tab)
+	which:SetWidth(1)
+	which:SetHeight(1)
+	which:SetPoint("LEFT", head, "RIGHT", 28, 0)
+	which.text = Text(which, 9, TEXT)
+	which.text:SetPoint("LEFT", which, "LEFT", 0, 0)
+	function which:Refresh()
+		local info = Info(Picked())
+		if info then
+			self.text:SetText(info.title)
+			self.text:SetTextColor(Kit.Light({ info.r, info.g, info.b }, 0.2))
+		else
+			self.text:SetText("")
+		end
+	end
+	table.insert(widgets, which)
+	for index = 1, 10 do
+		local swatch = CreateFrame("Button", nil, tab)
+		swatch.index = index
+		swatch:SetWidth(18)
+		swatch:SetHeight(ROW)
+		swatch:SetPoint("TOPLEFT", tab, "TOPLEFT", (index - 1) * 24, tab.y)
+		swatch.edge = Fill(swatch, "BORDER", 0.3, 0.3, 0.35, 1)
+		swatch.edge:SetWidth(18)
+		swatch.edge:SetHeight(18)
+		swatch.edge:SetPoint("TOPLEFT", swatch, "TOPLEFT", 0, -1)
+		swatch.fill = Fill(swatch, "ARTWORK", 1, 1, 1, 1)
+		swatch.fill:SetPoint("TOPLEFT", swatch.edge, "TOPLEFT", 2, -2)
+		swatch.fill:SetPoint("BOTTOMRIGHT", swatch.edge, "BOTTOMRIGHT", -2, 2)
+		swatch:SetScript("OnClick", function()
+			if this.key and SurvivorUI_SetMapButtonColor and Picked() then
+				SurvivorUI_SetMapButtonColor(Picked(), this.key)
+			end
+			RefreshAll()
+		end)
+		swatch:SetScript("OnEnter", function()
+			this.hot = true
+			this:Refresh()
+			GameTooltip:SetOwner(this, "ANCHOR_TOP")
+			GameTooltip:SetText(this.name or "", 1, 1, 1)
+			GameTooltip:Show()
+		end)
+		swatch:SetScript("OnLeave", function()
+			this.hot = nil
+			this:Refresh()
+			GameTooltip:Hide()
+		end)
+		function swatch:Refresh()
+			local entry = SurvivorUI_MAPBUTTON_COLORS and SurvivorUI_MAPBUTTON_COLORS[self.index]
+			if not entry then
+				self:Hide()
+				return
+			end
+			self:Show()
+			self.key, self.name = entry[1], entry[2]
+			local tint = entry[3] or ACCENT
+			self.fill:SetVertexColor(tint[1], tint[2], tint[3], 1)
+			local info = Info(Picked())
+			local chosen = info and info.color == self.key
+			if chosen then
+				self.edge:SetVertexColor(1, 1, 1, 1)
+			elseif self.hot then
+				self.edge:SetVertexColor(0.7, 0.7, 0.75, 1)
+			else
+				self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+			end
+			self.fill:SetAlpha((chosen or self.hot) and 1 or 0.75)
+		end
+		table.insert(widgets, swatch)
+	end
+	local all = Kit.Quiet(tab, "All in this color", 130, function()
+		local info = Info(Picked())
+		if info and SurvivorUI_SetMapButtonColor then
+			SurvivorUI_SetMapButtonColor(nil, info.color)
+		end
+		RefreshAll()
+	end)
+	all:SetPoint("TOPLEFT", tab, "TOPLEFT", PAGE_WIDTH - 130, tab.y + 2)
+	side.Index(tab, "Color", "class color gold white red orange green teal blue purple pink all", tab.y, ROW)
+	tab.y = tab.y - ROW - 10
+
+	-- How they line up, their size and the gap: the buttons and the preview
+	-- follow each.
+	local function Follow(set)
+		return function(value)
+			set(value)
+			if SurvivorUI_PlaceMapButtons then
+				SurvivorUI_PlaceMapButtons()
+			end
+			if tab.preview then
+				tab.preview:Refresh()
+			end
+		end
+	end
+	Kit.Split(tab)
+	Kit.Section(tab, "Line up", "From the first, the one by the minimap's corner: up and down in a column, left and right in a row. The first one stays where it is.")
+	Kit.Segments(tab, { { "up", "Up" }, { "down", "Down" }, { "left", "Left" }, { "right", "Right" } },
+		function() return DB().mapButtonWay or "up" end,
+		Follow(function(way) DB().mapButtonWay = way ~= "up" and way or nil end))
+	Kit.Right(tab)
+	Kit.Size(tab, "Size", 12, 28, 1, function() return DB().mapButtonSize or 16 end,
+		Follow(function(value)
+			value = math.floor(value + 0.5)
+			DB().mapButtonSize = value ~= 16 and value or nil
+		end), { { "S", 14 }, { "M", 16 }, { "L", 20 } }, "%d")
+	Kit.Join(tab)
+	local y = tab.y
+	Kit.Stepper(tab, "Gap", 0, 12, 1, function() return DB().mapButtonGap or 5 end,
+		Follow(function(value) DB().mapButtonGap = value ~= 5 and value or nil end), "%d px")
+	local back = Kit.Quiet(tab, "Back to its place", 140, function()
+		if SurvivorUI_ResetPiece then
+			SurvivorUI_ResetPiece("Minimap buttons")
+		end
+	end)
+	back:SetPoint("TOPLEFT", tab, "TOPLEFT", PAGE_WIDTH - 140, y)
+	side.Index(tab, "Back to its place", "reset place position", y, 24)
+
+	Kit.Foot(tab, { reset = Asked("Minimap buttons back to default?",
+		"All of them shown, in their first order and colors, lined up upward at the first size and gap. Where they stand stays: Back to its place for that.", "Back to default",
+		function()
+			if SurvivorUI_ResetMapButtons then
+				SurvivorUI_ResetMapButtons()
+			end
+			picked = nil
+		end) })
+end
 
 ------------------------------------------------------------------------------
 -- Chat.

@@ -228,6 +228,21 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.55, 2026-11-03
+
+A tab of their own for the minimap buttons, with your order, your colors and a live preview, and your friends' buffs on any side of the party frames.
+
+**Minimap buttons**
+- **A tab of their own:** the options' new **Minimap buttons** tab, after Minimap, holds the squares beside the minimap: a live preview of them by a corner of the minimap, then a row for each with its switch, two arrows to move it in the order and, for the spell effects, sound effects and range ring, its key. The switches and keys left the Minimap tab for it.
+- **Your order:** any of them can come first, the [S] too, and each one shown or hidden. Hide the [S] and `/sui` still opens the options.
+- **Your colors:** each one in the class's color (as before) or one of nine others: gold, white, red, orange, green, teal, blue, purple or pink. The Guide's square starts gold as before. **All in this color** paints every button the same.
+- **Line up, size and gap:** a column up (as before) or down, or a row to the left or the right; the squares from 12 to 28 (16 as before) and the gap between them from 0 to 12.
+- **They move as one:** in move mode they are now one piece, **Minimap buttons**, so the whole line moves together; a place you set before stays.
+
+**Party frames**
+- **Buffs on any side:** your friends' buffs can go left of their frames (as before), right of them, over them or under them. Over or under, the frames stand a line of buffs further apart; on the right, until you move them, the frames stand further left of yours so the buffs fit. The Party tab: **Buffs**.
+- **Layout preview:** the Party tab draws a full party beside your frame as it will look: the order, the buffs' side, a friend down and one far away. The samples you see while placing the frames show some buffs too.
+
 ### v3.0.54, 2026-11-03
 
 Bosses and awake guardians that move on the minimap, your shield in your health numbers, your friends' buffs and distance on the party frames, debuffs inside the nameplates and a button for your range ring.
