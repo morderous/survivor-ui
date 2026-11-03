@@ -1,7 +1,8 @@
 -- Survivor UI - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
 -- Survivor UI: raid marks put on their own (the game's 0.115, "raid markers
 -- work for everyone"; asked for on Discord by Farsigt). A mark for each kind,
--- each kind on or off (the Nameplates tab, Raid marks; all off by default):
+-- each kind on or off (the Nameplates tab, Raid marks; all off by default,
+-- the enemies' on for a new install from v3.0.53, SurvivorUI.lua):
 -- the bosses (a skull), the lair guardians (a cross), the elites (a star).
 --
 -- A mark goes to an enemy the game lists (AZS_UNITS) once it is in the fight:

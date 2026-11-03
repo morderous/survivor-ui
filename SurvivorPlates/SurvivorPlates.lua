@@ -1,23 +1,39 @@
 -- Survivor Plates - Copyright (C) 2026 morderous - GPL-3.0 - github.com/morderous/survivor-ui
--- Survivor Plates: nameplates in the manner of Plater, for Azeroth Survivors.
--- A flat health bar on a dark backing with a thin black border, the name above
--- it, the unit's health on it, a color of its own in the execute range, and a
--- highlighted target with its debuffs. Elites and bosses get larger plates in
--- their own colors. The plate under the mouse wears a white line round its bar
--- and round the letters of its name, comes to the front of the others, and
--- takes the click: with clicks going through the plates it is the only one
--- that does.
--- A lair guardian is an elite to the client, under its elite's name; the game
--- tells addons which one it is only for the target, whose plate turns blue.
+-- Survivor Plates: nameplates for Azeroth Survivors, in the manner of the old
+-- plates (SurvivorUI Classic's, brought here in v3.0.53 with its corners less
+-- round, Lucas 2026-11-02): a thin black line round the bar, the name over it,
+-- the health's share small inside. The rank and file in red; the elites, the
+-- lair guardians, the bosses and the final boss in the item qualities' colors
+-- (uncommon, rare, epic, legendary), each a little larger, with a skull over
+-- the name, each meaner. The bosses' plates in front, then the guardians',
+-- then the elites', the rank and file a little faded behind. Your target's
+-- line is gold, its debuffs over it; the boss bar under the mouse (Survivor
+-- UI's) lines its enemy's in white. The plate under the mouse glows, comes to
+-- the front of the others and takes the click: with clicks going through the
+-- plates it is the only one that does. A friend's plate is thinner, in a gold
+-- rim: a member of a co-op run's party in the class's color, told by its name
+-- among party1 to party4, every other friend (pets, summons, totems) in mint.
+-- A friend down has no plate: the client gives a fallen hero none (seen
+-- 2026-10-23), and Survivor UI's party frames say DOWN.
 --
--- Where the game shares its run (its addon API: AZS_UNITS, AZS_UnitKind), the
--- elites and bosses it lists are told apart by that too, beyond the lists below.
+-- Each enemy's kind is the game's: the world anchors of the elites, lair
+-- guardians and bosses alive (the game's 0.139.2), read four times a second
+-- and put on the screen ten times, each claiming the nearest plate of its
+-- name (the client seats a plate's middle on its unit's overhead spot, 4
+-- points off at most, seen 2026-11-02); and the target's from AZS_UnitKind. A
+-- lair guardian is named as its zone's elites, so the name alone can't tell
+-- the two. A plate no anchor claims (the layout Stacking moves plates apart)
+-- goes by its name: the anchors', the game's list of the run's units
+-- (AZS_UNITS, a guardian by its health against an elite of the same name),
+-- and the lists below.
 --
 -- The 1.12 client owns the nameplate frames: they are unnamed children of
 -- WorldFrame, recognized by their border texture. Each one is skinned once,
--- its stock art blanked and an overlay drawn from the stock health bar's
--- values. The client recycles a plate for another unit, so the overlay
--- re-reads the name every frame.
+-- its stock art blanked and our own drawn on it from the stock health bar's
+-- values. The client keeps a pool of plates and hands them from unit to unit
+-- as the enemies come within 20 yards, go and die: in a crowd, every moment.
+-- So each plate is read again every frame (its name, its bar's color and
+-- health), else one handed on shows its last unit's look for a moment.
 --
 -- The bars sit exactly where the client seats its plates: position and
 -- stacking are the client's own, its Nameplate Layout (the game's 0.131,
@@ -26,30 +42,29 @@
 --
 -- A raid mark (the game's 0.115; Survivor UI's Raid marks put them on their
 -- own) is the client's own icon, the plate's last region, left of the bar: the
--- client hangs it off its wider stock plate's edge, far from the bar.
+-- client hangs it off its wider stock plate's edge, far from the bar. The
+-- marks Survivor UI draws on the enemies (its Raid marks, "Draw the enemies'
+-- marks") go there too, on a plate its anchor claimed; its World markers then
+-- leave that enemy to the plate (SurvivorPlates_PlateShows).
 --
 -- Each kind is chosen on its own (/splates, or Survivor UI's options): the
--- enemies' four, normal, elites, guardians and bosses (all of them by
--- default; a kind left out still shows as your target, unless /splates
--- target: the game moves the target on its own, and with the rank and file
--- left out its plate jumps from one to the next, asked for by Klopp), and the friends'
--- three, your pets and summons and your totems (asked for on Discord by
--- Sedz and Amarolk, with a warlock's many demons about) and the members of a
--- co-op run's party (the game's 0.113; asked for by Klopp and ChaoticBon),
--- none by default. Only elites, guardians and bosses carry a name, unless names
--- are on every plate. The friends' plates are the client's friendly ones,
--- told from an enemy's by the color it gives them, drawn small with the
--- name and icon; a party member's, told by its name among party1 to party4,
--- in the class's color with the class's icon and the health left. A friend
--- down has no plate: the client gives a fallen hero none (seen 2026-10-23),
--- and Survivor UI's party frames say DOWN.
+-- enemies' four, normal, elites, guardians and bosses (all but the rank and
+-- file by default, as SurvivorUI Classic's; a kind left out shows as your
+-- target only with /splates target: the game moves the target on its own,
+-- and with the rank and file left out its plate jumps from one to the next,
+-- asked for by Klopp), and the friends' three, your pets and summons and your
+-- totems (asked for on Discord by Sedz and Amarolk, with a warlock's many
+-- demons about) and the members of a co-op run's party (the game's 0.113;
+-- asked for by Klopp and ChaoticBon), all on by default. A plate left out has
+-- its bar hidden, the plate itself untouched: the client keeps it, and its
+-- target's light (the target's plate the one at full alpha).
 --
 -- Slash commands:
---   /splates none       no nameplates at all (the default), or back
+--   /splates none       no nameplates at all, or back (the default)
 --   /splates normal | elites | guardians | bosses     each enemy kind, on or off
 --   /splates pets | totems | party                    each friend's, on or off
---   /splates target     the target's plate though its kind is left out (default), or not
---   /splates names      names only on elites, guardians and bosses (default), or on every plate
+--   /splates target     the target's plate though its kind is left out, or not (the default)
+--   /splates names      names on every plate (the default), or only on elites, guardians, bosses and friends
 --   /splates keys       V and Shift+V ignored (default), or let them work as the game has them
 --   /splates click      clicks go through the plates but the one under the mouse (default), or every plate takes them
 --   /splates overlap    plates stay right over their enemies (default), or move apart in a crowd
@@ -66,6 +81,11 @@ SurvivorPlates_Standby = SurvivorUIClassicDB and SurvivorUIClassicDB.use == "cla
 if SurvivorPlates_Standby then return end
 
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
+local ART = "Interface\\AddOns\\SurvivorPlates\\Art\\"
+-- Our rounded bar (bot\ferramentas\make_plate_round.py --plates), drawn in
+-- three pieces: the left end, the middle, the right end.
+local ROUND = ART.."PlateRound"
+local END = 0.25                 -- each round end's share of the art across
 -- Survivor UI's face when it is installed: a player's own Expressway, else its
 -- Barlow Condensed, else Friz Quadrata. This addon loads first, so it tries
 -- them itself, each on a probe, since a face that does not load leaves none.
@@ -89,40 +109,57 @@ for index = 1, table.getn(FACES) do
 end
 local BORDER_TEXTURE = "Interface\\Tooltips\\Nameplate-Border"
 
-local EXECUTE_RANGE = 0.30      -- the game's execute effects start below this share of health
-
+-- Each kind's plate, SurvivorUI Classic's: the enemies' names a fifth smaller
+-- and their bars a tenth than its first ones (Lucas, 2026-11-02). A skull over
+-- the name, three of them, each meaner: our plain bone one over an elite's,
+-- the minimap's for lairs over a guardian's, our infernal one over a boss's.
+-- Each kind's plate raised over the rest by `rise` frame levels (Lucas: the
+-- bosses in front, then the guardians, then the elites).
 local KINDS = {
-	normal   = { width = 100, height = 9,  nameSize = 9,  color = { 0.84, 0.20, 0.20 } },
-	-- Elites, guardians and bosses in the item qualities' order, each a
-	-- little lighter: uncommon's lime (not the pets' mint), rare, epic.
-	elite    = { width = 130, height = 11, nameSize = 11, color = { 0.35, 1.00, 0.20 } },
-	guardian = { width = 150, height = 12, nameSize = 12, color = { 0.20, 0.75, 0.95 } },
-	boss     = { width = 170, height = 14, nameSize = 13, color = { 0.72, 0.32, 1.00 } },
-	-- A friend's plate, small and always named: your pets and summons green,
-	-- your totems blue.
-	pet       = { width = 80,  height = 6,  nameSize = 9,  color = { 0.25, 0.85, 0.35 } },
-	totem     = { width = 80,  height = 6,  nameSize = 9,  color = { 0.30, 0.65, 1.00 } },
-	-- A co-op friend's: a little larger, in the class's color (this one only
-	-- with the class unknown).
-	party     = { width = 110, height = 8,  nameSize = 10, color = { 0.45, 0.78, 1.00 } },
+	normal   = { width = 81,  height = 8,  name = 8,  share = 7, color = { 0.77, 0.12, 0.12 } },
+	elite    = { width = 95,  height = 9,  name = 9,  share = 7, color = { 0.12, 0.72, 0.12 },
+		skull = "EliteSkull", skullSize = 14, rise = 10 },
+	guardian = { width = 106, height = 10, name = 9,  share = 8, color = { 0.00, 0.44, 0.87 },
+		skull = "MinimapSkull", skullSize = 16, rise = 20 },
+	boss     = { width = 119, height = 11, name = 10, share = 8, color = { 0.64, 0.21, 0.93 },
+		skull = "BossSkull", skullSize = 22, rise = 30 },
+	final    = { width = 128, height = 11, name = 10, share = 8, color = { 1.00, 0.50, 0.00 },
+		skull = "BossSkull", skullSize = 22, rise = 30 },
+	-- The friends' bars 30% thinner and their names a fifth smaller, in a
+	-- gold rim (Lucas, 2026-11-02): the party in the class's color (this one
+	-- only with the class unknown), the pets, summons and totems in mint,
+	-- apart from the elites' green.
+	party    = { width = 81,  height = 5.5, name = 6.4, share = 5, rim = true, color = { 0.45, 0.78, 1.00 } },
+	pet      = { width = 81,  height = 5.5, name = 6.4, share = 5, rim = true, color = { 0.30, 0.88, 0.62 } },
+	totem    = { width = 81,  height = 5.5, name = 6.4, share = 5, rim = true, color = { 0.30, 0.88, 0.62 } },
 }
 local FRIEND_KINDS = { pet = true, totem = true, party = true }
+local FADE = 0.75                -- the rank and file's colors, behind the rest
+-- Each enemy kind's switch (the final boss's is the bosses'), and its mark's
+-- in Survivor UI's Raid marks.
+local SWITCH = { normal = "normal", elite = "elite", guardian = "guardian", boss = "boss", final = "boss" }
+local MARKED = { elite = "elite", guardian = "guardian", boss = "boss", final = "boss" }
+-- The kinds as the anchors, AZS_UNITS and AZS_UnitKind name them.
+local KIND_OF = { elite = "elite", guardian = "guardian", boss = "boss", finalBoss = "final", final = "final",
+	normal = "normal" }
+local QUERY = { kinds = { "elite", "guardian", "boss", "finalBoss" }, states = { "alive" } }
+local READ_EVERY = 0.25          -- the anchors' catalog
+local CLAIM_EVERY = 0.1          -- their spots on the screen
+local CLAIM_LASTS = 0.6          -- a plate's claim, unclaimed since
+local NEAR = 24                  -- the farthest a plate sits from its unit's overhead spot
+local HOVER_RISE = 40            -- the plate under the mouse, over the others
 
--- The classes' icons (the character creation's) and colors, for a co-op
--- friend's plate; the shaman in its modern blue, as Survivor UI has it.
-local CLASS_ICONS = "Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes"
-local CLASS_ICON_COORDS = {
-	WARRIOR = { 0, 0.25, 0, 0.25 }, MAGE = { 0.25, 0.49609375, 0, 0.25 },
-	ROGUE = { 0.49609375, 0.7421875, 0, 0.25 }, DRUID = { 0.7421875, 0.98828125, 0, 0.25 },
-	HUNTER = { 0, 0.25, 0.25, 0.5 }, SHAMAN = { 0.25, 0.49609375, 0.25, 0.5 },
-	PRIEST = { 0.49609375, 0.7421875, 0.25, 0.5 }, WARLOCK = { 0.7421875, 0.98828125, 0.25, 0.5 },
-	PALADIN = { 0, 0.25, 0.5, 0.75 },
-}
+-- The line round the bar: black, your target's gold, the one the boss bar
+-- lines white. A friend's a rim of gold in its place (PlateGold), to tell
+-- them from the enemies: the rim RIM of its art's height on each side, the
+-- bar in its hollow.
+local EDGES = { none = { 0, 0, 0 }, target = { 1, 0.82, 0 }, lit = { 1, 1, 1 } }
+local RIM = 5 / 32
 
 local function ClassColor(class)
 	if SurvivorUI_ClassColor then
 		local r, g, b = SurvivorUI_ClassColor(class)
-		return { r, g, b }
+		return r and { r, g, b } or nil
 	end
 	if class == "SHAMAN" then
 		return { 0.00, 0.44, 0.87 }
@@ -144,7 +181,6 @@ local function PartyClass(name)
 		end
 	end
 end
-local EXECUTE_COLOR = { 1.00, 0.86, 0.25 }
 
 -- The five bosses of each zone.
 local BOSSES = {
@@ -224,7 +260,7 @@ local function RefreshLiveKinds()
 			table.insert(found[name], most)
 			seen = seen..name..most..";"
 		elseif name and not kindByName[name] then
-			kind = (kind == "final" or kind == "boss") and "boss" or "elite"
+			kind = (kind == "final" or kind == "boss") and kind or "elite"
 			if liveKind[name] ~= kind then
 				liveKind[name] = kind
 				changed = true
@@ -262,13 +298,6 @@ local function Classify(name, most)
 	return named or "normal"
 end
 
--- The target's kind as the game has it, "guardian" included; nil without the API.
-local function TargetKind()
-	if AZS_UnitKind and UnitExists("target") then
-		return AZS_UnitKind("target")
-	end
-end
-
 local function Settings()
 	SurvivorPlatesDB = SurvivorPlatesDB or {}
 	local db = SurvivorPlatesDB
@@ -294,6 +323,20 @@ local function Settings()
 	end
 	-- The companions had plates of their own for a day: the game gives them none.
 	db.show.companion = nil
+	-- From v3.0.53 the new plates, on once for everyone with SurvivorUI
+	-- Classic's defaults (Lucas, 2026-11-02): the rank and file off; elites,
+	-- guardians, bosses and every friend on; a name on every plate; a target
+	-- of a kind left out without one.
+	if db.defaults < 4 then
+		db.defaults = 4
+		db.hidden = nil
+		db.show.normal = false
+		db.show.elite, db.show.guardian, db.show.boss = true, true, true
+		db.show.pet, db.show.totem, db.show.party = true, true, true
+		db.friendsChosen = true
+		db.names = true
+		db.targetPlate = false
+	end
 	db.scale = db.scale or 1
 	-- From v3.0.36 clicks go through the plates, as asked on Discord.
 	if db.clickThrough == nil then
@@ -302,56 +345,177 @@ local function Settings()
 	return db
 end
 
--- 1234, 12.3k, 1.2m
-local function Short(value)
-	if value >= 1000000 then
-		return string.format("%.1fm", value / 1000000)
-	elseif value >= 10000 then
-		return string.format("%.1fk", value / 1000)
-	end
-	return math.floor(value + 0.5)
-end
-
 local overlays = {}
+local visible, shownCount = {}, 0 -- the plates on the screen, this frame
+local anchors, named = {}, {}    -- the anchors alive; their kinds by name
+local lit, litId, litOverlay     -- the enemy to line: its name, its unit's id, its plate
+local hovered                    -- the plate under the mouse
+local targetName, targetKind
 
 -- Other addons find the plates here: the art a plate is recognized by is
 -- blanked once it is skinned. Each entry has .plate and .stock.name.
 SurvivorPlatesRegistry = overlays
 
--- The client's raid icon, left of the bar, as tall as the bar and a little
--- more. The client sets its anchor again when the window changes size, so it
--- is put back each time a mark shows.
-local function PlaceRaidIcon(overlay)
-	local raid = overlay.stock.raid
-	if not raid or not overlay.style then
-		return
+-- A name's kind in a list, "mixed" for a name two kinds share.
+local function Mark(list, name, kind)
+	if list[name] and list[name] ~= kind then
+		list[name] = "mixed"
+	else
+		list[name] = kind
 	end
-	local size = math.max(14, (overlay.style.height + 8) * Settings().scale)
-	raid:ClearAllPoints()
-	raid:SetPoint("RIGHT", overlay.bar, "LEFT", -3, 0)
-	raid:SetWidth(size)
-	raid:SetHeight(size)
 end
 
-local function ApplyKind(overlay, kind)
-	local style = KINDS[kind]
-	local settings = Settings()
-	local scale = settings.scale
-	overlay.kind = kind
-	overlay.style = style
-	overlay.bar:SetWidth(style.width * scale)
-	overlay.bar:SetHeight(style.height * scale)
-	overlay.name:SetFont(SurvivorUI_FONT or FONT, style.nameSize * scale + FONT_BUMP, "OUTLINE")
-	overlay.health:SetFont(SurvivorUI_FONT or FONT, math.max(8, (style.height - 1) * scale) + FONT_BUMP, "OUTLINE")
-
-	overlay.named = settings.names or kind ~= "normal"
-	PlaceRaidIcon(overlay)
-	if overlay.named and not overlay.put then
-		overlay.name:Show()
-	else
-		overlay.name:Hide()
+local function ReadAnchors()
+	local found, kinds, cursor = {}, {}, nil
+	for page = 1, 4 do
+		local ok, result = pcall(AZS_GetWorldAnchors, QUERY, cursor, 256)
+		if not ok or not result or not result.entries then
+			return
+		end
+		for index = 1, table.getn(result.entries) do
+			local entry = result.entries[index]
+			local kind = KIND_OF[entry.kind or ""]
+			if kind and entry.name and entry.anchorId then
+				table.insert(found, { id = entry.anchorId, kind = kind, name = entry.name,
+					unit = entry.unitId and tostring(entry.unitId) })
+				Mark(kinds, entry.name, kind)
+			end
+		end
+		if not result.hasMore or not result.nextCursor then
+			break
+		end
+		cursor = result.nextCursor
 	end
+	anchors, named = found, kinds
+end
 
+-- Each anchor on the screen claims the nearest plate of its name, one plate
+-- each, in WorldFrame's units (the plates are its children).
+local function Claim()
+	local count = table.getn(anchors)
+	if count == 0 or count > 256 or shownCount == 0 then
+		return
+	end
+	local requests = {}
+	for index = 1, count do
+		requests[index] = { anchorId = anchors[index].id, attachment = "overhead", offset = { x = 0, y = 0, z = 0 } }
+	end
+	local ok, result = pcall(AZS_ProjectWorldAnchors, requests)
+	local entries = ok and result and result.entries
+	if not entries then
+		return
+	end
+	local world, now, taken = WorldFrame:GetEffectiveScale(), GetTime(), {}
+	for index = 1, count do
+		local spot, anchor = entries[index], anchors[index]
+		if spot and spot.state == "onScreen" and spot.x then
+			local best, bestFar
+			for each = 1, shownCount do
+				local overlay = visible[each]
+				if overlay.lastName == anchor.name and not taken[overlay] then
+					local x, y = overlay.plate:GetCenter()
+					if x then
+						local scale = overlay.plate:GetEffectiveScale() / world
+						local dx, dy = x * scale - spot.x, y * scale - spot.y
+						local far = dx * dx + dy * dy
+						if far <= NEAR * NEAR and (not bestFar or far < bestFar) then
+							best, bestFar = overlay, far
+						end
+					end
+				end
+			end
+			if best then
+				taken[best] = true
+				best.claim, best.claimName, best.claimAt, best.unit = anchor.kind, anchor.name, now, anchor.unit
+			end
+		end
+	end
+end
+
+-- Whether a unit's plate is on the screen with its bar drawn, by its unit's
+-- id (an anchor's unitId, as a string): Survivor UI's World markers leave
+-- that enemy to the plate.
+function SurvivorPlates_PlateShows(unit)
+	local now = GetTime()
+	for index = 1, shownCount do
+		local overlay = visible[index]
+		if overlay.unit == unit and overlay.shown and overlay.claimName == overlay.lastName
+				and now - overlay.claimAt < CLAIM_LASTS then
+			return true
+		end
+	end
+	return false
+end
+
+-- The enemy Survivor UI's boss bar under the mouse is, by its name and its
+-- unit's id; nil for none.
+function SurvivorPlates_Light(name, id)
+	lit = name
+	litId = name and id and tostring(id) or nil
+end
+
+-- Three pieces of the rounded art: the left end, the middle, the right end.
+local function Strip(parent, layer, art)
+	local strip = {}
+	for index = 1, 3 do
+		strip[index] = parent:CreateTexture(nil, layer)
+		strip[index]:SetTexture(art or ROUND)
+	end
+	strip[2]:SetTexCoord(END, 1 - END, 0, 1)
+	return strip
+end
+
+local function Tint(strip, r, g, b, a)
+	for index = 1, 3 do
+		strip[index]:SetVertexColor(r, g, b, a)
+	end
+end
+
+-- Every piece's color at the plate's own alpha: the rank and file a little
+-- faded behind the rest, your target never. The client dims every plate but
+-- the target's with the plate's alpha, and in this game a frame's alpha takes
+-- the place of its children's, not multiplied: so the fading is in the colors.
+local function Paint(overlay)
+	local a, edge = overlay.fade, EDGES[overlay.edge]
+	local color = overlay.color or overlay.style.color
+	Tint(overlay.line, edge[1], edge[2], edge[3], a)
+	-- The rim a little dull, bright on your target.
+	local shine = overlay.edge == "target" and 1 or 0.85
+	Tint(overlay.gold, shine, shine, shine, a)
+	Tint(overlay.back, 0.06, 0.06, 0.06, a)
+	Tint(overlay.fill, color[1], color[2], color[3], a)
+	overlay.name:SetTextColor(1, 1, 1, a)
+	overlay.share:SetTextColor(1, 1, 1, a)
+	overlay.skull:SetVertexColor(1, 1, 1, a)
+	overlay.painted = true
+end
+
+local function Piece(piece, holder, left, width, height, from, to)
+	if width < 0.5 then
+		piece:Hide()
+		return
+	end
+	piece:ClearAllPoints()
+	piece:SetPoint("LEFT", holder, "LEFT", left, 0)
+	piece:SetWidth(width)
+	piece:SetHeight(height)
+	if from then
+		piece:SetTexCoord(from, to, 0, 1)
+	end
+	piece:Show()
+end
+
+-- A strip `width` across and `height` tall, `left` from its holder's left
+-- edge, drawn `filled` across from its left: the ends as the art has them, a
+-- fill short of the right end cut square.
+local function Lay(strip, holder, left, width, height, filled)
+	local cap = math.min(height, width) / 2
+	local first = math.min(filled, cap)
+	local middle = math.min(math.max(filled - cap, 0), width - 2 * cap)
+	local last = math.max(filled - (width - cap), 0)
+	Piece(strip[1], holder, left, first, height, 0, END * first / cap)
+	Piece(strip[2], holder, left + cap, middle, height)
+	Piece(strip[3], holder, left + width - cap, last, height, 1 - END, 1 - END + END * last / cap)
 end
 
 -- Debuffs on the target's plate, with their stacks. The 1.12 client only tells
@@ -360,7 +524,104 @@ end
 local PLATE_DEBUFFS = 6
 local DEBUFF_SIZE = 15
 
-local function UpdatePlateDebuffs(overlay, isTarget)
+-- The bosses' plates over the guardians', theirs over the elites', and those
+-- over the rest: in a crowd the plate that matters is in front; the one under
+-- the mouse over them all. The game draws every frame by its own strata and
+-- level, and a frame's level does not carry down to its children, so each one
+-- is raised.
+local function Raise(overlay)
+	local rise = overlay.level + (overlay.style.rise or 0) + (overlay == hovered and HOVER_RISE or 0)
+	overlay.plate:SetFrameLevel(rise)
+	overlay:SetFrameLevel(rise + 1)
+	overlay.bar:SetFrameLevel(rise + 2)
+	local icons = overlay.debuffs
+	if icons then
+		for index = 1, PLATE_DEBUFFS do
+			if icons[index] then
+				icons[index]:SetFrameLevel(rise + 3)
+			end
+		end
+	end
+end
+
+-- The soft glow round the bar of the plate under the mouse, as far out as
+-- the bar is tall (the art's hollow is half its height).
+local function Glow(overlay, on)
+	if on then
+		local width, height = overlay.width, overlay.height
+		Lay(overlay.glow, overlay.bar, -height / 2, width + height, height * 2, width + height)
+	else
+		for index = 1, 3 do
+			overlay.glow[index]:Hide()
+		end
+	end
+end
+
+-- The client's raid icon and the mark Survivor UI draws, left of the bar, as
+-- tall as the bar and a little more. The client sets its icon's anchor again
+-- when the window changes size, so it is put back each time a mark shows.
+local function PlaceMarks(overlay)
+	local size = math.max(14, (overlay.style.height + 8) * Settings().scale)
+	local raid = overlay.stock.raid
+	if raid then
+		raid:ClearAllPoints()
+		raid:SetPoint("RIGHT", overlay.bar, "LEFT", -3, 0)
+		raid:SetWidth(size)
+		raid:SetHeight(size)
+	end
+	overlay.mark:SetWidth(size)
+	overlay.mark:SetHeight(size)
+end
+
+local function Dress(overlay, kind)
+	local style = KINDS[kind]
+	local settings = Settings()
+	local scale = settings.scale
+	local width, height = style.width * scale, style.height * scale
+	overlay.kind, overlay.style = kind, style
+	overlay.width, overlay.height = width, height
+	overlay.bar:SetWidth(width)
+	overlay.bar:SetHeight(height)
+	local face = SurvivorUI_FONT or FONT
+	overlay.name:SetFont(face, style.name * scale + FONT_BUMP, "OUTLINE")
+	if style.rim then
+		local tall = height / (1 - 2 * RIM)
+		local out = (tall - height) / 2
+		Lay(overlay.gold, overlay.bar, -out, width + 2 * out, tall, width + 2 * out)
+		Lay(overlay.line, overlay.bar, -1, width + 2, height + 2, 0)
+	else
+		Lay(overlay.gold, overlay.bar, 0, width, height, 0)
+		Lay(overlay.line, overlay.bar, -1, width + 2, height + 2, width + 2)
+	end
+	Lay(overlay.back, overlay.bar, 0, width, height, width)
+	-- In the bar's middle up and down: the digits sit low in their line, an
+	-- eighth of the font's size (seen 2026-11-02, the friends' thin bars).
+	local share = style.share * scale + FONT_BUMP
+	overlay.share:SetFont(face, share, "OUTLINE")
+	overlay.share:ClearAllPoints()
+	overlay.share:SetPoint("RIGHT", overlay.bar, "RIGHT", -3 * scale, share * 0.12)
+	overlay.named = settings.names or kind ~= "normal"
+	if overlay.named then
+		overlay.name:Show()
+	else
+		overlay.name:Hide()
+	end
+	if style.skull and overlay.named then
+		local size = style.skullSize * scale
+		overlay.skull:SetTexture(ART..style.skull)
+		overlay.skull:SetWidth(size)
+		overlay.skull:SetHeight(size)
+		overlay.skull:Show()
+	else
+		overlay.skull:Hide()
+	end
+	Raise(overlay)
+	Glow(overlay, overlay == hovered)
+	PlaceMarks(overlay)
+	overlay.across, overlay.percent, overlay.painted = nil, nil, nil
+end
+
+local function UpdatePlateDebuffs(overlay, isTarget, settings)
 	local icons = overlay.debuffs
 	if not isTarget then
 		if icons and overlay.debuffsShown then
@@ -380,13 +641,22 @@ local function UpdatePlateDebuffs(overlay, isTarget)
 	end
 	overlay.debuffsShown = true
 
-	local lift = overlay.named and (overlay.style.nameSize * Settings().scale + 7) or 4
+	-- Over the name and its skull.
+	local style, scale = overlay.style, settings.scale
+	local lift = 4
+	if overlay.named then
+		lift = lift + style.name * scale + 3
+		if style.skull then
+			lift = lift + style.skullSize * scale
+		end
+	end
 	for index = 1, PLATE_DEBUFFS do
 		local texture, count = UnitDebuff("target", index)
 		local icon = icons[index]
 		if texture then
 			if not icon then
 				icon = CreateFrame("Frame", nil, overlay.bar)
+				icon:SetFrameLevel(overlay.bar:GetFrameLevel() + 1)
 				icon:SetWidth(DEBUFF_SIZE)
 				icon:SetHeight(DEBUFF_SIZE)
 				icon.edge = icon:CreateTexture(nil, "BACKGROUND")
@@ -440,63 +710,8 @@ local function FriendKind(name)
 	return "pet"
 end
 
--- A plain "Totem"'s icon: the hero's one totem spell's, or a totem's when the
--- hero has more than one (the plate can't tell which).
-local TOTEM_ICON = "Interface\\Icons\\Spell_Nature_StoneClawTotem"
-local function TotemIcon()
-	local found
-	for index = 1, table.getn(AZS_SPELLS or {}) do
-		local entry = AZS_SPELLS[index]
-		local key = entry.key or entry[1] or ""
-		if string.find(key, "_totem$") then
-			if found then
-				return TOTEM_ICON
-			end
-			found = key
-		end
-	end
-	-- "searing_totem" as its name, "Searing Totem".
-	local spell = found and string.gsub(string.gsub(found, "_", " "), "(%a)(%a*)",
-		function(first, rest) return string.upper(first)..rest end)
-	return spell and SurvivorUI_MeterIcon and SurvivorUI_MeterIcon(spell) or TOTEM_ICON
-end
-
--- A friend's icon beside its name, Survivor UI's (its meter's), when it is there.
-local function FriendIcon(overlay, name)
-	local icon
-	-- A party member: the class's icon, cut inside its round edge.
-	if overlay.kind == "party" then
-		local coords = CLASS_ICON_COORDS[PartyClass(name) or ""]
-		if coords then
-			local cutX, cutY = (coords[2] - coords[1]) * 0.1, (coords[4] - coords[3]) * 0.1
-			overlay.icon:SetTexture(CLASS_ICONS)
-			overlay.icon:SetTexCoord(coords[1] + cutX, coords[2] - cutX, coords[3] + cutY, coords[4] - cutY)
-			overlay.icon:Show()
-		else
-			overlay.icon:Hide()
-		end
-		return
-	end
-	overlay.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-	if overlay.kind == "totem" and English(name or "") == "Totem" then
-		icon = TotemIcon()
-	elseif FRIEND_KINDS[overlay.kind] then
-		icon = SurvivorUI_MeterIcon and SurvivorUI_MeterIcon(name)
-	end
-	if icon then
-		overlay.icon:SetTexture(icon)
-		overlay.icon:Show()
-	else
-		overlay.icon:Hide()
-	end
-end
-
-local function UpdatePlate()
-	local overlay = this
+local function Update(overlay, settings, hasTarget, now)
 	local stock = overlay.stock
-
-	-- The client dims every plate but the target's.
-	local isTarget = UnitExists("target") and overlay.plate:GetAlpha() == 1
 
 	-- The client fills a plate in over a frame or two as it hands it to
 	-- another unit: its name, then its bar's color and health. So the kind is
@@ -511,88 +726,102 @@ local function UpdatePlate()
 		overlay.lastName, overlay.lastFriend, overlay.lastHigh = name, friend, high
 		overlay.kindsVersion = kindsVersion
 		overlay.name:SetText(name)
-		local known = high - low ~= 100 and high > 1
+		local known = low and high and high - low ~= 100 and high > 1
 		overlay.baseKind = friend and FriendKind(name) or Classify(name, known and high or nil)
-		overlay.iconFor = nil
-		overlay.classColor = overlay.baseKind == "party" and ClassColor(PartyClass(name)) or nil
+		overlay.color = overlay.baseKind == "party" and ClassColor(PartyClass(name)) or nil
+		overlay.painted = nil
 	end
-	-- The target's kind as the game tells it, an enemy's: a guardian and an
-	-- elite of the same name told apart for sure.
-	local kind = overlay.baseKind
-	if isTarget and not FRIEND_KINDS[kind] then
-		local told = overlay.targetKind
-		if told == "final" or told == "boss" then
-			kind = "boss"
-		elseif told == "guardian" or told == "elite" or told == "normal" then
-			kind = told
+
+	-- The target's plate: the one at full alpha, the others dimmed. With the
+	-- target out of the plates' reach the client leaves them all at full
+	-- alpha (seen 2026-11-02), so it takes being the only one, and its name.
+	local isTarget = hasTarget and overlay.plate:GetAlpha() == 1 and name == targetName
+	-- An enemy's kind: its anchor's, else the target's as the game tells it,
+	-- else its name's.
+	local kind, sure = overlay.baseKind, false
+	if not FRIEND_KINDS[kind] then
+		if overlay.claim and overlay.claimName == name and now - overlay.claimAt < CLAIM_LASTS then
+			kind, sure = overlay.claim, true
+		elseif isTarget and targetKind then
+			kind = targetKind
+		elseif named[name] and named[name] ~= "mixed" then
+			kind = named[name]
 		end
 	end
 	if kind ~= overlay.kind then
-		ApplyKind(overlay, kind)
-		overlay.iconFor = nil
+		Dress(overlay, kind)
 	end
-	if overlay.iconFor ~= name then
-		overlay.iconFor = name
-		FriendIcon(overlay, name)
+
+	-- A kind left out goes without its bar; an enemy's still shows as the
+	-- target if asked, and always as the one the boss bar under the mouse lines.
+	local switch = SWITCH[kind]
+	local shown
+	if switch then
+		shown = settings.show[switch] or overlay == litOverlay or (isTarget and settings.targetPlate ~= false)
+	else
+		shown = settings.show[kind]
 	end
+	shown = shown and true or false
+	if shown ~= overlay.shown then
+		overlay.shown = shown
+		if shown then
+			overlay.bar:Show()
+		else
+			overlay.bar:Hide()
+		end
+		if stock.raid then
+			stock.raid:SetAlpha(shown and 1 or 0)
+		end
+	end
+	if not shown then
+		return
+	end
+
+	local share = 0
+	if low and high and high > low then
+		share = math.max(0, math.min(1, (stock.health:GetValue() - low) / (high - low)))
+	end
+	local across = math.floor(share * overlay.width * 2 + 0.5) / 2
+	if across ~= overlay.across then
+		overlay.across = across
+		Lay(overlay.fill, overlay.bar, 0, overlay.width, overlay.height, across)
+	end
+	local percent = math.floor(share * 100 + 0.5)
+	if percent == 0 and share > 0 then
+		percent = 1
+	end
+	if percent ~= overlay.percent then
+		overlay.percent = percent
+		overlay.share:SetText(percent.."%")
+	end
+
+	local edge = (overlay == litOverlay and "lit") or (isTarget and "target") or "none"
+	local fade = (kind == "normal" and not isTarget and overlay ~= litOverlay) and FADE or 1
+	if edge ~= overlay.edge or fade ~= overlay.fade or not overlay.painted then
+		overlay.edge, overlay.fade = edge, fade
+		Paint(overlay)
+	end
+
 	local marked = stock.raid and stock.raid:IsShown() and true or false
 	if marked and not overlay.marked then
-		PlaceRaidIcon(overlay)
+		PlaceMarks(overlay)
 	end
 	overlay.marked = marked
-
-	-- A kind left out goes without a plate; an enemy's still shows as the
-	-- target, unless that is off too.
-	local settings = Settings()
-	if not settings.show[overlay.kind]
-		and not (isTarget and settings.targetPlate ~= false and not FRIEND_KINDS[overlay.kind]) then
-		overlay.icon:Hide()
-		if not overlay.put then
-			overlay.put = true
-			overlay.bar:Hide()
-			overlay.name:Hide()
+	-- The mark Survivor UI draws on this kind, on a plate its anchor claimed
+	-- (its World markers leave that enemy to the plate then), unless the
+	-- client's own shows.
+	local drawn = sure and not marked and MARKED[kind] and SurvivorUI_MarksDrawn and SurvivorUI_MarksDrawn()
+		and SurvivorUI_AutoMarkOn(MARKED[kind]) and SurvivorUI_AutoMarkIcon(MARKED[kind]) or nil
+	if drawn ~= overlay.drawn then
+		overlay.drawn = drawn
+		if drawn and SurvivorUI_SetRaidMarkTexture then
+			SurvivorUI_SetRaidMarkTexture(overlay.mark, drawn)
+			overlay.mark:Show()
+		else
+			overlay.mark:Hide()
 		end
-		return
-	elseif overlay.put then
-		overlay.put = nil
-		overlay.bar:Show()
-		if overlay.named then
-			overlay.name:Show()
-		end
-		overlay.iconFor = nil
 	end
-
-	local value = stock.health:GetValue()
-	local share = high > low and (value - low) / (high - low) or 0
-	local percent = math.floor(share * 100 + 0.5)
-	overlay.bar:SetValue(share)
-
-	-- A 0 to 100 bar means the client only knows the percentage; anything else
-	-- is the unit's real health. A party member: what is left of it.
-	if overlay.kind == "party" then
-		overlay.health:SetText(percent.."%")
-	elseif FRIEND_KINDS[overlay.kind] then
-		overlay.health:SetText("")
-	elseif high - low == 100 or high <= 1 then
-		overlay.health:SetText(percent.."%")
-	elseif overlay.kind == "normal" then
-		overlay.health:SetText(Short(value))
-	else
-		overlay.health:SetText(Short(value).." / "..Short(high).."  "..percent.."%")
-	end
-
-	local color = overlay.classColor or overlay.style.color
-	if share <= EXECUTE_RANGE and not FRIEND_KINDS[overlay.kind] then
-		color = EXECUTE_COLOR
-	end
-	overlay.bar:SetStatusBarColor(color[1], color[2], color[3], 1)
-
-	if isTarget or overlay.lit then
-		overlay.border:SetVertexColor(1, 1, 1, 1)
-	else
-		overlay.border:SetVertexColor(0, 0, 0, 1)
-	end
-	UpdatePlateDebuffs(overlay, isTarget)
+	UpdatePlateDebuffs(overlay, isTarget, settings)
 end
 
 local function IsNameplate(frame)
@@ -647,90 +876,77 @@ local function SkinPlate(plate)
 	overlay:SetAllPoints(plate)
 	overlay.plate = plate
 	overlay.stock = stock
+	overlay.level = plate:GetFrameLevel()
+	plate.survivorOverlay = overlay
 
-	overlay.bar = CreateFrame("StatusBar", nil, overlay)
+	overlay.bar = CreateFrame("Frame", nil, overlay)
 	overlay.bar:SetPoint("CENTER", overlay, "CENTER", 0, -4)
-	overlay.bar:SetStatusBarTexture(FLAT)
-	overlay.bar:SetMinMaxValues(0, 1)
+	overlay.line = Strip(overlay.bar, "BACKGROUND")
+	overlay.back = Strip(overlay.bar, "BORDER")
+	overlay.fill = Strip(overlay.bar, "ARTWORK")
+	-- Under the bar (on the frame below it), its light added
+	-- (make_plate_glow.py --plates).
+	overlay.glow = Strip(overlay, "BACKGROUND", ART.."PlateGlow")
+	for index = 1, 3 do
+		overlay.glow[index]:SetBlendMode("ADD")
+		overlay.glow[index]:SetVertexColor(1, 0.92, 0.70, 0.9)
+		overlay.glow[index]:Hide()
+	end
+	-- Over the bar's edge, the bar in its hollow (make_plate_gold.py --plates).
+	overlay.gold = Strip(overlay.bar, "OVERLAY", ART.."PlateGold")
 
-	overlay.border = overlay.bar:CreateTexture(nil, "BACKGROUND")
-	overlay.border:SetTexture(FLAT)
-	overlay.border:SetPoint("TOPLEFT", overlay.bar, "TOPLEFT", -1, 1)
-	overlay.border:SetPoint("BOTTOMRIGHT", overlay.bar, "BOTTOMRIGHT", 1, -1)
+	overlay.name = overlay.bar:CreateFontString(nil, "OVERLAY")
+	overlay.name:SetPoint("BOTTOM", overlay.bar, "TOP", 0, 2)
+	overlay.share = overlay.bar:CreateFontString(nil, "OVERLAY")
+	overlay.share:SetShadowOffset(0, 0)
+	overlay.skull = overlay.bar:CreateTexture(nil, "OVERLAY")
+	overlay.skull:SetPoint("BOTTOM", overlay.name, "TOP", 0, 0)
+	overlay.skull:Hide()
+	-- The mark Survivor UI draws, where the client's raid icon goes.
+	overlay.mark = overlay.bar:CreateTexture(nil, "OVERLAY")
+	overlay.mark:SetPoint("RIGHT", overlay.bar, "LEFT", -3, 0)
+	overlay.mark:Hide()
 
-	overlay.backing = overlay.bar:CreateTexture(nil, "BORDER")
-	overlay.backing:SetTexture(FLAT)
-	overlay.backing:SetVertexColor(0.10, 0.10, 0.12, 1)
-	overlay.backing:SetAllPoints(overlay.bar)
-
-	overlay.name = overlay:CreateFontString(nil, "OVERLAY")
-	overlay.name:SetPoint("BOTTOM", overlay.bar, "TOP", 0, 3)
-	overlay.name:SetTextColor(1, 1, 1)
-
-	-- A pet's icon, left of its name (PetIcon).
-	overlay.icon = overlay:CreateTexture(nil, "OVERLAY")
-	overlay.icon:SetWidth(12)
-	overlay.icon:SetHeight(12)
-	overlay.icon:SetPoint("RIGHT", overlay.name, "LEFT", -2, 0)
-	overlay.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-	overlay.icon:Hide()
-
-	overlay.health = overlay.bar:CreateFontString(nil, "OVERLAY")
-	overlay.health:SetPoint("RIGHT", overlay.bar, "RIGHT", -2, 0)
-	overlay.health:SetTextColor(1, 1, 1)
-
-	ApplyKind(overlay, "normal")
-	overlay:SetScript("OnUpdate", UpdatePlate)
+	overlay.shown, overlay.edge, overlay.fade, overlay.claimAt = true, "none", 1, 0
+	Dress(overlay, "normal")
 	table.insert(overlays, overlay)
 end
 
--- The plate under the mouse, read by hand: with clicks going through the plates
--- none of them hears it. The nearest to the mouse, of those it is on; none with
--- the mouse on a window. Asked 20 times a second.
-local hovered
-local hoverWait = 0
-local RISE = 40                 -- the plate under the mouse, over the others
--- The white line round the name's letters: white copies of it, under the
--- name and clear of its black outline, all round. Made for a plate the first
--- time the mouse is on it.
-local HALO = { { -2, 0 }, { 2, 0 }, { 0, -2 }, { 0, 2 }, { -1.5, -1.5 }, { 1.5, -1.5 }, { -1.5, 1.5 }, { 1.5, 1.5 } }
-
-local function ShowHalo(overlay, on)
-	if on and not overlay.named then
-		on = false
+-- The plate to line: the one its unit's anchor claimed, else the first of
+-- its name.
+local function Lit()
+	if not lit then
+		return nil
 	end
-	if on and not overlay.halo then
-		overlay.halo = {}
-		for index = 1, table.getn(HALO) do
-			local copy = overlay:CreateFontString(nil, "ARTWORK")
-			copy:SetPoint("CENTER", overlay.name, "CENTER", HALO[index][1], HALO[index][2])
-			overlay.halo[index] = copy
+	local first
+	for index = 1, shownCount do
+		local overlay = visible[index]
+		if litId and overlay.unit == litId and overlay.claimName == overlay.lastName then
+			return overlay
+		end
+		if not first and overlay.lastName == lit then
+			first = overlay
 		end
 	end
-	for index = 1, table.getn(overlay.halo or {}) do
-		local copy = overlay.halo[index]
-		if on then
-			local font, size = overlay.name:GetFont()
-			copy:SetFont(font, size)
-			copy:SetTextColor(1, 1, 1, 1)
-			copy:SetText(overlay.name:GetText())
-			copy:Show()
-		else
-			copy:Hide()
-		end
-	end
+	return first
 end
+
+-- The plate under the mouse, read by hand: with clicks going through the plates
+-- none of them hears it. The nearest to the mouse, of those with their bar
+-- drawn whose bar or name it is on; none with the mouse on a window. Asked 20
+-- times a second.
+local hoverWait = 0
 
 local function PlateUnderMouse()
 	local focus = GetMouseFocus and GetMouseFocus()
-	if focus and focus ~= WorldFrame and not (hovered and focus == hovered.plate) then
+	if focus and focus ~= WorldFrame and not focus.survivorOverlay then
 		return nil
 	end
 	local x, y = GetCursorPosition()
 	local best, bestGap
-	for index = 1, table.getn(overlays) do
-		local overlay = overlays[index]
-		if overlay.plate:IsVisible() and not overlay.put then
+	for index = 1, shownCount do
+		local overlay = visible[index]
+		if overlay.shown then
 			local scale = overlay.bar:GetEffectiveScale()
 			local atX, atY = x / scale, y / scale
 			local left, right = overlay.bar:GetLeft(), overlay.bar:GetRight()
@@ -755,22 +971,25 @@ local function SetHovered(overlay)
 	if overlay == hovered then
 		return
 	end
-	if hovered then
-		hovered.lit = nil
-		ShowHalo(hovered, false)
-		hovered.plate:SetFrameLevel(hovered.plateLevel)
+	local was = hovered
+	hovered = overlay
+	if was then
+		Glow(was, false)
+		Raise(was)
 		if Settings().clickThrough then
-			hovered.plate:EnableMouse(false)
+			was.plate:EnableMouse(false)
 		end
 	end
-	hovered = overlay
 	if overlay then
-		overlay.lit = true
-		ShowHalo(overlay, true)
-		overlay.plateLevel = overlay.plate:GetFrameLevel()
-		overlay.plate:SetFrameLevel(overlay.plateLevel + RISE)
+		Glow(overlay, true)
+		Raise(overlay)
 		overlay.plate:EnableMouse(true)
 	end
+end
+
+-- The tests find the plate under the mouse here.
+function SurvivorPlates_HoveredPlate()
+	return hovered
 end
 
 -- The game's Nameplate Layout (its 0.131): nil on a game without it.
@@ -796,14 +1015,10 @@ end
 -- New plates only ever get appended to WorldFrame's children.
 local scanned = 0
 local partyCount = 0
+local readWait, claimWait = READ_EVERY, CLAIM_EVERY
 local scanner = CreateFrame("Frame")
 scanner:SetScript("OnUpdate", function()
 	RefreshLiveKinds()
-	-- The target's kind, asked once a frame for every plate to read.
-	local targetKind = TargetKind()
-	for index = 1, table.getn(overlays) do
-		overlays[index].targetKind = targetKind
-	end
 
 	-- The party changed (a friend joined or left): every plate looks again, a
 	-- friend's plate read before the party knew them was a pet's.
@@ -811,16 +1026,6 @@ scanner:SetScript("OnUpdate", function()
 	if members ~= partyCount then
 		partyCount = members
 		kindsVersion = kindsVersion + 1
-	end
-
-	hoverWait = hoverWait + arg1
-	if hoverWait >= 0.05 then
-		hoverWait = 0
-		SetHovered(PlateUnderMouse())
-		-- The client hands a plate to another unit: the copies follow its name.
-		if hovered then
-			ShowHalo(hovered, true)
-		end
 	end
 
 	local count = WorldFrame:GetNumChildren()
@@ -833,6 +1038,45 @@ scanner:SetScript("OnUpdate", function()
 			end
 		end
 		scanned = count
+	end
+
+	shownCount = 0
+	local bright = 0
+	for index = 1, table.getn(overlays) do
+		local plate = overlays[index].plate
+		if plate:IsVisible() then
+			shownCount = shownCount + 1
+			visible[shownCount] = overlays[index]
+			if plate:GetAlpha() == 1 then
+				bright = bright + 1
+			end
+		end
+	end
+	if AZS_GetWorldAnchors and AZS_ProjectWorldAnchors then
+		readWait = readWait + arg1
+		if readWait >= READ_EVERY then
+			readWait = 0
+			ReadAnchors()
+		end
+		claimWait = claimWait + arg1
+		if claimWait >= CLAIM_EVERY then
+			claimWait = 0
+			Claim()
+		end
+	end
+	local hasTarget = UnitExists("target") and bright == 1
+	targetName = hasTarget and UnitName("target") or nil
+	targetKind = hasTarget and AZS_UnitKind and KIND_OF[AZS_UnitKind("target") or ""] or nil
+	litOverlay = Lit()
+	local settings, now = Settings(), GetTime()
+	for index = 1, shownCount do
+		Update(visible[index], settings, hasTarget, now)
+	end
+
+	hoverWait = hoverWait + arg1
+	if hoverWait >= 0.05 then
+		hoverWait = 0
+		SetHovered(PlateUnderMouse())
 	end
 end)
 
@@ -946,7 +1190,7 @@ end)
 
 local function Restyle()
 	for index = 1, table.getn(overlays) do
-		ApplyKind(overlays[index], overlays[index].kind or "normal")
+		Dress(overlays[index], overlays[index].kind or "normal")
 	end
 end
 
@@ -978,9 +1222,8 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 		ApplyShown()
 		Say(KIND_NAMES[kind]..(settings.show[kind] and ": plates on." or ": plates off."))
 	elseif command == "suggested" then
-		-- The setup Survivor UI's options suggest: the friends' plates only.
-		-- Enemy plates stack badly on this old engine among so many enemies;
-		-- the boss bars follow the bosses, elites and guardians.
+		-- The setup Survivor UI's options once suggested: the friends' plates
+		-- only, the boss bars following the bosses, elites and guardians.
 		for enemy in pairs(KIND_NAMES) do
 			settings.show[enemy] = FRIEND_KINDS[enemy] == true
 		end
@@ -1020,7 +1263,7 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 				total = total + 1
 				local kind = overlay.kind or "?"
 				byKind[kind] = (byKind[kind] or 0) + 1
-				if not overlay.put then
+				if overlay.shown then
 					drawn = drawn + 1
 				end
 			end
@@ -1038,7 +1281,7 @@ SlashCmdList["SURVIVORPLATES"] = function(msg)
 			or "your target's plate only when its kind is on.")
 	elseif command == "names" then
 		settings.names = not settings.names
-		Say("names on "..(settings.names and "every plate" or "elites, guardians and bosses only")..".")
+		Say("names on "..(settings.names and "every plate" or "elites, guardians, bosses and friends only")..".")
 	elseif command == "none" then
 		settings.hidden = not settings.hidden
 		ApplyShown()

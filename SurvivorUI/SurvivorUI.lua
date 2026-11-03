@@ -2415,6 +2415,12 @@ globalFont:SetScript("OnEvent", function()
 			xpBarOddsSide = true, xpBarRate = false,
 			paneStatsStep = 2, pinCacheSize = 12, pinLairSize = 11,
 			pieceFonts = { ["Damage meter"] = { step = -1 }, ["Jewelry"] = { step = -2 } },
+			-- The author's choices for v3.0.53, the new plates showing the
+			-- bosses (the boss bars off, BossBars.lua): the guardians as a count
+			-- in the run tracker and no level there, the enemies' raid marks
+			-- drawn over them.
+			guardiansCount = "count", trackerXp = false,
+			markBosses = true, markGuardians = true, markElites = true,
 		}
 		for key, value in pairs(look) do
 			if settings[key] == nil then

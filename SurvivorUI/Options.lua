@@ -4380,7 +4380,7 @@ Check(page, "Roman spell ranks (also applied to the meter)", OnlyIfOn("romanRank
 -- Nameplates.
 
 page = pages.plates
-Header(page, "Nameplates", "Survivor Plates: a plate over the enemies within 20 yards of the hero, and over your own totems and pets and your co-op friends, each kind as you choose (off by default: the run tracker shows the bosses, guardians and elites).")
+Header(page, "Nameplates", "Survivor Plates: a plate over the enemies within 20 yards of the hero, in their kind's color (elites green, guardians blue, bosses purple, the final boss orange), and over your own totems and pets and your co-op friends, each kind as you choose.")
 
 if PlatesThere() then
 	PanelHead(page, PlatesOn, function() Plates("none") end)
@@ -4389,27 +4389,16 @@ if PlatesThere() then
 		Check(page, label, function() return SurvivorPlates_Shown and SurvivorPlates_Shown(kind) end,
 			function() Plates(command) end, note)
 	end
-	local suggestion = Callout(page, "Suggested: friendly plates only",
-		"This engine is old: enemy plates stack badly, and a run brings a great many enemies. For a smoother game, untick every " ..
-		"Enemy kind below and keep the Friendly ones on. Bosses, elites and guardians still have the boss bars (Boss bars tab) " ..
-		"to follow their health and debuffs. Only a suggestion: the choice is yours.", 128)
-	-- Its button, on the box's right: the setup at once (/splates suggested).
-	local useIt = Button(page, "Use suggested", 112, 0, function()
-		Plates("suggested")
-		RefreshAll()
-	end, ALERT)
-	useIt:ClearAllPoints()
-	useIt:SetPoint("RIGHT", suggestion, "RIGHT", -8, 0)
 	Subheader(page, "Friendly")
-	Kind("Totems", "totem", "totems", "a shaman's: small and blue")
-	Kind("Pets and summons", "pet", "pets", "a warlock's demons, the Water Elemental, spirit wolves, treants, a hunter's pets: small and green, with the name and icon")
-	Kind("Co-op members", "party", "party", "your friends in a co-op run: the class's color and icon, the health left; a friend down has none (the game gives a fallen hero no plate), the party frames show them")
+	Kind("Totems", "totem", "totems", "a shaman's: thin, in mint, in a gold rim")
+	Kind("Pets and summons", "pet", "pets", "a warlock's demons, the Water Elemental, spirit wolves, treants, a hunter's pets: thin, in mint, in a gold rim")
+	Kind("Co-op members", "party", "party", "your friends in a co-op run: thin, in the class's color, in a gold rim; a friend down has none (the game gives a fallen hero no plate), the party frames show them")
 	Subheader(page, "Enemy")
-	Kind("Normal", "normal", "normal", "the rank and file of the horde")
-	Kind("Elites", "elite", "elites", nil)
-	Kind("Guardians", "guardian", "guardians", "told from an elite of the same name by its health")
-	Kind("Bosses", "boss", "bosses", nil)
-	Check(page, "Your target always", function() return SurvivorPlates_TargetPlate and SurvivorPlates_TargetPlate() end,
+	Kind("Normal", "normal", "normal", "the rank and file of the horde, in red, a little faded behind the rest")
+	Kind("Elites", "elite", "elites", "in green, a bone skull over the name")
+	Kind("Guardians", "guardian", "guardians", "in blue, the lair's skull over the name; told from an elite of the same name by the game")
+	Kind("Bosses", "boss", "bosses", "in purple, the final boss in orange, a horned skull over the name, in front of every other plate")
+	Check(page, "Your target, whatever its kind", function() return SurvivorPlates_TargetPlate and SurvivorPlates_TargetPlate() end,
 		function() Plates("target") end, "its plate even when its kind is off")
 	Subheader(page, "Look")
 	Check(page, "Names on every plate", function() return SurvivorPlatesDB and SurvivorPlatesDB.names == true end,
@@ -4419,7 +4408,7 @@ if PlatesThere() then
 			function() Plates("overlap") end, "each plate stays right over its enemy; off, they move apart in a crowd (the game's Nameplate Layout)")
 	end
 	Check(page, "Click through the plates", function() return SurvivorPlates_ClickThrough and SurvivorPlates_ClickThrough() end,
-		function() Plates("click") end, "the camera turns from over a plate; only the plate under the mouse, in its white line, takes a click")
+		function() Plates("click") end, "the camera turns from over a plate; only the plate under the mouse, in its glow, takes a click")
 	Check(page, "Ignore V and Shift+V", function() return not (SurvivorPlates_KeysAllowed and SurvivorPlates_KeysAllowed()) end,
 		function() Plates("keys") end, "the game's keys for its plates: what they turn on or off goes back to the choices here")
 	KeyButton(page, "Plates on or off key", "SURVIVORPLATES_TOGGLE",
@@ -4575,8 +4564,12 @@ do
 	WorldCheck("Friends down", "worldDowned", "a gold cross over a friend who is down, their name and how far; their party frame says how far too")
 	Subheader(page, "The map")
 	WorldCheck("Caches", "worldCaches", "a chest over each cache still there, and how far")
+	WorldCheck("Light beams over caches", "worldBeams", "a column of gold light over each cache, its chest floating near the top; drawn over the world, it fades where you stand in front of it")
 	WorldCheck("Lairs", "worldLairs", "the guardian's name over its lair while it sleeps, grey; awake, over the guardian itself, orange, following it; slain, back over the lair with the time until it comes back")
 	WorldCheck("Arrows", "worldArrows", "for friends down, caches and lairs out of sight: an arrow on a ring round you toward the nearest few, with how far")
+	Subheader(page, "Your range")
+	WorldCheck("Range ring on the minimap", "rangeMinimap", "a light blue ring round you, as far as your longest-reaching spell strikes (heals, shields and buffs left out): enemies inside it are in reach, to see how far to pull. Left out while it does not fit the minimap's zoom")
+	WorldCheck("Range ring round you", "rangeWorld", "the same ring on the ground round your hero, in light blue dots")
 	Subheader(page, "Enemies")
 	WorldCheck("Explosive orbs", "worldOrbs", "in a run with the Explosive affix, a pulsing mark over each orb: only direct hits hurt them")
 	WorldCheck("Bars over elites, guardians and bosses", "worldBars", "a test: their name and health over them, in their kind's color, with no nameplate")

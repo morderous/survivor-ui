@@ -56,40 +56,41 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui guardians bar` | The guardians as a bar in the run tracker, or a list beside it |
 | `/sui pins` | Prints what the minimap's cache and lair pins read, to check them |
 | `/sui chat 10` | Chat text size, 8 to 18 |
-| `/splates all` | Plates on every enemy, or only on elites, guardians and bosses |
-| `/splates names` | Names only on elites, guardians and bosses, or on every plate |
+| `/splates normal` | Plates on the rank and file too, or not (the default); also `elites`, `guardians`, `bosses` |
+| `/splates names` | A name on every plate (the default), or on elites, guardians, bosses and friends only |
+| `/splates target` | Your target's plate whatever its kind, or only when its kind is on (the default) |
 | `/splates click` | Clicks go through the plates (the default), or a click on one targets it |
-| `/splates none` | No nameplates (the default), or back |
+| `/splates none` | No nameplates, or back (on by default) |
 | `/splates party` | Plates on your co-op friends, in their class color (also `pets`, `totems`) |
-| `/splates suggested` | The suggested setup: friendly plates on, enemy plates off |
-| `/splates scale 1.3` | Plate size, 0.6 to 2 |
+| `/splates suggested` | Friendly plates only: every enemy's off |
+| `/splates scale 1.3` | Plate size, 0.5 to 2 |
 
 ## Survivor Plates
 
 Nameplates.
 
-> **Out of the box there are no nameplates:** Survivor UI's boss bars already show every boss, guardian and elite with its health. To turn plates on, pick them in `/sui opt`, Nameplates, or type `/splates none`.
->
-> Turned on, every enemy carries a plate (`/splates all` keeps them on elites, guardians and bosses only), and only elites, guardians and bosses carry a name on it (`/splates names` puts a name on every plate). Every choice is remembered.
+> **Out of the box the plates are on for elites, lair guardians and bosses**, with a name on every plate, and off for the rank and file (`/splates normal` puts them on). Each kind is on or off on its own in `/sui opt`, Nameplates, and every choice is remembered.
 
-- A flat health bar with a thin border, the name above it and the unit's health on it.
-- At 30% health, where execute effects start, the bar turns yellow.
-- A white line round the bar and the letters of the name of the plate under the mouse, which comes to the front and takes the click, so you can pick one out of a crowd.
-- Elites and bosses get larger plates in their own colors. A lair guardian wears its elite's plate, except as your target: then it turns blue.
-- The target's plate shows its debuffs and their stacks.
-- Friendly plates, each kind on its own and off by default: your totems (small, blue), your pets and summons (small, green, with their icon), and in a co-op run your friends, in their class's color with the class's icon and the health left.
+- A thin bar with a black line round it, the name over it and the health's share small inside, on the right.
+- Each kind in its own color, each a little larger: the rank and file red, elites green, lair guardians blue, bosses purple, the final boss orange. From the game's 0.139.2 the game tells each one's kind, so a guardian and an elite of the same name each wear their own.
+- A skull over the name: a bone skull on an elite, its lair's mark on a guardian, a horned infernal skull on a boss and the final boss.
+- In a crowd a boss's plate is in front, then a guardian's, then an elite's; the rank and file behind, a little faded (never your target).
+- The target's plate has a gold line and shows its debuffs and their stacks.
+- The plate under the mouse glows, comes to the front and takes the click, so you can pick one out of a crowd. A Survivor UI boss bar under the mouse lines its enemy's plate in white.
+- Friendly plates, thinner, in a gold rim, each kind on its own and on by default: your pets, summons and totems in mint, and in a co-op run your friends in their class's color.
 
 Commands:
 
 | Command | What it does |
 |---|---|
-| `/splates none` | Switches between no nameplates (the default) and nameplates |
-| `/splates all` | Switches between plates on every enemy and plates only on elites, guardians and bosses |
-| `/splates names` | Switches between names only on elites, guardians and bosses (the default) and names on every plate |
+| `/splates none` | Switches between no nameplates and nameplates (the default from v3.0.53) |
+| `/splates normal`, `/splates elites`, `/splates guardians`, `/splates bosses` | Each enemy kind on or off: the rank and file (off by default), elites, guardians, bosses |
+| `/splates names` | Switches between a name on every plate (the default) and names on elites, guardians, bosses and friends only |
+| `/splates target` | Switches between your target's plate only when its kind is on (the default) and your target's plate whatever its kind |
 | `/splates click` | Switches between clicks going through the plates, the camera turning from over them (the default), and plates you click to target |
-| `/splates totems`, `/splates pets`, `/splates party` | Each friendly kind on or off: your totems, your pets and summons, your co-op friends |
-| `/splates suggested` | The suggested setup: your totems, pets and summons and co-op friends' plates on, every enemy's off (the boss bars follow bosses, elites and guardians) |
-| `/splates scale 1.3` | Plate size, 0.6 to 2 |
+| `/splates totems`, `/splates pets`, `/splates party` | Each friendly kind on or off: your totems, your pets and summons, your co-op friends (all on by default) |
+| `/splates suggested` | Friendly plates only: your totems, pets and summons and co-op friends' plates on, every enemy's off (the boss bars follow bosses, elites and guardians) |
+| `/splates scale 1.3` | Plate size, 0.5 to 2 |
 
 ## Survivor UI
 
@@ -113,7 +114,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the Default clock.
 - A run panel on the left, under the loot list: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
 - A damage meter under the build list, in place of Default, as many lines as fit the screen or as you set, a scroll bar for the rest: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, the damage to bosses in the last boss fight, or in a co-op run each hero's damage. The + at its corner opens more windows, each on a page of its own.
-- Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health and its debuffs (icons that drain to grey as they run out), at any distance. Click one to target it.
+- Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health and its debuffs (icons that drain to grey as they run out), at any distance. Click one to target it. Off for a new install from v3.0.53, the plates showing the bosses: `/sui bosses` brings them.
 - A DoT and fear counter over the action bar: over each damage over time spell's button, how many of it are out on the enemies, counted by their ticks; over a fear's (Psychic Scream, Intimidating Shout...), how many enemies it holds now. In the spell's damage meter color.
 - A guardians' list against the run tracker's left side, small and with no background: a line a lair, with a little arrow toward it, the guardian's name, how far it is, and asleep, awake with its health, or slain at its second and back in so many seconds. The arrows turn with the way you face (or point north up). Over it, the achievement "Slay four guardians before 8:00": how many fell before 8:00.
 - Caches and lairs on the minimap, on every map, instances too: a golden chest for each cache, a horned skull for each guardian's lair (grey once empty); one out of range waits on the minimap's edge, pointing the way.
@@ -158,7 +159,7 @@ Commands:
 | `/sui crits` | Biggest Crits box: on or off (on by default) |
 | `/sui scale 0.85` | Size of the whole interface, 0.6 to 1.4. Each part has its own size in `/sui opt`, Size |
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
-| `/sui bosses` | Switches the boss bars on or off (on by default from v3.0.12) |
+| `/sui bosses` | Switches the boss bars on or off (off for a new install from v3.0.53) |
 | `/sui bosses elites` | Lists every elite in the boss bars too |
 | `/sui guide` | Opens the Guide: how Luck, Damage, Crit, Haste and Speed really work, and what marks and sets give |
 | `/sui tally` | Switches between the kills and gold line (the default) and the Default box |
@@ -218,7 +219,7 @@ These come from the 1.12 client and cannot be worked around by an addon:
 - Debuffs can only be read from the current target, so only the target's plate shows them.
 - A debuff's time left is only known for the hero's own buffs and debuffs.
 - The game's spells and jewelry rows are drawn by the game and cannot be moved from here: the game shares no jewelry data to draw them again.
-- A lair guardian is the same creature as its elite, so only your target can be told apart as one. Its plate is an elite's otherwise; the run panel and the boss bars know them all from the game.
+- A lair guardian is the same creature as its elite. From the game's 0.139.2 the game tells the plates which is which; before it, only your target could be told apart as one, and its plate was an elite's otherwise.
 - On a version of the game without its addon API, the run panel keeps its own count: its own clock (hover it for the rules), elites and guardians together, and no gold, caches or bosses to come.
 
 If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
@@ -226,6 +227,37 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.53, 2026-11-02
+
+New nameplates in SurvivorUI Classic's look, each elite, guardian and boss told apart by the game itself. Light beams over the caches, a ring for your range, the mouse cursor over the game's screens and the marks in Run History.
+
+**Nameplates** (Survivor Plates)
+- **A new look:** a thin bar with a black line round it and slightly rounded corners, the name over it and the health's share small inside, on the right.
+- **Each kind its own:** the rank and file red, elites green, lair guardians blue, bosses purple, the final boss orange, each a little larger. The game tells each one's kind (its 0.139.2), so a guardian and an elite of the same name each wear their own color.
+- **Skulls over the name:** a bone skull on an elite, its lair's mark on a guardian, a horned infernal skull on a boss and the final boss.
+- **In front:** in a crowd a boss's plate is over every other, then a guardian's, then an elite's; the rank and file behind and a little faded (never your target).
+- **Your target:** a gold line round its plate, its debuffs over it.
+- **The mouse:** the plate under it glows softly and comes to the front; with clicks going through the plates, it is the only one that takes the click. A boss bar under the mouse lines its enemy's plate in white.
+- **Friends:** thinner plates in a gold rim: a co-op friend in their class's color, your pets, summons and totems in mint.
+- **On for everyone, once:** the plates come on (even if you had them off), with the rank and file off; elites, guardians, bosses, pets, totems and co-op friends on; a name on every plate. The options' Nameplates tab and `/splates` change any of it after.
+- **Your target, whatever its kind** (new, off): on, your target gets a plate even when its kind is off.
+- **With the world markers:** a lair's big mark steps aside while its guardian's plate shows, and with **Draw the enemies' marks** the mark sits left of the plate's bar.
+
+**World markers**
+- **Light beams over caches:** a column of golden light over each cache, a pool of light under it and the chest floating near the top, bobbing slowly, with how far. Thinner and shorter far away, faint where your hero stands in front. Off (**Light beams over caches**), the chest near the ground as before.
+- **Your range** (an idea of ProTecz's): a light blue ring as far as your build's longest damaging spell reaches, heals, shields, buffs and racials left out: on the minimap, and in dots on the ground round your hero. Both on, each on its own in **Your range**. It follows your build as it changes.
+
+**Mouse cursor**
+- **Over the game's screens** (reported by Nomad): the colored gauntlet stays over the level-up and treasure cards, where the game's cursor used to come back. The game's Esc menu covers whatever an addon draws, so where Esc does not pause (a co-op run, the town, "Move to begin") the Gauntlet shape is the game's own gauntlet, with the effects round it.
+
+**Run History**
+- **The run's marks** (asked for by jiminee): the Loot box says the marks the run earned at its title, and hovering them shows each boss's marks and your class's total, as the loot list's card does. Runs saved before keep their box as it was.
+
+**New defaults** (for a new install)
+- **Boss bars off:** the plates show the bosses now. `/sui bosses` brings them back; whoever has them keeps them.
+- **Raid marks:** bosses, guardians and elites marked, drawn over them.
+- **Run tracker:** the guardians as a count ("Guardians 4 / 4 alive") in place of the bar, and no level and experience line.
 
 ### v3.0.52, 2026-11-02
 

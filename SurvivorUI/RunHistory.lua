@@ -248,6 +248,8 @@ local function Snapshot(phase)
 	record.build = SurvivorUI_BuildSnapshot and SurvivorUI_BuildSnapshot() or {}
 	record.gear = SurvivorUI_GearSnapshot and SurvivorUI_GearSnapshot() or nil
 	record.loot = SurvivorUI_LootList and SurvivorUI_LootList(12) or {}
+	-- Its marks and each boss's, as the loot list's title has them (LootLog.lua).
+	record.marks = SurvivorUI_RunMarks and SurvivorUI_RunMarks() or nil
 	-- The hero's numbers (the Stats panel's), every one, as they stand.
 	if AZS_STATS then
 		record.stats = {}
@@ -3347,9 +3349,44 @@ end
 
 ------------------------------------------------------------------------------
 -- The loot, in the loot list's look (LootLog.lua): each piece filled with
--- its quality's color in a black edge; the run second it came.
+-- its quality's color in a black edge; the run second it came. The run's
+-- marks at the title's other end, each boss's in the loot list's card over
+-- them; a run kept before v3.0.53 has none.
 
 local lootBox = Box(SurvivorUI_T("Loot"))
+lootBox.note:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
+lootBox.note:SetTextColor(1, 0.82, 0)
+lootBox.note:ClearAllPoints()
+lootBox.note:SetPoint("TOPRIGHT", lootBox, "TOPRIGHT", -7, -6)
+lootBox.marks = CreateFrame("Frame", nil, lootBox)
+lootBox.marks:SetPoint("TOPRIGHT", lootBox.note, "TOPRIGHT", 4, 3)
+lootBox.marks:SetHeight(16)
+lootBox.marks:EnableMouse(true)
+lootBox.marks:SetScript("OnEnter", function()
+	local marks = this.kept
+	if not (marks and marks.rows and table.getn(marks.rows) > 0 and SurvivorUI_MarksCardShow) then
+		return
+	end
+	-- Beside the window, level with the title, as the panels' tooltips.
+	local owner = this
+	SurvivorUI_MarksCardShow(marks, window, function(card)
+		card:SetPoint("TOPLEFT", owner, "TOPRIGHT", (window:GetRight() or 0) - (owner:GetRight() or 0) + 6, 0)
+	end)
+end)
+lootBox.marks:SetScript("OnLeave", function()
+	if SurvivorUI_MarksCardHide then
+		SurvivorUI_MarksCardHide()
+	end
+end)
+
+-- Marks as the game writes them: 20, 22.5.
+local function Amount(value)
+	local whole = math.floor(value + 0.05)
+	if math.abs(value - whole) < 0.05 then
+		return tostring(whole)
+	end
+	return string.format("%.1f", value)
+end
 
 local function LootRow(index)
 	local row = lootBox.rows[index]
@@ -3424,6 +3461,15 @@ local function DrawLoot(run)
 		At(row, lootBox, 6, -TOP - (index - 1) * ROW)
 	end
 	HideRows(lootBox, table.getn(loot) + 1)
+	local marks = run.marks
+	lootBox.note:SetText(marks and SurvivorUI_TF("Marks: {1}", Amount(Num(marks.total))) or "")
+	lootBox.marks.kept = marks
+	lootBox.marks:SetWidth(math.max(14, lootBox.note:GetStringWidth()) + 8)
+	if marks then
+		lootBox.marks:Show()
+	else
+		lootBox.marks:Hide()
+	end
 	local height = Nothing(lootBox, table.getn(loot) == 0 and "Nothing dropped." or nil)
 	return math.max(height, TOP + table.getn(loot) * ROW + 6)
 end
@@ -3962,6 +4008,9 @@ end)
 window:SetScript("OnHide", function()
 	pageBox:ClearFocus()
 	Disarm()
+	if SurvivorUI_MarksCardHide then
+		SurvivorUI_MarksCardHide()
+	end
 end)
 
 -- For the options (Run History): what is kept, and about how much room it

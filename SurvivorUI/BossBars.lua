@@ -33,10 +33,11 @@ local KINDS = {
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
-	-- On on a new install (from v3.0.12; off before, the run tracker showing
-	-- the bosses' health, which a new install now leaves to these bars).
+	-- On on a new install from v3.0.12 (off before, the run tracker showing
+	-- the bosses' health); off again from v3.0.53, the new plates showing the
+	-- bosses (Lucas, 2026-11-02). Whoever had them keeps them.
 	if SurvivorUIDB.bossBars == nil then
-		SurvivorUIDB.bossBars = true
+		SurvivorUIDB.bossBars = false
 	end
 	return SurvivorUIDB
 end
@@ -106,6 +107,15 @@ local function RestorePlace()
 end
 
 local bars = {}
+local hovered                    -- the bar under the mouse: Survivor Plates lines its enemy's plate in white
+
+-- The enemy of the bar under the mouse, for Survivor Plates; nil for none.
+local function Light(bar)
+	hovered = bar
+	if SurvivorPlates_Light then
+		SurvivorPlates_Light(bar and bar.unitName, bar and bar.unitId)
+	end
+end
 
 local function Bar(index)
 	local bar = bars[index]
@@ -176,6 +186,7 @@ local function Bar(index)
 		SavePlace()
 	end)
 	bar:SetScript("OnEnter", function()
+		Light(this)
 		GameTooltip:SetOwner(this, "ANCHOR_LEFT")
 		GameTooltip:SetText(this.unitName or "", 1, 1, 1)
 		if this.kindLabel then
@@ -185,7 +196,10 @@ local function Bar(index)
 		GameTooltip:AddLine(SurvivorUI_T("Click to target.").." "..SurvivorUI_MoveHint(), 0.7, 0.7, 0.7, 1)
 		GameTooltip:Show()
 	end)
-	bar:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	bar:SetScript("OnLeave", function()
+		Light(nil)
+		GameTooltip:Hide()
+	end)
 
 	bar.debuffs = {}
 	bars[index] = bar
@@ -348,6 +362,11 @@ local function Fill(bar, unit)
 	local share = hpm > 0 and hp / hpm or 0
 
 	bar.unitName, bar.hp, bar.hpm = name, hp, hpm
+	bar.unitId = Field(unit, "id", 2)
+	-- The bars move up and down as the enemies come and go: the light follows.
+	if bar == hovered then
+		Light(bar)
+	end
 	bar.color = style.color
 	bar.kindLabel = KIND_LABELS[kind]
 	bar.health:SetStatusBarColor(style.color[1], style.color[2], style.color[3], 0.9)
@@ -438,6 +457,9 @@ local function Update()
 	for index = shown + 1, table.getn(bars) do
 		bars[index]:Hide()
 		bars[index].unitName = nil
+		if bars[index] == hovered then
+			Light(nil)
+		end
 	end
 end
 

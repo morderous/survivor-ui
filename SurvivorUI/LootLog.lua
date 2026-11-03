@@ -551,22 +551,15 @@ local function CardRow(index)
 	return row
 end
 
-head:SetScript("OnEnter", function()
-	local count = table.getn(earned)
-	if count == 0 then
-		return
-	end
-	card:SetScale(log:GetEffectiveScale() / UIParent:GetEffectiveScale())
-	card:ClearAllPoints()
-	if SurvivorUI_RoomOnRight(log) then
-		card:SetPoint("TOPLEFT", log, "TOPRIGHT", 6, 0)
-	else
-		card:SetPoint("TOPRIGHT", log, "TOPLEFT", -6, 0)
-	end
-	card.title:SetText(SurvivorUI_TF("{1} marks this run", Amount(earned.total)))
+-- A run's marks in the card, { total, class, rows } with the rows oldest
+-- first: the run's own, or a run the Run History kept (RunHistory.lua).
+local function FillCard(marks)
+	local rows = marks.rows or {}
+	local count = table.getn(rows)
+	card.title:SetText(SurvivorUI_TF("{1} marks this run", Amount(marks.total or 0)))
 	local first = math.max(1, count - HISTORY + 1)
 	for index = first, count do
-		local each = earned[index]
+		local each = rows[index]
 		local row = CardRow(index - first + 1)
 		row.at:SetText(each.at and Clock(each.at) or "")
 		row.name:SetText(each.boss or SurvivorUI_T(each.paid and "A boss" or "Repeated loot"))
@@ -583,7 +576,7 @@ head:SetScript("OnEnter", function()
 		row.amount:Hide()
 	end
 	-- Under them, what the hero's class has, once the game has said.
-	local stock = Stocks()[ClassKey()]
+	local stock = marks.class
 	local foot = 0
 	if stock then
 		foot = 20
@@ -598,6 +591,24 @@ head:SetScript("OnEnter", function()
 		card.stockValue:Hide()
 	end
 	card:SetHeight(CARD_TOP + shown * CARD_ROW + foot + 6)
+end
+
+local function RunMarks()
+	return { total = earned.total, class = Stocks()[ClassKey()], rows = earned }
+end
+
+head:SetScript("OnEnter", function()
+	if table.getn(earned) == 0 then
+		return
+	end
+	card:SetScale(log:GetEffectiveScale() / UIParent:GetEffectiveScale())
+	card:ClearAllPoints()
+	if SurvivorUI_RoomOnRight(log) then
+		card:SetPoint("TOPLEFT", log, "TOPRIGHT", 6, 0)
+	else
+		card:SetPoint("TOPRIGHT", log, "TOPLEFT", -6, 0)
+	end
+	FillCard(RunMarks())
 	card:Show()
 end)
 head:SetScript("OnLeave", function() card:Hide() end)
@@ -805,6 +816,37 @@ function SurvivorUI_LootList(most)
 		})
 	end
 	return list
+end
+
+-- And the run's marks, as the title's card has them: { total, class, rows },
+-- a row { amount, at, boss, paid } each, the oldest first. Nil with the list
+-- switched off, as nothing is read then.
+function SurvivorUI_RunMarks()
+	if not Settings().lootLog then
+		return nil
+	end
+	local marks = RunMarks()
+	local rows, count = {}, table.getn(earned)
+	for index = math.max(1, count - HISTORY + 1), count do
+		local each = earned[index]
+		table.insert(rows, { amount = each.amount, at = each.at, boss = each.boss, paid = each.paid })
+	end
+	marks.rows = rows
+	return marks
+end
+
+-- A kept run's marks in the same card, as big as `owner` and put by `place`
+-- (RunHistory.lua); and the card away.
+function SurvivorUI_MarksCardShow(marks, owner, place)
+	card:SetScale(owner:GetEffectiveScale() / UIParent:GetEffectiveScale())
+	card:ClearAllPoints()
+	place(card)
+	FillCard(marks)
+	card:Show()
+end
+
+function SurvivorUI_MarksCardHide()
+	card:Hide()
 end
 
 -- An item's quality by its link's color ("ffa335ee": "epic"), and the link

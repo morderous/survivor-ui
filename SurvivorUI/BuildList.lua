@@ -1414,6 +1414,36 @@ function SurvivorUI_BuildSnapshot()
 	return list
 end
 
+-- For the range rings (WorldMarks.lua): the longest reach among the build's
+-- spells that strike, in yards, and that spell's name, read off the buttons'
+-- tooltips as the list's Info is (a radius, for one with no range). Heals,
+-- shields and lasting buffs left out, and the racial. Read again every two
+-- seconds, or as the game sends its list anew.
+local longest = { at = -10 }
+
+function SurvivorUI_LongestReach()
+	if GetTime() - longest.at < 2 and longest.seen == AZS_SPELLS_UPDATED then
+		return longest.yards, longest.name
+	end
+	longest.at, longest.seen = GetTime(), AZS_SPELLS_UPDATED
+	longest.yards, longest.name = nil, nil
+	local spells = AZS_SPELLS or {}
+	local count = table.getn(spells)
+	for index = 1, count - 1 do
+		local entry = spells[index]
+		local key = Field(entry, "key", 1)
+		if key and not (LASTING[key] or HEALING[key] or ABSORBING[key]) then
+			local name = SpellName(key)
+			local reach = Reach(Slot(index, count), name, Field(entry, "rank", 3))
+			local yards = reach and tonumber((string.gsub(reach, " yd$", "")))
+			if yards and yards > (longest.yards or 0) then
+				longest.yards, longest.name = yards, name
+			end
+		end
+	end
+	return longest.yards, longest.name
+end
+
 -- For the last runs too: the jewelry lines as they read, one a slot: { label,
 -- tags, color, item, name, tip }, or { label, empty } for a slot with nothing.
 function SurvivorUI_GearSnapshot()

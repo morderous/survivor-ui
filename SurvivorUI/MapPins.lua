@@ -355,12 +355,13 @@ SurvivorUI_GameHud.flag = ApplyGameFlag
 
 local flaggedPin                -- the pin glowing for the game's flag, if one
 
--- The yards the minimap spans across, now.
+-- The yards the minimap spans across, now; the range ring's too (WorldMarks.lua).
 local function MinimapYards()
 	local zoom = Minimap:GetZoom() or 0
 	local yards = Indoors() and INSIDE_YARDS or MINIMAP_YARDS
 	return yards[zoom] or yards[0], zoom
 end
+SurvivorUI_MinimapYards = MinimapYards
 
 -- A pin at its size: beyond the square's edge, on the edge (on the line toward
 -- it, smaller and fainter), or hidden with "Out of reach: hidden".

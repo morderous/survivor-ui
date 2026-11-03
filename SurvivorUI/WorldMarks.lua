@@ -6,7 +6,9 @@
 --
 -- - Friends down (co-op): over each, a gold cross, their name and how far;
 --   their party frame reads the yards too (SurvivorUI_DownedYards).
--- - Caches: a chest over each one still there, with how far.
+-- - Caches: a chest over each one still there, with how far; with Light
+--   beams, in a column of gold light, the chest floating near its top (as
+--   SurvivorUI Classic's 0.2.10).
 -- - Lairs: the lair's mark and its guardian's name over a lair whose guardian
 --   sleeps there (grey); awake, over the guardian itself (orange), following
 --   it out of the lair; slain, back over the lair, greyed, with the time until
@@ -20,6 +22,12 @@
 -- - Explosive orbs (the Explosive affix): a pulsing mark over each.
 -- - Bars (a test): over each elite, guardian and boss, its name and health
 --   (AZS_UNITS) in its kind's color, with no nameplate.
+-- - Range rings: the reach of the build's longest spell round the hero, on
+--   the minimap (its yards across, MapPins.lua) and on the ground (dots
+--   along points of the circle, each a spot by offset).
+--
+-- An enemy whose Survivor Plates plate shows (SurvivorPlates_PlateShows) is
+-- left to it: the plate names it and wears the mark drawn beside its bar.
 --
 -- The catalog is read four times a second; the places every frame, after the
 -- camera (AZS_RegisterWorldAnchorFrameHandler), so nothing trails. Seen in the
@@ -55,8 +63,24 @@ local GOLD = { 1.00, 0.82, 0.00 }
 local RESPAWN = { 1.00, 0.28, 0.22 }  -- an empty lair's time, as Guardians.lua's
 local DEFAULTS = {
 	worldDowned = true, worldCaches = true, worldLairs = true, worldArrows = true,
-	worldOrbs = true, worldBars = false, markDrawn = true,
+	worldOrbs = true, worldBars = false, markDrawn = true, worldBeams = true,
+	rangeMinimap = true, rangeWorld = true,
 }
+-- A cache's beam (Lucas, 2026-11-02, after the world markers of the game's
+-- live client): a column of light BEAM_TALL yards up and BEAM_WIDE across, a
+-- pool POOL_WIDE across on the ground, the chest floating near the top. Ours,
+-- drawn flat over the world, so nothing hides behind it: dimmed where the
+-- hero stands in front.
+local BEAM_TALL, BEAM_WIDE, POOL_WIDE = 6, 2.4, 3.4
+local BEAM_COLOR = { 1.00, 0.77, 0.27 }
+-- The range rings (Lucas, 2026-11-02, after an idea of ProTecz's): as far as
+-- the build's longest spell strikes (BuildList.lua, SurvivorUI_LongestReach),
+-- round the hero, light blue: on the minimap a ring, on the ground dots
+-- along RING_POINTS points of the circle (both on at first), at least
+-- DOT_GAP apart on the screen and never more than MOST_DOTS.
+local RING_COLOR = { 0.55, 0.82, 1.00 }
+local RING_POINTS = 48
+local DOT_GAP, DOT_SIZE, MOST_DOTS = 10, 6, 200
 
 local function On(key)
 	local value = SurvivorUIDB and SurvivorUIDB[key]
@@ -155,7 +179,8 @@ local function EnemySpot(entry, health)
 	end
 	local unit = entry.unitId and health[tonumber(entry.unitId)]
 	return { anchor = entry.anchorId, attachment = "overhead", lift = 0.4, look = "enemy", kind = entry.kind,
-		mark = mark, bar = bar, name = entry.name, hp = unit and unit[1], hpm = unit and unit[2] }
+		mark = mark, bar = bar, name = entry.name, hp = unit and unit[1], hpm = unit and unit[2],
+		unit = entry.unitId and tostring(entry.unitId) }
 end
 
 local function ReadAll()
@@ -206,7 +231,9 @@ local function ReadAll()
 		if entry.kind == "cache" then
 			base = base or { id = entry.anchorId, x = entry.x, y = entry.y, z = entry.z }
 			if entry.state == "present" and On("worldCaches") then
-				spot = { anchor = entry.anchorId, attachment = "position", lift = 1.2, look = "cache", arrow = true }
+				local beam = On("worldBeams")
+				spot = { anchor = entry.anchorId, attachment = "position", lift = beam and BEAM_TALL * 0.8 or 1.2,
+					look = "cache", arrow = true, beam = beam }
 			end
 		elseif entry.kind == "guardianLair" then
 			base = base or { id = entry.anchorId, x = entry.x, y = entry.y, z = entry.z }
@@ -226,7 +253,7 @@ local function ReadAll()
 			elseif guardian then
 				local unit = guardian.entry
 				spot = { anchor = unit.anchorId, attachment = "overhead", lift = 0.6, look = "lair", arrow = true,
-					name = entry.name, awake = true }
+					name = entry.name, awake = true, unit = unit.unitId and tostring(unit.unitId) }
 				entry = unit
 			else
 				spot = { anchor = entry.anchorId, attachment = "position", lift = 3, look = "lair", arrow = true,
@@ -267,6 +294,71 @@ layer:SetFrameStrata("LOW")
 layer:Hide()
 
 local marks, arrows = {}, {}
+
+-- The beams under the nameplates' bars: a child of WorldFrame, on the world's
+-- own strata as the plates are (the game draws by strata, then level), placed
+-- in WorldFrame's units, as the places come.
+local beams = CreateFrame("Frame", "SurvivorUIWorldBeams", WorldFrame)
+beams:SetAllPoints(WorldFrame)
+beams:Hide()
+local lights = {}
+
+local function Light(index)
+	local light = lights[index]
+	if light then
+		return light
+	end
+	light = {}
+	light.pool = beams:CreateTexture(nil, "BORDER")
+	light.pool:SetTexture(ART.."CachePool")
+	light.pool:SetBlendMode("ADD")
+	light.beam = beams:CreateTexture(nil, "ARTWORK")
+	light.beam:SetTexture(ART.."CacheBeam")
+	light.beam:SetBlendMode("ADD")
+	lights[index] = light
+	return light
+end
+
+local function HideLights(first)
+	for index = first, table.getn(lights) do
+		lights[index].pool:Hide()
+		lights[index].beam:Hide()
+	end
+end
+
+-- A beam from its spot on the ground (low) to BEAM_TALL yards up (high), as
+-- wide as the ground's yards there; the pool squashed as the camera tilts (a
+-- yard up looks shorter than a yard across as the camera looks down).
+local function PaintLight(light, low, high, hero, phase)
+	local yard = low.uiUnitsPerYard
+	local tall = high.y - low.y
+	if not yard or yard <= 0 or tall <= 1 then
+		light.pool:Hide()
+		light.beam:Hide()
+		return
+	end
+	local wide = BEAM_WIDE * yard
+	light.beam:ClearAllPoints()
+	light.beam:SetPoint("BOTTOM", beams, "BOTTOMLEFT", low.x, low.y)
+	light.beam:SetWidth(wide)
+	light.beam:SetHeight(tall)
+	local up = math.min(1, tall / (BEAM_TALL * yard))
+	local squash = math.max(0.25, math.sqrt(1 - up * up))
+	local pool = POOL_WIDE * yard
+	light.pool:ClearAllPoints()
+	light.pool:SetPoint("CENTER", beams, "BOTTOMLEFT", low.x, low.y)
+	light.pool:SetWidth(pool)
+	light.pool:SetHeight(pool * squash)
+	local a = 0.85 + 0.15 * math.sin(GetTime() * 2.2 + phase)
+	if hero and hero.x and math.abs(hero.x - low.x) < wide * 0.7 and hero.y < high.y
+			and hero.y > low.y - 3 * yard and (hero.cameraDepth or 0) < (low.cameraDepth or 0) then
+		a = a * 0.35
+	end
+	light.beam:SetVertexColor(BEAM_COLOR[1], BEAM_COLOR[2], BEAM_COLOR[3], a)
+	light.pool:SetVertexColor(BEAM_COLOR[1], BEAM_COLOR[2], BEAM_COLOR[3], a * 0.8)
+	light.pool:Show()
+	light.beam:Show()
+end
 
 local function Words(parent, size)
 	local text = parent:CreateFontString(nil, "OVERLAY")
@@ -516,7 +608,9 @@ local function Draw()
 	local requests, wanted = {}, {}
 	for index = 1, table.getn(spots) do
 		local spot = spots[index]
-		if spot.anchor then
+		if spot.unit and SurvivorPlates_PlateShows and SurvivorPlates_PlateShows(spot.unit) then
+			-- its nameplate names it, with the mark drawn beside its bar (Survivor Plates)
+		elseif spot.anchor then
 			table.insert(requests, { anchorId = spot.anchor, attachment = spot.attachment, offset = { x = 0, y = 0, z = spot.lift or 0 } })
 			table.insert(wanted, spot)
 		elseif base and spot.x then
@@ -524,15 +618,27 @@ local function Draw()
 			table.insert(wanted, spot)
 		end
 	end
-	-- The hero's spot, for the arrows' way.
+	-- Each beam's foot and top.
+	local lit = {}
+	for index = 1, table.getn(wanted) do
+		local spot = wanted[index]
+		if spot.beam then
+			table.insert(requests, { anchorId = spot.anchor, attachment = "position", offset = { x = 0, y = 0, z = 0 } })
+			table.insert(requests, { anchorId = spot.anchor, attachment = "position", offset = { x = 0, y = 0, z = BEAM_TALL } })
+			table.insert(lit, table.getn(requests) - 1)
+		end
+	end
+	-- The hero's spot, for the arrows' way and the beams it stands in front of.
 	local heroIndex
-	if base and heroAt and On("worldArrows") then
+	local pointing = On("worldArrows")
+	if base and heroAt and (pointing or table.getn(lit) > 0) then
 		table.insert(requests, Spot(heroAt.x, heroAt.y, heroAt.z))
 		heroIndex = table.getn(requests)
 	end
 	if table.getn(requests) == 0 or table.getn(requests) > 256 then
 		HideFrom(marks, 1)
 		HideFrom(arrows, 1)
+		HideLights(1)
 		return
 	end
 	local ok, result = pcall(AZS_ProjectWorldAnchors, requests)
@@ -543,16 +649,27 @@ local function Draw()
 		local entry, spot = entries[index], wanted[index]
 		if entry and entry.state == "onScreen" and entry.x then
 			shown = shown + 1
-			Paint(Mark(shown), spot, entry.x * ratio, entry.y * ratio, entry.playerDistance or Distance(spot))
+			-- A beam's chest floats up and down a little.
+			local bob = spot.beam and 2 * math.sin(GetTime() * 2.2 + index) or 0
+			Paint(Mark(shown), spot, entry.x * ratio, entry.y * ratio + bob, entry.playerDistance or Distance(spot))
 		elseif spot.arrow and entry and (entry.state == "offscreen" or entry.state == "behindCamera") then
 			table.insert(away, spot)
 		end
 	end
 	HideFrom(marks, shown + 1)
+	local hero = heroIndex and entries[heroIndex]
+	local glowing = 0
+	for index = 1, table.getn(lit) do
+		local low, high = entries[lit[index]], entries[lit[index] + 1]
+		if low and high and low.state == "onScreen" and high.state == "onScreen" and low.x and high.x then
+			glowing = glowing + 1
+			PaintLight(Light(glowing), low, high, hero and hero.state == "onScreen" and hero or nil, index)
+		end
+	end
+	HideLights(glowing + 1)
 	-- The arrows: the nearest spots out of sight, each by its way from the hero.
 	local pointed = 0
-	local hero = heroIndex and entries[heroIndex]
-	if hero and hero.state == "onScreen" and hero.x then
+	if pointing and hero and hero.state == "onScreen" and hero.x then
 		for index = 1, table.getn(away) do
 			away[index].yards = Distance(away[index]) or 0
 		end
@@ -593,6 +710,116 @@ local function Draw()
 	HideFrom(arrows, pointed + 1)
 end
 
+------------------------------------------------------------------------------
+-- The range rings.
+
+local reach                      -- the longest spell's yards, this read
+
+-- On the minimap: a ring as wide as the yards across allow, under the pins
+-- (MapPins.lua's stand 4 over the map); left out while it fits no more.
+local mapRing = CreateFrame("Frame", "SurvivorUIRangeRing", Minimap)
+mapRing:SetFrameLevel(Minimap:GetFrameLevel() + 2)
+mapRing:SetPoint("CENTER", Minimap, "CENTER", 0, 0)
+mapRing:Hide()
+mapRing.ring = mapRing:CreateTexture(nil, "ARTWORK")
+mapRing.ring:SetTexture(ART.."Ring")
+mapRing.ring:SetAllPoints(mapRing)
+mapRing.ring:SetVertexColor(RING_COLOR[1], RING_COLOR[2], RING_COLOR[3], 0.9)
+
+local function PlaceMapRing(running)
+	local across = SurvivorUI_MinimapYards and SurvivorUI_MinimapYards()
+	local width = Minimap:GetWidth() or 0
+	local size = reach and across and across > 0 and 2 * reach * width / across
+	if not (running and size and size >= 6 and size <= width and On("rangeMinimap")) then
+		mapRing:Hide()
+		return
+	end
+	mapRing:SetWidth(size)
+	mapRing:SetHeight(size)
+	mapRing:Show()
+end
+
+-- On the ground: under the beams, a child of WorldFrame as they are.
+local ground = CreateFrame("Frame", "SurvivorUIWorldRange", WorldFrame)
+ground:SetAllPoints(WorldFrame)
+ground:Hide()
+local dots = {}
+local ringAsk, lines = {}, {}    -- the circle's points, asked anew each frame; the lines between
+for index = 1, RING_POINTS do
+	ringAsk[index] = { anchorId = "", attachment = "position", offset = { x = 0, y = 0, z = 0 } }
+	lines[index] = {}
+end
+
+local function Dot(index)
+	local dot = dots[index]
+	if not dot then
+		dot = ground:CreateTexture(nil, "BACKGROUND")
+		dot:SetTexture(ART.."PaceDot")
+		dot:SetWidth(DOT_SIZE)
+		dot:SetHeight(DOT_SIZE)
+		dot:SetVertexColor(RING_COLOR[1], RING_COLOR[2], RING_COLOR[3], 0.8)
+		dots[index] = dot
+	end
+	return dot
+end
+
+local function HideDots(first)
+	for index = first, table.getn(dots) do
+		dots[index]:Hide()
+	end
+end
+
+-- The circle's points on the screen, by offset from the anchor that stays
+-- put, then dots along the lines between them: a line with an end off the
+-- screen left out.
+local function DrawRing()
+	if not (reach and base and heroAt and On("rangeWorld")) then
+		HideDots(1)
+		return
+	end
+	for index = 1, RING_POINTS do
+		local angle = 2 * math.pi * (index - 1) / RING_POINTS
+		local ask = ringAsk[index]
+		ask.anchorId = base.id
+		ask.offset.x = heroAt.x + reach * math.cos(angle) - base.x
+		ask.offset.y = heroAt.y + reach * math.sin(angle) - base.y
+		ask.offset.z = heroAt.z - base.z
+	end
+	local ok, result = pcall(AZS_ProjectWorldAnchors, ringAsk)
+	local points = ok and result and result.entries or {}
+	local around = 0
+	for index = 1, RING_POINTS do
+		local a, b = points[index], points[math.mod(index, RING_POINTS) + 1]
+		local line = lines[index]
+		line.on = a and b and a.state == "onScreen" and b.state == "onScreen" and a.x and b.x and true or false
+		if line.on then
+			line.x, line.y, line.dx, line.dy = a.x, a.y, b.x - a.x, b.y - a.y
+			line.length = math.sqrt(line.dx * line.dx + line.dy * line.dy)
+			around = around + line.length
+		end
+	end
+	local gap = math.max(DOT_GAP, around / MOST_DOTS)
+	local used, carry = 0, 0
+	for index = 1, RING_POINTS do
+		local line = lines[index]
+		if not line.on then
+			carry = 0
+		elseif line.length > 0 then
+			local at = carry
+			while at < line.length and used < MOST_DOTS do
+				used = used + 1
+				local dot = Dot(used)
+				local share = at / line.length
+				dot:SetPoint("CENTER", ground, "BOTTOMLEFT", line.x + line.dx * share, line.y + line.dy * share)
+				dot:Show()
+				at = at + gap
+			end
+			carry = at - line.length
+		end
+	end
+	HideDots(used + 1)
+end
+
 local function Showing()
 	return AZS_GetPhase and AZS_GetPhase() == "playing"
 end
@@ -602,20 +829,26 @@ local function Frame()
 	if not Showing() then
 		if layer:IsShown() then
 			layer:Hide()
+			beams:Hide()
+			ground:Hide()
 		end
 		return
 	end
 	if not layer:IsShown() then
 		layer:Show()
+		beams:Show()
+		ground:Show()
 	end
 	local ok, p = pcall(AZS_GetPlayerPosition)
 	heroAt = ok and p and p.x and { x = p.x, y = p.y, z = p.z or 0 } or nil
 	Draw()
+	DrawRing()
 end
 
 AZS_RegisterWorldAnchorFrameHandler(Frame)
 
--- The catalog, four times a second; the friends' yards for the party frames.
+-- The catalog, four times a second; the friends' yards for the party frames;
+-- the longest spell's reach and the minimap's ring.
 local reader = CreateFrame("Frame")
 reader:SetScript("OnUpdate", function()
 	waited = waited + arg1
@@ -623,6 +856,11 @@ reader:SetScript("OnUpdate", function()
 		return
 	end
 	waited = 0
+	local phase = AZS_GetPhase and AZS_GetPhase()
+	local running = phase == "playing" or phase == "choosing" or phase == "paused"
+	reach = running and (On("rangeMinimap") or On("rangeWorld")) and SurvivorUI_LongestReach
+		and SurvivorUI_LongestReach() or nil
+	PlaceMapRing(running)
 	if not Showing() then
 		return
 	end

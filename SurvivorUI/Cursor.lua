@@ -12,7 +12,9 @@
 --             color and size, Art\Cursor\<Size><Color>.tga)
 -- The game writes its cursor again on every frame the mouse is over the
 -- world, so ours is handed over on every frame too. While the cursor holds
--- something, the game's own shows.
+-- something, the game's own shows; and in a party or before the run, the
+-- game's own gauntlet for the Gauntlet (its Esc menu covers anything an
+-- addon draws, and pauses only a run played alone).
 --
 -- And a few touches in the same color, in the records' manner (Effects.lua):
 -- a soft glow breathing round it, motes trailing off as it moves, a ring and
@@ -116,6 +118,8 @@ end
 
 local layer = CreateFrame("Frame", "SurvivorUICursor", UIParent)
 layer:SetFrameStrata("TOOLTIP")
+-- Over the tooltips too, and the pieces kept over the cards.
+layer:SetFrameLevel(500)
 layer:SetAllPoints(UIParent)
 layer:Hide()
 
@@ -277,13 +281,22 @@ local function Holding()
 		or (CursorHasMoney and CursorHasMoney())
 end
 
--- The game draws its own screens over every addon's (paused, the cards, the
--- end of a run): the gauntlet drawn here would be under them, so it is drawn
--- only while the run is played or about to be (the arrow, the game's own
--- cursor, shows over them).
+-- The game draws its own screens over every addon's (paused, the end of a
+-- run): the gauntlet drawn here would be under them, so it is drawn only
+-- while the run is played or about to be (the arrow, the game's own cursor,
+-- shows over them). But the cards, a level's or a new piece of jewelry: the
+-- game keeps the layer over them (its AZS_SetOnTopOfScreens, 0.126).
 local function Played()
 	local phase = AZS_RUN and AZS_RUN.ph
-	return phase == "playing" or phase == "ready"
+	return phase == "playing" or phase == "ready" or (phase == "choosing" and AZS_SetOnTopOfScreens ~= nil)
+end
+
+-- Where the game's Esc menu leaves the run as it is and tells no addon: in a
+-- party, and before the run (the town, "Move to begin"; the game pauses only
+-- a run played alone). The menu is drawn over everything ours, so there the
+-- gauntlet is the game's own, with the touches round it.
+local function Own()
+	return (AZS_RUN and AZS_RUN.ph == "ready") or (SurvivorUI_InParty and SurvivorUI_InParty())
 end
 
 local function GiveBack()
@@ -305,7 +318,17 @@ driver:SetScript("OnUpdate", function()
 		GiveBack()
 		return
 	end
-	if not SetCursor(gauntlet and BLANK or arrowPath) then
+	-- The game's own gauntlet where its Esc menu would cover ours (the arrow,
+	-- the game's cursor, shows over the menu).
+	local own = gauntlet and Own()
+	if own then
+		if handed then
+			handed = nil
+			ResetCursor()
+		end
+	elseif SetCursor(gauntlet and BLANK or arrowPath) then
+		handed = true
+	else
 		-- A picture the game would not take: the game's cursor, and no more tries.
 		this:Hide()
 		GiveBack()
@@ -313,14 +336,13 @@ driver:SetScript("OnUpdate", function()
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: the cursor's picture did not load."))
 		return
 	end
-	handed = true
 
 	local unit = PixelsPerUnit()
 	local x, y = GetCursorPosition()
 	local scale = UIParent:GetEffectiveScale()
 	x, y = x / scale, y / scale
 	local size = 32 / unit
-	if gauntlet then
+	if gauntlet and not own then
 		local file = "Point"
 		if targeting then
 			file = "Cast"
@@ -364,6 +386,10 @@ if WorldFrame then
 end
 
 local function Apply()
+	-- Over the cards: the game reads its list as they open, so ahead of them.
+	if AZS_SetOnTopOfScreens then
+		AZS_SetOnTopOfScreens(layer, SurvivorUI_CursorOn())
+	end
 	if SurvivorUI_CursorOn() then
 		WorkOut()
 		layer:Show()
