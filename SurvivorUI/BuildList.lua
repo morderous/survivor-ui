@@ -454,6 +454,16 @@ local function Reach(actionSlot, name, rank)
 		-- within 25 yd", Blizzard's "once enemies come within 30 yd": where it
 		-- is cast from, not how far it reaches.
 		text = string.gsub(string.gsub(text, "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
+		-- The game in Russian: its lines read as the English ones ("Дальность
+		-- 30 м" as "30 yd range"); an English line has no Cyrillic to change.
+		text = string.gsub(text, "^Дальность (%d+%.?%d*) м", "%1 yd range")
+		text = string.gsub(text, "^Конус (%d+%.?%d*) м", "%1 yd cone")
+		text = string.gsub(text, "^Радиус (%d+%.?%d*) м", "%1 yd radius")
+		text = string.gsub(text, "в радиусе (%d+%.?%d*) м от этого места", "within %1 yd of that spot")
+		text = string.gsub(text, "в радиусе (%d+%.?%d*) м", "within %1 yd")
+		text = string.gsub(text, "когда враги ближе (%d+%.?%d*) м", "once enemies are within %1 yd")
+		text = string.gsub(text.." ", "(%d+%.?%d*) м([^\208\209])", "%1 yd%2")
+		text = string.gsub(string.gsub(text, "Радиус", "radius"), "радиус", "radius")
 		local _, _, spot = string.find(text, "within (%d+%.?%d*) yd of that spot")
 		area = area or spot
 		-- Its header line: "30 yd range", "10 yd radius", "13 yd cone".
@@ -978,7 +988,7 @@ local function Tagged(english, value)
 		if string.find(value, "%", 1, true) then
 			return tag.." "..value
 		end
-		return tag.." "..value.."s"
+		return tag.." "..SurvivorUI_TF("{1}s", value)
 	end
 	return value.." "..tag
 end
@@ -1487,10 +1497,10 @@ function SurvivorUI_ToggleBuild()
 	local settings = Settings()
 	settings.buildList = not settings.buildList
 	ApplyGameHud()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.buildList
-		and (settings.gameBuildToo and "build list shown, and the Default row of spells stays with it."
-			or "build list shown; the Default row of spells is put away.")
-		or (settings.noGameBuild and "build list hidden, and the Default row of spells stays away." or "build list hidden; the Default row of spells is back.")))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.buildList
+		and (settings.gameBuildToo and "Survivor UI: build list shown, and the Default row of spells stays with it."
+			or "Survivor UI: build list shown; the Default row of spells is put away.")
+		or (settings.noGameBuild and "Survivor UI: build list hidden, and the Default row of spells stays away." or "Survivor UI: build list hidden; the Default row of spells is back.")))
 end
 
 local loader = CreateFrame("Frame")

@@ -206,7 +206,7 @@ local function Read()
 			if section then
 				table.insert(ability.sections, { info = section, items = List(string.sub(text, string.len(section.prefix) + 1)) })
 			elseif critChance then
-				ability.crit = critChance.." crit"..DOT..critDamage.." dmg"
+				ability.crit = SurvivorUI_TF("{1} crit \194\183 {2} dmg", critChance, critDamage)
 			elseif text ~= "" then
 				-- The description is the first text below the cast line; the
 				-- rest ("Not learned yet", a racial's note) keep their color.
@@ -244,7 +244,7 @@ local function What(ability)
 	for index = 1, table.getn(ability.description) do
 		for word in string.gfind(ability.description[index], "(%a+) damage") do
 			if SCHOOL_COLORS[word] then
-				return word.." damage", SCHOOL_COLORS[word], word
+				return SurvivorUI_TF("{1} damage", SurvivorUI_T(word)), SCHOOL_COLORS[word], word
 			end
 		end
 	end
@@ -255,12 +255,12 @@ local function What(ability)
 		if string.find(first, KINDS[index][1]) then
 			local kind = KINDS[index][2]
 			if kind == "heal" or kind == "shield" or kind == "thorns" then
-				return own and own.." "..kind or Capital(kind), own and SCHOOL_COLORS[own] or HEAL_COLOR, nil
+				return own and SurvivorUI_TF("{1} "..kind, SurvivorUI_T(own)) or SurvivorUI_T(Capital(kind)), own and SCHOOL_COLORS[own] or HEAL_COLOR, nil
 			end
-			return Capital(kind), own and SCHOOL_COLORS[own] or BUFF_COLOR, nil
+			return SurvivorUI_T(Capital(kind)), own and SCHOOL_COLORS[own] or BUFF_COLOR, nil
 		end
 	end
-	return own or "Physical", SCHOOL_COLORS[own or "Physical"], nil
+	return SurvivorUI_T(own or "Physical"), SCHOOL_COLORS[own or "Physical"], nil
 end
 
 local function Hex(color)
@@ -342,7 +342,7 @@ local function Write(ability)
 		local section = ability.sections[index]
 		local color = section.info.color
 		Spacer(color)
-		GameTooltip:AddLine(section.info.title, color[1], color[2], color[3])
+		GameTooltip:AddLine(SurvivorUI_T(section.info.title), color[1], color[2], color[3])
 		for item = 1, table.getn(section.items) do
 			local text = section.items[item]
 			-- "+35% damage" as "Damage ... +35%"; a talent is a name alone.
@@ -373,7 +373,7 @@ local function Write(ability)
 	end
 	if traits and table.getn(traits) > 0 then
 		Spacer(RACE_COLOR)
-		GameTooltip:AddLine((race or "Race").."'s traits", RACE_COLOR[1], RACE_COLOR[2], RACE_COLOR[3])
+		GameTooltip:AddLine(SurvivorUI_TF("{1}'s traits", SurvivorUI_T(race or "Race")), RACE_COLOR[1], RACE_COLOR[2], RACE_COLOR[3])
 		for index = 1, table.getn(traits) do
 			GameTooltip:AddLine("|cffffd100"..traits[index].name.."|r  "..traits[index].text,
 				DESCRIPTION_COLOR[1], DESCRIPTION_COLOR[2], DESCRIPTION_COLOR[3], 1)

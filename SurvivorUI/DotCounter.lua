@@ -211,7 +211,7 @@ local function Light(lit, spell, count, seconds)
 	if count then
 		badge:SetText(math.max(1, math.floor(count + 0.5)))
 	else
-		badge:SetText(math.ceil(seconds).."s")
+		badge:SetText(SurvivorUI_TF("{1}s", math.ceil(seconds)))
 	end
 	local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(spell)
 	if color then
@@ -221,7 +221,7 @@ local function Light(lit, spell, count, seconds)
 	end
 	badge:Show()
 	if count and seconds then
-		badge.timer:SetText(math.ceil(seconds).."s")
+		badge.timer:SetText(SurvivorUI_TF("{1}s", math.ceil(seconds)))
 		badge.timer:Show()
 	else
 		badge.timer:Hide()
@@ -513,5 +513,6 @@ function SurvivorUI_ToggleDots()
 	local settings = Settings()
 	local on = not (On("dotCounter") or On("fearCounter") or On("totemCounter") or On("shoutCounter") or On("markCounter"))
 	settings.dotCounter, settings.fearCounter, settings.totemCounter, settings.shoutCounter, settings.markCounter = on, on, on, on, on
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the counters over the action bar (DoTs, fears, totems, shouts, marks) are "..(on and "on." or "off."))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(on and "Survivor UI: the counters over the action bar (DoTs, fears, totems, shouts, marks) are on."
+		or "Survivor UI: the counters over the action bar (DoTs, fears, totems, shouts, marks) are off."))
 end

@@ -78,7 +78,7 @@ end
 -- (the addon's own, gold if Global says so) or one of these.
 SurvivorUI_MAPBUTTON_COLORS = {
 	{ "class", "Class color", nil },
-	{ "gold", "Gold", { 1.00, 0.78, 0.15 } },
+	{ "gold", "@color:Gold", { 1.00, 0.78, 0.15 } },
 	{ "white", "White", { 1.00, 1.00, 1.00 } },
 	{ "red", "Red", { 1.00, 0.28, 0.22 } },
 	{ "orange", "Orange", { 1.00, 0.55, 0.15 } },
@@ -481,9 +481,9 @@ local function KeyFlip(switch)
 end
 
 BINDING_HEADER_SURVIVORUI = "Survivor UI"
-BINDING_NAME_SURVIVORUI_SPELLEFFECTS = "Spell effects on or off"
-BINDING_NAME_SURVIVORUI_SOUNDEFFECTS = "Sound effects on or off"
-BINDING_NAME_SURVIVORUI_RANGERING = "Range ring on or off"
+BINDING_NAME_SURVIVORUI_SPELLEFFECTS = SurvivorUI_T("Spell effects on or off")
+BINDING_NAME_SURVIVORUI_SOUNDEFFECTS = SurvivorUI_T("Sound effects on or off")
+BINDING_NAME_SURVIVORUI_RANGERING = SurvivorUI_T("Range ring on or off")
 
 function SurvivorUI_ToggleSpellEffects()
 	KeyFlip(effectsSwitch)
@@ -976,7 +976,7 @@ function SurvivorUI_HistoryNotice(force, look)
 	-- "Elwynn Forest 20:50 - ENDLESS": the zone green, the time white, the result its color.
 	notice.line:SetText(string.format("|cff4dff70%s|r  |cffffffff%s|r  -  |cff%02x%02x%02x%s|r",
 		run.zone or "", MinSec(seconds),
-		math.floor(color[1] * 255), math.floor(color[2] * 255), math.floor(color[3] * 255), RESULT_WORDS[kind]))
+		math.floor(color[1] * 255), math.floor(color[2] * 255), math.floor(color[3] * 255), SurvivorUI_T(RESULT_WORDS[kind])))
 	notice:SetWidth(math.max(notice.title:GetStringWidth() + 24, notice.line:GetStringWidth() + 16))
 	-- Beside Run History's button, apart from the line they make.
 	Beside(notice, NoteAnchor())

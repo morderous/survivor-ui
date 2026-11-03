@@ -95,6 +95,7 @@ local GAME_FONTS = {
 -- letters: each is offered only where it can write the game's language.
 local OWN_FONTS = "Interface\\AddOns\\SurvivorUI\\Fonts\\"
 local ADDON_FONTS = {
+	{ name = "Exo 2", path = OWN_FONTS.."Exo2-SemiBold.ttf", cannot = { ko = true } },
 	{ name = "Fira Sans", path = OWN_FONTS.."FiraSans-Medium.ttf", cannot = { ko = true } },
 	{ name = "Noto Sans", path = OWN_FONTS.."NotoSans-Medium.ttf", cannot = { ko = true } },
 	{ name = "Exo", path = OWN_FONTS.."Exo-SemiBold.ttf", cannot = { ru = true, uk = true, ko = true } },
@@ -155,9 +156,9 @@ end
 -- game's language.
 function SurvivorUI_FontList(forGlobal)
 	local default = string.lower(SurvivorUI_DefaultFont and SurvivorUI_DefaultFont() or SurvivorUI_DEFAULT_FONT or "")
-	local first = { name = "The global font", path = nil }
+	local first = { name = SurvivorUI_T("The global font"), path = nil }
 	if forGlobal then
-		first = { name = "Default: "..(SurvivorUI_DefaultFontName and SurvivorUI_DefaultFontName() or "Friz Quadrata"), path = nil }
+		first = { name = SurvivorUI_TF("Default: {1}", SurvivorUI_DefaultFontName and SurvivorUI_DefaultFontName() or "Friz Quadrata"), path = nil }
 	end
 	local list = { first }
 	for _, face in pairs(GAME_FONTS) do
@@ -518,7 +519,7 @@ for index, axis in pairs({ "X", "Y" }) do
 		if isX then Changed(step, 0) else Changed(0, step) end
 	end)
 	plus:SetPoint("LEFT", box, "RIGHT", 4, 0)
-	local middle = Button(isX and "Center across" or "Center up/down", 88, function()
+	local middle = Button(SurvivorUI_T(isX and "Center across" or "Center up/down"), 88, function()
 		if not selected then
 			return
 		end
@@ -577,7 +578,8 @@ slider:SetScript("OnMouseWheel", function()
 	this:SetValue(this:GetValue() + arg1 * 0.05)
 end)
 local noSize = Text(card, 9, MUTED)
-noSize:SetPoint("TOPLEFT", card, "TOPLEFT", 50, -104)
+-- Clear of a longer language's word for Size
+noSize:SetPoint("TOPLEFT", card, "TOPLEFT", math.max(50, 12 + math.ceil(sizeLabel:GetStringWidth()) + 6), -104)
 noSize:SetText(SurvivorUI_T("with the whole interface"))
 
 -- A damage meter window's own width and lines (Meter.lua, MeterWindows.lua),
@@ -914,7 +916,7 @@ function Fill()
 	-- A follower's font row is the piece it follows'.
 	local fontPiece = PIECES[FontName(selected.name)] or piece
 	if fontPiece.gameFont or fontPiece.noFont then
-		gameFont:SetText(fontPiece.noFont and "set in Combat text" or "Default")
+		gameFont:SetText(SurvivorUI_T(fontPiece.noFont and "set in Combat text" or "Default"))
 		for _, button in pairs(fontRow) do
 			button:Hide()
 		end
@@ -928,7 +930,7 @@ function Fill()
 		end
 		gameFont:Hide()
 		stepLabel:Show()
-		local name = "The global font"
+		local name = SurvivorUI_T("The global font")
 		for _, face in pairs(SurvivorUI_FontList()) do
 			if chosen and face.path == chosen.path then
 				name = face.name
@@ -940,7 +942,7 @@ function Fill()
 		stepText:Show()
 	end
 	if piece.toggle then
-		visible.text:SetText(Shown(piece) and "Shown  -  click to hide" or "Hidden  -  click to show")
+		visible.text:SetText(SurvivorUI_T(Shown(piece) and "Shown  -  click to hide" or "Hidden  -  click to show"))
 		visible:Enable()
 	else
 		visible.text:SetText(SurvivorUI_T("Always shown"))

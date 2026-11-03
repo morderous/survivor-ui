@@ -261,7 +261,7 @@ local SECTIONS = {
 	{ title = "Reach", color = { 0.72, 0.45, 1.00 }, rows = {
 		{ "Area",     function(s) return Pct(s.area - 1) end, "Your spells' areas and ranges are this much larger." },
 		{ "Targets",  function(s) return string.format("+%d", s.cnt) end, "Every spell that picks its targets picks this many more." },
-		{ "Pickup",   function(s) return string.format("%.0f yd", s.pick) end, "Experience and gold fly to you from this far." },
+		{ "Pickup",   function(s) return string.format(SurvivorUI_T("%.0f yd"), s.pick) end, "Experience and gold fly to you from this far." },
 	} },
 	{ title = "Utility", color = { 0.35, 0.90, 0.55 }, rows = {
 		{ "Speed",      function(s) return Pct(s.spd - 1) end, "You run this much faster." },

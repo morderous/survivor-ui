@@ -463,9 +463,9 @@ function SurvivorUI_Tally()
 	local settings = Settings()
 	settings.tally = not settings.tally
 	ApplyGameHud()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.tally
-		and "the kills and gold line is on; the Default box is put away."
-		or (settings.noGameTally and "the kills and gold line is off, and the Default box stays away." or "the Default kills and gold box is back.")))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.tally
+		and "Survivor UI: the kills and gold line is on; the Default box is put away."
+		or (settings.noGameTally and "Survivor UI: the kills and gold line is off, and the Default box stays away." or "Survivor UI: the Default kills and gold box is back.")))
 end
 
 -- Its place: under the minimap or the action bar, following it, until moved.

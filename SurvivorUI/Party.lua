@@ -183,7 +183,7 @@ local rows = {}
 -- A friend's card: the class, the health, the damage this run.
 local function Tip(row)
 	local unit = row.unit
-	local name, class, race = row.sample and row.sample.name, row.sample and row.sample.class, nil
+	local name, class, race = row.sample and SurvivorUI_T(row.sample.name), row.sample and row.sample.class, nil
 	if not row.sample then
 		if not UnitExists(unit) then
 			return
@@ -197,7 +197,7 @@ local function Tip(row)
 	-- Over the row's buffs when they line up over it.
 	GameTooltip:SetPoint("BOTTOMLEFT", row, "TOPLEFT", 0, 6 + (row.lift or 0))
 	GameTooltip:SetText(name or "?", r, g, b)
-	local kind = (race and (race.." ") or "")..(row.className or "")
+	local kind = (race and (SurvivorUI_T(race).." ") or "")..SurvivorUI_T(row.className or "")
 	if kind ~= "" then
 		GameTooltip:AddLine(kind, 0.8, 0.8, 0.8)
 	end
@@ -477,15 +477,15 @@ local function Paint(row, friend)
 	if friend.offline then
 		row.health:SetValue(1)
 		row.health:SetStatusBarColor(0.25, 0.25, 0.28, 1)
-		value, color = "Offline", { 0.6, 0.6, 0.65 }
+		value, color = SurvivorUI_T("Offline"), { 0.6, 0.6, 0.65 }
 	elseif friend.down then
 		row.health:SetValue(1)
 		row.health:SetStatusBarColor(DOWN_FILL[1], DOWN_FILL[2], DOWN_FILL[3], 1)
-		value, color = "DOWN", DOWN_TEXT
+		value, color = SurvivorUI_T("DOWN"), DOWN_TEXT
 		-- How far, from the game's 0.139.2 (WorldMarks.lua).
 		local yards = SurvivorUI_DownedYards and SurvivorUI_DownedYards(friend.name)
 		if yards then
-			value = "DOWN "..SurvivorUI_TF("{1} yd", yards)
+			value = value.." "..SurvivorUI_TF("{1} yd", yards)
 		end
 	else
 		row.health:SetValue(share)
@@ -509,16 +509,16 @@ local function Paint(row, friend)
 	if friend.down and friend.rescue then
 		row.revive:SetValue(friend.rescue)
 		row.revive:Show()
-		value, color = "Reviving "..Percent(friend.rescue), { 1, 1, 1 }
+		value, color = SurvivorUI_TF("Reviving {1}", Percent(friend.rescue)), { 1, 1, 1 }
 	else
 		row.revive:Hide()
 	end
 	if friend.saving then
-		value, color = "Reviving you", GOLD
+		value, color = SurvivorUI_T("Reviving you"), GOLD
 	end
 	row.value:SetText(value)
 	row.value:SetTextColor(color[1], color[2], color[3])
-	SetName(row, friend.name or "?", BAR_WIDTH - 14 - row.value:GetStringWidth())
+	SetName(row, row.sample and SurvivorUI_T(friend.name) or friend.name or "?", BAR_WIDTH - 14 - row.value:GetStringWidth())
 	-- Down: the name in red, but white over the gold while brought back.
 	if friend.down then
 		if friend.rescue then
@@ -801,7 +801,7 @@ local function DrawBar(revive)
 	local rescuing = Named(revive.reviving)
 	local share, title, text, fill, titleColor
 	if not (down or rescuing) and Placing("Revive bar") then
-		down, revive = true, { by = "Friend", share = 0.6 }
+		down, revive = true, { by = SurvivorUI_T("Friend"), share = 0.6 }
 	end
 	if down then
 		share = Num(revive.share)
@@ -816,7 +816,7 @@ local function DrawBar(revive)
 		end
 	elseif rescuing then
 		share = Num(revive.rshare)
-		title, titleColor, fill = SurvivorUI_TF("BRINGING {1} BACK", string.upper(rescuing)), RESCUE_FILL, RESCUE_FILL
+		title, titleColor, fill = SurvivorUI_TF("BRINGING {1} BACK", SurvivorUI_Upper(rescuing)), RESCUE_FILL, RESCUE_FILL
 		text = Percent(share)
 	else
 		bar:Hide()

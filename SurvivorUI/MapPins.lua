@@ -486,7 +486,7 @@ local function Update()
 					pin.art:SetTexCoord(0, 1, 0, 1)
 					pin.art:SetVertexColor(1, 1, 1)
 					pin.glow:Hide()
-					pin.title, pin.note, pin.flagged = "Cache", nil, nil
+					pin.title, pin.note, pin.flagged = SurvivorUI_T("Cache"), nil, nil
 					pin.timer:Hide()
 					Place(pin, east, south, yardsAcross, cacheSize)
 				end
@@ -526,9 +526,9 @@ local function Update()
 					if guardian then
 						pin.note = SurvivorUI_TF("Awake: {1}, on the move", guardian.name or lair.name or "?")
 					elseif lair.active then
-						pin.note = "Guardian's lair: "..(lair.name and lair.name ~= "" and lair.name or "a guardian holds it")
+						pin.note = SurvivorUI_TF("Guardian's lair: {1}", lair.name and lair.name ~= "" and lair.name or SurvivorUI_T("a guardian holds it"))
 					else
-						pin.note = "Empty lair"
+						pin.note = SurvivorUI_T("Empty lair")
 					end
 					local markName = SurvivorUI_LairMarkName and SurvivorUI_LairMarkName(mark)
 					pin.title = markName and SurvivorUI_TF("{1} lair", SurvivorUI_T(markName)) or SurvivorUI_T("Lair")
@@ -639,38 +639,38 @@ end
 -- /sui pins: what the addon reads, to check the pins against the world.
 function SurvivorUI_PinsReport()
 	local say = function(text) DEFAULT_CHAT_FRAME:AddMessage("|cffffd100Survivor UI|r "..text) end
-	say("zone: "..tostring(AZS_ZONE and AZS_ZONE.zone).." (map "..tostring(AZS_ZONE and AZS_ZONE.map)
-		.."); the client's: "..tostring(GetRealZoneText and GetRealZoneText()))
+	say(SurvivorUI_TF("zone: {1} (map {2}); the client's: {3}", tostring(AZS_ZONE and AZS_ZONE.zone), tostring(AZS_ZONE and AZS_ZONE.map),
+		tostring(GetRealZoneText and GetRealZoneText())))
 	local chests = AZS_CHESTS or {}
 	local lairs = AZS_GetLairs and AZS_GetLairs() or {}
-	say("caches: "..table.getn(chests)..", lairs: "..table.getn(lairs))
+	say(SurvivorUI_TF("caches: {1}, lairs: {2}", table.getn(chests), table.getn(lairs)))
 	local px, py, facing = HeroWorld()
 	if px then
 		-- The way faced, as a compass reads it: 0 north, 90 east.
 		local degrees = facing and math.mod(math.floor(facing * 180 / math.pi + 0.5) + 720, 360)
-		say(string.format("hero in the world: x %.1f, y %.1f; facing %s", px, py,
-			degrees and (degrees.."° (0 north, 90 east)") or "not sent"))
+		say(SurvivorUI_TF("hero in the world: x {1}, y {2}; facing {3}", string.format("%.1f", px), string.format("%.1f", py),
+			degrees and SurvivorUI_TF("{1}° (0 north, 90 east)", degrees) or SurvivorUI_T("not sent")))
 		local yards, east, south = Nearest(chests, px, py)
 		if yards then
-			say(string.format("nearest cache: %d yards %s", math.floor(yards + 0.5), Compass(east, south)))
+			say(SurvivorUI_TF("nearest cache: {1} yards {2}", math.floor(yards + 0.5), SurvivorUI_T(Compass(east, south))))
 		end
 		yards, east, south = Nearest(lairs, px, py)
 		if yards then
-			say(string.format("nearest lair: %d yards %s", math.floor(yards + 0.5), Compass(east, south)))
+			say(SurvivorUI_TF("nearest lair: {1} yards {2}", math.floor(yards + 0.5), SurvivorUI_T(Compass(east, south))))
 		end
 	else
-		say("hero in the world: not sent by this version of the game")
+		say(SurvivorUI_T("hero in the world: not sent by this version of the game"))
 		local heroX, heroY = HeroPlace()
-		say("hero on the map: "..(heroX and string.format("%.3f, %.3f", heroX, heroY) or "unknown"))
+		say(SurvivorUI_TF("hero on the map: {1}", heroX and string.format("%.3f, %.3f", heroX, heroY) or SurvivorUI_T("unknown")))
 		local span = Span()
 		if span then
-			say(string.format("map spans %.0f yards across, %.0f down", span.across, span.down))
+			say(SurvivorUI_TF("map spans {1} yards across, {2} down", string.format("%.0f", span.across), string.format("%.0f", span.down)))
 		else
-			say("map size not found yet: needs two caches or lairs far apart")
+			say(SurvivorUI_T("map size not found yet: needs two caches or lairs far apart"))
 		end
 	end
 	local yardsAcross, zoom = MinimapYards()
-	say(string.format("minimap: %s, zoom %d, %d yards across (zoom set outdoors %s, indoors %s)",
-		Indoors() and "indoors" or "outdoors", zoom, math.floor(yardsAcross + 0.5),
+	say(SurvivorUI_TF("minimap: {1}, zoom {2}, {3} yards across (zoom set outdoors {4}, indoors {5})",
+		SurvivorUI_T(Indoors() and "indoors" or "outdoors"), string.format("%d", zoom), math.floor(yardsAcross + 0.5),
 		tostring(Setting("minimapZoom")), tostring(Setting("minimapInsideZoom"))))
 end

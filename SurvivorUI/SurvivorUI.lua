@@ -80,6 +80,7 @@ local FONT_BUMP = SurvivorUI_FONT_BUMP
 SurvivorUI_LANGUAGE_FONTS = {
 	zh = "Interface\\AddOns\\SurvivorUI\\Fonts\\NotoSansSC-Medium.ttf",
 	ja = "Interface\\AddOns\\SurvivorUI\\Fonts\\NotoSansSC-Medium.ttf",
+	ru = "Interface\\AddOns\\SurvivorUI\\Fonts\\Exo2-SemiBold.ttf",
 }
 
 local BAR_BUTTONS = { 1, 2, 3, 4, 5, 6, 12 }     -- 12 is the = key
@@ -1319,9 +1320,9 @@ local AURA_MAX = 12
 
 local function TimeText(seconds)
 	if seconds >= 3600 then
-		return math.floor(seconds / 3600 + 0.5).."h"
+		return SurvivorUI_TF("{1}h", math.floor(seconds / 3600 + 0.5))
 	elseif seconds >= 60 then
-		return math.floor(seconds / 60 + 0.5).."m"
+		return SurvivorUI_TF("{1}m", math.floor(seconds / 60 + 0.5))
 	elseif seconds >= 10 then
 		return math.floor(seconds)
 	end
@@ -1627,7 +1628,7 @@ do
 		setter.time:SetText(text)
 		local value = hours or (computer and computer / 3600)
 		setter.zone:SetText(value and (SurvivorUI_ZoneLabel and SurvivorUI_ZoneLabel(value) or tostring(value))
-			or "UTC, the game's clock: no time zone set yet")
+			or SurvivorUI_T("UTC, the game's clock: no time zone set yet"))
 		value = value or 0
 		setter.fill:SetWidth(math.max(1, (setter.slider:GetWidth() - 8) * (value - LOW) / (HIGH - LOW) + 4))
 		setter.hours.lit = not (SurvivorUIDB and SurvivorUIDB.clock12)
@@ -2220,7 +2221,7 @@ local function PathLoads(path)
 end
 
 -- The face the game's language needs (SurvivorUI_LANGUAGE_FONTS), when it
--- loads; nil for every other language, and until the hero's race has told.
+-- loads; nil for every other language, and until the language is known.
 local function LanguageFont()
 	local language = SurvivorUI_Language and SurvivorUI_Language()
 	local face = language and SurvivorUI_LANGUAGE_FONTS[language]
@@ -2329,38 +2330,80 @@ function SurvivorUI_DefaultFontName()
 		return "Expressway"
 	elseif string.find(face, "barlow", 1, true) then
 		return "Barlow Condensed"
+	elseif string.find(face, "exo2", 1, true) then
+		return "Exo 2"
 	elseif string.find(face, "notosanssc", 1, true) then
 		return "Noto Sans SC"
 	end
 	return "Friz Quadrata"
 end
 
--- path nil: the default face. Saved, and worn at once; in a language that
--- needs a face of its own, that one is worn and the choice kept for later.
-function SurvivorUI_SetGlobalFont(path)
-	Settings().globalFont = path
-	local needed = LanguageFont()
-	if path and PathLoads(path) and not (needed and string.lower(path) ~= string.lower(needed)) then
-		Wear(path)
-	else
-		Wear(SurvivorUI_DefaultFont())
+-- In a block of their own: the file's top level is at Lua 5.0's limit of 200
+-- locals.
+do
+	-- Whether a face writes the game's language: any does when it needs no face
+	-- of its own; else that one, or one the font list offers for it (EditCard.lua,
+	-- which loads later: until then only the language's own).
+	local function WritesLanguage(path)
+		local needed = LanguageFont()
+		if not needed or string.lower(path) == string.lower(needed) then
+			return true
+		end
+		if not SurvivorUI_FontList then
+			return false
+		end
+		local list = SurvivorUI_FontList(true)
+		for index = 1, table.getn(list) do
+			if list[index].path and string.lower(list[index].path) == string.lower(path) then
+				return true
+			end
+		end
+		return false
 	end
-end
 
--- The game's language is told by the hero's race once a run begins: the face
--- it needs worn then, each time the zone is told again.
-local languageWatch = CreateFrame("Frame")
-local zoneSeen
-languageWatch:SetScript("OnUpdate", function()
-	if AZS_ZONE_UPDATED == zoneSeen then
-		return
+	-- path nil: the default face. Saved, and worn at once if it loads and writes
+	-- the game's language; else the default face is worn and the choice kept for
+	-- later.
+	function SurvivorUI_SetGlobalFont(path)
+		Settings().globalFont = path
+		if path and PathLoads(path) and WritesLanguage(path) then
+			Wear(path)
+		else
+			Wear(SurvivorUI_DefaultFont())
+		end
 	end
-	zoneSeen = AZS_ZONE_UPDATED
-	local needed = LanguageFont()
-	if needed and string.lower(SurvivorUI_FONT) ~= string.lower(needed) then
+
+	-- The game's language, known at startup or told by the hero's race once a run
+	-- begins: the face it needs worn each time it changes.
+	local languageWatch = CreateFrame("Frame")
+	local zoneSeen, elapsed = nil, 0
+	local languageWorn = false
+
+	local function CheckLanguageFont()
+		local language = SurvivorUI_Language and SurvivorUI_Language()
+		if language == languageWorn then
+			return
+		end
+		languageWorn = language
 		SurvivorUI_SetGlobalFont(Settings().globalFont)
 	end
-end)
+
+	languageWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
+	languageWatch:RegisterEvent("VARIABLES_LOADED")
+	languageWatch:SetScript("OnEvent", function()
+		CheckLanguageFont()
+	end)
+
+	languageWatch:SetScript("OnUpdate", function()
+		elapsed = elapsed + (arg1 or 0)
+		if elapsed < 0.5 and AZS_ZONE_UPDATED == zoneSeen then
+			return
+		end
+		elapsed = 0
+		zoneSeen = AZS_ZONE_UPDATED
+		CheckLanguageFont()
+	end)
+end
 
 function SurvivorUI_GlobalFont()
 	return SurvivorUIDB and SurvivorUIDB.globalFont
@@ -3338,8 +3381,8 @@ end
 function SurvivorUI_ToggleRecord()
 	local ct = CT()
 	ct.ctRecord = ct.ctRecord == false
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: a new best crit "..(ct.ctRecord
-		and "stands still, bigger and gold." or "climbs with the rest."))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(ct.ctRecord
+		and "Survivor UI: a new best crit stands still, bigger and gold." or "Survivor UI: a new best crit climbs with the rest."))
 end
 recordShown.glow = recordShown:CreateTexture(nil, "BACKGROUND")
 recordShown.glow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
@@ -3843,7 +3886,7 @@ function SurvivorUI_ToggleDamage()
 	settings.damageText = not settings.damageText
 	settings.damageNone = nil
 	ApplyDamageText()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.damageText and "SurvivorUI's damage numbers." or "Default damage numbers."))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.damageText and "Survivor UI: SurvivorUI's damage numbers." or "Survivor UI: Default damage numbers."))
 end
 
 -- How the combat numbers show, for the options: "quick" (over the enemies),
@@ -3940,7 +3983,7 @@ function SurvivorUI_ToggleDamageSide()
 	settings.damageText = true
 	settings.damageNone = nil
 	ApplyDamageText()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: damage numbers "..(settings.damageSide and "beside the hero." or "over the enemies."))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.damageSide and "Survivor UI: damage numbers beside the hero." or "Survivor UI: damage numbers over the enemies."))
 end
 
 -- For the options (Size): the chat's text size, 8 to 18, and the tooltips'
@@ -3986,7 +4029,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		local settings = Settings()
 		settings.chatSize = math.max(8, math.min(18, tonumber(argument)))
 		StyleChat()
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: chat text size "..settings.chatSize..".")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_TF("Survivor UI: chat text size {1}.", settings.chatSize))
 	elseif msg == "run" then
 		if SurvivorUI_ToggleRun then
 			SurvivorUI_ToggleRun()
@@ -4091,11 +4134,11 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		local on = not CT().ctIcons
 		CT().ctIcons, CT().ctMeterColors = on, on
 		SurvivorUI_SetDamageMode("survivor")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: damage numbers "..(on and "with their source's icon, in its damage meter color." or "without icons, in the classic colors."))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(on and "Survivor UI: damage numbers with their source's icon, in its damage meter color." or "Survivor UI: damage numbers without icons, in the classic colors."))
 	elseif msg == "damage none" then
 		local none = SurvivorUI_DamageMode() ~= "none"
 		SurvivorUI_SetDamageMode(none and "none" or "survivor")
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(none and "no combat text at all." or "quick damage numbers."))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(none and "Survivor UI: no combat text at all." or "Survivor UI: quick damage numbers."))
 	else
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui opt  opens the options: every piece on or off, panel size, and a move mode with a grid"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui damage  switches between SurvivorUI's damage numbers and Default"))

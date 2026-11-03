@@ -1327,18 +1327,18 @@ function SurvivorUI_ToggleGuardians(argument)
 	if argument == "bar" then
 		settings.guardiansCount = nil
 		settings.guardiansDocked = not settings.guardiansDocked
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the guardians "..(settings.guardiansDocked
-			and "are a bar in the run tracker." or "are a list beside the run tracker again."))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.guardiansDocked
+			and "Survivor UI: the guardians are a bar in the run tracker." or "Survivor UI: the guardians are a list beside the run tracker again."))
 		return
 	end
 	if argument == "north" then
 		settings.guardiansNorth = not settings.guardiansNorth or nil
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the guardians' arrows "..(settings.guardiansNorth
-			and "point north up, as the minimap." or "turn with the way you walk."))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.guardiansNorth
+			and "Survivor UI: the guardians' arrows point north up, as the minimap." or "Survivor UI: the guardians' arrows turn with the way you walk."))
 		return
 	end
 	settings.guardians = not settings.guardians
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the guardians' list is "..(settings.guardians and "on." or "off."))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.guardians and "Survivor UI: the guardians' list is on." or "Survivor UI: the guardians' list is off."))
 end
 
 local function SavePlace()

@@ -35,7 +35,7 @@ SurvivorUI_CURSOR_SHAPES = {
 }
 SurvivorUI_CURSOR_COLORS = {
 	{ key = "White", name = "White", color = { 0.93, 0.93, 0.95 } },
-	{ key = "Gold", name = "Gold", color = { 1.00, 0.78, 0.16 } },
+	{ key = "Gold", name = "@color:Gold", color = { 1.00, 0.78, 0.16 } },
 	{ key = "Green", name = "Green", color = { 0.35, 0.90, 0.55 } },
 	{ key = "Blue", name = "Blue", color = { 0.31, 0.71, 1.00 } },
 	{ key = "Red", name = "Red", color = { 1.00, 0.33, 0.29 } },

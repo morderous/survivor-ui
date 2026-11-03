@@ -177,9 +177,17 @@ namespace SurvivorInstaller
                 string ini = Path.Combine(SettingsFolder.Dir, "launcher.ini");
                 if (File.Exists(ini))
                     foreach (string line in File.ReadAllLines(ini))
-                        if (line.StartsWith("language=")) return line.Substring(9).Trim() == "zh" ? "zh" : "en";
+                        if (line.StartsWith("language="))
+                        {
+                            string val = line.Substring(9).Trim();
+                            return (val == "zh" || val == "ru") ? val : "en";
+                        }
                 string game = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "wenilla-rogue", "language.txt");
-                if (File.Exists(game) && File.ReadAllText(game).Trim() == "zh") return "zh";
+                if (File.Exists(game))
+                {
+                    string val = File.ReadAllText(game).Trim();
+                    if (val == "zh" || val == "ru") return val;
+                }
             }
             catch { }
             return "en";
@@ -188,10 +196,11 @@ namespace SurvivorInstaller
         static Dictionary<string, string> Load()
         {
             Dictionary<string, string> found = new Dictionary<string, string>();
-            if (Code != "zh") return found;
+            if (Code != "zh" && Code != "ru") return found;
             try
             {
-                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("lang-zh.json"))
+                string resourceName = Code == "zh" ? "lang-zh.json" : "lang-ru.json";
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName))
                 using (StreamReader reader = new StreamReader(stream, System.Text.Encoding.UTF8))
                 {
                     JavaScriptSerializer json = new JavaScriptSerializer();
@@ -204,10 +213,32 @@ namespace SurvivorInstaller
             return found;
         }
 
+        // An "@word:" prefix gives one English text a second translation, as the addon's
+        // SurvivorUI_T does: a key missing from the dictionary shows without it
         public static string T(string text)
         {
+            if (text == null) return null;
             string found;
-            return text != null && words.TryGetValue(text, out found) ? found : text;
+            if (words.TryGetValue(text, out found)) return found;
+            Match prefix = Regex.Match(text, "^@[A-Za-z]+:");
+            return prefix.Success ? text.Substring(prefix.Length) : text;
+        }
+
+        // Russian holds a counted word's three forms in the plural's value: one|few|many
+        public static string N(long n, string one, string many)
+        {
+            if (Code == "ru")
+            {
+                string[] forms = T(many).Split('|');
+                if (forms.Length == 3)
+                {
+                    long tail = Math.Abs(n) % 100;
+                    if (tail % 10 == 1 && tail != 11) return forms[0];
+                    if (tail % 10 >= 2 && tail % 10 <= 4 && (tail < 12 || tail > 14)) return forms[1];
+                    return forms[2];
+                }
+            }
+            return T(n == 1 ? one : many);
         }
     }
 
@@ -668,6 +699,21 @@ namespace SurvivorInstaller
         int MeasureW(Graphics g, string text, Font font, TextFormatFlags flags)
         {
             return (int)Math.Ceiling(TextRenderer.MeasureText(g, text, Scaled(font), Size.Empty, flags).Width / ui);
+        }
+
+        // The font half a point smaller at a time, down to the floor, till the
+        // words fit the width (old units): a longer language's words. One made
+        // here is the caller's to dispose.
+        Font Fitted(Graphics g, string text, Font font, int width, float floor)
+        {
+            Font fitted = font;
+            while (fitted.Size - 0.5f >= floor && MeasureW(g, text, fitted, TextOnly) > width)
+            {
+                Font smaller = new Font(font.FontFamily, fitted.Size - 0.5f, font.Style);
+                if (fitted != font) fitted.Dispose();
+                fitted = smaller;
+            }
+            return fitted;
         }
 
         // Once built: the window up to 40% larger, as the screen where it opens
@@ -1704,8 +1750,8 @@ namespace SurvivorInstaller
             if (sessionStart != DateTime.MinValue) seconds += (int)(DateTime.Now - sessionStart).TotalSeconds;
             SaveStats stats = shownStats ?? ReadSaveStats();
             long played = stats != null ? stats.Total("runs") : 0;
-            string so = seconds >= 60 && played > 0 ? Hours(seconds) + Lang.T(" of play and ") + Count(played) + Lang.T(" runs so far.\n")
-                : played > 0 ? Count(played) + Lang.T(" runs so far.\n") : "";
+            string so = seconds >= 60 && played > 0 ? Hours(seconds) + Lang.T(" of play and ") + Count(played) + Lang.N(played, " runs so far.\n", " runs so far.\n")
+                : played > 0 ? Count(played) + Lang.N(played, " runs so far.\n", " runs so far.\n") : "";
             return so + Lang.T("Survivor UI, Survivor Plates and this launcher are free, made in my spare time.\n") +
                 Lang.T("If they made your runs better, a donation on Ko-fi says thanks and keeps them coming.\n") +
                 Lang.T("Thank you!  morderous");
@@ -2337,7 +2383,7 @@ namespace SurvivorInstaller
             Rectangle inner = Rectangle.Inflate(r, -S(4), -S(4));
             using (Brush wash = new SolidBrush(Color.FromArgb(70 + (int)(90 * glow), 46, 190, 80))) g.FillRectangle(wash, inner);
             using (Pen edge = new Pen(Color.FromArgb(120 + (int)(120 * glow), 150, 255, 160))) g.DrawRectangle(edge, inner.X, inner.Y, inner.Width - 1, inner.Height - 1);
-            string words = alerts.Count == 0 ? "" : alerts.Count == 1 ? "\u2191  " + alerts[0].Key + Lang.T(" is out") : "\u2191  " + alerts.Count + Lang.T(" updates waiting");
+            string words = alerts.Count == 0 ? "" : alerts.Count == 1 ? "\u2191  " + alerts[0].Key + Lang.T(" is out") : "\u2191  " + alerts.Count + Lang.N(alerts.Count, " updates waiting", " updates waiting");
             TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
             using (Font font = new Font(Lang.Face, SF(8.5f), FontStyle.Bold))
             {
@@ -2726,17 +2772,17 @@ namespace SurvivorInstaller
             page.Controls.Add(languageLabel);
             ComboBox languageBox = new ComboBox();
             DarkCombo(languageBox);
-            languageBox.Items.AddRange(new object[] { "English", "\u4e2d\u6587" });
+            languageBox.Items.AddRange(new object[] { "English", "\u4e2d\u6587", "Русский" });
             languageBox.Location = new Point(366, 362);
-            languageBox.Size = new Size(96, 24);
-            languageBox.SelectedIndex = Lang.Code == "zh" ? 1 : 0;
+            languageBox.Size = new Size(100, 24);
+            languageBox.SelectedIndex = Lang.Code == "zh" ? 1 : Lang.Code == "ru" ? 2 : 0;
             languageBox.SelectedIndexChanged += delegate
             {
-                string code = languageBox.SelectedIndex == 1 ? "zh" : "en";
+                string code = languageBox.SelectedIndex == 1 ? "zh" : languageBox.SelectedIndex == 2 ? "ru" : "en";
                 if (code == Lang.Code) return;
                 if (installing || addonBusy)
                 {
-                    languageBox.SelectedIndex = Lang.Code == "zh" ? 1 : 0;
+                    languageBox.SelectedIndex = Lang.Code == "zh" ? 1 : Lang.Code == "ru" ? 2 : 0;
                     Status(Lang.T("Wait for what is running to finish."));
                     return;
                 }
@@ -3028,7 +3074,7 @@ namespace SurvivorInstaller
             addonList.Columns.Add(Lang.T("Addon"), 222);
             addonList.Columns.Add(Lang.T("By"), 86);
             addonList.Columns.Add(Lang.T("Latest"), 80);
-            addonList.Columns.Add(Lang.T("Installed"), 80);
+            addonList.Columns.Add(Lang.T("@column:Installed"), 80);
             addonList.Columns.Add(Lang.T("State"), 84);
             addonList.Columns.Add(Lang.T("Auto Update when ready"), 150);
             addonList.OwnerDraw = true;
@@ -3643,7 +3689,7 @@ namespace SurvivorInstaller
                     picked = Array.FindIndex(names, name => name.IndexOf(repoName, StringComparison.OrdinalIgnoreCase) >= 0
                         || Array.Exists(addon.Folders ?? new string[0], folder => name.IndexOf(folder, StringComparison.OrdinalIgnoreCase) >= 0));
                 }
-                if (picked < 0) throw new Exception(Lang.T("its release holds ") + names.Length + Lang.T(" zips, none of them ") + (addon.Asset ?? Lang.T("named as it")));
+                if (picked < 0) throw new Exception(Lang.T("its release holds ") + names.Length + Lang.N(names.Length, " zips, none of them ", " zips, none of them ") + (addon.Asset ?? Lang.T("named as it")));
                 zip = zips[picked];
             }
             if (zip == null)
@@ -3874,7 +3920,7 @@ namespace SurvivorInstaller
                 {
                     found = LookUpRepo(repo, zip, names => (int)Invoke(new Func<int>(delegate
                     {
-                        return Choose(repo + Lang.T("'s newest release holds ") + names.Length + Lang.T(" zips. Which one is the addon?"),
+                        return Choose(repo + Lang.T("'s newest release holds ") + names.Length + Lang.N(names.Length, " zips. Which one is the addon?", " zips. Which one is the addon?"),
                             Lang.T("Add an addon from GitHub"), names, 0);
                     })));
                 }
@@ -4549,8 +4595,8 @@ namespace SurvivorInstaller
                 ShowUpdateState();
                 string them = done.Count == 1 ? Lang.T("it") : Lang.T("them");
                 string loads = running ? Lang.T("The game is open: restart it to load ") + them + "." : Lang.T("The game loads ") + them + Lang.T(" the next time it starts.");
-                string stayed = left > 0 ? "\n\n" + left + Lang.T(" files of ") + (done.Count == 1 ? Lang.T("its zip") : Lang.T("their zips")) +
-                    Lang.T(" stayed out: not an addon's kind (programs, ") + (done.Count == 1 ? Lang.T("its author's") : Lang.T("their authors'")) + Lang.T(" tools).") : "";
+                string stayed = left > 0 ? "\n\n" + left + Lang.N(left, " files of ", " files of ") + (done.Count == 1 ? Lang.T("its zip") : Lang.T("their zips")) +
+                    Lang.N(left, " stayed out: not an addon's kind (programs, ", " stayed out: not an addon's kind (programs, ") + (done.Count == 1 ? Lang.T("its author's") : Lang.T("their authors'")) + Lang.T(" tools).") : "";
                 if (failed.Count == 0)
                 {
                     Status((which.Count > 1 ? Lang.T("Updated ") : Lang.T("Installed ")) + string.Join(", ", done.ToArray()) + ".");
@@ -4665,10 +4711,12 @@ namespace SurvivorInstaller
             saveInfo.UseMnemonic = false;
             saveInfo.Location = new Point(100, 12);
             page.Controls.Add(saveInfo);
-            Link(page, Lang.T("Open folder"), 664, 12, delegate
+            LinkLabel openSave = Link(page, Lang.T("Open folder"), 664, 12, delegate
             {
                 if (Directory.Exists(GameSave.SaveFolder())) Process.Start("explorer.exe", "\"" + GameSave.SaveFolder() + "\"");
             });
+            // Longer words than the English ones end by the page's right edge
+            openSave.Left = Math.Min(openSave.Left, 740 - openSave.PreferredWidth);
 
             // A backup now: where to (the Desktop, each USB drive plugged in, a
             // folder of one's own), the last one kept; and putting one back.
@@ -4724,7 +4772,7 @@ namespace SurvivorInstaller
             };
             usbBox.CheckedChanged += delegate { SetSetting("autoUsb", usbBox.Checked ? "1" : "0"); };
 
-            Caption(page, Lang.T("Keep the last"), 470, 116);
+            Label keepCaption = Caption(page, Lang.T("Keep the last"), 470, 116);
             DarkCombo(keepBox);
             keepBox.Items.AddRange(new object[] { "5", "10", "20", "50" });
             keepBox.Location = new Point(560, 112);
@@ -4733,7 +4781,12 @@ namespace SurvivorInstaller
             if (keepBox.SelectedIndex < 0) keepBox.SelectedIndex = 1;
             keepBox.SelectedIndexChanged += delegate { SetSetting("autoKeep", (string)keepBox.SelectedItem); };
             page.Controls.Add(keepBox);
-            Caption(page, Lang.T("automatic ones"), 644, 116);
+            Label keepTail = Caption(page, Lang.T("automatic ones"), 644, 116);
+            // Words longer than the English ones move the row left, to end by the section's right edge
+            int back = Math.Max(0, keepTail.Left + keepTail.PreferredWidth - 740);
+            keepCaption.Left -= back;
+            keepBox.Left -= back;
+            keepTail.Left -= back;
             Label autoNote = Caption(page, Lang.T("Into Documents\\") + SavesFolderName + Lang.T(". The launcher must be running (in the tray) as the game closes; ") +
                 Lang.T("only the oldest automatic ones are removed, never the ones you make yourself."), 20, 166);
             autoNote.Font = new Font(Lang.Face, 8f);
@@ -5188,11 +5241,20 @@ namespace SurvivorInstaller
             return new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(unix).ToLocalTime();
         }
 
+        // The units come from Lang: "{0}m" holds the minutes, "{0}h {1}m" the hours and the minutes
         static string Hours(int seconds)
         {
-            if (seconds < 60) return seconds > 0 ? "<1m" : "0m";
+            if (seconds < 60) return seconds > 0 ? Lang.T("<1m") : string.Format(Lang.T("{0}m"), 0);
             int minutes = seconds / 60;
-            return minutes < 60 ? minutes + "m" : (minutes / 60) + "h " + (minutes % 60).ToString("00") + "m";
+            return minutes < 60 ? string.Format(Lang.T("{0}m"), minutes)
+                : string.Format(Lang.T("{0}h {1}m"), minutes / 60, (minutes % 60).ToString("00"));
+        }
+
+        // A date as "Nov 3": the month's name and the order of the two come from Lang
+        static string MonthDay(DateTime date)
+        {
+            string month = Lang.T("@month:" + date.ToString("MMM", System.Globalization.CultureInfo.InvariantCulture));
+            return string.Format(Lang.T("@date:{0} {1}"), month, date.Day);
         }
 
         // --- Statistics --------------------------------------------------------------
@@ -5208,7 +5270,8 @@ namespace SurvivorInstaller
         static readonly string[] ZoneIds = { "elwynn", "duskwood", "wsg", "ungoro", "ab", "feralas", "arena", "sm", "av", "brm", "aq", "naxx" };
         static readonly string[] ZoneNames = { Lang.T("Elwynn Forest"), Lang.T("Duskwood"), Lang.T("Warsong Gulch"), Lang.T("Un'Goro Crater"), Lang.T("Arathi Basin"), Lang.T("Feralas"),
             Lang.T("Gurubashi Arena"), Lang.T("Scarlet Monastery"), Lang.T("Alterac Valley"), Lang.T("Blackrock Mountain"), Lang.T("Gates of Ahn'Qiraj"), Lang.T("Naxxramas") };
-        static readonly string[] ZoneShort = { Lang.T("Elwynn"), Lang.T("Duskwood"), "WSG", Lang.T("Un'Goro"), "AB", Lang.T("Feralas"), Lang.T("Arena"), "SM", "AV", "BRM", "AQ", Lang.T("Naxx") };
+        static readonly string[] ZoneShort = { Lang.T("@short:Elwynn"), Lang.T("@short:Duskwood"), Lang.T("@short:WSG"), Lang.T("@short:Un'Goro"), Lang.T("@short:AB"),
+            Lang.T("@short:Feralas"), Lang.T("@short:Arena"), Lang.T("@short:SM"), Lang.T("@short:AV"), Lang.T("@short:BRM"), Lang.T("@short:AQ"), Lang.T("@short:Naxx") };
 
         // The achievements' names, as the game shows them in English; the ones
         // made from a class or a zone are put together in AchievementName.
@@ -5245,11 +5308,16 @@ namespace SurvivorInstaller
             int cls = -1;
             for (int i = 0; i < ClassNames.Length; i++)
                 if (string.Equals(ClassNames[i], what, StringComparison.OrdinalIgnoreCase)) cls = i;
-            if (kind == "class" && cls >= 0) return Lang.T(ClassNames[cls]) + Lang.T(" Victorious");
+            if (kind == "class" && cls >= 0) return Lang.T("{0} Victorious").Replace("{0}", Lang.T(ClassNames[cls]));
             if (kind == "classlast" && cls >= 0) return Lang.T(ClassNames[cls]) + Lang.T(" of the Scarab Wall");
             if (kind == "zone9" && zone >= 0) return Lang.T("Champion of ") + ZoneNames[zone];
             if (kind == "zone" && zone >= 0) return ZoneNames[zone] + Lang.T(" cleared");
-            if (kind == "pieces") return Lang.T("Collect ") + what + Lang.T(" pieces of gear");
+            if (kind == "pieces")
+            {
+                long pieces;
+                long.TryParse(what, out pieces);
+                return Lang.T("Collect ") + what + Lang.N(pieces, " pieces of gear", " pieces of gear");
+            }
             // One the launcher does not know yet: its id, readable.
             string words = (what != "" ? what : kind).Replace('_', ' ');
             return words.Length > 0 ? char.ToUpper(words[0]) + words.Substring(1) : id;
@@ -5388,7 +5456,7 @@ namespace SurvivorInstaller
             }
             statValues[0].Text = total > 0 ? Hours(total) : "—";
             statSubs[0].Text = first != DateTime.MaxValue
-                ? Lang.T("since ") + first.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture) : Lang.T("not seen yet");
+                ? Lang.T("since ") + MonthDay(first) : Lang.T("not seen yet");
 
             for (int i = 1; i < StatKeys.Length; i++)
             {
@@ -5404,9 +5472,10 @@ namespace SurvivorInstaller
             collectionLine.Text = stats == null
                 ? (saveThere ? Lang.T("The save could not be read just now; it is read again each time this tab opens.")
                     : Lang.T("No save yet in ") + GameSave.SaveFolder() + Lang.T(": play the game once first."))
-                : Lang.T("Collection:  ") + stats.Items + Lang.T(" pieces of gear  ·  ") + stats.Seen + Lang.T(" jewels seen in the codex  ·  ") +
-                  stats.Pets + (stats.Pets == 1 ? Lang.T(" pet") : Lang.T(" pets")) + "  ·  " + stats.Tabards + (stats.Tabards == 1 ? Lang.T(" tabard") : Lang.T(" tabards")) +
-                  "  ·  " + stats.Heroes.Count + (stats.Heroes.Count == 1 ? Lang.T(" hero") : Lang.T(" heroes"));
+                : Lang.T("Collection:  ") + stats.Items + Lang.N(stats.Items, " pieces of gear  ·  ", " pieces of gear  ·  ") +
+                  stats.Seen + Lang.N(stats.Seen, " jewels seen in the codex  ·  ", " jewels seen in the codex  ·  ") +
+                  stats.Pets + Lang.N(stats.Pets, " pet", " pets") + "  ·  " + stats.Tabards + Lang.N(stats.Tabards, " tabard", " tabards") +
+                  "  ·  " + stats.Heroes.Count + Lang.N(stats.Heroes.Count, " hero", " heroes");
             playChart.Invalidate();
             achList.Invalidate();
             classGrid.Invalidate();
@@ -5414,8 +5483,8 @@ namespace SurvivorInstaller
 
         static string DayHours(int seconds)
         {
-            if (seconds < 3600) return Math.Max(1, seconds / 60) + "m";
-            return (seconds / 3600.0).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "h";
+            if (seconds < 3600) return string.Format(Lang.T("{0}m"), Math.Max(1, seconds / 60));
+            return string.Format(Lang.T("{0}h"), (seconds / 3600.0).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture));
         }
 
         const TextFormatFlags TextOnly = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
@@ -5480,7 +5549,7 @@ namespace SurvivorInstaller
                     {
                         long when = stats.When(id);
                         string date = when > 0
-                            ? new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(when).ToLocalTime().ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture)
+                            ? MonthDay(new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(when).ToLocalTime())
                             : "";
                         Txt(inner, date, small, new Rectangle(10, y + 2, 52, 16), Muted, TextOnly);
                         Txt(inner, AchievementName(id), BaseFont, new Rectangle(62, y, W(achList) - 76, 18), TextColor,
@@ -5507,8 +5576,13 @@ namespace SurvivorInstaller
             using (Pen open = new Pen(Color.FromArgb(84, 76, 60)))
             {
                 for (int z = 0; z < ZoneIds.Length; z++)
-                    Txt(g, ZoneShort[z], small, new Rectangle(nameWidth + z * column - 6, 4, column + 12, 14), Muted,
+                {
+                    // A longer language's name: a smaller face, clear of its neighbours'
+                    Font face = Fitted(g, ZoneShort[z], small, column + 6, 6.5f);
+                    Txt(g, ZoneShort[z], face, new Rectangle(nameWidth + z * column - 6, 4, column + 12, 14), Muted,
                         TextOnly | TextFormatFlags.HorizontalCenter);
+                    if (face != small) face.Dispose();
+                }
                 Txt(g, Lang.T("Talents"), small, new Rectangle(W(classGrid) - talentWidth, 4, talentWidth - 10, 14), Muted,
                     TextOnly | TextFormatFlags.Right);
                 for (int c = 0; c < ClassIds.Length; c++)
@@ -5559,10 +5633,10 @@ namespace SurvivorInstaller
             }
             stripValues[0].Text = Hours(today);
             // Past 100 hours, the hours alone, to fit its card.
-            stripValues[1].Text = total >= 360000 ? (total / 3600) + "h" : Hours(total);
+            stripValues[1].Text = total >= 360000 ? string.Format(Lang.T("{0}h"), total / 3600) : Hours(total);
             stripValues[2].Text = sessionStart != DateTime.MinValue ? Lang.T("now") : last == DateTime.MinValue ? "—"
                 : last.Date == DateTime.Today ? Lang.T("today") : last.Date == DateTime.Today.AddDays(-1) ? Lang.T("yesterday")
-                : last.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture);
+                : MonthDay(last);
             SaveStats stats = ReadSaveStats();
             if (stats != null)
             {
@@ -5620,9 +5694,11 @@ namespace SurvivorInstaller
 
         void BuildRunsPage(Panel page)
         {
-            Caption(page, Lang.T("Show"), 20, 12);
+            Label showCaption = Caption(page, Lang.T("Show"), 20, 12);
+            // A caption longer than the English one moves the row's controls right by the difference
+            int shift = Math.Max(0, showCaption.Left + showCaption.PreferredWidth + 6 - 62);
             DarkCombo(runClass);
-            runClass.Location = new Point(62, 8);
+            runClass.Location = new Point(62 + shift, 8);
             runClass.Size = new Size(140, 24);
             runClass.Items.Add(Lang.T("All classes"));
             foreach (string name in ClassNames) runClass.Items.Add(Lang.T(name));
@@ -5631,7 +5707,7 @@ namespace SurvivorInstaller
             page.Controls.Add(runClass);
 
             DarkCombo(runResult);
-            runResult.Location = new Point(210, 8);
+            runResult.Location = new Point(210 + shift, 8);
             runResult.Size = new Size(130, 24);
             runResult.Items.AddRange(new object[] { Lang.T("All results"), Lang.T("Victories"), Lang.T("Deaths"), Lang.T("Left early") });
             runResult.SelectedIndex = 0;
@@ -5640,7 +5716,7 @@ namespace SurvivorInstaller
 
             runCount.AutoSize = true;
             runCount.ForeColor = Muted;
-            runCount.Location = new Point(352, 12);
+            runCount.Location = new Point(352 + shift, 12);
             page.Controls.Add(runCount);
             // A filter: only the victories and the endless runs, those the
             // launcher keeps for good (its archive).
@@ -5649,9 +5725,11 @@ namespace SurvivorInstaller
             keepWins.FlatStyle = FlatStyle.Flat;
             keepWins.FlatAppearance.BorderColor = TickEdge;
             keepWins.Cursor = Cursors.Hand;
-            keepWins.Location = new Point(510, 10);
+            keepWins.Location = new Point(510 + shift, 10);
             page.Controls.Add(keepWins);
             TickLook(keepWins);
+            // On a row moved right, the toggle goes to the right edge, clear of a longer count
+            if (shift > 0) keepWins.Left = Math.Max(keepWins.Left, 740 - keepWins.PreferredSize.Width);
             keepWins.CheckedChanged += delegate { KeepWinsChanged(); };
             tips.SetToolTip(runCount, Lang.T("Your victories and endless runs are kept here for good, whatever the game's Run History lets go\n") +
                 Lang.T("(it keeps 100 runs at most). A date in gold: a run gone from the game's, kept here."));
@@ -5678,6 +5756,42 @@ namespace SurvivorInstaller
             runList.Columns.Add(Lang.T("Kills"), 62, HorizontalAlignment.Right);
             runList.Columns.Add("DPS", 62, HorizontalAlignment.Right);
             runList.Columns.Add(Lang.T("Level"), 46, HorizontalAlignment.Right);
+            // A longer language's class names and level heading: their columns
+            // widen to them, from the room When, Time and DPS leave unused first,
+            // then from the zone's (it takes what is left). The English widths stay.
+            // Measured in the face the window will show (the scale planned), as a
+            // small face's words run wider than the same ones scaled up; on a
+            // canvas, as without one the measure keeps the padding NoPadding drops.
+            Font shown = new Font(BaseFont.FontFamily, BaseFont.Size * planned, BaseFont.Style);
+            Bitmap scratch = new Bitmap(1, 1);
+            Graphics canvas = Graphics.FromImage(scratch);
+            Func<string, int> wide = delegate (string text)
+            {
+                return (int)Math.Ceiling(TextRenderer.MeasureText(canvas, text, shown, Size.Empty, TextOnly).Width / planned);
+            };
+            int classNeed = 0;
+            foreach (string name in ClassNames) classNeed = Math.Max(classNeed, wide(Lang.T(name)) + 10);
+            int levelNeed = wide(Lang.T("Level")) + 8;
+            int wider = Math.Max(0, classNeed - runList.Columns[2].Width) + Math.Max(0, levelNeed - runList.Columns[8].Width);
+            if (wider > 0)
+            {
+                int whenNeed = wide("2088-08-28");
+                for (int month = 1; month <= 12; month++)
+                    whenNeed = Math.Max(whenNeed, wide(When(new DateTime(DateTime.Now.Year, month, 28, 18, 58, 0))));
+                int timeNeed = Math.Max(wide(Lang.T("Time")), wide("888:88"));
+                int dpsNeed = wide("888.88k");
+                int fromWhen = Math.Min(wider, Math.Max(0, runList.Columns[0].Width - whenNeed - 8));
+                int fromTime = Math.Min(wider - fromWhen, Math.Max(0, runList.Columns[5].Width - timeNeed - 8));
+                int fromDps = Math.Min(wider - fromWhen - fromTime, Math.Max(0, runList.Columns[7].Width - dpsNeed - 8));
+                runList.Columns[0].Width -= fromWhen;
+                runList.Columns[5].Width -= fromTime;
+                runList.Columns[7].Width -= fromDps;
+                runList.Columns[2].Width = Math.Max(runList.Columns[2].Width, classNeed);
+                runList.Columns[8].Width = Math.Max(runList.Columns[8].Width, levelNeed);
+            }
+            canvas.Dispose();
+            scratch.Dispose();
+            shown.Dispose();
             runList.OwnerDraw = true;
             typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(runList, true, null);
             runList.DrawColumnHeader += delegate (object sender, DrawListViewColumnHeaderEventArgs e)
@@ -5956,7 +6070,8 @@ namespace SurvivorInstaller
 
         static string When(DateTime date)
         {
-            return date.ToString(date.Year == DateTime.Now.Year ? "MMM d  HH:mm" : "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            System.Globalization.CultureInfo invariant = System.Globalization.CultureInfo.InvariantCulture;
+            return date.Year == DateTime.Now.Year ? MonthDay(date) + "  " + date.ToString("HH:mm", invariant) : date.ToString("yyyy-MM-dd", invariant);
         }
 
         void ShowKeep()
@@ -6042,7 +6157,7 @@ namespace SurvivorInstaller
             shownRun = keep != null ? (RunRecord)keep.Tag : null;
             runList.EndUpdate();
             fillingRuns = false;
-            runCount.Text = runs.Count == 0 ? "" : shown + (shown == 1 ? Lang.T(" run") : Lang.T(" runs")) + "  ·  " + wins + (wins == 1 ? Lang.T(" victory") : Lang.T(" victories"));
+            runCount.Text = runs.Count == 0 ? "" : shown + Lang.N(shown, " run", " runs") + "  ·  " + wins + Lang.N(wins, " victory", " victories");
             FitRunColumns();
             if (keep != null) keep.EnsureVisible();
             runDetail.Invalidate();
@@ -6242,7 +6357,7 @@ namespace SurvivorInstaller
                 int level = (int)run.Num("heroic");
                 string affixes = AffixNames(run);
                 string mods = level > 0 ? Lang.T("Heroic ") + Numeral(level) + (affixes != "" ? " (" + affixes + ")" : "") : run.Str("mods");
-                string who = Lang.T("Level ") + (int)view.Num("level") + " " + run.Str("race") + " " + run.Str("class") + "  ·  " + run.Str("zone") +
+                string who = Lang.T("Level ") + (int)view.Num("level") + " " + Lang.T(run.Str("race")) + " " + run.Str("class") + "  ·  " + run.Str("zone") +
                     (mods != "" && mods != "normal" ? "  ·  " + mods : "");
                 Txt(g, who, BaseFont, new Rectangle(x, 9, width - x - 190, 18), Muted, TextOnly | TextFormatFlags.EndEllipsis);
                 bool showingEnd = view != run;
@@ -6261,12 +6376,15 @@ namespace SurvivorInstaller
                     double added = view.Num(key) - run.Num(key);
                     return added > 0 ? " (+" + (key == "dealt" || key == "taken" ? Big(added) : ((long)added).ToString("N0", invariant)) + ")" : "";
                 };
-                string numbers = ((long)view.Num("kills")).ToString("N0", invariant) + more("kills") + Lang.T(" kills  ·  ") + Big(view.Num("meterDps")) + " DPS  ·  " +
+                string numbers = ((long)view.Num("kills")).ToString("N0", invariant) + more("kills") + Lang.N((long)view.Num("kills"), " kills  ·  ", " kills  ·  ") + Big(view.Num("meterDps")) + " DPS  ·  " +
                     Big(view.Num("dealt")) + more("dealt") + Lang.T(" damage  ·  ") + Big(view.Num("taken")) + Lang.T(" taken  ·  ") +
-                    ((long)view.Num("gold")).ToString("N0", invariant) + more("gold") + Lang.T(" gold  ·  ") + (int)view.Num("bosses") + Lang.T(" bosses  ·  ") +
-                    (int)view.Num("guardians") + Lang.T(" guardians  ·  ") + (int)view.Num("elites") + Lang.T(" elites  ·  ") +
-                    looted + Lang.T(" looted") + (fresh > 0 ? ", " + fresh + Lang.T(" new") : "");
-                Txt(g, numbers, small, new Rectangle(10, 32, width - 20, 16), TextColor, TextOnly | TextFormatFlags.EndEllipsis);
+                    ((long)view.Num("gold")).ToString("N0", invariant) + more("gold") + Lang.T(" gold  ·  ") + (int)view.Num("bosses") + Lang.N((int)view.Num("bosses"), " bosses  ·  ", " bosses  ·  ") +
+                    (int)view.Num("guardians") + Lang.N((int)view.Num("guardians"), " guardians  ·  ", " guardians  ·  ") +
+                    (int)view.Num("elites") + Lang.N((int)view.Num("elites"), " elites  ·  ", " elites  ·  ") +
+                    looted + Lang.N(looted, " looted", " looted") + (fresh > 0 ? ", " + fresh + Lang.N(fresh, " new", " new") : "");
+                Font numbersFace = Fitted(g, numbers, small, width - 20, 6.5f);
+                Txt(g, numbers, numbersFace, new Rectangle(10, 32, width - 20, 16), TextColor, TextOnly | TextFormatFlags.EndEllipsis);
+                if (numbersFace != small) numbersFace.Dispose();
 
                 g.DrawLine(line, 10, 52, width - 10, 52);
                 int bottom = H(runDetail) - 32 - 8;
@@ -6605,18 +6723,23 @@ namespace SurvivorInstaller
                 string label = (RunRecord.Field(piece, "label") as string ?? "").Trim();
                 int space = label.IndexOf(' ');
                 if (space > 0) label = label.Substring(0, space);
+                label = Lang.T(label);
+                // A longer language's slot word: a smaller face, clear of the name
+                Font slot = Fitted(g, label, small, 47, 6.5f);
                 string name = RunRecord.Field(piece, "name") as string ?? "";
                 Rectangle row = new Rectangle(area.X, y, area.Width - 8, 29);
                 if (name == "")
                 {
                     RowBar(g, row, Color.FromArgb(128, 128, 140), 15, 38);
-                    Txt(g, label, small, new Rectangle(area.X + 4, y + 2, 50, 14), Color.FromArgb(115, 115, 128), TextOnly);
+                    Txt(g, label, slot, new Rectangle(area.X + 4, y + 2, 50, 14), Color.FromArgb(115, 115, 128), TextOnly);
                     Txt(g, Lang.T("empty"), small, new Rectangle(area.X + 54, y + 2, area.Width - 62, 14), Color.FromArgb(102, 102, 115), TextOnly);
+                    if (slot != small) slot.Dispose();
                     y += 33;
                     continue;
                 }
                 RowBar(g, row, ColorOf(RunRecord.Field(piece, "color"), TextColor), 115, 178);
-                Shadowed(g, label, small, new Rectangle(area.X + 4, y + 2, 50, 14), Color.White, TextOnly);
+                Shadowed(g, label, slot, new Rectangle(area.X + 4, y + 2, 50, 14), Color.White, TextOnly);
+                if (slot != small) slot.Dispose();
                 Shadowed(g, name, small, new Rectangle(area.X + 54, y + 1, area.Width - 62, 15), Color.White, TextOnly | TextFormatFlags.EndEllipsis);
                 Shadowed(g, RunRecord.Field(piece, "tags") as string ?? "", small, new Rectangle(area.X + 54, y + 14, area.Width - 62, 14),
                     Color.FromArgb(236, 236, 236), TextOnly | TextFormatFlags.EndEllipsis);

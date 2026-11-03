@@ -1304,7 +1304,7 @@ local function MakeBar(parent)
 			GameTooltip:SetPoint("TOPRIGHT", window, "TOPLEFT", -4, 0)
 			GameTooltip:SetText(this.line.name, this.color[1], this.color[2], this.color[3])
 			local word = (this.view == "healing" and "Healing") or (this.view == "party" and "Damage") or "Damage to bosses"
-			GameTooltip:AddDoubleLine(word, Short(this.line.dmg), 0.8, 0.8, 0.8, 1, 1, 1)
+			GameTooltip:AddDoubleLine(SurvivorUI_T(word), Short(this.line.dmg), 0.8, 0.8, 0.8, 1, 1, 1)
 			GameTooltip:AddDoubleLine(SurvivorUI_T("Share"), math.floor(this.line.share * 100 + 0.5).."%", 0.8, 0.8, 0.8, 1, 1, 1)
 			-- A hero of the party: the damage a second, the spell that dealt the most.
 			if this.view == "party" then
@@ -1927,9 +1927,9 @@ function SurvivorUI_ToggleMeter()
 	local settings = Settings()
 	settings.meter = not settings.meter
 	ApplyGameHud()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: "..(settings.meter
-		and "damage meter on; the Default meter is put away."
-		or (settings.noGameMeter and "damage meter off, and the Default one stays away." or "damage meter off; the Default one is back, with its healing and boss damage.")))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(settings.meter
+		and "Survivor UI: damage meter on; the Default meter is put away."
+		or (settings.noGameMeter and "Survivor UI: damage meter off, and the Default one stays away." or "Survivor UI: damage meter off; the Default one is back, with its healing and boss damage.")))
 end
 
 -- The game's tooltip for units and the world: it opens at an anchor of its own

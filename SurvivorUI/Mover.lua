@@ -851,7 +851,7 @@ function SurvivorUI_SetScale(value, quiet)
 	SurvivorUIDB = SurvivorUIDB or {}
 	value = tonumber(value)
 	if not value then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: interface at "..(SurvivorUIDB.panelScale or DEFAULT_SCALE).."; /sui scale 0.85 sets it, 0.6 to 1.4. Each part has its own size in /sui opt.")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_TF("Survivor UI: interface at {1}; /sui scale 0.85 sets it, 0.6 to 1.4. Each part has its own size in /sui opt.", SurvivorUIDB.panelScale or DEFAULT_SCALE))
 		return
 	end
 	local froms = {}
@@ -863,7 +863,7 @@ function SurvivorUI_SetScale(value, quiet)
 		ApplyPart(part, froms[part.key])
 	end
 	if not quiet then
-		DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: interface at "..SurvivorUIDB.panelScale..".")
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_TF("Survivor UI: interface at {1}.", SurvivorUIDB.panelScale))
 	end
 end
 

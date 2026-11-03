@@ -502,7 +502,7 @@ RowTip("taken", function(game)
 	for index = 1, table.getn(list) do
 		local source = Field(list[index], "source", 1) or "?"
 		local dmg = Num(Field(list[index], "dmg", 2))
-		Pair(string.upper(string.sub(source, 1, 1))..string.sub(source, 2), Short(dmg).."  "..Percent(dmg, total))
+		Pair(SurvivorUI_T(string.upper(string.sub(source, 1, 1))..string.sub(source, 2)), Short(dmg).."  "..Percent(dmg, total))
 	end
 end)
 
@@ -758,7 +758,7 @@ local function CardOf(row, kept)
 		if SurvivorUI_Racials then
 			race, traits = SurvivorUI_Racials()
 		end
-		Add("head", SurvivorUI_TF("{1}'s traits", race or SurvivorUI_T("Race")), "")
+		Add("head", SurvivorUI_TF("{1}'s traits", SurvivorUI_T(race or "Race")), "")
 		if traits and table.getn(traits) > 0 then
 			for _, trait in pairs(traits) do
 				Add("text", "|cffffd100"..trait.name.."|r  "..trait.text)
@@ -1112,17 +1112,38 @@ local function CritStatsOn()
 	return not SurvivorUIDB or SurvivorUIDB.critStats ~= false
 end
 
--- Each number in its part, its name and number together in the middle.
+-- Each number in its part, its name and number together in the middle. When
+-- one is wider than its part (a longer language's name), all of them side by
+-- side by their own widths, the room left shared out evenly, and the lead's
+-- gold as wide as the first one's room.
 local function PlaceCritCells()
-	local x = 0
-	for index = 1, table.getn(CRIT_STATS) do
+	local count = table.getn(CRIT_STATS)
+	local widths, total, crowded = {}, 0, nil
+	for index = 1, count do
 		local cell = critStrip.cells[index]
-		local part = WIDTH * STRIP_SHARES[index]
-		local width = cell.label:GetStringWidth() + 4 + cell.value:GetStringWidth()
-		cell.label:ClearAllPoints()
-		cell.label:SetPoint("LEFT", critStrip, "LEFT", math.floor(x + (part - width) / 2 + 0.5), 0)
-		x = x + part
+		widths[index] = cell.label:GetStringWidth() + 4 + cell.value:GetStringWidth()
+		total = total + widths[index]
+		if widths[index] > WIDTH * STRIP_SHARES[index] then
+			crowded = true
+		end
 	end
+	local gap = math.max(0, (WIDTH - total) / count)
+	local x = crowded and gap / 2 or 0
+	for index = 1, count do
+		local cell = critStrip.cells[index]
+		local left
+		if crowded then
+			left = x
+			x = x + widths[index] + gap
+		else
+			local part = WIDTH * STRIP_SHARES[index]
+			left = x + (part - widths[index]) / 2
+			x = x + part
+		end
+		cell.label:ClearAllPoints()
+		cell.label:SetPoint("LEFT", critStrip, "LEFT", math.floor(left + 0.5), 0)
+	end
+	critStrip.lead:SetWidth(math.floor(crowded and widths[1] + gap or WIDTH * STRIP_SHARES[1]))
 end
 
 -- The damage's flash, easing back to its gold.
@@ -1344,7 +1365,7 @@ function SurvivorUI_ToggleCrits()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.critBox = not CritsShown()
 	DrawCrits()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: Biggest Crits box "..(SurvivorUIDB.critBox and "on (it shows once something crits)." or "off."))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(SurvivorUIDB.critBox and "Survivor UI: Biggest Crits box on (it shows once something crits)." or "Survivor UI: Biggest Crits box off."))
 end
 -- The game's own clock starts when the hero first moves, so this one does
 -- too: from "Move to begin" the hero's map position is watched for a change.
@@ -1427,7 +1448,7 @@ end
 function SurvivorUI_ToggleRun()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.runPanel = not Shown()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: run panel "..(SurvivorUIDB.runPanel and "shown." or "hidden."))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(SurvivorUIDB.runPanel and "Survivor UI: run panel shown." or "Survivor UI: run panel hidden."))
 end
 
 function SurvivorUI_ResetRun()

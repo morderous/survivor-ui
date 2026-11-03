@@ -36,7 +36,7 @@ end
 -- sparks take it.
 SurvivorUI_LEVELUP_COLORS = {
 	{ "class", "Class color", nil },
-	{ "gold", "Gold", { 1.00, 0.82, 0.00 } },
+	{ "gold", "@color:Gold", { 1.00, 0.82, 0.00 } },
 	{ "white", "White", { 1.00, 1.00, 1.00 } },
 	{ "red", "Red", { 1.00, 0.28, 0.22 } },
 	{ "orange", "Orange", { 1.00, 0.55, 0.15 } },
@@ -313,8 +313,8 @@ function SurvivorUI_ToggleLevelUp()
 	local settings = Settings()
 	settings.levelUp = not On()
 	ApplyGameHud()
-	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the Level Up! button "..(On() and "is Survivor UI's."
-		or (settings.noGameLevels and "is off, the game's too." or "is the game's again.")))
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(On() and "Survivor UI: the Level Up! button is Survivor UI's."
+		or (settings.noGameLevels and "Survivor UI: the Level Up! button is off, the game's too." or "Survivor UI: the Level Up! button is the game's again.")))
 end
 
 -- Which button: "ours", "game" or "off" (none at all).
