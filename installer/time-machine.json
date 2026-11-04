@@ -1,0 +1,124 @@
+{
+  "data_sources": [
+    "https://download.survivorui.com/time-machine/data/"
+  ],
+  "versions": [
+    {
+      "version": "0.100.1",
+      "date": "2026-10-18",
+      "note": "Shadow Weaving strikes for 1% of the target's maximum health (halved in 0.103.1). The old Demonology talents, with Summon Imp and Summon Felguard. No Heroic yet.",
+      "note_zh": "暗影之波按目标最大生命值的 1% 造成伤害（0.103.1 减半）。旧版恶魔学识天赋，有召唤小鬼和召唤恶魔卫士。还没有英雄难度。",
+      "note_ru": "Сплетение теней бьёт на 1% от максимального здоровья цели (вдвое меньше с 0.103.1). Старая ветка демонологии с призывом беса и стража Скверны. Героического режима ещё нет.",
+      "addons": "current",
+      "zip": [
+        "https://download.survivorui.com/time-machine/time-machine-0.100.1.zip"
+      ],
+      "size": 43276002,
+      "sha256": "d6dd1efa7cdaf24dbf888b518ff4f758520e99da54d483a91954223f49481bf9",
+      "exe_sha256": "17abcc4caad41f4150b0a05cc9bf8c428a4666121c49091db19f887a9b79eb7b",
+      "data": [
+        {
+          "name": "patch.MPQ",
+          "size": 1340199244,
+          "sha256": "49473c3cd0f47cd949e579240ea694c793aab813549920f1073ef73017364adf"
+        },
+        {
+          "name": "patch-2.MPQ",
+          "size": 4690878,
+          "sha256": "366edee41642a5dda22ed90cc252b543ee375755b7e8bee81e2a6cd59fd7b286"
+        },
+        {
+          "name": "patch-3.MPQ",
+          "size": 2580491,
+          "sha256": "75c35ca5b8075197252581e301e8900143007fdf37b493ad271ae1bd39f95a29"
+        },
+        {
+          "name": "patch-4.MPQ",
+          "size": 22769233,
+          "sha256": "2e895e0e0ff6a4781d0e0aaa6ea7d32ed1fe36841e17806fe1855cb880d18865"
+        },
+        {
+          "name": "patch-5.MPQ",
+          "size": 267019039,
+          "sha256": "5008e56873718b468fa5ae1b697dcbe4f5da9ffe6c793f3ef9939dbd7716f3d8"
+        },
+        {
+          "name": "patch-6.MPQ",
+          "size": 212228,
+          "sha256": "cad6ff59b5df028a507581befb836fce07894057e15fe63d9fdc553a95b7ceb5"
+        }
+      ]
+    },
+    {
+      "version": "0.123.0",
+      "date": "2026-10-27",
+      "note": "Divine Shield can stay up forever, and stuns, roots, fears and polymorph never wear off when used over and over (fixed in 0.124.0).",
+      "note_zh": "圣盾术可以永久保持，昏迷、定身、恐惧和变形术反复使用也不会消失（0.124.0 修复）。",
+      "note_ru": "Божественный щит держится вечно, а оглушение, обездвиживание, страх и превращение не спадают при повторном применении (исправлено в 0.124.0).",
+      "addons": "current",
+      "zip": [
+        "https://download.survivorui.com/time-machine/time-machine-0.123.0.zip"
+      ],
+      "size": 47602008,
+      "sha256": "fab958d230c7ba46aa2e883daa63cadf7730d99bc566a34107049846cbb4eb0f",
+      "exe_sha256": "de7147a2a3a01b4fb84f3a7f036bc940f9e7d4fdfc42a7fdb79f3f1b2bd798be",
+      "data": [
+        {
+          "name": "patch.MPQ",
+          "size": 1340199244,
+          "sha256": "49473c3cd0f47cd949e579240ea694c793aab813549920f1073ef73017364adf"
+        },
+        {
+          "name": "patch-2.MPQ",
+          "size": 4690878,
+          "sha256": "366edee41642a5dda22ed90cc252b543ee375755b7e8bee81e2a6cd59fd7b286"
+        },
+        {
+          "name": "patch-3.MPQ",
+          "size": 2580491,
+          "sha256": "75c35ca5b8075197252581e301e8900143007fdf37b493ad271ae1bd39f95a29"
+        },
+        {
+          "name": "patch-4.MPQ",
+          "size": 22769233,
+          "sha256": "2e895e0e0ff6a4781d0e0aaa6ea7d32ed1fe36841e17806fe1855cb880d18865"
+        },
+        {
+          "name": "patch-5.MPQ",
+          "size": 267019039,
+          "sha256": "5008e56873718b468fa5ae1b697dcbe4f5da9ffe6c793f3ef9939dbd7716f3d8"
+        },
+        {
+          "name": "patch-6.MPQ",
+          "size": 212228,
+          "sha256": "cad6ff59b5df028a507581befb836fce07894057e15fe63d9fdc553a95b7ceb5"
+        },
+        {
+          "name": "patch-7.MPQ",
+          "size": 276649,
+          "sha256": "f5fb15b181cf01cc6b5cf2ee9948a27ecc4ba27bab9a8bec584df4381932aae6"
+        },
+        {
+          "name": "patch-8.MPQ",
+          "size": 4155417,
+          "sha256": "ae3aaa29cadb7aeba8255f5b4a8305c7cbecfe8f0d3ed9646522113d16c3e12e"
+        },
+        {
+          "name": "patch-9.MPQ",
+          "size": 5739608,
+          "sha256": "ffff8ea890bdaf91a1680543ac60106db92132bc2210105279610fa73661a524"
+        },
+        {
+          "name": "patch-A.MPQ",
+          "size": 1453122,
+          "sha256": "350cde8cd0f76e5246a663eb3811f5a7b1a9c75e4e699190208c9299177b8d90"
+        },
+        {
+          "name": "patch-B.MPQ",
+          "size": 2935,
+          "sha256": "e9d074b012078efc1c1c8c729bf94d28b1d213d5fcb721dc4370a142f98834bd"
+        }
+      ]
+    }
+  ]
+}

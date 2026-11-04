@@ -69,6 +69,8 @@
 //     was here before changes nothing;
 //   - "Auto Update when ready" (1.8.0, a tick on our rows in the Addons tab, on
 //     unless unticked): a newer release of ours taken by itself, the game closed;
+//     since 1.11.0 a tick on every addon installed from the list, the others'
+//     off unless ticked, and one in the column's header for them all;
 //   - says what waits as its window opens (1.8.0): a newer game, and each addon
 //     installed with a newer release, with Update now or Later;
 //   - gives the game's own screens back when one of our addons is uninstalled
@@ -77,8 +79,10 @@
 //   - with the game just downloaded (1.8.0), offers to move itself into the
 //     game's folder with a shortcut on the Desktop, or the shortcut alone, so
 //     it is not left where it can be deleted by accident;
-//   - in five tabs: Play, Savegame, Statistics, Run History, Addons (the
-//     Survivor UI tab folded into Addons in 1.6.0);
+//   - in six tabs: Play, Savegame, Statistics, Run History, Addons (the
+//     Survivor UI tab folded into Addons in 1.6.0), Time Machine (1.11.0:
+//     older versions of the game, each in its own folder, on a save of its
+//     own where everything is open, never updating);
 //   - gets more addons (Addons tab, 1.6.0): the ones morderous checked,
 //     listed beside it (installer/addons.json), each from its
 //     author's own latest release, checked by the sha256 the author gives;
@@ -139,7 +143,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.10.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.11.0.0")]
 
 namespace SurvivorInstaller
 {
@@ -167,7 +171,14 @@ namespace SurvivorInstaller
         // The picker's order on the Play tab.
         public static readonly string[] Codes = { "en", "zh", "ru" };
         public static readonly string[] Names = { "English", "中文", "Русский" };
+        // On the language button of the Play tab (1.11.0), short.
+        static readonly string[] Marks = { "EN", "中文", "RU" };
         public static readonly string Code = Pick();
+
+        public static string Mark
+        {
+            get { return Marks[Math.Max(0, Array.IndexOf(Codes, Code))]; }
+        }
         static readonly Dictionary<string, string> words = Load();
 
         // The window's face: Segoe UI has no Chinese (it has Cyrillic).
@@ -312,6 +323,22 @@ namespace SurvivorInstaller
 
         [DllImport("user32.dll", EntryPoint = "SendMessage")]
         public static extern IntPtr Send(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool InvalidateRect(IntPtr hwnd, IntPtr rect, [MarshalAs(UnmanagedType.Bool)] bool erase);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CreateHardLink(string newFile, string existingFile, IntPtr security);
+
+        // A list's header drawn again (its own window: the list's redraw leaves it).
+        public static void RepaintHeader(ListView list)
+        {
+            if (!list.IsHandleCreated) return;
+            IntPtr header = Send(list.Handle, 0x101F, IntPtr.Zero, IntPtr.Zero);   // LVM_GETHEADER
+            if (header != IntPtr.Zero) InvalidateRect(header, IntPtr.Zero, true);
+        }
 
         [StructLayout(LayoutKind.Sequential)]
         public struct ScrollInfo
@@ -626,8 +653,8 @@ namespace SurvivorInstaller
         //                recommended (the release, the beta, what's new),
         //                then the list's, installed from their authors'
         //                releases, and the ones put in by hand; each on or off.
-        static readonly string[] TabNames = { "Play", "Savegame", "Statistics", "Run History", "Addons" };
-        const int PlayTab = 0, SaveTab = 1, StatsTab = 2, RunsTab = 3, AddonsTab = 4;
+        static readonly string[] TabNames = { "Play", "Savegame", "Statistics", "Run History", "Addons", "Time Machine" };
+        const int PlayTab = 0, SaveTab = 1, StatsTab = 2, RunsTab = 3, AddonsTab = 4, TimeTab = 5;
         // The tabs before 1.6.0, for the one kept open then (by its number).
         static readonly string[] OldTabNames = { "Play", "Survivor UI", "Savegame", "Statistics", "Run History", "Addons" };
         const int PageTop = 124, PageHeight = 432;
@@ -888,7 +915,8 @@ namespace SurvivorInstaller
                 tab.ForeColor = Muted;
                 tab.Font = new Font(Lang.Face, 10f, FontStyle.Bold);
                 tab.Cursor = Cursors.Hand;
-                int width = TextRenderer.MeasureText(tab.Text, tab.Font).Width + 28;
+                // 22 around the words since the sixth tab (Time Machine, 1.11.0), 28 before.
+                int width = TextRenderer.MeasureText(tab.Text, tab.Font).Width + 22;
                 tab.Location = new Point(tabX, 88);
                 tab.Size = new Size(width, 30);
                 int which = i;
@@ -912,6 +940,7 @@ namespace SurvivorInstaller
             BuildStatsPage(NewPage());
             BuildRunsPage(NewPage());
             BuildAddonsPage(NewPage());
+            BuildTimePage(NewPage());
 
             statusLabel.Location = new Point(20, 562);
             statusLabel.BackColor = Color.Transparent;
@@ -1790,7 +1819,7 @@ namespace SurvivorInstaller
         {
             foreach (Button button in new Button[] { gameCheckButton, browseButton, foldersButton, betaButton, restoreButton, addonRemove })
                 Wear(button, "stone");
-            foreach (Control control in new Control[] { gameNews, notesBox, backupList, runList, runDetail, playChart, achList, classGrid, addonList })
+            foreach (Control control in new Control[] { gameNews, notesBox, backupList, runList, runDetail, playChart, achList, classGrid, addonList, timeList })
                 Frame(control, "inset");
             Frame(folderBox, "card");
             foreach (ComboBox box in new ComboBox[] { destBox, keepBox, runClass, runResult, graphicsBox })
@@ -2321,9 +2350,12 @@ namespace SurvivorInstaller
 
         void BuildAlert()
         {
-            // Made once the window is scaled: its place and size scaled here.
-            alertPill.Location = new Point(S(538), S(89));
-            alertPill.Size = new Size(S(206), S(28));
+            // Made once the window is scaled: its place and size scaled here. Since
+            // the sixth tab (1.11.0) it starts past the last tab when that one
+            // reaches further, and takes what is left up to the right edge.
+            int pillLeft = Math.Max(S(538), tabButtons[tabButtons.Count - 1].Right + S(8));
+            alertPill.Location = new Point(pillLeft, S(89));
+            alertPill.Size = new Size(Math.Max(S(90), S(744) - pillLeft), S(28));
             alertPill.BackColor = Color.Transparent;
             alertPill.Cursor = Cursors.Hand;
             alertPill.Visible = false;
@@ -2378,7 +2410,17 @@ namespace SurvivorInstaller
             using (Pen edge = new Pen(Color.FromArgb(120 + (int)(120 * glow), 150, 255, 160))) g.DrawRectangle(edge, inner.X, inner.Y, inner.Width - 1, inner.Height - 1);
             string words = alerts.Count == 0 ? "" : alerts.Count == 1 ? "\u2191  " + alerts[0].Key + Lang.T(" is out") : "\u2191  " + alerts.Count + Lang.N(alerts.Count, " updates waiting");
             TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
-            using (Font font = new Font(Lang.Face, SF(8.5f), FontStyle.Bold))
+            // Narrower since the sixth tab (1.11.0): what does not fit loses its
+            // " is out", then its size, down to 7 points.
+            float size = 8.5f;
+            Func<float, string, bool> fits = (points, said) =>
+            {
+                using (Font trial = new Font(Lang.Face, SF(points), FontStyle.Bold))
+                    return TextRenderer.MeasureText(g, said, trial, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width <= inner.Width - S(6);
+            };
+            if (alerts.Count == 1 && !fits(size, words)) words = "\u2191  " + alerts[0].Key;
+            while (size > 7f && !fits(size, words)) size -= 0.5f;
+            using (Font font = new Font(Lang.Face, SF(size), FontStyle.Bold))
             {
                 Rectangle shadow = inner;
                 shadow.Offset(1, 1);
@@ -2485,6 +2527,7 @@ namespace SurvivorInstaller
             if (index == StatsTab) ShowStats();
             if (index == RunsTab) ShowRuns();
             if (index == AddonsTab) ShowAddonsTab();
+            if (index == TimeTab) ShowTimeTab();
         }
 
         static Label Caption(Control parent, string text, int x, int y)
@@ -2762,32 +2805,55 @@ namespace SurvivorInstaller
             languageLabel.AutoSize = true;
             languageLabel.Location = new Point(300, 366);
             page.Controls.Add(languageLabel);
-            ComboBox languageBox = new ComboBox();
-            DarkCombo(languageBox);
-            languageBox.Items.AddRange(Lang.Names);
-            languageBox.Location = new Point(366, 362);
-            languageBox.Size = new Size(96, 24);
-            languageBox.SelectedIndex = Array.IndexOf(Lang.Codes, Lang.Code);
-            languageBox.SelectedIndexChanged += delegate
+            // Our stone button with the language's mark and an arrow (1.11.0, a
+            // Windows drop-down before), opening our own menu of the three.
+            Canvas languageButton = new Canvas();
+            languageButton.Location = new Point(366, 361);
+            languageButton.Size = new Size(76, 26);
+            languageButton.BackColor = Color.Transparent;
+            languageButton.Cursor = Cursors.Hand;
+            languageButton.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
+            // languageSkip: a click on the button with the menu open only closes it.
+            bool languageHot = false, languageOpen = false, languageSkip = false;
+            languageButton.MouseEnter += delegate { languageHot = true; languageButton.Invalidate(); };
+            languageButton.MouseLeave += delegate { languageHot = false; languageSkip = false; languageButton.Invalidate(); };
+            languageButton.Paint += delegate (object sender, PaintEventArgs e)
             {
-                string code = Lang.Codes[Math.Max(0, languageBox.SelectedIndex)];
-                if (code == Lang.Code) return;
-                if (installing || addonBusy)
+                Graphics g = e.Graphics;
+                Rectangle r = languageButton.ClientRectangle;
+                bool lit = languageHot || languageOpen;
+                Slice3(g, ArtAs("button-stone", lit ? "hot" : null), r, 22, 20);
+                int arrow = r.Height - S(10);
+                DrawArt(g, ArtAs("arrow-down", lit ? "hot" : null), new Rectangle(r.Right - arrow - S(9), (r.Height - arrow) / 2, arrow, arrow));
+                Rectangle words = new Rectangle(r.X + S(8), r.Y, Math.Max(0, r.Width - arrow - S(19)), r.Height);
+                Rectangle shadow = words;
+                shadow.Offset(1, 1);
+                TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+                TextRenderer.DrawText(g, Lang.Mark, languageButton.Font, shadow, Color.FromArgb(8, 6, 4), flags);
+                TextRenderer.DrawText(g, Lang.Mark, languageButton.Font, words, lit ? Color.FromArgb(255, 244, 210) : StoneText, flags);
+            };
+            languageButton.Click += delegate
+            {
+                if (languageSkip)
                 {
-                    languageBox.SelectedIndex = Array.IndexOf(Lang.Codes, Lang.Code);
-                    Status(Lang.T("Wait for what is running to finish."));
+                    languageSkip = false;
                     return;
                 }
-                SetSetting("language", code);
-                string exe = Application.ExecutablePath;
-                ProcessStartInfo info = new ProcessStartInfo(exe, "--language");
-                info.WorkingDirectory = Path.GetDirectoryName(exe);
-                info.UseShellExecute = false;
-                Process.Start(info);
-                exiting = true;
-                Close();
+                ContextMenuStrip menu = LanguageMenu(languageButton.Width);
+                menu.Closed += delegate (object sender, ToolStripDropDownClosedEventArgs e)
+                {
+                    languageOpen = false;
+                    languageSkip = e.CloseReason == ToolStripDropDownCloseReason.AppClicked &&
+                        languageButton.ClientRectangle.Contains(languageButton.PointToClient(Cursor.Position));
+                    languageButton.Invalidate();
+                    BeginInvoke(new Action(menu.Dispose));
+                };
+                languageOpen = true;
+                languageButton.Invalidate();
+                menu.Show(languageButton, new Point(0, languageButton.Height + S(2)));
             };
-            page.Controls.Add(languageBox);
+            tips.SetToolTip(languageButton, Lang.T("The launcher's language. Picked, it starts again in it."));
+            page.Controls.Add(languageButton);
 
             // The game's Discord: news, help and the other players.
             Button discord = new Button();
@@ -2802,6 +2868,93 @@ namespace SurvivorInstaller
             tips.SetToolTip(discord, Lang.T("The game's own Discord server: news, help and the other players.\n") +
                 Lang.T("Survivor UI's thread is there too (Survivor UI tab)."));
             page.Controls.Add(discord);
+        }
+
+        // The language button's menu, in the pack's card: each language by its
+        // own name, the one in use in gold; a click on another starts the
+        // launcher again in it. At least as wide as the button.
+        ContextMenuStrip LanguageMenu(int width)
+        {
+            ContextMenuStrip menu = new ContextMenuStrip();
+            menu.Renderer = new ArtMenu(ui);
+            menu.ShowImageMargin = false;
+            menu.ShowCheckMargin = false;
+            menu.Font = new Font(Lang.Face, 9.5f * ui);
+            menu.Padding = new Padding(S(4), S(6), S(4), S(6));
+            menu.MinimumSize = new Size(width, 0);
+            for (int i = 0; i < Lang.Codes.Length; i++)
+            {
+                string code = Lang.Codes[i];
+                ToolStripMenuItem item = new ToolStripMenuItem(Lang.Names[i]);
+                item.Checked = code == Lang.Code;
+                item.Padding = new Padding(S(6), S(3), S(10), S(3));
+                item.Click += delegate { SwitchLanguage(code); };
+                menu.Items.Add(item);
+            }
+            return menu;
+        }
+
+        // The window's words are set as it opens, so it starts itself again in
+        // the one picked, at once.
+        void SwitchLanguage(string code)
+        {
+            if (code == Lang.Code) return;
+            if (installing || addonBusy)
+            {
+                Status(Lang.T("Wait for what is running to finish."));
+                return;
+            }
+            SetSetting("language", code);
+            string exe = Application.ExecutablePath;
+            ProcessStartInfo info = new ProcessStartInfo(exe, "--language");
+            info.WorkingDirectory = Path.GetDirectoryName(exe);
+            info.UseShellExecute = false;
+            Process.Start(info);
+            exiting = true;
+            Close();
+        }
+
+        // A menu drawn as the pack's tooltips are: its dark card, the line under
+        // the mouse in the lists' gold-brown, the words with a shadow, the
+        // checked line (the one in use) in gold. No border of Windows' own.
+        class ArtMenu : ToolStripRenderer
+        {
+            readonly float k;
+
+            public ArtMenu(float scale)
+            {
+                k = scale;
+            }
+
+            protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+            {
+                Rectangle r = new Rectangle(Point.Empty, e.ToolStrip.Size);
+                using (Brush back = new SolidBrush(Color.FromArgb(12, 12, 12))) e.Graphics.FillRectangle(back, r);
+                Slice9(e.Graphics, Art("card"), r, 8, 8, 8, 8, k, true);
+            }
+
+            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { }
+
+            protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+            {
+                if (!e.Item.Selected) return;
+                Rectangle r = new Rectangle(Point.Empty, e.Item.Size);
+                r.Inflate(-(int)Math.Round(2 * k), 0);
+                using (Brush hot = new SolidBrush(Color.FromArgb(62, 54, 22))) e.Graphics.FillRectangle(hot, r);
+            }
+
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+            {
+                ToolStripMenuItem item = e.Item as ToolStripMenuItem;
+                bool current = item != null && item.Checked;
+                Color color = current ? Gold : e.Item.Selected ? Color.FromArgb(255, 244, 210) : StoneText;
+                TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+                Rectangle words = e.TextRectangle;
+                Rectangle shadow = words;
+                shadow.Offset(1, 1);
+                TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont, shadow, Color.FromArgb(8, 6, 4), flags);
+                TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont, words, color, flags);
+            }
         }
 
         // The game's news: Aethus' notes for the newest Azeroth Survivors, and
@@ -3057,7 +3210,8 @@ namespace SurvivorInstaller
             addonList.FullRowSelect = true;
             addonList.MultiSelect = false;
             addonList.HideSelection = false;
-            addonList.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+            // Clickable for the Auto Update header's tick only (1.11.0).
+            addonList.HeaderStyle = ColumnHeaderStyle.Clickable;
             addonList.BackColor = Panel;
             addonList.ForeColor = TextColor;
             addonList.BorderStyle = BorderStyle.FixedSingle;
@@ -3070,7 +3224,9 @@ namespace SurvivorInstaller
             // Russian's "Not installed" is longer; its "Auto Update" header shorter.
             int stateWidth = Lang.Code == "ru" ? 106 : 84;
             addonList.Columns.Add(Lang.T("State"), stateWidth);
-            addonList.Columns.Add(Lang.T("Auto Update when ready"), 234 - stateWidth);
+            // "Auto update" (1.11.0; "Auto Update when ready" before, cut short once
+            // its tick for every row came in front of it).
+            addonList.Columns.Add(Lang.T("Auto update"), 234 - stateWidth);
             addonList.OwnerDraw = true;
             typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(addonList, true, null);
             addonList.DrawColumnHeader += delegate (object sender, DrawListViewColumnHeaderEventArgs e)
@@ -3079,7 +3235,22 @@ namespace SurvivorInstaller
                 using (Pen line = new Pen(RuleColor))
                     e.Graphics.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
                 Rectangle words = new Rectangle(e.Bounds.X + S(4), e.Bounds.Y, e.Bounds.Width - S(8), e.Bounds.Height);
-                TextRenderer.DrawText(e.Graphics, e.Header.Text, addonList.Font, words, Muted, TextOnly | TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+                // Auto Update's: a tick for every row's at once, before its words,
+                // half filled while only some are on.
+                int ticks = 0, on = 0;
+                if (e.ColumnIndex == AutoColumn) on = AutoTicksOn(out ticks);
+                if (ticks > 0)
+                {
+                    DrawAutoTick(e.Graphics, e.Bounds, on == ticks, on > 0 && on < ticks);
+                    int past = S(6) + S(13) + S(6);
+                    words = new Rectangle(e.Bounds.X + past, e.Bounds.Y, Math.Max(0, e.Bounds.Width - past - S(2)), e.Bounds.Height);
+                }
+                TextRenderer.DrawText(e.Graphics, e.Header.Text, addonList.Font, words, Muted,
+                    TextOnly | TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            };
+            addonList.ColumnClick += delegate (object sender, ColumnClickEventArgs e)
+            {
+                if (e.Column == AutoColumn) SwitchAllAuto();
             };
             addonList.DrawItem += delegate (object sender, DrawListViewItemEventArgs e) { };
             addonList.DrawSubItem += delegate (object sender, DrawListViewSubItemEventArgs e)
@@ -3208,6 +3379,871 @@ namespace SurvivorInstaller
             Link(page, Lang.T("Check the list again"), 20, 396, delegate { AskAddons(true); });
             Link(page, Lang.T("What's new in Survivor UI"), 190, 396, ShowNotesWindow);
             Link(page, Lang.T("Survivor UI's thread on the game's Discord"), 390, 396, delegate { Open(AddonThread); });
+        }
+
+        // --- Time Machine (1.11.0) -----------------------------------------------------
+
+        // The game as it was: older versions of Azeroth Survivors, each in a place
+        // of its own, %LOCALAPPDATA%\SurvivorUIInstaller\Time Machine\<version>,
+        // never touching the game of today nor the player's save:
+        //   - its exe, named AzerothSurvivors-<version>.exe (the game updates
+        //     itself only under its own name, read in its code), checked by its
+        //     sha256 as it comes and by a quick print at every start;
+        //   - its own data: the MPQs that version knew, by name, size and sha256
+        //     in the list, each kept once by its sha256 in the Time Machine's data
+        //     folder and linked into the version's Data. The game of today's file
+        //     with that sha256 is hard-linked in (no room taken; an update of the
+        //     game, written beside and renamed, leaves the old file there), else
+        //     copied; one the game no longer has, or has changed, comes from our
+        //     mirror. Newer patches never reach it;
+        //   - two saves, the tick picking: Everything unlocked (ours, made for
+        //     that version: every talent point, zone, item and achievement it
+        //     knows) or the player's own, from scratch; each keeps its progress;
+        //   - its own folder for the game's things (BENILLA_HOME, made before its
+        //     first start: a game before 0.112.5 would take C:\Git\wenilla's
+        //     otherwise), and our addons as the list says (as the player has
+        //     them, or none).
+        // Started with an environment of its own: every WOW_* and BENILLA_* the
+        // launcher has is left out, then its save, home and data, its update off
+        // (WOW_ROGUE_UPDATE=0: the update thread never starts) with the update
+        // addresses on a closed port, co-op's service on a closed port too (an
+        // old version never joins the game of today's rooms), and its presence
+        // (the "I am online" a version from 0.1xx sends Aethus every minute) off.
+        // The list: installer/time-machine.json beside the source.
+        const string TimeMachineUrl = "https://raw.githubusercontent.com/" + Repo + "/main/installer/time-machine.json";
+        static readonly string[] TimeAddons = { "SurvivorUI", "SurvivorPlates", ClassicFolder };
+        const string ClosedPort = "127.0.0.1:9";
+
+        static string TimeRoot
+        {
+            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SurvivorUIInstaller", "Time Machine"); }
+        }
+
+        internal class OldFile
+        {
+            public string Name, Sha256;
+            public long Size;
+        }
+
+        internal class OldGame
+        {
+            public string Version, Date, Sha256, ExeSha256, Addons = "current";
+            public long Size;
+            public readonly List<string> Zips = new List<string>();
+            public readonly List<OldFile> Data = new List<OldFile>();
+            public readonly Dictionary<string, string> Notes = new Dictionary<string, string>();
+
+            // What is different in it, in the launcher's language when the list has it.
+            public string Note
+            {
+                get
+                {
+                    string said;
+                    if (Notes.TryGetValue(Lang.Code, out said) && !string.IsNullOrEmpty(said)) return said;
+                    return Notes.TryGetValue("en", out said) ? said : "";
+                }
+            }
+        }
+
+        readonly Panel timeList = new Panel();
+        readonly Label timeEmpty = new Label();
+        readonly Dictionary<string, Button> timeButtons = new Dictionary<string, Button>();
+        List<OldGame> oldGames;
+        List<string> timeSources = new List<string>();
+        bool timeAsking, timeFailed;
+        DateTime timeAsked = DateTime.MinValue;
+        // The version being got ready, and how far (0 to 100).
+        string timeGetting;
+        int timeGot;
+
+        void BuildTimePage(Panel page)
+        {
+            Section(page, Lang.T("Time Machine"), 20, 10, 720);
+            Label note = Caption(page, Lang.T("The game as it was: each version in a place of its own, with its own data and its own saves."), 20, 32);
+            note.Font = new Font(Lang.Face, 8f);
+            // Said first and plainly (Lucas): the tab is for fun and nothing in it
+            // touches the game of today, its settings, its addons or its saves.
+            Panel apart = new Panel();
+            apart.Location = new Point(20, 52);
+            apart.Size = new Size(720, 44);
+            apart.BackColor = Color.FromArgb(34, 31, 24);
+            Panel bar = new Panel();
+            bar.Location = new Point(0, 0);
+            bar.Size = new Size(3, 44);
+            bar.BackColor = Gold;
+            apart.Controls.Add(bar);
+            Label fun = new Label();
+            fun.Text = Lang.T("Just for fun");
+            fun.UseMnemonic = false;
+            fun.AutoSize = true;
+            fun.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
+            fun.ForeColor = Gold;
+            fun.BackColor = Color.Transparent;
+            fun.Location = new Point(12, 4);
+            apart.Controls.Add(fun);
+            Label untouched = new Label();
+            untouched.Text = Lang.T("Nothing done in this tab touches, manages or changes your game, its settings, your addons or your saves.");
+            untouched.UseMnemonic = false;
+            untouched.AutoSize = false;
+            untouched.AutoEllipsis = true;
+            untouched.Font = new Font(Lang.Face, 8.5f);
+            untouched.ForeColor = Color.FromArgb(226, 220, 204);
+            untouched.BackColor = Color.Transparent;
+            untouched.Location = new Point(12, 22);
+            untouched.Size = new Size(700, 18);
+            apart.Controls.Add(untouched);
+            page.Controls.Add(apart);
+            timeList.Location = new Point(20, 104);
+            timeList.Size = new Size(720, 252);
+            timeList.BackColor = Panel;
+            timeList.AutoScroll = true;
+            page.Controls.Add(timeList);
+            timeEmpty.AutoSize = false;
+            timeEmpty.UseMnemonic = false;
+            timeEmpty.Location = new Point(16, 14);
+            timeEmpty.Size = new Size(688, 40);
+            timeEmpty.ForeColor = Muted;
+            timeEmpty.BackColor = Color.Transparent;
+            timeEmpty.Font = new Font(Lang.Face, 9f);
+            timeEmpty.Text = Lang.T("Asking for the list of old versions...");
+            timeList.Controls.Add(timeEmpty);
+            Label how = Caption(page, Lang.T("Old versions never update, play no co-op and get no fixes or support. ") +
+                Lang.T("Survivor UI and SurvivorUI Classic come along as you have them."), 20, 362);
+            how.Font = new Font(Lang.Face, 8f);
+            how.AutoSize = false;
+            how.Size = new Size(720, 30);
+            Link(page, Lang.T("Check the list again"), 20, 396, delegate { AskTimeMachine(true); });
+            Link(page, Lang.T("Open the Time Machine's folder"), 190, 396, delegate
+            {
+                try
+                {
+                    Directory.CreateDirectory(TimeRoot);
+                    Open(TimeRoot);
+                }
+                catch { }
+            });
+        }
+
+        // The tab opened: the list as it stands, asked again after half an hour.
+        void ShowTimeTab()
+        {
+            FillTimeMachine();
+            if (DateTime.Now - timeAsked > TimeSpan.FromMinutes(30)) AskTimeMachine(false);
+        }
+
+        void AskTimeMachine(bool told)
+        {
+            if (timeAsking) return;
+            timeAsking = true;
+            if (told) Status(Lang.T("Asking for the list of old versions..."));
+            new Thread(delegate ()
+            {
+                List<OldGame> found;
+                List<string> sources = new List<string>();
+                try { found = ReadOldGames(Download(TimeMachineUrl), sources); }
+                catch { found = null; }
+                // Asked as the window is still being made (the tab kept open): its
+                // answer waits for the window.
+                for (int wait = 0; wait < 300 && !IsHandleCreated && !IsDisposed; wait++) Thread.Sleep(100);
+                if (!IsHandleCreated)
+                {
+                    timeAsking = false;
+                    return;
+                }
+                BeginInvoke(new Action(delegate
+                {
+                    timeAsking = false;
+                    timeAsked = DateTime.Now;
+                    timeFailed = found == null;
+                    if (found != null)
+                    {
+                        oldGames = found;
+                        timeSources = sources;
+                    }
+                    else if (oldGames == null) oldGames = new List<OldGame>();
+                    FillTimeMachine();
+                    if (told) Status(found == null ? Lang.T("The list of old versions could not be read: try again later.") : Lang.T("The list of old versions is up to date."));
+                }));
+            }) { IsBackground = true }.Start();
+        }
+
+        // {"data_sources": [where the MPQs are, by their sha256], "versions": [{"version",
+        // "date" (yyyy-mm-dd), "note", "note_zh", "note_ru", "zip" (one address or
+        // several), "size", "sha256", "exe_sha256", "addons" ("current" or "none"),
+        // "data": [{"name", "size", "sha256"}]}]}. A version only digits and dots (it
+        // names a folder), an MPQ only patch.MPQ or patch-?.MPQ.
+        internal static List<OldGame> ReadOldGames(string json, List<string> sources)
+        {
+            List<OldGame> list = new List<OldGame>();
+            Dictionary<string, object> data = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(json);
+            if (data.ContainsKey("data_sources") && data["data_sources"] is object[])
+                foreach (object source in (object[])data["data_sources"]) sources.Add(Convert.ToString(source));
+            foreach (object item in (System.Collections.IEnumerable)data["versions"])
+            {
+                Dictionary<string, object> entry = (Dictionary<string, object>)item;
+                Func<Dictionary<string, object>, string, string> text = (map, name) =>
+                    map.ContainsKey(name) && map[name] != null ? Convert.ToString(map[name], System.Globalization.CultureInfo.InvariantCulture) : null;
+                OldGame old = new OldGame
+                {
+                    Version = text(entry, "version"), Date = text(entry, "date"), Sha256 = (text(entry, "sha256") ?? "").ToLowerInvariant(),
+                    ExeSha256 = (text(entry, "exe_sha256") ?? "").ToLowerInvariant(), Addons = text(entry, "addons") ?? "current",
+                };
+                long size;
+                if (long.TryParse(text(entry, "size"), out size)) old.Size = size;
+                if (entry.ContainsKey("zip") && entry["zip"] is object[])
+                    foreach (object zip in (object[])entry["zip"]) old.Zips.Add(Convert.ToString(zip));
+                else if (text(entry, "zip") != null) old.Zips.Add(text(entry, "zip"));
+                bool dataOk = true;
+                if (entry.ContainsKey("data") && entry["data"] is object[])
+                    foreach (object one in (object[])entry["data"])
+                    {
+                        Dictionary<string, object> file = one as Dictionary<string, object>;
+                        long bytes;
+                        if (file == null || !long.TryParse(text(file, "size"), out bytes)) { dataOk = false; continue; }
+                        OldFile mpq = new OldFile { Name = text(file, "name"), Sha256 = (text(file, "sha256") ?? "").ToLowerInvariant(), Size = bytes };
+                        if (mpq.Name == null || !Regex.IsMatch(mpq.Name, @"^patch(-[0-9A-Za-z])?\.mpq$", RegexOptions.IgnoreCase) || !Regex.IsMatch(mpq.Sha256, "^[0-9a-f]{64}$"))
+                            dataOk = false;
+                        else old.Data.Add(mpq);
+                    }
+                foreach (string code in Lang.Codes)
+                {
+                    string said = text(entry, code == "en" ? "note" : "note_" + code);
+                    if (said != null) old.Notes[code] = said;
+                }
+                if (old.Version != null && Regex.IsMatch(old.Version, @"^\d+(\.\d+){1,3}$") && old.Zips.Count > 0 && Regex.IsMatch(old.Sha256, "^[0-9a-f]{64}$")
+                    && old.Size > 0 && dataOk && old.Data.Count > 0 && (old.ExeSha256 == "" || Regex.IsMatch(old.ExeSha256, "^[0-9a-f]{64}$")))
+                    list.Add(old);
+            }
+            return list;
+        }
+
+        static string TimeFolder(OldGame old)
+        {
+            return Path.Combine(TimeRoot, old.Version);
+        }
+
+        static string TimeExe(OldGame old)
+        {
+            return Path.Combine(TimeFolder(old), "AzerothSurvivors-" + old.Version + ".exe");
+        }
+
+        static string TimePool
+        {
+            get { return Path.Combine(TimeRoot, "data"); }
+        }
+
+        string TimeKey(OldGame old)
+        {
+            return "timeMachine." + old.Version + ".unlocked";
+        }
+
+        // Everything unlocked unless unticked.
+        bool TimeUnlocked(OldGame old)
+        {
+            return Setting(TimeKey(old), "1") != "0";
+        }
+
+        static string TimeSaves(OldGame old, bool unlocked)
+        {
+            return Path.Combine(TimeFolder(old), unlocked ? "save-unlocked" : "save-own");
+        }
+
+        // Here: its exe and the unlocked save it came with (fresh-save.txt).
+        static bool TimeReady(OldGame old)
+        {
+            return File.Exists(TimeExe(old)) && File.Exists(Path.Combine(TimeFolder(old), "fresh-save.txt"));
+        }
+
+        // A row a version: its number and day, what is different in it, the tick,
+        // Play (Get it first, with its size), and once it is here Fresh save and Remove.
+        void FillTimeMachine()
+        {
+            timeList.SuspendLayout();
+            for (int i = timeList.Controls.Count - 1; i >= 0; i--)
+            {
+                Control was = timeList.Controls[i];
+                if (was == timeEmpty) continue;
+                timeList.Controls.RemoveAt(i);
+                was.Dispose();
+            }
+            foreach (Button gone in timeButtons.Values)
+            {
+                subLines.Remove(gone);
+                buttonArt.Remove(gone);
+            }
+            timeButtons.Clear();
+            string say = oldGames == null ? Lang.T("Asking for the list of old versions...")
+                : oldGames.Count > 0 ? null
+                : timeFailed ? Lang.T("The list of old versions could not be read: try again later.") : Lang.T("No old versions yet.");
+            timeEmpty.Text = say ?? "";
+            timeEmpty.Visible = say != null;
+            if (say == null)
+            {
+                int y = S(8);
+                foreach (OldGame old in oldGames)
+                {
+                    timeList.Controls.Add(TimeRow(old, y));
+                    y += S(96);
+                }
+            }
+            timeList.ResumeLayout();
+        }
+
+        Panel TimeRow(OldGame old, int y)
+        {
+            Panel row = new Panel();
+            row.Location = new Point(S(8), y);
+            bool scrolls = S(8) + oldGames.Count * S(96) > timeList.ClientSize.Height;
+            row.Size = new Size(timeList.ClientSize.Width - S(16) - (scrolls ? SystemInformation.VerticalScrollBarWidth : 0), S(90));
+            row.BackColor = Color.FromArgb(28, 27, 24);
+            Label version = new Label();
+            version.Text = old.Version;
+            version.Font = new Font(Lang.Face, SF(12f), FontStyle.Bold);
+            version.ForeColor = Gold;
+            version.AutoSize = true;
+            version.BackColor = Color.Transparent;
+            version.Location = new Point(S(12), S(10));
+            row.Controls.Add(version);
+            Label day = new Label();
+            DateTime when;
+            day.Text = DateTime.TryParseExact(old.Date ?? "", "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out when) ? when.ToString("MMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture) : old.Date ?? "";
+            day.Font = new Font(Lang.Face, SF(8.5f));
+            day.ForeColor = Muted;
+            day.AutoSize = true;
+            day.BackColor = Color.Transparent;
+            day.Location = new Point(S(12), S(40));
+            row.Controls.Add(day);
+            Label note = new Label();
+            note.Text = old.Note;
+            note.UseMnemonic = false;
+            note.Font = new Font(Lang.Face, SF(9f));
+            note.ForeColor = TextColor;
+            note.BackColor = Color.Transparent;
+            note.AutoSize = false;
+            note.Location = new Point(S(128), S(8));
+            note.Size = new Size(row.Width - S(128) - S(178), S(54));
+            row.Controls.Add(note);
+
+            // Which save it starts on.
+            CheckBox unlocked = new CheckBox();
+            unlocked.Text = Lang.T("Everything unlocked");
+            unlocked.Font = new Font(Lang.Face, SF(8.5f));
+            unlocked.AutoSize = true;
+            unlocked.Location = new Point(S(128), S(63));
+            unlocked.FlatStyle = FlatStyle.Flat;
+            unlocked.FlatAppearance.BorderColor = TickEdge;
+            unlocked.Cursor = Cursors.Hand;
+            unlocked.BackColor = Color.Transparent;
+            unlocked.Checked = TimeUnlocked(old);
+            TickLook(unlocked);
+            unlocked.CheckedChanged += delegate
+            {
+                SetSetting(TimeKey(old), unlocked.Checked ? "1" : "0");
+                Status(unlocked.Checked ? old.Version + Lang.T(" starts on the save where everything is open.")
+                    : old.Version + Lang.T(" starts on your own save, from scratch: unlock it all yourself."));
+                BeginInvoke(new Action(FillTimeMachine));
+            };
+            tips.SetToolTip(unlocked, Lang.T("On: a save where everything is open, to just play. Off: your own save, from scratch, to unlock it all yourself.\n") +
+                Lang.T("Each keeps its own progress; switching loses nothing."));
+            row.Controls.Add(unlocked);
+
+            bool ready = TimeReady(old), getting = timeGetting == old.Version;
+            Button play = new Button();
+            Style(play, getting ? Lang.T("Getting ready ") + timeGot + "%" : ready ? Lang.T("Play") : Lang.T("Get it"));
+            play.Font = new Font(Lang.Face, SF(9.5f), FontStyle.Bold);
+            play.Bounds = new Rectangle(row.Width - S(166), S(8), S(154), S(30));
+            if (!ready && !getting)
+            {
+                long megabytes = (old.Size + 1048575) / 1048576;
+                subLines[play] = () => megabytes + " MB";
+            }
+            play.Enabled = !getting;
+            play.Click += delegate
+            {
+                if (TimeReady(old)) PlayOld(old);
+                else GetOld(old);
+            };
+            tips.SetToolTip(play, ready ? Lang.T("Starts ") + old.Version + Lang.T(" in its own place, with its own data and save. It never updates.")
+                : Lang.T("Downloads ") + old.Version + Lang.T(" into the Time Machine's own folder, with its save and the game data it needs."));
+            row.Controls.Add(play);
+            timeButtons[old.Version] = play;
+            if (ready)
+            {
+                bool open = TimeUnlocked(old);
+                Button fresh = TimeSmall(row, Lang.T("Fresh save"), new Rectangle(row.Width - S(166), S(46), S(90), S(22)), delegate { FreshOldSave(old); });
+                tips.SetToolTip(fresh, open ? Lang.T("Its unlocked save as it came, everything open again; the one there goes to the Recycle Bin.")
+                    : Lang.T("Your own save there starts over; the one there goes to the Recycle Bin."));
+                Button remove = TimeSmall(row, Lang.T("Remove"), new Rectangle(row.Width - S(72), S(46), S(60), S(22)), delegate { RemoveOld(old); });
+                tips.SetToolTip(remove, Lang.T("Its folder, with its saves, to the Recycle Bin."));
+                timeButtons[old.Version + "|fresh"] = fresh;
+                timeButtons[old.Version + "|remove"] = remove;
+            }
+            return row;
+        }
+
+        // A small stone button made once the window is scaled.
+        Button TimeSmall(Control parent, string text, Rectangle bounds, Action click)
+        {
+            Button button = new Button();
+            Style(button, text);
+            Wear(button, "stone");
+            button.ForeColor = StoneText;
+            button.Font = new Font(Lang.Face, SF(8f), FontStyle.Bold);
+            button.Bounds = bounds;
+            button.Click += delegate { click(); };
+            parent.Controls.Add(button);
+            return button;
+        }
+
+        void ShowTimeProgress()
+        {
+            Button play;
+            if (timeGetting != null && timeButtons.TryGetValue(timeGetting, out play))
+                play.Text = Lang.T("Getting ready ") + timeGot + "%";
+        }
+
+        void GetOld(OldGame old)
+        {
+            if (timeGetting != null)
+            {
+                Status(Lang.T("Wait for what is running to finish."));
+                return;
+            }
+            if (GameRunning())
+            {
+                Status(Lang.T("Close the game first."));
+                return;
+            }
+            ReadyOld(old, false);
+        }
+
+        // Its exe, its unlocked save and its data made sure of, in the
+        // background, then started when asked.
+        void ReadyOld(OldGame old, bool thenPlay)
+        {
+            if (!TimeApart(old, TimeFolder(old), TimePool))
+            {
+                Status(Lang.T("The Time Machine's folder is inside the game's or the save's: not started."));
+                return;
+            }
+            timeGetting = old.Version;
+            timeGot = 0;
+            FillTimeMachine();
+            Status(Lang.T("Getting Azeroth Survivors ") + old.Version + Lang.T(" ready for the Time Machine..."));
+            string gameData = GameExePath() != null ? Path.Combine(Path.GetDirectoryName(GameExePath()), "Data") : null;
+            new Thread(delegate ()
+            {
+                string problem = null;
+                try { PrepareOld(old, gameData); }
+                catch (Exception error) { problem = error.Message; }
+                if (!IsHandleCreated) return;
+                BeginInvoke(new Action(delegate
+                {
+                    timeGetting = null;
+                    FillTimeMachine();
+                    if (problem != null) Status(Lang.T("Could not get ") + old.Version + ": " + problem);
+                    else if (thenPlay) StartOld(old);
+                    else Status("Azeroth Survivors " + old.Version + Lang.T(" is in the Time Machine: click Play."));
+                }));
+            }) { IsBackground = true }.Start();
+        }
+
+        void TimeProgress(int part, int parts, int percent)
+        {
+            int now = (part * 100 + percent) / Math.Max(1, parts);
+            if (now == timeGot || !IsHandleCreated) return;
+            timeGot = now;
+            BeginInvoke(new Action(ShowTimeProgress));
+        }
+
+        // What it takes to start (on a worker thread): the exe and the unlocked
+        // save from the zip when the exe is missing or not the one listed; each
+        // MPQ in the shared data folder (linked from the game, copied, or
+        // downloaded; checked by its sha256) and linked into the version's Data,
+        // nothing else left there; then each file's quick print kept for the
+        // check at every start.
+        void PrepareOld(OldGame old, string gameData)
+        {
+            string folder = TimeFolder(old), data = Path.Combine(folder, "Data");
+            Directory.CreateDirectory(folder);
+            Directory.CreateDirectory(data);
+            Directory.CreateDirectory(TimePool);
+            int parts = old.Data.Count + 1, part = 0;
+            if (!TimeExeGood(old))
+            {
+                string zip = Path.Combine(Path.GetTempPath(), "survivorui-time-machine-" + old.Version + ".zip");
+                try
+                {
+                    DownloadChecked(old.Zips, old.Size, old.Sha256, zip, percent => TimeProgress(0, parts, percent));
+                    using (ZipArchive archive = ZipFile.OpenRead(zip))
+                    {
+                        ZipArchiveEntry exe = archive.GetEntry(GameExe), save = archive.GetEntry("characters.txt");
+                        if (exe == null || save == null) throw new InvalidDataException(Lang.T("the zip has no game or no save in it"));
+                        string exeNew = TimeExe(old) + ".new";
+                        exe.ExtractToFile(exeNew, true);
+                        if (old.ExeSha256 != "" && Sha256Of(exeNew) != old.ExeSha256)
+                        {
+                            File.Delete(exeNew);
+                            throw new InvalidDataException(Lang.T("the download is not the one the list gives (size or sha256)"));
+                        }
+                        if (File.Exists(TimeExe(old))) File.Delete(TimeExe(old));
+                        File.Move(exeNew, TimeExe(old));
+                        save.ExtractToFile(Path.Combine(folder, "fresh-save.txt"), true);
+                    }
+                }
+                finally
+                {
+                    try { File.Delete(zip); } catch { }
+                }
+            }
+            List<string> wanted = new List<string>();
+            foreach (OldFile mpq in old.Data)
+            {
+                part++;
+                int at = part;
+                string pooled = Path.Combine(TimePool, mpq.Sha256 + ".MPQ");
+                if (!(File.Exists(pooled) && new FileInfo(pooled).Length == mpq.Size && QuickPrint(pooled) == Remembered(pooled)))
+                    FillPool(mpq, pooled, gameData, percent => TimeProgress(at, parts, percent));
+                string linked = Path.Combine(data, mpq.Name);
+                wanted.Add(mpq.Name.ToLowerInvariant());
+                if (File.Exists(linked) && new FileInfo(linked).Length == mpq.Size && QuickPrint(linked) == QuickPrint(pooled)) continue;
+                if (File.Exists(linked)) File.Delete(linked);
+                if (!Native.CreateHardLink(linked, pooled, IntPtr.Zero)) File.Copy(pooled, linked);
+            }
+            foreach (string file in Directory.GetFiles(data))
+                if (!wanted.Contains(Path.GetFileName(file).ToLowerInvariant())) File.Delete(file);
+            List<string> checks = new List<string> { "exe|" + QuickPrint(TimeExe(old)) };
+            foreach (OldFile mpq in old.Data) checks.Add(mpq.Name + "|" + QuickPrint(Path.Combine(data, mpq.Name)));
+            File.WriteAllLines(Path.Combine(folder, "checked.txt"), checks.ToArray());
+        }
+
+        // The exe there and the one listed: by its sha256 once, then by the quick
+        // print kept beside it.
+        static bool TimeExeGood(OldGame old)
+        {
+            string exe = TimeExe(old), mark = exe + ".print";
+            if (!File.Exists(exe) || !File.Exists(Path.Combine(TimeFolder(old), "fresh-save.txt"))) return false;
+            string print = QuickPrint(exe);
+            try
+            {
+                if (File.Exists(mark) && File.ReadAllText(mark).Trim() == print) return true;
+            }
+            catch { }
+            if (old.ExeSha256 != "" && Sha256Of(exe) != old.ExeSha256) return false;
+            File.WriteAllText(mark, print);
+            return true;
+        }
+
+        // An MPQ into the shared data folder by its sha256: the game's own file
+        // when it is that one (a hard link, else a copy), else from our mirror.
+        void FillPool(OldFile mpq, string pooled, string gameData, Action<int> percent)
+        {
+            string part = pooled + ".part";
+            if (File.Exists(part)) File.Delete(part);
+            string mine = gameData != null ? Path.Combine(gameData, mpq.Name) : null;
+            if (mine != null && File.Exists(mine) && new FileInfo(mine).Length == mpq.Size && Sha256Of(mine) == mpq.Sha256)
+            {
+                if (File.Exists(pooled)) File.Delete(pooled);
+                if (!Native.CreateHardLink(pooled, mine, IntPtr.Zero)) File.Copy(mine, pooled);
+            }
+            else
+            {
+                List<string> urls = new List<string>();
+                foreach (string source in timeSources) urls.Add(source.TrimEnd('/') + "/" + mpq.Sha256 + ".MPQ");
+                if (urls.Count == 0) throw new InvalidDataException(mpq.Name + Lang.T(": not in your game as this version needs it, and the list gives no place to get it"));
+                DownloadChecked(urls, mpq.Size, mpq.Sha256, part, percent);
+                if (File.Exists(pooled)) File.Delete(pooled);
+                File.Move(part, pooled);
+            }
+            File.WriteAllText(pooled + ".print", QuickPrint(pooled));
+        }
+
+        static string Remembered(string file)
+        {
+            try { return File.ReadAllText(file + ".print").Trim(); }
+            catch { return ""; }
+        }
+
+        // From the first address that gives it whole: its size and sha256 as given.
+        static void DownloadChecked(List<string> urls, long size, string sha256, string target, Action<int> percent)
+        {
+            string problem = null;
+            foreach (string url in urls)
+            {
+                try
+                {
+                    ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                    WebRequest request = WebRequest.Create(url);
+                    HttpWebRequest web = request as HttpWebRequest;
+                    if (web != null) web.UserAgent = "SurvivorUI-Installer";
+                    using (WebResponse response = request.GetResponse())
+                    using (Stream input = response.GetResponseStream())
+                    using (FileStream output = File.Create(target))
+                    {
+                        byte[] buffer = new byte[1 << 16];
+                        long done = 0;
+                        int read, shown = -1;
+                        while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            output.Write(buffer, 0, read);
+                            done += read;
+                            if (done > size) throw new InvalidDataException(Lang.T("the download is not the one the list gives (size or sha256)"));
+                            int now = (int)(done * 100 / size);
+                            if (now != shown) { shown = now; percent(now); }
+                        }
+                    }
+                    if (new FileInfo(target).Length == size && Sha256Of(target) == sha256) return;
+                    problem = Lang.T("the download is not the one the list gives (size or sha256)");
+                }
+                catch (Exception error) { problem = error.Message; }
+                try { File.Delete(target); } catch { }
+            }
+            throw new InvalidDataException(problem ?? Lang.T("nowhere to download it from"));
+        }
+
+        // A file's quick print: the sha256 of its first and last MiB and its
+        // length. A file changed in place (not replaced) changes it.
+        static string QuickPrint(string path)
+        {
+            using (FileStream input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (System.Security.Cryptography.SHA256 hash = System.Security.Cryptography.SHA256.Create())
+            {
+                long length = input.Length;
+                byte[] buffer = new byte[(int)Math.Min(length, 1 << 20)];
+                int got = ReadAll(input, buffer);
+                hash.TransformBlock(buffer, 0, got, null, 0);
+                if (length > buffer.Length)
+                {
+                    input.Seek(-buffer.Length, SeekOrigin.End);
+                    got = ReadAll(input, buffer);
+                    hash.TransformBlock(buffer, 0, got, null, 0);
+                }
+                byte[] size = BitConverter.GetBytes(length);
+                hash.TransformFinalBlock(size, 0, size.Length);
+                return BitConverter.ToString(hash.Hash).Replace("-", "").ToLowerInvariant();
+            }
+        }
+
+        static int ReadAll(Stream input, byte[] buffer)
+        {
+            int got = 0, read;
+            while (got < buffer.Length && (read = input.Read(buffer, got, buffer.Length - got)) > 0) got += read;
+            return got;
+        }
+
+        // Every file as it was made ready (checked.txt beside it): the quick prints.
+        static bool TimeChecked(OldGame old)
+        {
+            try
+            {
+                string folder = TimeFolder(old);
+                string[] lines = File.ReadAllLines(Path.Combine(folder, "checked.txt"));
+                if (lines.Length != old.Data.Count + 1) return false;
+                foreach (string line in lines)
+                {
+                    int bar = line.IndexOf('|');
+                    string name = line.Substring(0, bar), print = line.Substring(bar + 1);
+                    string file = name == "exe" ? TimeExe(old) : Path.Combine(folder, "Data", name);
+                    if (!File.Exists(file) || QuickPrint(file) != print) return false;
+                }
+                foreach (OldFile mpq in old.Data)
+                    if (!File.Exists(Path.Combine(folder, "Data", mpq.Name))) return false;
+                return true;
+            }
+            catch { return false; }
+        }
+
+        void PlayOld(OldGame old)
+        {
+            if (GameExePath() == null && timeSources.Count == 0)
+            {
+                Status(Lang.T("The Time Machine needs the game itself: get it on the Play tab first."));
+                return;
+            }
+            if (GameRunning())
+            {
+                Status(Lang.T("The game is already open."));
+                return;
+            }
+            if (timeGetting != null)
+            {
+                Status(Lang.T("Wait for what is running to finish."));
+                return;
+            }
+            // Something changed since it was made ready: made ready again first.
+            if (!TimeChecked(old)) ReadyOld(old, true);
+            else StartOld(old);
+        }
+
+        // Its own place only: every path it is given inside the Time Machine's
+        // folder, and that folder apart from the game's and from the real save's.
+        bool TimeApart(OldGame old, params string[] paths)
+        {
+            string root = Path.GetFullPath(TimeRoot).TrimEnd('\\') + "\\";
+            Func<string, string, bool> inside = (path, folder) => (Path.GetFullPath(path).TrimEnd('\\') + "\\").StartsWith(folder, StringComparison.OrdinalIgnoreCase);
+            foreach (string path in paths)
+                if (!inside(path, root)) return false;
+            List<string> others = new List<string> { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "wenilla-rogue") };
+            if (GameExePath() != null) others.Add(Path.GetDirectoryName(GameExePath()));
+            foreach (string other in others)
+            {
+                string apart = Path.GetFullPath(other).TrimEnd('\\') + "\\";
+                if (inside(other, root) || inside(TimeRoot, apart)) return false;
+            }
+            return true;
+        }
+
+        void StartOld(OldGame old)
+        {
+            string folder = TimeFolder(old), home = Path.Combine(folder, "benilla-config"), data = Path.Combine(folder, "Data");
+            bool open = TimeUnlocked(old);
+            string saves = TimeSaves(old, open), save = Path.Combine(saves, "characters.txt");
+            if (!TimeApart(old, home, data, saves, TimeExe(old)))
+            {
+                Status(Lang.T("The Time Machine's folder is inside the game's or the save's: not started."));
+                return;
+            }
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(home, "AddOns"));
+                Directory.CreateDirectory(saves);
+                // Unlocked: our save the first time (and after Fresh save); its own:
+                // the game starts a new one by itself.
+                if (open && !File.Exists(save)) File.Copy(Path.Combine(folder, "fresh-save.txt"), save);
+                // The game's language there too, once (beside the save, as the game keeps it).
+                string language = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "wenilla-rogue", "language.txt");
+                if (File.Exists(language) && !File.Exists(Path.Combine(saves, "language.txt"))) File.Copy(language, Path.Combine(saves, "language.txt"));
+                string addons = Path.Combine(home, "AddOns");
+                if (old.Addons == "current" && GameExePath() != null) CopyOurAddons(AddonsFor(GameExePath()), addons);
+                else foreach (string name in TimeAddons)
+                    if (Directory.Exists(Path.Combine(addons, name))) Directory.Delete(Path.Combine(addons, name), true);
+            }
+            catch (Exception error)
+            {
+                Status(Lang.T("Could not start the game: ") + error.Message);
+                return;
+            }
+            string graphics = Setting("graphics", "auto");
+            Dictionary<string, string> asked = new Dictionary<string, string> {
+                { "WOW_ROGUE_SAVE", save }, { "BENILLA_HOME", home }, { "WOW_DATA", data }, { "WOW_ROGUE_UPDATE", "0" },
+                { "WOW_ROGUE_UPDATE_URL", "http://" + ClosedPort + "/latest.json" }, { "WOW_ROGUE_DATA_URL", "http://" + ClosedPort + "/patches.json" },
+                { "WOW_ROGUE_COOP_URL", "ws://" + ClosedPort + "/coop/" },
+                // Its "I am online" to wow.aethus.pl/presence, every minute (0.123.0, read in its code): off.
+                { "WOW_ROGUE_PRESENCE", "0" },
+                { "WGPU_BACKEND", graphics == "auto" ? InheritedBackend : graphics },
+            };
+            // Every WOW_* and BENILLA_* of the launcher's own left out for the start.
+            Dictionary<string, string> before = new Dictionary<string, string>();
+            foreach (System.Collections.DictionaryEntry pair in Environment.GetEnvironmentVariables())
+            {
+                string name = Convert.ToString(pair.Key);
+                if (name.StartsWith("WOW_", StringComparison.OrdinalIgnoreCase) || name.StartsWith("BENILLA_", StringComparison.OrdinalIgnoreCase))
+                    before[name] = Convert.ToString(pair.Value);
+            }
+            foreach (string name in asked.Keys)
+                if (!before.ContainsKey(name)) before[name] = Environment.GetEnvironmentVariable(name);
+            try
+            {
+                foreach (string name in before.Keys) Environment.SetEnvironmentVariable(name, null);
+                foreach (KeyValuePair<string, string> pair in asked) Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+                int error;
+                Process started = StartWithLog(TimeExe(old), Path.Combine(folder, "game-log.txt"), out error);
+                if (started == null) throw new System.ComponentModel.Win32Exception(error);
+                Status(Lang.T("Starting Azeroth Survivors ") + old.Version + Lang.T(" from the Time Machine...") +
+                    (open ? Lang.T(" (everything unlocked)") : Lang.T(" (your own save)")));
+                if (Visible) ToTray();
+            }
+            catch (Exception error)
+            {
+                Status(Lang.T("Could not start the game: ") + error.Message);
+            }
+            finally
+            {
+                foreach (string name in asked.Keys) Environment.SetEnvironmentVariable(name, null);
+                foreach (KeyValuePair<string, string> pair in before) Environment.SetEnvironmentVariable(pair.Key, pair.Value);
+            }
+        }
+
+        // Survivor UI, Survivor Plates and SurvivorUI Classic as the player has
+        // them (one not there taken out there too), and the game's list of
+        // addons on and off; nothing else.
+        static void CopyOurAddons(string from, string to)
+        {
+            foreach (string name in TimeAddons)
+            {
+                string source = Path.Combine(from, name), target = Path.Combine(to, name);
+                if (Directory.Exists(target)) Directory.Delete(target, true);
+                if (Directory.Exists(source)) CopyTree(source, target);
+            }
+            string list = Path.Combine(from, "account.txt");
+            if (File.Exists(list)) File.Copy(list, Path.Combine(to, "account.txt"), true);
+        }
+
+        static void CopyTree(string from, string to)
+        {
+            Directory.CreateDirectory(to);
+            foreach (string file in Directory.GetFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)), true);
+            foreach (string dir in Directory.GetDirectories(from)) CopyTree(dir, Path.Combine(to, Path.GetFileName(dir)));
+        }
+
+        // The save it starts on, over: the unlocked one as it came, or the
+        // player's own from scratch; the one there to the Recycle Bin.
+        void FreshOldSave(OldGame old)
+        {
+            if (GameRunning())
+            {
+                Status(Lang.T("Close the game first."));
+                return;
+            }
+            bool open = TimeUnlocked(old);
+            string question = open
+                ? Lang.T("A fresh save for ") + old.Version + Lang.T("? The one there goes to the Recycle Bin, and everything is open again.")
+                : Lang.T("Start your own save in ") + old.Version + Lang.T(" over? Your progress there goes to the Recycle Bin.");
+            if (Ask(this, question, Lang.T("Time Machine"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            string save = Path.Combine(TimeSaves(old, open), "characters.txt");
+            if (File.Exists(save) && !ToRecycleBin(save))
+            {
+                Status(Lang.T("Could not move the save to the Recycle Bin."));
+                return;
+            }
+            Status(open ? old.Version + Lang.T(" has a fresh save: everything is open again.") : old.Version + Lang.T(": your own save starts over."));
+        }
+
+        // Its folder to the Recycle Bin; the shared data only the others still use stays.
+        void RemoveOld(OldGame old)
+        {
+            string folder = TimeFolder(old);
+            if (!Directory.Exists(folder)) return;
+            if (GameRunning())
+            {
+                Status(Lang.T("Close the game first."));
+                return;
+            }
+            if (Ask(this, Lang.T("Remove ") + old.Version + Lang.T(" from the Time Machine? Its folder, with its saves, goes to the Recycle Bin."),
+                Lang.T("Time Machine"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (!ToRecycleBin(folder))
+            {
+                Status(Lang.T("Could not move the folder to the Recycle Bin."));
+                return;
+            }
+            try
+            {
+                List<string> used = new List<string>();
+                if (oldGames != null)
+                    foreach (OldGame other in oldGames)
+                        if (other != old && Directory.Exists(TimeFolder(other)))
+                            foreach (OldFile mpq in other.Data) used.Add(mpq.Sha256);
+                if (Directory.Exists(TimePool))
+                    foreach (string file in Directory.GetFiles(TimePool))
+                    {
+                        string sha = Path.GetFileName(file).Split('.')[0].ToLowerInvariant();
+                        if (!used.Contains(sha)) File.Delete(file);
+                    }
+            }
+            catch { }
+            FillTimeMachine();
+            Status(old.Version + Lang.T(" is out of the Time Machine."));
         }
 
         // The tab opened: the list as it stands, asked again after half an hour.
@@ -4283,6 +5319,7 @@ namespace SurvivorInstaller
             }
             addonList.EndUpdate();
             FitAddonColumns();
+            Native.RepaintHeader(addonList);
             foreach (ListViewItem row in addonList.Items)
             {
                 bool same = row.Tag == picked
@@ -4322,7 +5359,7 @@ namespace SurvivorInstaller
             row.SubItems.Add(installed, TextColor, Panel, addonList.Font);
             row.SubItems.Add(!present ? Lang.T("Not installed") : outdated ? Lang.T("Outdated") : Lang.T("Installed"),
                 !present ? Muted : outdated ? OutdatedColor : InstalledColor, Panel, addonList.Font);
-            row.SubItems.Add(!present || AutoKey(tag) == null ? "" : AutoOn(tag) ? "on" : "off");
+            row.SubItems.Add(!HasAutoTick(tag, present) ? "" : AutoOn(tag) ? "on" : "off");
             row.Tag = tag;
             addonList.Items.Add(row);
         }
@@ -6932,7 +7969,11 @@ namespace SurvivorInstaller
 
         static bool GameRunning()
         {
-            return Process.GetProcessesByName(Path.GetFileNameWithoutExtension(GameExe)).Length > 0;
+            if (Process.GetProcessesByName(Path.GetFileNameWithoutExtension(GameExe)).Length > 0) return true;
+            // A Time Machine version (1.11.0): AzerothSurvivors-<version>.exe.
+            foreach (Process process in Process.GetProcesses())
+                if (process.ProcessName.StartsWith("AzerothSurvivors-", StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
         }
 
         // --- The game's save ---------------------------------------------------
@@ -9964,28 +11005,87 @@ namespace SurvivorInstaller
         }
 
         // "Auto Update when ready": Survivor UI's tick, Survivor Plates' the same
-        // one (they come in one zip), and SurvivorUI Classic's; on unless
-        // unticked, on the rows of ours installed.
+        // one (they come in one zip), and SurvivorUI Classic's, on unless
+        // unticked; since 1.11.0 also every other addon installed from the list
+        // (or added by you), off unless ticked. The header's tick sets them all.
         const int AutoColumn = 5;
 
         static string AutoKey(object row)
         {
             if (row is OurAddon) return "autoUpdate.ui";
-            return IsClassic(row as ListedAddon) ? "autoUpdate.classic" : null;
+            ListedAddon listed = row as ListedAddon;
+            if (listed == null) return null;
+            return IsClassic(listed) ? "autoUpdate.classic" : "autoUpdate." + InstalledKey(listed);
         }
 
+        // Ours update by themselves unless unticked; the others only if ticked.
         static bool AutoOn(object row)
         {
             string key = AutoKey(row);
-            return key != null && Setting(key, "1") != "0";
+            bool ours = row is OurAddon || IsClassic(row as ListedAddon);
+            return key != null && Setting(key, ours ? "1" : "0") != "0";
+        }
+
+        // A row with a tick: one of ours installed, or one installed from the
+        // list (one put in by hand is never updated by the launcher; Classic's
+        // kept its tick there as before).
+        bool HasAutoTick(object row, bool present)
+        {
+            if (!present || AutoKey(row) == null) return false;
+            ListedAddon listed = row as ListedAddon;
+            return listed == null || IsClassic(listed) || Setting(InstalledKey(listed), "") != "";
+        }
+
+        // The rows' ticks together, for the header's: all on, none, or some.
+        int AutoTicksOn(out int ticks)
+        {
+            int on = 0;
+            ticks = 0;
+            foreach (ListViewItem row in addonList.Items)
+            {
+                if (row.SubItems.Count <= AutoColumn || row.SubItems[AutoColumn].Text == "") continue;
+                ticks++;
+                if (row.SubItems[AutoColumn].Text == "on") on++;
+            }
+            return on;
+        }
+
+        // The header's tick: on, every row's ticked on; else every row's off.
+        void SwitchAllAuto()
+        {
+            int ticks;
+            int on = AutoTicksOn(out ticks);
+            if (ticks == 0) return;
+            bool all = on < ticks;
+            foreach (ListViewItem row in addonList.Items)
+                if (row.SubItems.Count > AutoColumn && row.SubItems[AutoColumn].Text != "")
+                    SetSetting(AutoKey(row.Tag), all ? "1" : "0");
+            Status(all ? Lang.T("Every addon here updates by itself as a new release is out, with the game closed.")
+                : Lang.T("No addon here updates by itself: you update by hand."));
+            BeginInvoke(new Action(delegate
+            {
+                FillAddons();
+                if (all) AutoUpdate();
+            }));
         }
 
         void DrawAutoTick(Graphics g, Rectangle cell, bool on)
         {
+            DrawAutoTick(g, cell, on, false);
+        }
+
+        // Some: a small gold square in the well (the header's, some rows on).
+        void DrawAutoTick(Graphics g, Rectangle cell, bool on, bool some)
+        {
             int size = S(13);
             Rectangle box = new Rectangle(cell.X + S(6), cell.Y + (cell.Height - size) / 2, size, size);
             using (Brush well = new SolidBrush(Color.FromArgb(12, 12, 11))) g.FillRectangle(well, box);
-            using (Pen edge = new Pen(on ? TickText : TickEdge)) g.DrawRectangle(edge, box);
+            using (Pen edge = new Pen(on || some ? TickText : TickEdge)) g.DrawRectangle(edge, box);
+            if (some && !on)
+            {
+                using (Brush part = new SolidBrush(Gold)) g.FillRectangle(part, Rectangle.Inflate(box, -S(3), -S(3)));
+                return;
+            }
             if (!on) return;
             System.Drawing.Drawing2D.SmoothingMode smooth = g.SmoothingMode;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
