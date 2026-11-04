@@ -158,6 +158,46 @@ cache:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 cache:SetPoint("LEFT", chest, "RIGHT", ICON_GAP, 0)
 cache:Hide()
 
+-- The mouse over the kills: the kills a minute of the last seconds (the kill
+-- pace's, Pace.lua) and of the whole run, as This Run's Kills / min row
+-- tells them (v3.0.57; Lucas). Kept up while the mouse stays.
+local killsHit = CreateFrame("Frame", nil, holder)
+killsHit:SetHeight(ICON_SIZE + 4)
+killsHit:Hide()
+
+local function KillsTip()
+	GameTooltip:SetText(SurvivorUI_T("Kills / min"), 0.78, 0.80, 0.88)
+	local rate, window
+	if SurvivorUI_PaceRate then
+		rate, window = SurvivorUI_PaceRate()
+	end
+	local seconds = AZS_GetRunTime and AZS_GetRunTime() or tonumber(AZS_RUN and AZS_RUN.t) or 0
+	local kills = tonumber(AZS_RUN and AZS_RUN.kills) or 0
+	GameTooltip:AddDoubleLine(SurvivorUI_TF("Last {1} seconds", window or 20), rate and string.format("%.0f", rate) or "-",
+		0.7, 0.7, 0.7, 1, 1, 1)
+	GameTooltip:AddDoubleLine(SurvivorUI_T("The whole run"), (seconds or 0) >= 10 and string.format("%.0f", kills / seconds * 60) or "-",
+		0.7, 0.7, 0.7, 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T("The last seconds' rate is the kill pace's (/sui pace): off with it."), 0.7, 0.7, 0.7, 1)
+	GameTooltip:Show()
+end
+
+killsHit:EnableMouse(true)
+killsHit:SetScript("OnEnter", function()
+	this.over = true
+	GameTooltip:SetOwner(this, "ANCHOR_BOTTOM")
+	KillsTip()
+end)
+killsHit:SetScript("OnLeave", function()
+	this.over = nil
+	GameTooltip:Hide()
+end)
+killsHit:SetScript("OnHide", function()
+	if this.over then
+		this.over = nil
+		GameTooltip:Hide()
+	end
+end)
+
 -- The groups, an icon and its number each, and the layouts' orders.
 local KILLS = { icon = skull, text = line }
 local GOLD = { icon = slot, text = gold }
@@ -244,18 +284,29 @@ local function Lay(order, apart)
 		group.icon:SetPoint("LEFT", holder, "CENTER", x, 0)
 		x = x + group.width + GROUP_GAP
 	end
+	-- The mouse's place over the kills, the skull and its number.
+	killsHit:ClearAllPoints()
+	killsHit:SetPoint("LEFT", skull, "LEFT", -2, 0)
+	killsHit:SetWidth(math.floor((KILLS.width or ICON_SIZE) + 4))
 	return shown
 end
 
--- Only the groups given shown; none with nil.
+-- Only the groups given shown; none with nil. The kills' mouse place with them.
 local function Shown(shown)
 	for index = 1, table.getn(GROUPS) do
 		GROUPS[index].icon:Hide()
 		GROUPS[index].text:Hide()
 	end
+	local kills
 	for index = 1, table.getn(shown or {}) do
 		shown[index].icon:Show()
 		shown[index].text:Show()
+		kills = kills or shown[index] == KILLS
+	end
+	if kills then
+		killsHit:Show()
+	else
+		killsHit:Hide()
 	end
 end
 
@@ -455,6 +506,9 @@ ticker:SetScript("OnUpdate", function()
 		gold:SetText("|cffffd24d"..Thousands(AZS_RUN.gold).."|r|cff9a9a9a/|r|cffb39a5c"..Thousands(AZS_RUN.chest).."|r")
 	end
 	Shown(Lay(ORDERS[settings.tallyLayout] or ORDERS.killsGold, apart))
+	if killsHit.over then
+		KillsTip()
+	end
 end)
 
 -- The game's own box: away while this line is on. The setting is the game's

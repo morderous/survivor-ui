@@ -564,7 +564,7 @@ local PET_CASTS = {
 -- by that name too: Biggest Crits, the combat numbers, their color and icon.
 -- Another class's summon joins them only if the meter has it so; a warlock's
 -- demons have a line each. Asked again every few seconds.
-local BEASTS = { ["Wolf"] = true, ["Raptor"] = true }
+local BEASTS = { ["Wolf"] = true, ["Raptor"] = true, ["White Devilsaur"] = true }
 local inPets, inPetsAt = {}, 0
 
 local function InPets(name)
@@ -619,8 +619,20 @@ local TALENT_CASTS = {
 
 function SurvivorUI_SourceOf(name, line)
 	local exact = name and line and SurvivorUI_HitLine and SurvivorUI_HitLine(name, line)
+	-- A pet with a line of its own in the meter (Meter.lua): its name, by the
+	-- game's hit or by the combat log's.
+	local _, _, whose = string.find(name or "", "^(.+)'s ")
+	local ownLine = SurvivorUI_MeterPetLine and (SurvivorUI_MeterPetLine(exact) or SurvivorUI_MeterPetLine(whose or name))
 	if exact then
-		return InPets(exact) and "Pets" or exact
+		if ownLine and (exact == "Pets" or exact == ownLine) then
+			return ownLine
+		end
+		-- The game's hits call a summon Pets where its meter gives it a line
+		-- of its own (a mage's Water Elemental): that line.
+		if exact == "Pets" and SurvivorUI_MeterHasLine and SurvivorUI_MeterHasLine(whose or name) then
+			return whose or name
+		end
+		return InPets(exact) and (ownLine or "Pets") or exact
 	end
 	local free = name and TALENT_CASTS[name]
 	if free and not Holds(free[1]) then
@@ -632,7 +644,7 @@ function SurvivorUI_SourceOf(name, line)
 	if name then
 		local _, _, owner = string.find(name, "^(.+)'s ")
 		if InPets(owner or name) then
-			return "Pets"
+			return ownLine or "Pets"
 		end
 		-- A demon's own spell: since the game's 0.139 its meter line is the
 		-- demon's, so one found there and one not read the same.
@@ -3104,7 +3116,7 @@ do
 			local hit = events[index]
 			if hit.kind == "damage" and hit.anchorId then
 				table.insert(hitsWaiting, { at = now, id = hit.anchorId, name = hit.targetName, amount = hit.amount, crit = hit.critical,
-					ability = hit.abilityName, meter = hit.meterSource })
+					ability = hit.abilityName, meter = hit.meterSource, source = hit.sourceId })
 			end
 		end
 		while hitsWaiting[1] and now - hitsWaiting[1].at > 1 do
@@ -3155,6 +3167,11 @@ do
 			end
 		end
 		local meter = found and found.meter and SurvivorUI_English(found.meter)
+		-- A pet's hit on the meter's Pets, that pet on a line of its own
+		-- (Meter.lua): its line.
+		if meter == "Pets" and SurvivorUI_MeterPetById then
+			meter = SurvivorUI_MeterPetById(found.source) or meter
+		end
 		if meter and meter ~= found.ability then
 			return meter
 		end
@@ -4117,6 +4134,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_ToggleMeter then
 			SurvivorUI_ToggleMeter()
 		end
+	elseif msg == "meter now" then
+		if SurvivorUI_ToggleMeterNow then
+			SurvivorUI_ToggleMeterNow()
+		end
 	elseif command == "scale" then
 		if SurvivorUI_SetScale then
 			SurvivorUI_SetScale(argument)
@@ -4222,6 +4243,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui hover  switches the white outline around what the mouse is on"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui scale 0.85  sizes the panels, 0.6 to 1.4, for smaller screens"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui meter  switches between SurvivorUI's damage meter, with the crits, and Default"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui meter now  opens or closes the meter now: the last 30 seconds, since its Reset or the boss fight"))
 	end
 end
 

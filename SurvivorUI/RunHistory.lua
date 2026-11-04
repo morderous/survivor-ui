@@ -239,7 +239,7 @@ local function Snapshot(phase)
 	-- The damage by source, the most first, as the game's meter has it.
 	record.sources = {}
 	if AZS_GetMeter then
-		local lines, total, dps = AZS_GetMeter()
+		local lines, total, dps = (SurvivorUI_MeterGame or AZS_GetMeter)()
 		lines = lines or {}
 		record.meterTotal, record.meterDps = Num(total), Num(dps)
 		for index = 1, math.min(8, table.getn(lines)) do

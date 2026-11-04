@@ -42,6 +42,7 @@ local PIECES = {
 	["Jewelry worn"] = { part = "worn", places = { "wornLeft", "wornTop" }, key = "jewelryWorn", toggle = "SurvivorUI_ToggleWorn" },
 	["Build list"] = { part = "build", places = { "buildLeft", "buildTop" }, key = "buildList", toggle = "SurvivorUI_ToggleBuild" },
 	["Damage meter"] = { part = "meter", places = { "meterRight", "meterBottom", "meterWidth", "meterLines" }, key = "meter", toggle = "SurvivorUI_ToggleMeter" },
+	["Meter now"] = { part = "meter", places = { "nowMeterLeft", "nowMeterTop", "nowMeterWidth", "nowMeterLines" }, key = "nowMeter", offUnlessOn = true, toggle = "SurvivorUI_ToggleMeterNow" },
 	["Boss bars"] = { part = "bosses", places = { "bossLeft", "bossTop" }, key = "bossBars", toggle = "SurvivorUI_BossBars" },
 	["Loot list"] = { part = "loot", places = { "lootLeft", "lootTop" }, key = "lootLog", toggle = "SurvivorUI_ToggleLoot" },
 	["This Run"] = { part = "run", places = { "runLeft", "runTop", "runBottom" }, key = "runPanel", toggle = "SurvivorUI_ToggleRun" },
@@ -60,10 +61,10 @@ local PIECES = {
 }
 
 -- A piece that wears another's font and size step, by its name's pattern: the
--- damage meter's extra windows (MeterWindows.lua, "Damage meter 2" to 4) the
--- main meter's, exact copies of it, so a face or a step chosen on any of them
--- is every one's.
-local FOLLOWS = { { "^Damage meter %d+$", "Damage meter" } }
+-- damage meter's extra windows (MeterWindows.lua, "Damage meter 2" to 4) and
+-- the meter now (MeterNow.lua) the main meter's, exact copies of it, so a
+-- face or a step chosen on any of them is every one's.
+local FOLLOWS = { { "^Damage meter %d+$", "Damage meter" }, { "^Meter now$", "Damage meter" } }
 
 local function FontName(name)
 	for _, each in pairs(FOLLOWS) do
@@ -592,12 +593,15 @@ noSize:SetText(SurvivorUI_T("with the whole interface"))
 
 -- A damage meter window's own width and lines (Meter.lua, MeterWindows.lua),
 -- under the size, and what it is linked to under them; the rows after them
--- move down to make room (Lay). Which: "main", or an extra window's 1 to 3.
+-- move down to make room (Lay). Which: "main", an extra window's 1 to 3, or
+-- "now" (the meter now, MeterNow.lua, which links to none).
 local METER_ROWS = 66
 
 local function MeterOf(name)
 	if name == "Damage meter" then
 		return "main"
+	elseif name == "Meter now" then
+		return "now"
 	end
 	local _, _, number = string.find(name or "", "^Damage meter (%d+)$")
 	return number and (tonumber(number) - 1) or nil
@@ -607,6 +611,10 @@ local function SetMeterSize(which, width, lines)
 	if which == "main" then
 		if SurvivorUI_SetMeterMainSize then
 			SurvivorUI_SetMeterMainSize(width, lines)
+		end
+	elseif which == "now" then
+		if SurvivorUI_SetMeterNowSize then
+			SurvivorUI_SetMeterNowSize(width, lines)
 		end
 	elseif SurvivorUI_SetMeterWindowSize then
 		SurvivorUI_SetMeterWindowSize(which, width, lines)
@@ -876,6 +884,8 @@ function Fill()
 		local width, lines
 		if which == "main" then
 			width, lines = SurvivorUI_MeterMainSize()
+		elseif which == "now" then
+			width, lines = SurvivorUI_MeterNowSize()
 		else
 			width, lines = SurvivorUI_MeterWindowSize(which)
 		end
@@ -888,8 +898,10 @@ function Fill()
 			row.value:Show()
 			row.bar:Show()
 		end
-		local linked = which ~= "main" and SurvivorUI_MeterLinkedTo and SurvivorUI_MeterLinkedTo(which)
-		if which == "main" then
+		local linked = which ~= "main" and which ~= "now" and SurvivorUI_MeterLinkedTo and SurvivorUI_MeterLinkedTo(which)
+		if which == "now" then
+			linkText:SetText(SurvivorUI_T("Moves on its own: it links to no other window."))
+		elseif which == "main" then
 			linkText:SetText(SurvivorUI_T("Another window let go against it is linked to it."))
 		elseif linked then
 			linkText:SetText(SurvivorUI_TF("Linked to {1}: drag it away to unlink.", SurvivorUI_PieceName(linked)))

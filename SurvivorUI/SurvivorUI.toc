@@ -3,7 +3,7 @@
 ## Author: morderous
 ## X-License: GPL-3.0
 ## X-Website: https://github.com/morderous/survivor-ui
-## Version: 3.0.56
+## Version: 3.0.57
 ## Notes: Flat, dark unit frames and a compact action bar (buttons 1 to 6 and the = button) for Azeroth Survivors.
 ## OptionalDeps: SurvivorUIClassic, SurvivorPlates
 ## SavedVariables: SurvivorUIDB, SurvivorUIJewelryBook
@@ -25,6 +25,7 @@ TalentIcons.lua
 TalentTrees.lua
 Meter.lua
 MeterWindows.lua
+MeterNow.lua
 DotCounter.lua
 SoulShards.lua
 Summons.lua

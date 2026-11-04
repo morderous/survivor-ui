@@ -204,7 +204,7 @@ local function MeterLine(ability)
 	if not AZS_GetMeter then
 		return nil
 	end
-	local lines, total = AZS_GetMeter()
+	local lines, total = (SurvivorUI_MeterGame or AZS_GetMeter)()
 	if not lines then
 		return nil
 	end
@@ -471,7 +471,7 @@ local function MeterTip()
 	GameTooltip:SetText(SurvivorUI_T("Damage dealt"), 1, 0.76, 0.08)
 	local lines, total, dps = nil, 0, 0
 	if AZS_GetMeter then
-		lines, total, dps = AZS_GetMeter()
+		lines, total, dps = (SurvivorUI_MeterGame or AZS_GetMeter)()
 	end
 	if not lines or table.getn(lines) == 0 then
 		GameTooltip:AddLine(SurvivorUI_T("Nothing yet."), MUTED[1], MUTED[2], MUTED[3])
@@ -718,6 +718,14 @@ local function CardOf(row, kept)
 	local hits = ability and hitStats[ability]
 	-- Its line in the game's damage meter, where the game shares it.
 	local meter = ability and MeterLine(ability)
+	local best, bestAt = ability and critBest[ability], ability and critBestAt[ability]
+	-- A line of the meter now (MeterNow.lua, row.slice): its stretch's crits,
+	-- hits and numbers.
+	local slice = ability and row.slice
+	if slice then
+		stats, hits, meter = slice.Crits(ability), slice.Hits(ability), slice.Line(row.line)
+		best, bestAt = stats and stats.best, stats and stats.bestAt
+	end
 	if not (stats or hits or meter or SpellEntry(ability)) then
 		return nil
 	end
@@ -788,9 +796,9 @@ local function CardOf(row, kept)
 	if not quiet then
 	Add("head", SurvivorUI_T("Critical strikes"), stats and stats.count or 0)
 	if stats then
-		Add("row", SurvivorUI_T("Biggest"), Short(critBest[ability]))
-		if critBestAt[ability] and not kept then
-			Add("row", SurvivorUI_T("Beaten last"), SurvivorUI_TF("{1} ago", Clock(RunNow() - critBestAt[ability])))
+		Add("row", SurvivorUI_T("Biggest"), Short(best))
+		if bestAt and not kept then
+			Add("row", SurvivorUI_T("Beaten last"), SurvivorUI_TF("{1} ago", Clock(RunNow() - bestAt)))
 		end
 		Add("row", SurvivorUI_T("Last"), Short(stats.last))
 		Add("row", SurvivorUI_T("Average"), Short(stats.sum / stats.count))
@@ -1488,6 +1496,10 @@ local function RecordCrit(ability, amount)
 		critBest[ability] = amount
 		critBestAt[ability] = RunNow()
 	end
+	-- The meter now's stretches count it too (MeterNow.lua).
+	if SurvivorUI_MeterNowNote then
+		SurvivorUI_MeterNowNote(ability, amount, true)
+	end
 	if critHovered and critHovered:IsVisible() then
 		CritTooltip(critHovered)
 	end
@@ -1506,6 +1518,9 @@ local function RecordHit(ability, amount)
 	stats.last = amount
 	stats.sum = stats.sum + amount
 	stats.count = stats.count + 1
+	if SurvivorUI_MeterNowNote then
+		SurvivorUI_MeterNowNote(ability, amount, false)
+	end
 	if critHovered and critHovered:IsVisible() then
 		CritTooltip(critHovered)
 	end
@@ -1619,11 +1634,13 @@ castWatch:SetScript("OnUpdate", function()
 			table.remove(held, index)
 		elseif whose then
 			table.remove(held, index)
+			SurvivorUI_BlowLine = line.nameless
 			if line.crit then
 				RecordCrit(whose, line.amount)
 			else
 				RecordHit(whose, line.amount)
 			end
+			SurvivorUI_BlowLine = nil
 		else
 			index = index + 1
 		end
@@ -1863,9 +1880,12 @@ events:SetScript("OnEvent", function()
 	if event == "CHAT_MSG_COMBAT_HOSTILE_DEATH" then
 		Death(message)
 	elseif HIT_EVENTS[event] then
+		-- The line being read, its target for the meter now's boss fight (MeterNow.lua).
+		SurvivorUI_BlowLine = message
 		Dealt(message)
 		Crit(message)
 		Hit(message)
+		SurvivorUI_BlowLine = nil
 	elseif DEALT_EVENTS[event] then
 		-- The periodic event also carries other units' damage; only "your" counts.
 		if event ~= "CHAT_MSG_SPELL_PERIODIC_CREATURE_DAMAGE" or string.find(message, "from your", 1, true) then

@@ -5,7 +5,8 @@
 -- show: the party's damage in a co-op run, else the healing, the boss fight
 -- or the damage, whichever no window shows yet. Up to three more. Each wears
 -- the main one's bars (lent by Meter.lua: the same colors, icons, cards and
--- numbers), its title a menu of the pages, a - at its corner to close it,
+-- numbers), the row of page buttons under its title (Meter.lua's), the
+-- numbers at its foot, a - at its corner to close it,
 -- and left of it the fold button (the small lines as one, Others).
 -- Hold Alt and drag to move one, or move mode ("Damage meter 2" to 4); the
 -- wheel rolls its list. Each as big as the main one until its card in move
@@ -26,8 +27,8 @@ local GOLD = { 1, 0.82, 0 }
 local WHITE = { 1, 1, 1 }
 local NOW_UP, NOW_DOWN = { 0.45, 0.95, 0.5 }, { 1, 0.6, 0.3 }
 -- The page a new window takes: the first of these no window shows.
-local PREFER = { "party", "healing", "boss", "damage", "dps" }
-local EMPTY = { boss = "No boss fight yet.", healing = "No healing yet.", party = "Not in a party.", damage = "No damage yet.", dps = "No damage yet." }
+local PREFER = { "party", "healing", "last", "damage", "dps" }
+local EMPTY = { last = "No damage yet.", healing = "No healing yet.", party = "Not in a party.", damage = "No damage yet.", dps = "No damage yet." }
 
 local windows = {}
 
@@ -102,7 +103,7 @@ local function Resize(window)
 	if window.barWidth ~= width or window.lines ~= lines then
 		window.barWidth, window.lines = width, lines
 		window:SetWidth(width + 8)
-		window:SetHeight(M.BARS_TOP + 4 + lines * (M.BAR_HEIGHT + M.BAR_GAP))
+		window:SetHeight(M.BARS_TOP + 4 + lines * (M.BAR_HEIGHT + M.BAR_GAP) + (M.FOOT or 0))
 		window.strip:SetWidth(width)
 	end
 end
@@ -251,71 +252,7 @@ function SurvivorUI_MeterLinkedTo(index)
 end
 
 ------------------------------------------------------------------------------
--- The title's menu: a row a page, the one shown gold, one the game does not
--- share now greyed (still chosen if picked: it shows once shared).
-
 local Draw
-
-local function PaintMenu(window)
-	local entry = Saved()[window.index]
-	for _, row in pairs(window.menu.rows) do
-		local chosen = entry and entry.view == row.key
-		row.mark:SetAlpha(chosen and 1 or 0)
-		row.wash:SetVertexColor(1, 1, 1, row.hot and 0.08 or 0)
-		if chosen then
-			row.text:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-		elseif row.hot then
-			row.text:SetTextColor(1, 1, 1)
-		elseif row.shared then
-			row.text:SetTextColor(0.75, 0.75, 0.78)
-		else
-			row.text:SetTextColor(0.4, 0.4, 0.44)
-		end
-	end
-end
-
-local function OpenMenu(window)
-	local menu = window.menu
-	local pages = Pages()
-	for index = 1, table.getn(pages) do
-		local row = menu.rows[index]
-		if not row then
-			row = CreateFrame("Button", nil, menu)
-			row:SetHeight(18)
-			row:SetPoint("TOPLEFT", menu, "TOPLEFT", 3, -3 - (index - 1) * 18)
-			row:SetPoint("TOPRIGHT", menu, "TOPRIGHT", -3, -3 - (index - 1) * 18)
-			row.wash = row:CreateTexture(nil, "BACKGROUND")
-			row.wash:SetTexture(FLAT)
-			row.wash:SetAllPoints(row)
-			row.mark = row:CreateTexture(nil, "ARTWORK")
-			row.mark:SetTexture(FLAT)
-			row.mark:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 1)
-			row.mark:SetWidth(2)
-			row.mark:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -3)
-			row.mark:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 3)
-			row.text = Text(row, 10, WHITE)
-			row.text:SetPoint("LEFT", row, "LEFT", 8, 0)
-			row.window = window
-			row:SetScript("OnEnter", function() this.hot = true PaintMenu(this.window) end)
-			row:SetScript("OnLeave", function() this.hot = nil PaintMenu(this.window) end)
-			row:SetScript("OnClick", function()
-				local entry = Saved()[this.window.index]
-				if entry then
-					entry.view = this.key
-					this.window.scrolled = 0
-				end
-				this.window.menu:Hide()
-				Draw(this.window)
-			end)
-			menu.rows[index] = row
-		end
-		row.key, row.shared = pages[index].key, pages[index].shared
-		row.text:SetText(SurvivorUI_T(pages[index].title))
-	end
-	menu:SetHeight(6 + table.getn(pages) * 18)
-	PaintMenu(window)
-	menu:Show()
-end
 
 ------------------------------------------------------------------------------
 -- A window, made the first time it is opened.
@@ -335,7 +272,8 @@ local function Window(index)
 	local window = CreateFrame("Frame", "SurvivorUIMeter"..(index + 1), UIParent)
 	window.index = index
 	window:SetWidth(M.WIDTH + 8)
-	window:SetHeight(M.BARS_TOP + 4 + LINES * (M.BAR_HEIGHT + M.BAR_GAP))
+	window:SetHeight(M.BARS_TOP + 4 + LINES * (M.BAR_HEIGHT + M.BAR_GAP) + (M.FOOT or 0))
+	window.foot = M.FOOT
 	window:SetBackdrop({ bgFile = FLAT })
 	Ground(window)
 	window:SetMovable(true)
@@ -376,49 +314,17 @@ local function Window(index)
 		SurvivorUI_MeterNewRoll(window)
 	end
 
-	-- The title: the page's name and a caret, a menu of the pages.
+	-- The title: the page's name; the page buttons under it.
 	local title = CreateFrame("Button", nil, window)
 	title:SetPoint("TOPLEFT", window, "TOPLEFT", 2, -2)
 	title:SetHeight(17)
 	title.text = Text(title, 11, GOLD)
 	title.text:SetPoint("LEFT", title, "LEFT", 3, 0)
-	title.caret = Text(title, 8, { 0.6, 0.6, 0.6 })
-	title.caret:SetText("v")
-	title:SetScript("OnClick", function()
-		if window.menu:IsShown() then
-			window.menu:Hide()
-		else
-			OpenMenu(window)
-		end
-	end)
-	title:SetScript("OnEnter", function() this.text:SetTextColor(1, 0.92, 0.5) end)
-	title:SetScript("OnLeave", function() this.text:SetTextColor(GOLD[1], GOLD[2], GOLD[3]) end)
 	title:RegisterForDrag("LeftButton")
 	title:SetScript("OnDragStart", window.StartMove)
 	title:SetScript("OnDragStop", window.StopMove)
 	window.title = title
 
-	window.menu = CreateFrame("Frame", nil, window)
-	window.menu:SetFrameStrata("DIALOG")
-	window.menu:SetWidth(120)
-	window.menu:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
-	window.menu:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } })
-	window.menu:SetBackdropColor(0.05, 0.05, 0.08, 0.97)
-	window.menu:SetBackdropBorderColor(1, 0.82, 0, 0.35)
-	window.menu:EnableMouse(true)
-	window.menu.rows = {}
-	window.menu.away = 0
-	window.menu:SetScript("OnUpdate", function()
-		if MouseIsOver(this) or MouseIsOver(title) then
-			this.away = 0
-		else
-			this.away = this.away + arg1
-			if this.away > 0.6 then
-				this:Hide()
-			end
-		end
-	end)
-	window.menu:Hide()
 
 	-- Its corner: a - to close it.
 	local close = CreateFrame("Button", nil, window)
@@ -449,7 +355,6 @@ local function Window(index)
 			end
 		end
 		Saved()[window.index] = nil
-		window.menu:Hide()
 		window:Hide()
 		GameTooltip:Hide()
 		if window.handle then
@@ -457,18 +362,28 @@ local function Window(index)
 		end
 	end)
 
-	-- Left of the -: the fold button, as the main window's.
+	-- Right of the title: the fold button, as the main window's.
 	if SurvivorUI_MeterFoldButton then
 		window.fold = SurvivorUI_MeterFoldButton(window)
-		window.fold:SetPoint("TOPRIGHT", window, "TOPRIGHT", -19, -3)
+		window.fold:SetPoint("LEFT", title, "RIGHT", 2, 0)
 	end
 	window.Redraw = function()
 		Draw(window)
 	end
+	if SurvivorUI_MeterPageRow then
+		window.pages = SurvivorUI_MeterPageRow(window, function(key)
+			local entry = Saved()[window.index]
+			if entry then
+				entry.view = key
+				window.scrolled = 0
+			end
+			Draw(window)
+		end)
+	end
 
-	-- The numbers under the title: NOW (when on), the rate, the total.
+	-- The numbers at its foot: NOW (when on), the rate, the total.
 	local strip = CreateFrame("Frame", nil, window)
-	strip:SetPoint("TOPLEFT", window, "TOPLEFT", 4, -M.STRIP_TOP)
+	strip:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", 4, 4)
 	strip:SetWidth(M.WIDTH)
 	strip:SetHeight(M.STRIP_HEIGHT)
 	strip.wash = strip:CreateTexture(nil, "BACKGROUND")
@@ -527,12 +442,20 @@ Draw = function(window)
 	if not entry then
 		return
 	end
+	-- A page gone (the last boss fight's, until 2026-11-04): the damage.
+	local known = false
+	for _, page in pairs(Pages()) do
+		known = known or page.key == entry.view
+	end
+	if not known then
+		entry.view = "damage"
+	end
 	local key = entry.view
 	window.title.text:SetText(TitleOf(key))
-	local width = window.title.text:GetStringWidth()
-	window.title.caret:ClearAllPoints()
-	window.title.caret:SetPoint("LEFT", window.title, "LEFT", 3 + width + 4, -1)
-	window.title:SetWidth(width + 16)
+	window.title:SetWidth(window.title.text:GetStringWidth() + 6)
+	if window.pages then
+		window.pages.Lay(key, window.barWidth or M.WIDTH)
+	end
 
 	local lines, total, rate = nil, 0, 0
 	if SurvivorUI_MeterLines then
@@ -592,6 +515,8 @@ Draw = function(window)
 			bar:ClearAllPoints()
 			bar:SetPoint("TOPLEFT", window, "TOPLEFT", 4, -M.BARS_TOP - (index - 1) * (M.BAR_HEIGHT + M.BAR_GAP))
 			SurvivorUI_MeterPaintBar(bar, lines[index + skip], top, key)
+			-- The last 30 seconds' cards tell that stretch's crits (MeterNow.lua).
+			bar.slice = key == "last" and SurvivorUI_MeterSlice and SurvivorUI_MeterSlice("last") or nil
 		end
 	end
 	for index = count + 1, table.getn(window.bars) do

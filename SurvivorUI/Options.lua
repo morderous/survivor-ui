@@ -337,7 +337,7 @@ local TAB_PIECES = {
 	levelup = { "Level Up!" },
 	loot = { "Loot list" },
 	combat = { "Damage numbers", "Crit numbers", "Damage taken", "Healing", "New best crit" },
-	meter = { "Damage meter" },
+	meter = { "Damage meter", "Meter now" },
 	party = { "Party frames", "Revive bar" },
 	run = { "This Run" },
 	records = { "New best crit", "New jump record" },
@@ -1903,6 +1903,8 @@ local MODULES = {
 			"SurvivorUI's combat numbers, set in the Combat text tab. Off: the game's." },
 		{ "Damage meter", OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"),
 			"Each source's damage, its crits on hover, the healing and the boss damage. It puts the game's meter away.", nil, nil, GAME.meter },
+		{ "Meter now", OnlyIfOn("nowMeter"), Call("SurvivorUI_ToggleMeterNow"),
+			"A second meter window for how you are doing now: the last 30 seconds, since its own Reset, or the boss fight." },
 		{ "This Run", OnUnlessOff("runPanel"), Call("SurvivorUI_ToggleRun"),
 			"The run's numbers, as the game's victory screen gives them." },
 		{ "Biggest Crits", OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"),
@@ -4824,7 +4826,7 @@ Kit.Foot(page, {
 -- Damage meter (Meter.lua).
 
 page = pages.meter
-Header(page, "Damage meter", "Each source's damage and its share, its crits on hover; its title's menu for the healing or the last boss fight. Off: the game's meter.")
+Header(page, "Damage meter", "Each source's damage and its share, its crits on hover; the buttons under its title for the DPS, the last 30 seconds, the healing and the bosses. Off: the game's meter.")
 PanelHead(page, OnUnlessOff("meter"), Call("SurvivorUI_ToggleMeter"), "meter", "Damage meter", nil, GAME.meter)
 -- Its height in lines (Meter.lua), the same as its card's in move mode: the
 -- other windows follow unless set on their own cards.
@@ -4849,6 +4851,15 @@ Subheader(page, "What shows")
 Check(page, "Damage a second right now", OnUnlessOff("meterNow"), Flip("meterNow"), "under the run's, over the last 5 seconds, as the game's meter has it")
 Check(page, "Spell ranks after the names", OnlyIfOn("meterRanks"), function() DB().meterRanks = not DB().meterRanks or nil end,
 	"Holy Shock  2, here and in the Run History's meter; in Roman numerals with Roman spell ranks on (Tooltips)")
+-- The meter now (MeterNow.lua): a window of its own for how the hero is doing
+-- now, the main one keeping the run's whole; what it counts is its title's.
+Subheader(page, "Meter now")
+Check(page, "Meter now window", OnlyIfOn("nowMeter"), Call("SurvivorUI_ToggleMeterNow"),
+	"a second window, the main one's look, for how you are doing now; /sui meter now")
+Inline(page, "It counts", { { "last", "Last 30 s" }, { "reset", "Since reset" }, { "boss", "This boss" } },
+	function() return DB().nowMeterMode or "last" end,
+	function(value) DB().nowMeterMode = value ~= "last" and value or nil end, 100)
+Note(page, "Last 30 s: the last 30 seconds of the run's clock, as they go. Since reset: from its own Reset, the main meter's untouched. This boss: from a boss's coming to its fall, kept until the next one comes. Its title switches it too, and each line's card tells that stretch's crits and hits.")
 
 ------------------------------------------------------------------------------
 -- This Run (RunPanel.lua).
@@ -5105,7 +5116,7 @@ PanelHead(page, OnUnlessOff("counters"), Flip("counters"))
 Subheader(page, "What is counted")
 Check(page, "DoTs", OnUnlessOff("dotCounter"), Flip("dotCounter"), "how many of each are ticking on the enemies, by their ticks over the last two seconds; one on an enemy that dies stays up to two seconds")
 Check(page, "Fears", OnUnlessOff("fearCounter"), Flip("fearCounter"), "how many enemies each one holds; the game writes a fear's hit but not its end, so each enemy hit counts for the fear's full time")
-Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, and the seconds until the next one ends, as the game tells them (its 0.124 on); with an older game each cast counts a totem for its tooltip's time, two with Call of the Elements, and Totemic Wrath's Searing Totem every 14 sec, told by the spells a run starts with")
+Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, out of the most that can stand at once, as the game tells them (its 0.124 on); with an older game each cast counts a totem for its tooltip's time, two with Call of the Elements, and Totemic Wrath's Searing Totem every 14 sec, told by the spells a run starts with, with the seconds until the next one ends beside it")
 Check(page, "Shouts", OnUnlessOff("shoutCounter"), Flip("shoutCounter"), "Demoralizing Shout: how many enemies its last cast weakened, for its time; Battle Shout: the seconds it has left")
 Check(page, "Marks", OnUnlessOff("markCounter"), Flip("markCounter"), "Faerie Fire: how many enemies carry it, bosses too; each one it hits counts for the mark's time (its tooltip's), so one hit again before it fades counts twice until it does")
 

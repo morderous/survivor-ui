@@ -32,9 +32,11 @@
 -- too; Battle Shout, a buff on the hero, shows the seconds it has left.
 --
 -- The number stands over the spell's action button, in the spell's damage
--- meter color, and goes once nothing is out; a totem's has the seconds until
--- the next one ends beside it. Each counter is on or off in the options
--- (Counters); /sui dots switches them all.
+-- meter color, and goes once nothing is out; a totem's is told against the
+-- most of its kind that can stand, "12/30" all in one size and color (the
+-- cap the game tells, since v3.0.57; Lucas: the seconds until the next one
+-- ends told little), or with an older game with those seconds beside it. Each counter is on or
+-- off in the options (Counters); /sui dots switches them all.
 
 if SurvivorUI_Standby then return end
 
@@ -183,7 +185,8 @@ local function Badge(button)
 	badge:SetFont(SurvivorUI_FONT, 13 + FONT_BUMP, "THICKOUTLINE")
 	badge:SetPoint("BOTTOM", button, "TOP", 0, 2)
 	badge:Hide()
-	-- A totem's: the seconds until the next one ends, small beside it.
+	-- A totem's with an older game: the seconds until the next one ends, small
+	-- beside it.
 	badge.timer = button:CreateFontString(nil, "OVERLAY")
 	badge.timer:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 	badge.timer:SetPoint("BOTTOMLEFT", badge, "BOTTOMRIGHT", 2, 1)
@@ -193,9 +196,10 @@ local function Badge(button)
 	return badge
 end
 
--- A spell's number over its button, in its meter color; a totem's with its
--- seconds left; no count (a buff's): the seconds left as the number.
-local function Light(lit, spell, count, seconds)
+-- A spell's number over its button, in its meter color; a totem's as "12/30"
+-- with its cap, all one size and color (Lucas), else with its seconds left;
+-- no count (a buff's): the seconds left as the number.
+local function Light(lit, spell, count, seconds, cap)
 	local button = SurvivorUI_SpellButton and SurvivorUI_SpellButton(spell)
 	if not (button and button:IsVisible()) then
 		return
@@ -208,7 +212,9 @@ local function Light(lit, spell, count, seconds)
 		badge:SetFont(SurvivorUI_FONT, math.floor(13 * size + 0.5) + FONT_BUMP, "THICKOUTLINE")
 		badge.timer:SetFont(SurvivorUI_FONT, math.floor(9 * size + 0.5) + FONT_BUMP, "OUTLINE")
 	end
-	if count then
+	if count and cap then
+		badge:SetText(math.max(1, math.floor(count + 0.5)).."/"..cap)
+	elseif count then
 		badge:SetText(math.max(1, math.floor(count + 0.5)))
 	else
 		badge:SetText(math.ceil(seconds).."s")
@@ -220,7 +226,7 @@ local function Light(lit, spell, count, seconds)
 		badge:SetTextColor(1, 1, 1)
 	end
 	badge:Show()
-	if count and seconds then
+	if count and seconds and not cap then
 		badge.timer:SetText(math.ceil(seconds).."s")
 		badge.timer:Show()
 	else
@@ -459,8 +465,8 @@ frame:SetScript("OnUpdate", function()
 			Light(lit, spell, table.getn(list))
 		end
 	end
-	-- The totems: as the game tells them (0.124 on), else the ones set down
-	-- whose time has not run out.
+	-- The totems: as the game tells them (0.124 on), with the cap of each kind,
+	-- else the ones set down whose time has not run out.
 	if AZS_GetTotems then
 		if On("totemCounter") then
 			local all = AZS_GetTotems()
@@ -468,8 +474,9 @@ frame:SetScript("OnUpdate", function()
 				local totem = all[each]
 				local count = tonumber(totem.count) or 0
 				local left = tonumber(totem.remaining) or 0
+				local cap = tonumber(totem.cap) or 0
 				if count > 0 then
-					Light(lit, TotemSpell(totem), count, left > 0 and left or nil)
+					Light(lit, TotemSpell(totem), count, left > 0 and left or nil, cap > 0 and cap or nil)
 				end
 			end
 		end

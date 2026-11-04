@@ -35,6 +35,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui run` | Run panel: on or off |
 | `/sui run reset` | Clears the crits |
 | `/sui meter` | SurvivorUI's damage meter, or Default |
+| `/sui meter now` | Meter now: on or off |
 | `/sui bosses` | Boss bars: on or off |
 | `/sui bosses elites` | Adds every elite to the boss bars |
 | `/sui guide` | The Guide: how Luck, Damage, Crit, Haste and Speed really work, and what marks and sets give |
@@ -113,7 +114,7 @@ Unit frames and the action bar, in one centered row under the hero:
 - Combat text in place of Default: beside the hero, each hit with its source's icon (a weapon for melee and shots) in its damage meter color, the crits on the right, the heals rising over the hero and the hits taken falling under the action bar; each column moves where you want it, and one source's hits close together add up (`1.2k x3`). Where, how far, the look and what shows are all yours to set; or Default, or none at all.
 - A run tracker under the minimap, in the manner of a Mythic+ timer: the zone, the lives left, the time gone against the zone's full length (the time gone alone in endless mode), a timeline with a tick for every boss, every boss with the second it comes, colored by where it stands (grey to come, white next, orange alive, green slain), and the level's progress. It stands in for the Default clock.
 - A run panel on the left, under the loot list: the run so far, the same numbers as the game's victory screen (time survived, level, kills, elites, guardians and bosses slain, damage dealt and taken, damage per second, gold earned, caches opened). Hover a row for more: the damage meter, damage taken by source, gold and rerolls.
-- A damage meter under the build list, in place of Default, as many lines as fit the screen or as you set, a scroll bar for the rest: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. Click the title for a menu: the run's healing, the damage to bosses in the last boss fight, or in a co-op run each hero's damage. The + at its corner opens more windows, each on a page of its own.
+- A damage meter under the build list, in place of Default, as many lines as fit the screen or as you set, a scroll bar for the rest: one bar per source of damage, with its damage and its share. Hover a line for its card: damage per second, and its critical strikes (biggest, last, average, smallest) and normal hits. The buttons under its title switch pages: each source's damage a second, the last 30 seconds, the run's healing, or in a co-op run each hero's damage. The + at its corner opens more windows, each on a page of its own, and the last button opens the meter now: the last 30 seconds, since its own Reset, or the boss fight.
 - Boss bars at the top of the screen: every boss alive and every awake lair guardian, with its health and its debuffs (icons that drain to grey as they run out), at any distance. Click one to target it. Off for a new install from v3.0.53, the plates showing the bosses: `/sui bosses` brings them.
 - A DoT and fear counter over the action bar: over each damage over time spell's button, how many of it are out on the enemies, counted by their ticks; over a fear's (Psychic Scream, Intimidating Shout...), how many enemies it holds now. In the spell's damage meter color.
 - A guardians' list against the run tracker's left side, small and with no background: a line a lair, with a little arrow toward it, the guardian's name, how far it is, and asleep, awake with its health, or slain at its second and back in so many seconds. The arrows turn with the way you face (or point north up). Over it, the achievement "Slay four guardians before 8:00": how many fell before 8:00.
@@ -151,6 +152,7 @@ Commands:
 | `/sui run` | Shows or hides the run panel |
 | `/sui tracker` | Shows or hides the run tracker under the minimap |
 | `/sui meter` | Switches between SurvivorUI's damage meter (the default) and Default |
+| `/sui meter now` | Opens or closes the meter now: the last 30 seconds, since its Reset, or the boss fight |
 | `/sui center` | Puts the middle block back under the hero |
 | `/sui layout` | Puts every piece back in its first place |
 | `/sui hover` | The white outline around what the mouse is on: on or off |
@@ -166,7 +168,7 @@ Commands:
 
 ### Healing and boss damage
 
-Click the meter's title for its menu: **Damage Done** (the run's damage, with each ability's crits on mouseover), **Healing Done** (the run's healing, overhealing left out), **Boss Damage** (the damage dealt to bosses in the last boss fight) or, in a co-op run, **Party Damage** (each hero's damage and damage a second, in the class's color). The meter keeps the view you chose.
+The buttons under the meter's title: **DMG** (the run's damage, with each ability's crits on mouseover), **DPS** (each source's damage a second), **PARTY** in a co-op run (each hero's damage and damage a second, in the class's color), **30s** (the last 30 seconds) and **Healing** (the run's healing, overhealing left out). The meter keeps the page you chose. For the damage to a boss, the meter now's **This boss**.
 
 ### Font
 
@@ -227,6 +229,27 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.57, 2026-11-04
+
+A second damage meter for how you are doing right now, buttons for the meter's pages, each pet on a line of its own, kills a minute on the kills line, and totems counted against their cap.
+
+**Meter now** (new)
+- **A meter for now:** a window of its own, so the damage meter can keep the whole run. The buttons under its title pick what it counts: **30s**, the last 30 seconds of the run (the default); **Since reset**, from its own Reset (the damage meter's stays as it is); or **This boss**, only the damage to the boss, from the moment it comes until it falls, kept until the next one comes.
+- **The meter's look:** the same bars, colors, icons and cards, each card's numbers, crits and hits those of the stretch shown. At its foot, the damage a second, the time it covers and the total.
+- **Open it** with the last button of the meter's row, in the options (Damage meter, **Meter now window**) or with `/sui meter now`. Hold Alt and drag to move it, or move it in move mode (**Meter now**), where its card sets its width and lines.
+
+**Damage meter**
+- **Page buttons:** the menu on the title gave way to a row of buttons under it, each in its own color, the page shown lit: **DMG**, **DPS**, **PARTY** (greyed out of a party), **30s** (new: the last 30 seconds) and **Healing**, then the meter now's. Hover one for what it shows. The windows the + opens have them too.
+- **No more Boss Damage pages:** the meter now's This boss tells a boss fight. A window that was on one goes back to DMG.
+- **The numbers at the foot:** the NOW, DPS and TOTAL strip moved under the bars.
+- **Each pet on its own line:** a hunter's beasts or a mage's summons were one Pets line; now each pet has its own, with its name and icon, and every total still adds up to the game's. Talents and amulets keep their own lines. The same in the meter now, This Run and Run History, and each pet's crits go to its own card. The White Devilsaur shows its talent's icon, in every game language.
+
+**Kills and gold line**
+- **Kills a minute:** hover the kills, under the minimap, for your kills a minute over the last 20 seconds (the kill pace's) and over the whole run, as This Run's Kills / min row has them.
+
+**Counters**
+- **Totems against their cap:** a totem's counter now reads 12/30, how many stand out of the most the game lets stand, all in one size and in the spell's damage meter color, in place of the seconds until the next one ends.
 
 ### Azeroth SurvivorUI Launcher 1.10.0, 2026-11-04
 
