@@ -427,7 +427,14 @@ function SurvivorUI_SetCursorFx(on)
 	Apply()
 end
 
--- The class is known once the world is in.
+-- The class is known once the world is in, and for sure once the run's zone
+-- is told (UnitClass, SurvivorUI.lua): worked out again each time it is.
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", Apply)
+loader:SetScript("OnUpdate", function()
+	if AZS_ZONE_UPDATED ~= this.zoneSeen then
+		this.zoneSeen = AZS_ZONE_UPDATED
+		Apply()
+	end
+end)

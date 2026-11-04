@@ -533,7 +533,10 @@ local function PlaceBanner()
 	local tracker = getglobal("SurvivorUITracker")
 	local guardians = getglobal("SurvivorUIGuardians")
 	banner:ClearAllPoints()
-	if guardians and guardians:IsShown() and guardians:GetAlpha() > 0 then
+	-- Under the guardians' list while it stands on its own; hung under the
+	-- tracker (Guardians.lua), the tracker's place is the banner's.
+	if guardians and guardians:IsShown() and guardians:GetAlpha() > 0
+		and not (SurvivorUI_GuardianListHangs and SurvivorUI_GuardianListHangs()) then
 		banner:SetParent(tracker or UIParent)
 		banner:SetFrameLevel((tracker or UIParent):GetFrameLevel() + 3)
 		banner:SetPoint("TOPRIGHT", guardians, "BOTTOMRIGHT", 0, -8)

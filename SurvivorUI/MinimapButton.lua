@@ -467,9 +467,9 @@ local soundSwitch = Switch({ key = "sound", name = "SurvivorUISoundButton", art 
 	onLine = "On. Click: mute them, the music and the ambience kept", offLine = "Muted. Click: back to their volume",
 	note = "The game keeps no sound of the spells apart: the hits and the clicks go with them." })
 local rangeSwitch = Switch({ key = "range", name = "SurvivorUIRangeButton", art = "Range", option = "rangeMapButton",
-	binding = "SURVIVORUI_RANGERING", read = RangeOn, flip = FlipRange, title = "Range ring",
+	binding = "SURVIVORUI_RANGERING", read = RangeOn, flip = FlipRange, title = "Range indicator",
 	onLine = "Shown. Click: hide it, on the minimap and round you", offLine = "Hidden. Click: show it again",
-	note = "Which rings show: options, World markers." })
+	note = "Which rings show, and their look: options, Range indicator." })
 
 -- The keys (Bindings.xml): each switch as its click, said in the chat, as a
 -- key gives no other sign of it.
@@ -483,7 +483,7 @@ end
 BINDING_HEADER_SURVIVORUI = "Survivor UI"
 BINDING_NAME_SURVIVORUI_SPELLEFFECTS = "Spell effects on or off"
 BINDING_NAME_SURVIVORUI_SOUNDEFFECTS = "Sound effects on or off"
-BINDING_NAME_SURVIVORUI_RANGERING = "Range ring on or off"
+BINDING_NAME_SURVIVORUI_RANGERING = "Range indicator on or off"
 
 function SurvivorUI_ToggleSpellEffects()
 	KeyFlip(effectsSwitch)

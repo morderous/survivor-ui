@@ -183,13 +183,23 @@ local function Paint()
 	end
 end
 
+-- No backgrounds (the options' No backgrounds, Experimental), the chat not
+-- kept there: the Panel look's ground, edges and tabs' rule away, the text on
+-- the world as in the Text on the world look; the tabs, the copy button, the
+-- grip and the typing box stay. Text on the world keeps its own Background.
+local function Bare()
+	local db = SurvivorUIDB
+	return db and db.noBackgrounds and not (db.noBackgroundsOff and db.noBackgroundsOff.chat) or false
+end
+
 local function Strength()
 	if not panel then
 		return
 	end
+	local bare = Bare()
 	local alpha = SurvivorUI_ChatPanelAlpha()
-	panel.fill:SetVertexColor(FILL[1], FILL[2], FILL[3], alpha)
-	local edged = SurvivorUI_ChatLocked() and 0 or 1
+	panel.fill:SetVertexColor(FILL[1], FILL[2], FILL[3], bare and 0 or alpha)
+	local edged = (SurvivorUI_ChatLocked() or bare) and 0 or 1
 	ColorEdges(panel.edges, 0, 0, 0, math.min(1, alpha + 0.15) * edged)
 	rule:SetVertexColor(1, 1, 1, 0.07 * alpha * edged)
 	local edit = ChatFrameEditBox
@@ -198,6 +208,9 @@ local function Strength()
 		ColorEdges(edit.survivorEdges, 0, 0, 0, 1)
 	end
 end
+-- Painted again as the options change No backgrounds (Options.lua).
+SurvivorUI_Grounds = SurvivorUI_Grounds or {}
+SurvivorUI_Grounds.chat = Strength
 
 local function TabClick()
 	local window = this.window

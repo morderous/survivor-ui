@@ -9,9 +9,9 @@
 -- place comes from the map (GetPlayerMapPosition), and the yards a map unit
 -- spans are worked out from two shared places far apart.
 --
--- A cache is a golden chest; a lair its own mark (the one the guardians' bar
--- and list show, Guardians.lua), or with the marks off a horned skull, bright
--- while its guardian holds it, dimmed once it is empty. One beyond the
+-- A cache is a golden chest; a lair a horned skull (Art\PinLair, the one the
+-- world markers and Survivor Plates' guardians wear), bright while its
+-- guardian holds it, dimmed once it is empty. One beyond the
 -- minimap's edge sits on the edge, smaller and fainter, pointing the way.
 -- Hover a pin for what it is.
 -- The options' Minimap tab sets them: lairs and caches each on or off and its
@@ -19,6 +19,10 @@
 -- not, a pin out of reach on the edge or hidden. All off with "Caches on the
 -- minimap" (Modules); /sui pins prints
 -- what the addon reads, to check it.
+-- The same tab sets the hero's own marker in the minimap's middle: the game's
+-- arrow, or ours in its place (at the end of this file).
+-- The guardians' rings, where one wakes and how far from its lair you may go
+-- before it gives up, are drawn here too (the options' World markers).
 
 if SurvivorUI_Standby then return end
 
@@ -288,7 +292,8 @@ local function Settings()
 	return SurvivorUIDB
 end
 
--- A kind's pin size, "lair" or "cache": 10 to 28, 16 untouched.
+-- A kind's pin size, "lair" or "cache": 10 to 28, 16 untouched. The lairs'
+-- sizes the bosses' and the elites' too (UNIT_PIN, below: 4 larger, 2 smaller).
 function SurvivorUI_PinSize(kind)
 	local size = tonumber(Settings()[kind == "cache" and "pinCacheSize" or "pinLairSize"])
 	return size and math.max(10, math.min(28, size)) or PIN_SIZE
@@ -418,15 +423,16 @@ local UNIT_PIN = {
 }
 
 -- The guardians away from their lairs ([lair index] = the guardian's anchor)
--- and the bosses and elites, alive, from the game's anchors now.
+-- and the bosses and elites, alive, from the game's anchors now; and every
+-- lair's anchor with its guardian's, for the guardians' rings (below).
 local function Moving()
-	local away, units = {}, {}
+	local away, units, lairs = {}, {}, {}
 	if not AZS_GetWorldAnchors then
-		return away, units
+		return away, units, lairs
 	end
 	local ok, result = pcall(AZS_GetWorldAnchors, { kinds = MOVING }, nil, 256)
 	if not (ok and type(result) == "table" and result.entries) then
-		return away, units
+		return away, units, lairs
 	end
 	local byId = {}
 	for index = 1, table.getn(result.entries) do
@@ -445,8 +451,128 @@ local function Moving()
 		if guardian and entry.lairIndex then
 			away[tonumber(entry.lairIndex)] = guardian
 		end
+		if entry.kind == "guardianLair" and tonumber(entry.x) and tonumber(entry.y) then
+			table.insert(lairs, { lair = entry, guardian = entry.occupantUnitId and byId[tonumber(entry.occupantUnitId)] })
+		end
 	end
-	return away, units
+	return away, units, lairs
+end
+
+------------------------------------------------------------------------------
+-- The guardians' rings on the minimap, by the game's rule (WorldMarks.lua
+-- tells it, and draws them on the ground): round an awake guardian's lair, a
+-- circle of dots LEASH yards out, the line it gives up at, turning red in
+-- your last WARN yards ("Warning"); round the nearest guardian asleep at home,
+-- the WAKE yards it wakes at, once the zoom makes it wide enough to read round
+-- its pin. Each with its own switch, color and opacity, and "On the minimap"
+-- (the options' Range ring tab).
+-- Only the dots inside the minimap are shown: its square, or the game's
+-- round one; under the pins and the clock's strip.
+
+local LeashMap
+do
+	local WAKE, HOME, LEASH, WARN = 20, 3, 97.5, 10   -- as WorldMarks.lua's
+	local AWAKE, LATE = { 1.00, 0.62, 0.22 }, { 1.00, 0.28, 0.22 }
+	local SPACING, DOT = 5, 3
+	local ring = CreateFrame("Frame", "SurvivorUILeashRing", Minimap)
+	ring:SetFrameLevel(Minimap:GetFrameLevel() + 2)   -- the range ring's, under the clock's strip (+3)
+	ring:SetAllPoints(Minimap)
+	local dots = {}
+
+	local function On(key)
+		return SurvivorUI_WorldOn and SurvivorUI_WorldOn(key)
+	end
+
+	-- Each ring's color and opacity, as on the ground ("Wake" or "Leash", the
+	-- options' Range ring tab); always dots here, DOT wide.
+	local function Color(which)
+		if SurvivorUI_RangeColor then
+			return SurvivorUI_RangeColor(which)
+		end
+		return AWAKE[1], AWAKE[2], AWAKE[3]
+	end
+
+	local function Alpha(which)
+		return SurvivorUI_RangeLook and SurvivorUI_RangeLook(which, "Alpha") or 0.85
+	end
+
+	-- A circle of dots from used + 1 on, its middle cx, cy and radius in
+	-- pixels from the minimap's middle; how many dots used back.
+	local function Circle(used, cx, cy, radius, r, g, b, a)
+		local half = Minimap:GetWidth() / 2 - DOT / 2
+		local round = SurvivorUI_Feature and not SurvivorUI_Feature("minimap")
+		local count = math.max(16, math.min(120, math.floor(2 * math.pi * radius / SPACING)))
+		for index = 1, count do
+			local angle = 2 * math.pi * index / count
+			local x, y = cx + radius * math.cos(angle), cy + radius * math.sin(angle)
+			local inside
+			if round then
+				inside = x * x + y * y <= half * half
+			else
+				inside = math.abs(x) <= half and math.abs(y) <= half
+			end
+			if inside then
+				used = used + 1
+				local dot = dots[used]
+				if not dot then
+					dot = ring:CreateTexture(nil, "ARTWORK")
+					dot:SetTexture(ART.."PaceDot")
+					dot:SetWidth(DOT)
+					dot:SetHeight(DOT)
+					dots[used] = dot
+				end
+				dot:SetVertexColor(r, g, b, a)
+				dot:ClearAllPoints()
+				dot:SetPoint("CENTER", Minimap, "CENTER", x, y)
+				dot:Show()
+			end
+		end
+		return used
+	end
+
+	-- lairs from Moving(); nil hides them.
+	LeashMap = function(lairs, px, py, yardsAcross)
+		local used = 0
+		if lairs and px and yardsAcross and On("leashMinimap") then
+			local perYard = Minimap:GetWidth() / yardsAcross
+			local nearest, nearestYards
+			for index = 1, table.getn(lairs) do
+				local lair, guardian = lairs[index].lair, lairs[index].guardian
+				local lx, ly = tonumber(lair.x), tonumber(lair.y)
+				local east, south = WorldWay(px, py, lx, ly)
+				local yards = math.sqrt(east * east + south * south)
+				if lair.state == "awake" and On("leashReset") then
+					local r, g, b = Color("Leash")
+					local a = Alpha("Leash")
+					local left = LEASH - yards
+					if left < WARN and On("leashWarn") then
+						local share = 0.5 + 0.5 * math.max(0, math.min(1, 1 - left / WARN))
+						r = r + (LATE[1] - r) * share
+						g = g + (LATE[2] - g) * share
+						b = b + (LATE[3] - b) * share
+						a = 1
+					end
+					used = Circle(used, east * perYard, -south * perYard, LEASH * perYard, r, g, b, a)
+				elseif lair.state == "asleep" and (not nearestYards or yards < nearestYards) then
+					-- Home: within HOME yards of its lair (walking home, only a hit wakes it).
+					local gx, gy = guardian and tonumber(guardian.x), guardian and tonumber(guardian.y)
+					local away = gx and gy and math.sqrt((gx - lx) * (gx - lx) + (gy - ly) * (gy - ly)) or 0
+					if away <= HOME then
+						nearest, nearestYards = { x = lx, y = ly }, yards
+					end
+				end
+			end
+			-- Wide enough to read round the lair's pin.
+			if nearest and On("leashWake") and 2 * WAKE * perYard >= 1.6 * SurvivorUI_PinSize("lair") then
+				local east, south = WorldWay(px, py, nearest.x, nearest.y)
+				local r, g, b = Color("Wake")
+				used = Circle(used, east * perYard, -south * perYard, WAKE * perYard, r, g, b, Alpha("Wake"))
+			end
+		end
+		for index = used + 1, table.getn(dots) do
+			dots[index]:Hide()
+		end
+	end
 end
 
 local function Clock(seconds)
@@ -457,7 +583,7 @@ end
 local pinsWere                  -- the pins on or off at the last look
 
 local function Update()
-	local shown = 0
+	local shown, ringed = 0, false
 	flaggedPin = nil
 	-- The pins switched on or off (Modules, at once): the game's flag follows.
 	if Enabled() ~= pinsWere then
@@ -492,12 +618,13 @@ local function Update()
 				end
 			end
 			local lairs = settings.pinLairs ~= false and AZS_GetLairs and AZS_GetLairs() or {}
-			local marks = SurvivorUI_LairMarks and SurvivorUI_LairMarks(lairs) or {}
 			local lairSize = SurvivorUI_PinSize("lair")
 			-- The game's seconds left are from its last word; while it plays they
 			-- run on from there (Guardians.lua).
 			local since = AZS_LAIRS_UPDATED and AZS_GetPhase() == "playing" and GetTime() - AZS_LAIRS_UPDATED or 0
-			local away, units = Moving()
+			local away, units, rings = Moving()
+			LeashMap(rings, px, py, yardsAcross)
+			ringed = true
 			if settings.pinFollow == false or not px then
 				away = {}
 			end
@@ -509,19 +636,13 @@ local function Update()
 				if east and (lair.active or settings.pinEmpty ~= "hide") then
 					shown = shown + 1
 					local pin = Pin(shown)
-					-- Its mark, as the guardians' bar and list show it; with the
-					-- marks off, the skull.
-					local mark = marks[tonumber(lair.index) or index]
-					if mark and SurvivorUI_SetLairMark then
-						SurvivorUI_SetLairMark(pin.art, mark, not lair.active)
+					-- The skull, dimmed while the lair is empty.
+					pin.art:SetTexture(ART.."PinLair")
+					pin.art:SetTexCoord(0, 1, 0, 1)
+					if lair.active then
+						pin.art:SetVertexColor(1, 1, 1)
 					else
-						pin.art:SetTexture(ART.."PinLair")
-						pin.art:SetTexCoord(0, 1, 0, 1)
-						if lair.active then
-							pin.art:SetVertexColor(1, 1, 1)
-						else
-							pin.art:SetVertexColor(0.45, 0.45, 0.45)
-						end
+						pin.art:SetVertexColor(0.45, 0.45, 0.45)
 					end
 					if guardian then
 						pin.note = SurvivorUI_TF("Awake: {1}, on the move", guardian.name or lair.name or "?")
@@ -530,8 +651,7 @@ local function Update()
 					else
 						pin.note = "Empty lair"
 					end
-					local markName = SurvivorUI_LairMarkName and SurvivorUI_LairMarkName(mark)
-					pin.title = markName and SurvivorUI_TF("{1} lair", SurvivorUI_T(markName)) or SurvivorUI_T("Lair")
+					pin.title = SurvivorUI_T("Lair")
 					pin.flagged = tonumber(lair.flag) == 1 or nil
 					local left = settings.pinTimers and not lair.active and (tonumber(lair.left) or -1) - since
 					if left and left > 0 then
@@ -589,6 +709,9 @@ local function Update()
 	end
 	for index = shown + 1, table.getn(pins) do
 		pins[index]:Hide()
+	end
+	if not ringed then
+		LeashMap(nil)
 	end
 end
 
@@ -674,3 +797,240 @@ function SurvivorUI_PinsReport()
 		Indoors() and "indoors" or "outdoors", zoom, math.floor(yardsAcross + 0.5),
 		tostring(Setting("minimapZoom")), tostring(Setting("minimapInsideZoom"))))
 end
+
+------------------------------------------------------------------------------
+-- You on the minimap (the options' Minimap tab): the game's arrow, untouched,
+-- or ours in its place: a dot, a dot with a small arrow the way you walk, an
+-- arrow the way you walk, or a cross; its size (S, M, L) and its color (the
+-- range ring's colors, the class's first).
+--
+-- The game's arrow is the minimap's player model, as in 1.12: an empty name
+-- for Minimap:SetPlayerModel takes it away (the game then says it could not
+-- load the file, kept quiet), its own file brings it back. Read and tried in
+-- the game's 0.139 (2026-11-03): its facing (AZS_GetPlayerPosition's, AZS_RUN
+-- pf, the arrow's) stays one way through a run as the hero walks every way,
+-- the way the camera looks (1.6, west, in Elwynn); only the hero's model
+-- turns. So ours points the way the hero last walked, from its place in the
+-- world; till it walks, the game's way. North is up on the minimap.
+
+local GAME_ARROW = "Interface\\Minimap\\MinimapArrow.mdx"
+local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
+local MARKER_SIZE = { dot = 8, dotArrow = 8, arrow = 14, cross = 11 }   -- each one's at M
+local SHEET = 8                 -- Art\GuardianArrow: 8 by 8 cells, 64 ways, clockwise from up
+local marker                    -- our marker's frame, made the first time it shows
+local markerLook = {}           -- what it was last laid out for
+local markerParts = { dark = {}, light = {} }
+local arrowAway                 -- the game's arrow taken away by us
+local walked, walkX, walkY      -- the way last walked (radians clockwise from north), and from where
+
+-- The arrow sheet's cell nearest a way (radians clockwise from north), 0 to
+-- 63, and that cell's corners for SetTexCoord.
+function SurvivorUI_ArrowCellOf(way)
+	local cells = SHEET * SHEET
+	local k = math.mod(math.floor(way / (2 * math.pi) * cells + 0.5), cells)
+	if k < 0 then
+		k = k + cells
+	end
+	return k
+end
+
+function SurvivorUI_ArrowCell(way)
+	local k = SurvivorUI_ArrowCellOf(way)
+	local column, line = math.mod(k, SHEET), math.floor(k / SHEET)
+	return column / SHEET, (column + 1) / SHEET, line / SHEET, (line + 1) / SHEET
+end
+
+-- The marker chosen, its size (a share of M) and its color's key.
+function SurvivorUI_HeroMarker()
+	local settings = Settings()
+	return settings.heroMarker or "game", tonumber(settings.heroMarkerSize) or 1, settings.heroMarkerColor or "class"
+end
+
+-- Whether this game lets the arrow go (Minimap:SetPlayerModel).
+function SurvivorUI_HeroMarkerUsable()
+	return Minimap and Minimap.SetPlayerModel and true or false
+end
+
+function SurvivorUI_HeroMarkerColor(key)
+	key = key or Settings().heroMarkerColor or "class"
+	if key == "class" and SurvivorUI_ClassColor and UnitClass then
+		local _, class = UnitClass("player")
+		if class then
+			return SurvivorUI_ClassColor(class)
+		end
+	end
+	local list = SurvivorUI_RANGE_COLORS or {}
+	for index = 1, table.getn(list) do
+		local entry = list[index]
+		if entry[1] == key and entry[3] then
+			return entry[3][1], entry[3][2], entry[3][3]
+		end
+	end
+	return 1, 1, 1
+end
+
+-- The way last walked, measured each 0.6 yards gone (a jump of 40 yards at
+-- once, a new run or a port, starts again from there).
+local function Walk()
+	local px, py = HeroWorld()
+	if not px then
+		return
+	end
+	if not walkX then
+		walkX, walkY = px, py
+		return
+	end
+	local north, east = px - walkX, walkY - py
+	local far = north * north + east * east
+	if far > 1600 then
+		walkX, walkY = px, py
+	elseif far >= 0.36 then
+		walked = math.atan2(east, north)
+		walkX, walkY = px, py
+	end
+end
+
+-- The way ours points: the way last walked, else the game's; nil when
+-- neither is known.
+function SurvivorUI_HeroHeading()
+	if walked then
+		return walked
+	end
+	local _, _, facing = HeroWorld()
+	return facing
+end
+
+-- Our marker's pieces, for the minimap and the options' preview alike, at a
+-- way: each { art, width, height, x, y (from the middle, y up), dark (its
+-- black edge, under the rest), way (the arrow sheet's cell for it) }.
+function SurvivorUI_HeroMarkerPieces(choice, scale, way)
+	local size = (MARKER_SIZE[choice] or MARKER_SIZE.dot) * (scale or 1)
+	local pieces = {}
+	way = way or 0
+	if choice == "cross" then
+		local thick = math.max(2, math.floor(size / 4 + 0.5))
+		table.insert(pieces, { art = FLAT, width = size + 2, height = thick + 2, x = 0, y = 0, dark = true })
+		table.insert(pieces, { art = FLAT, width = thick + 2, height = size + 2, x = 0, y = 0, dark = true })
+		table.insert(pieces, { art = FLAT, width = size, height = thick, x = 0, y = 0 })
+		table.insert(pieces, { art = FLAT, width = thick, height = size, x = 0, y = 0 })
+	elseif choice == "arrow" then
+		table.insert(pieces, { art = ART.."GuardianArrow", width = size + 4, height = size + 4, x = 0, y = 0, dark = true, way = way })
+		table.insert(pieces, { art = ART.."GuardianArrow", width = size, height = size, x = 0, y = 0, way = way })
+	else
+		-- Art\HeroDot: a solid disc (Disc is a fill at 59%, for the range ring).
+		table.insert(pieces, { art = ART.."HeroDot", width = size + 3, height = size + 3, x = 0, y = 0, dark = true })
+		table.insert(pieces, { art = ART.."HeroDot", width = size, height = size, x = 0, y = 0 })
+		if choice == "dotArrow" then
+			-- Just ahead of the dot, its tail under it.
+			local tip = size * 0.9
+			local reach = size / 2 + tip * 0.25
+			local x, y = reach * math.sin(way), reach * math.cos(way)
+			table.insert(pieces, { art = ART.."GuardianArrow", width = tip + 4, height = tip + 4, x = x, y = y, dark = true, way = way })
+			table.insert(pieces, { art = ART.."GuardianArrow", width = tip, height = tip, x = x, y = y, way = way })
+		end
+	end
+	return pieces
+end
+
+-- The pieces on the minimap: the dark ones a layer under the rest.
+local function LayOut(choice, scale, way)
+	local pieces = SurvivorUI_HeroMarkerPieces(choice, scale, way)
+	local r, g, b = SurvivorUI_HeroMarkerColor()
+	local used = { dark = 0, light = 0 }
+	for index = 1, table.getn(pieces) do
+		local piece = pieces[index]
+		local kind = piece.dark and "dark" or "light"
+		used[kind] = used[kind] + 1
+		local part = markerParts[kind][used[kind]]
+		if not part then
+			part = marker:CreateTexture(nil, piece.dark and "BORDER" or "ARTWORK")
+			markerParts[kind][used[kind]] = part
+		end
+		part:SetTexture(piece.art)
+		if piece.way then
+			part:SetTexCoord(SurvivorUI_ArrowCell(piece.way))
+		else
+			part:SetTexCoord(0, 1, 0, 1)
+		end
+		if piece.dark then
+			part:SetVertexColor(0, 0, 0, 0.85)
+		else
+			part:SetVertexColor(r, g, b, 1)
+		end
+		part:SetWidth(piece.width)
+		part:SetHeight(piece.height)
+		part:ClearAllPoints()
+		part:SetPoint("CENTER", marker, "CENTER", piece.x, piece.y)
+		part:Show()
+	end
+	for kind, pool in pairs(markerParts) do
+		for index = used[kind] + 1, table.getn(pool) do
+			pool[index]:Hide()
+		end
+	end
+end
+
+-- Each frame while it shows: the way walked, and the pieces laid out again
+-- when the choice, its size, its color or the arrow's cell changed.
+local function MarkerUpdate()
+	local choice, scale, color = SurvivorUI_HeroMarker()
+	local way, cell = 0, 0
+	if choice == "arrow" or choice == "dotArrow" then
+		Walk()
+		cell = SurvivorUI_ArrowCellOf(SurvivorUI_HeroHeading() or 0)
+		-- The cell's own way, so the arrow and its place agree.
+		way = cell * 2 * math.pi / (SHEET * SHEET)
+	end
+	local look = markerLook
+	if look.choice ~= choice or look.scale ~= scale or look.color ~= color or look.cell ~= cell then
+		look.choice, look.scale, look.color, look.cell = choice, scale, color, cell
+		LayOut(choice, scale, way)
+	end
+end
+
+-- The game's arrow away while ours shows, back once the game's is chosen.
+local function ApplyMarker()
+	if not SurvivorUI_HeroMarkerUsable() then
+		return
+	end
+	if (Settings().heroMarker or "game") ~= "game" then
+		if not marker then
+			marker = CreateFrame("Frame", nil, Minimap)
+			marker:SetFrameLevel(Minimap:GetFrameLevel() + 6)
+			marker:SetWidth(1)
+			marker:SetHeight(1)
+			marker:SetPoint("CENTER", Minimap, "CENTER", 0, 0)
+			marker:SetScript("OnUpdate", MarkerUpdate)
+		end
+		markerLook.choice = nil
+		marker:Show()
+		pcall(Minimap.SetPlayerModel, Minimap, "")
+		arrowAway = true
+	else
+		if marker then
+			marker:Hide()
+		end
+		if arrowAway then
+			pcall(Minimap.SetPlayerModel, Minimap, GAME_ARROW)
+			arrowAway = nil
+		end
+	end
+end
+
+-- field: "look" ("game", "dot", "dotArrow", "arrow", "cross"), "size" (a
+-- share of M) or "color" (a key of SurvivorUI_RANGE_COLORS, or "class").
+function SurvivorUI_SetHeroMarker(field, value)
+	local settings = Settings()
+	if field == "size" then
+		settings.heroMarkerSize = value ~= 1 and value or nil
+	elseif field == "color" then
+		settings.heroMarkerColor = value ~= "class" and value or nil
+	else
+		settings.heroMarker = value ~= "game" and value or nil
+	end
+	ApplyMarker()
+end
+
+local markerLoader = CreateFrame("Frame")
+markerLoader:RegisterEvent("PLAYER_ENTERING_WORLD")
+markerLoader:SetScript("OnEvent", ApplyMarker)

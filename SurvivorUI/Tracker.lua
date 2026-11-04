@@ -5,13 +5,15 @@
 -- run stands and the lives left, the time gone against the zone's full length
 -- (the time gone alone in endless mode), a green timeline with a pip for every boss, every boss with the
 -- second it comes, colored by where it stands (grey to come, white next,
--- orange alive, green slain), and the level's progress. It stands in for the game's own clock, which is put away while it
+-- orange alive, green slain), the guardians and the elites. It stands in for the game's own clock, which is put away while it
 -- shows. Its size is fixed for the run: every line keeps its place, shown or
 -- not, so nothing jumps as the run goes on.
 --
 -- Needs the game's addon API (AZS_RUN, AZS_SCHEDULE); without it nothing
 -- shows. Hold Alt and drag it to move it; the place is kept. /sui tracker
--- hides it and brings the game's clock back.
+-- hides it and brings the game's clock back. Or, as chosen (the options, Run
+-- tracker: Look, Dial), the Tracker Ring (Dial.lua) in its frame, in place of the
+-- lines.
 
 if SurvivorUI_Standby then return end
 
@@ -244,17 +246,18 @@ head.now:SetTexture(FLAT)
 head.now:SetWidth(2)
 head.now:SetHeight(10)
 head.now:SetVertexColor(1, 1, 1, 0.95)
-head.level = HeadText(9)
-head.xp = HeadBar(5)
-head.xp:SetStatusBarColor(0.58, 0.30, 0.85, 1)
 head.ticks = {}
 head.bosses = {}
 
--- Across the frame at y, centered; returns the y under it.
+-- Across the frame at y, centered; returns the y under it, the foot of what
+-- the tracker shows so far (head.foot: room kept for a line not shown is not
+-- shown, so the tracker ends at its last line, the guardians' list right
+-- under it).
 local function Put(object, y, height)
 	object:ClearAllPoints()
 	object:SetPoint("TOP", head, "TOP", 0, y)
 	object:Show()
+	head.foot = y - height
 	return y - height
 end
 
@@ -333,8 +336,10 @@ end
 -- Affixes.lua). Each in a thin border of its color over a dark wash of it,
 -- short by default (N or the Heroic level's numeral, a symbol for endless
 -- and each affix: Art\Endless, Art\Affix*), or in words (the options,
--- Run tracker: Tags in words); the full name under the mouse. Run History's
--- copy of the tracker wears them too.
+-- Run tracker: Difficulty and affixes, Words); the full name under the
+-- mouse. Either side can be put away there (Off, since v3.0.56: the
+-- difficulty with endless mode, or the affixes). Run History's copy of the
+-- tracker wears them too.
 local TAG_COLORS = {
 	normal  = { 0.62, 0.62, 0.66 },
 	heroic  = { 1.00, 0.48, 0.18 },
@@ -400,13 +405,21 @@ end
 -- and right (from its right edge, 0 or less): the difficulty (heroic, nil
 -- before the game's 0.121) and endless mode at the left, the affixes at the
 -- right, first to last; or all of them together in the middle (the options,
--- Run tracker: Tags, Centered). tags = { difficulty, endless, affixes = {} },
--- made by the caller. The left edge for how the run stands comes back (after
--- the left ones, or after the last when centered), and whether the row holds
--- anything.
-function SurvivorUI_TagRow(tags, frame, heroic, endless, affixes, left, right, y)
-	local words = SurvivorUIDB and SurvivorUIDB.trackerTagWords == true
-	local named = SurvivorUIDB and SurvivorUIDB.trackerAffixWords == true
+-- Run tracker: Tags, Centered; always, with centered; short, never in words;
+-- the Tracker Ring draws its own, Dial.lua).
+-- tags = { difficulty, endless, affixes = {} }, made by the caller. The left
+-- edge for how the run stands comes back (after the left ones, or after the
+-- last when centered), and whether the row holds anything.
+function SurvivorUI_TagRow(tags, frame, heroic, endless, affixes, left, right, y, centered, short)
+	local words = not short and SurvivorUIDB and SurvivorUIDB.trackerTagWords == true
+	local named = not short and SurvivorUIDB and SurvivorUIDB.trackerAffixWords == true
+	-- Either side put away (Off): the difficulty and endless mode, the affixes.
+	if SurvivorUIDB and SurvivorUIDB.trackerDifficulty == false then
+		heroic, endless = nil, nil
+	end
+	if SurvivorUIDB and SurvivorUIDB.trackerAffixes == false then
+		affixes = nil
+	end
 	-- Each tag in its words or symbol, and its width; then where it stands.
 	local row = {}
 	heroic = tonumber(heroic)
@@ -446,7 +459,7 @@ function SurvivorUI_TagRow(tags, frame, heroic, endless, affixes, left, right, y
 	end
 	local total = table.getn(row)
 	local x = left
-	if SurvivorUIDB and SurvivorUIDB.trackerTagsCentered == true then
+	if centered or (SurvivorUIDB and SurvivorUIDB.trackerTagsCentered == true) then
 		local wide = -3
 		for each = 1, total do
 			wide = wide + row[each].width + 3
@@ -877,6 +890,7 @@ local function Draw(game, phase)
 	end
 
 	local y = 0
+	head.foot = nil
 
 	-- The zone's name centered, in green; under it the run's tags, its
 	-- difficulty and endless mode at the left, its affixes at the right, and
@@ -1058,44 +1072,29 @@ local function Draw(game, phase)
 		head.endlessSlain:Hide()
 	end
 	-- The guardians' bar, when it stands here (Guardians.lua).
+	local above = y
 	if SurvivorUI_GuardianBar then
 		y = SurvivorUI_GuardianBar(head, y)
 	end
-	-- The elites alive, under it.
+	-- The elites alive, under it (with no elite, their room kept or not).
 	y = EliteRow(y)
-	-- The level, and how far to the next, at the bottom; the time to the next
-	-- level beside it (XpBar.lua). Each as chosen (Run tracker, XP bar).
-	if not (SurvivorUIDB and SurvivorUIDB.trackerXp == false) then
-		local xp, xpNeeded = Num(game.xp), Num(game.xpn)
-		local level = "|cffbf8cff"..SurvivorUI_TF("Lv. {1}", Num(game.lvl)).."|r"
-		-- The levels waiting (Store Level-Ups, LevelUp.lua): "Lv. 12 +3".
-		local stored = SurvivorUI_StoredLevels and SurvivorUI_StoredLevels() or 0
-		if stored > 0 then
-			level = level.." |cffffd100+"..stored.."|r"
-		end
-		if not (SurvivorUIDB and SurvivorUIDB.trackerXpEta == false) and SurvivorUI_XpNextText then
-			local nextIn = SurvivorUI_XpNextText()
-			if nextIn then
-				level = level.."  |cff9a9a9a"..nextIn.."|r"
-			end
-		end
-		head.level:SetText(level)
-		-- A little room over it: the guardians' bar or the elites end right there.
-		y = Put(head.level, y - 6, 13)
-		head.xp:SetValue(xpNeeded > 0 and xp / xpNeeded or 0)
-		y = Put(head.xp, y, 6)
-	else
-		head.level:Hide()
-		head.xp:Hide()
+	if y ~= above then
+		head.foot = y
 	end
+	-- (The level and its experience left the tracker in v3.0.56: the XP bar,
+	-- XpBar.lua, shows them.)
 
-	head:SetHeight(-y)
+	-- Its last line its foot: the room kept under it for lines to come (an
+	-- endless run's) stays out until they come. Under it the guardians' list
+	-- when it hangs there (Guardians.lua), inside the frame and its shade, so
+	-- what hangs under the tracker (the build list) stays clear of it.
+	head.content = -(head.foot or y)
+	head:SetHeight(head.content + (SurvivorUI_GuardianListRoom and SurvivorUI_GuardianListRoom(head.content) or 0))
 end
 -- For the last runs (RunHistory.lua): the tracker as it stands, to be drawn
 -- again as it was when the run ended. The zone and how the run stands, the
 -- clock against the zone's length, each boss with its second, where it stands
--- and when it fell, the guardians (Guardians.lua) and the elites alive, the
--- level and its experience.
+-- and when it fell, the guardians (Guardians.lua) and the elites alive.
 function SurvivorUI_TrackerSnapshot()
 	local game, phase = Game()
 	if not game then
@@ -1172,13 +1171,66 @@ function SurvivorUI_TrackerSnapshot()
 			shot.elites = { total = total, hurt = hurt, slots = slots, shares = shares }
 		end
 	end
-	if not (SurvivorUIDB and SurvivorUIDB.trackerXp == false) then
-		local xp, xpNeeded = Num(game.xp), Num(game.xpn)
-		shot.level = Num(game.lvl)
-		shot.xp = xpNeeded > 0 and math.min(1, xp / xpNeeded) or 0
-		shot.stored = SurvivorUI_StoredLevels and SurvivorUI_StoredLevels() or 0
-	end
 	return shot
+end
+
+------------------------------------------------------------------------------
+-- The look (the options, Run tracker: Look): the lines above (Classic, the
+-- default), or the Tracker Ring (Dial.lua, trackerLook "dial"), drawn in this
+-- same frame in place of the lines, so it keeps the tracker's place, size,
+-- move mode and switch. The frame takes the dial's height, its hung list's
+-- room under it as for the lines, so what hangs under the tracker moves too.
+
+local shownLook                   -- the look drawn last: "classic", "dial"
+
+-- The lines away, for the dial; Draw shows each again.
+local function HideLines()
+	head.zone:Hide()
+	head.state:Hide()
+	head.clock:SetText("")
+	head.timeline:Hide()
+	head.shade:Hide()
+	for _, line in pairs(head.bosses) do
+		line:Hide()
+	end
+	if head.nextBoss then
+		head.nextBoss:Hide()
+		head.endlessSlain:Hide()
+	end
+	head.tags.difficulty:Hide()
+	head.tags.endless:Hide()
+	for _, tag in pairs(head.tags.affixes) do
+		tag:Hide()
+	end
+	HideElites()
+	-- The guardians' bar or count: it gives way to the dial (Guardians.lua).
+	if SurvivorUI_GuardianBar then
+		SurvivorUI_GuardianBar(head, 0)
+	end
+end
+
+local function DrawLook(game, phase)
+	if SurvivorUI_DrawDial and SurvivorUI_DialOn and SurvivorUI_DialOn() then
+		if shownLook ~= "dial" then
+			shownLook = "dial"
+			HideLines()
+		end
+		head.content = SurvivorUI_DrawDial(game, phase)
+		head:SetHeight(head.content + (SurvivorUI_GuardianListRoom and SurvivorUI_GuardianListRoom(head.content) or 0))
+		return
+	end
+	if shownLook == "dial" then
+		-- Back from the dial: its shade, and the coin by the clock, drawn anew.
+		if SurvivorUI_HideDial then
+			SurvivorUI_HideDial()
+		end
+		head.shade:Show()
+		head.coin:ClearAllPoints()
+		head.coin:SetPoint("RIGHT", head.clock, "LEFT", -8, 0)
+		head.coin.pays = nil
+	end
+	shownLook = "classic"
+	Draw(game, phase)
 end
 
 local elapsed = 0
@@ -1190,7 +1242,7 @@ head:SetScript("OnUpdate", function()
 	elapsed = 0
 	local game, phase = Game()
 	if game then
-		Draw(game, phase)
+		DrawLook(game, phase)
 	end
 end)
 
@@ -1207,19 +1259,27 @@ watcher:SetScript("OnUpdate", function()
 	local showing = game and Settings().tracker
 	if showing then
 		if not head:IsShown() then
-			Draw(game, phase)
+			DrawLook(game, phase)
 			head:Show()
 		end
 	elseif head:IsShown() then
 		head:Hide()
 	end
-	-- One experience bar is enough: the tracker's, or the XP bar of its own.
-	-- Away whenever one of them is on, before the run starts too; back only
-	-- with both off.
+	-- Off, its place the guardians' list's, hung there: as tall as the list,
+	-- so what hangs under the tracker stays clear of it.
+	if not showing and SurvivorUI_GuardianListRoom then
+		local room = SurvivorUI_GuardianListRoom(nil)
+		if room > 0 then
+			head:SetHeight(room)
+		end
+	end
+	-- One experience bar is enough: the XP bar of its own (XpBar.lua) puts the
+	-- game's away, before the run starts too; back with it off (the tracker
+	-- has no level line since v3.0.56).
 	local bar = getglobal("MainMenuExpBar")
 	if bar then
 		local settings = Settings()
-		local want = (settings.tracker or settings.xpBar) and 0 or 1
+		local want = settings.xpBar and 0 or 1
 		if bar:GetAlpha() ~= want then
 			bar:SetAlpha(want)
 			if bar.EnableMouse then

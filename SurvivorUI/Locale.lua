@@ -17,32 +17,99 @@ if SurvivorUI_Standby then return end
 
 local LOCALE = SurvivorUI_LOCALE or {}
 
--- The game's language: told by the hero's race as the game names it
--- (AZS_ZONE.rname), read again whenever that name changes (the game set to
--- another language between runs). Until it is known, every language is tried.
+-- The game's language: its meter API names it (AZS_GetMeterCapabilities,
+-- languageCode, from the game's 0.139), as the files run and before any run,
+-- Russian apart from Ukrainian too; asked again at most once a second. A game
+-- without it is told by the hero's race as the game names it (AZS_ZONE.rname),
+-- read again whenever that name changes (the game set to another language
+-- between runs). Until it is known, every language is tried.
 local language
 local raceSeen
+local fromGame, askedAt
 
-local function Languages()
-	local race = AZS_ZONE and AZS_ZONE.rname
-	if race and race ~= raceSeen then
-		raceSeen = race
-		local matches, which = 0, nil
-		for code, data in pairs(LOCALE) do
-			for _, name in pairs(data.races or {}) do
-				if name == race then
-					matches, which = matches + 1, code
+local function FromGame()
+	if not AZS_GetMeterCapabilities then
+		return nil
+	end
+	local now = GetTime()
+	if askedAt and now - askedAt < 1 then
+		return fromGame
+	end
+	askedAt = now
+	local ok, capabilities = pcall(AZS_GetMeterCapabilities)
+	local code = ok and type(capabilities) == "table" and capabilities.languageCode
+	if type(code) == "string" and code ~= "" then
+		fromGame = code
+	end
+	return fromGame
+end
+
+-- By the race: Russian and Ukrainian name five races alike (Орк, Дворф,
+-- Нежить, Таурен, Гном). The hero's other words, which the game also gives in
+-- its language (its class, its zone and the zone's line under it), tell them
+-- apart by the letters only one of the two writes.
+local OWN_LETTERS = {
+	ru = { "ы", "э", "ъ", "ё", "Э", "Ё" },
+	uk = { "і", "ї", "є", "ґ", "І", "Ї", "Є", "Ґ" },
+}
+
+local function ByLetters(candidates)
+	local zone = AZS_ZONE or {}
+	local words = (zone.rname or "").." "..(zone.cname or "").." "..(zone.zname or "").." "..(zone.zsub or "")
+	local which
+	for code in pairs(candidates) do
+		for _, letter in pairs(OWN_LETTERS[code] or {}) do
+			if string.find(words, letter, 1, true) then
+				if which and which ~= code then
+					return nil
 				end
+				which = code
+				break
 			end
 		end
-		-- "Orc" is Orc in several: a name of one language only says which; a
-		-- name of none is English's.
-		if matches == 1 then
-			language = which
-		elseif matches == 0 then
-			language = nil
+	end
+	return which
+end
+
+local function ByRace()
+	local race = AZS_ZONE and AZS_ZONE.rname
+	if not race or race == raceSeen then
+		return
+	end
+	raceSeen = race
+	local matches, which, candidates = 0, nil, {}
+	for code, data in pairs(LOCALE) do
+		for _, name in pairs(data.races or {}) do
+			if name == race then
+				matches, which = matches + 1, code
+				candidates[code] = true
+			end
 		end
 	end
+	-- "Orc" is Orc in several: a name of one language only says which; a
+	-- name of none is English's. Several keep the language as it was, unless
+	-- the letters tell Russian from Ukrainian.
+	if matches == 1 then
+		language = which
+	elseif matches == 0 then
+		language = nil
+	else
+		language = ByLetters(candidates) or language
+	end
+end
+
+local function Told()
+	local code = FromGame()
+	if code then
+		-- English, or a language LocaleData does not have, is English here.
+		language = LOCALE[code] and code or nil
+	else
+		ByRace()
+	end
+end
+
+local function Languages()
+	Told()
 	if language then
 		return { LOCALE[language] }
 	end
@@ -50,9 +117,9 @@ local function Languages()
 end
 
 -- The game's language as LocaleData names it ("de", "ru", "zh"...): nil for
--- English, or until the hero's race has told.
+-- English, or until the game has told.
 function SurvivorUI_Language()
-	Languages()
+	Told()
 	return language
 end
 
@@ -161,10 +228,11 @@ end
 
 ------------------------------------------------------------------------------
 -- The other way: the addon's own words in the game's language, for the
--- languages the addon is translated into (Locale_zh.lua: Chinese, its game
--- terms the game's own words, the rest translated for it). Every text the
--- addon shows goes through these; in any other language, or until the
--- hero's race has told, it stays English.
+-- languages the addon is translated into (Locale_zh.lua: Chinese,
+-- Locale_ru.lua: Russian; their game terms the game's own words, the rest
+-- translated for them). Every text the addon shows goes through these; in
+-- any other language, or until the game has told its language, it stays
+-- English.
 --
 --   SurvivorUI_T("Biggest Crits")                  "最高暴击"
 --   SurvivorUI_TF("{1} more to find", 3)          "还有3件待发现"
@@ -172,11 +240,14 @@ end
 
 -- The table of the game's language, if the addon speaks it.
 local function Words()
+	-- Not before the run's zone has come, even with the language known: texts
+	-- set before it stay English, so the pass below can tell each one's English
+	-- (and put it back, should the language change).
 	local words = SurvivorUI_WORDS
 	if not (words and AZS_ZONE and AZS_ZONE.rname) then
 		return nil
 	end
-	Languages()
+	Told()
 	return language and words[language]
 end
 
@@ -278,8 +349,8 @@ end
 -- The texts already on screen as the language turns up (set before it was
 -- known, as the files ran) put in it: every font string of the addon's
 -- frames whose text is one of its words, the options window's left out
--- (it stays English for now, not half of it in another language). Each
--- keeps its English, so the game set back to English puts that back.
+-- (it has words of its own, and its own pass: below). Each keeps its
+-- English, so the game set back to English puts that back.
 local function Ours(frame)
 	local at = frame
 	while at do
@@ -302,7 +373,8 @@ local function Retell(frame)
 	local regions = { frame:GetRegions() }
 	for index = 1, table.getn(regions) do
 		local region = regions[index]
-		if region.GetObjectType and region:GetObjectType() == "FontString" then
+		-- A font string of the options window's speaks its own words (below).
+		if not region.suiSet and region.GetObjectType and region:GetObjectType() == "FontString" then
 			local text = region:GetText()
 			if text then
 				-- Its English kept, unless its text was changed since.
@@ -322,14 +394,54 @@ local function Retell(frame)
 	end
 end
 
+-- Russian is written in the face chosen (the global font, a piece's own) when
+-- that face has every letter the addon writes in Russian: А to я, Ё and ё, and
+-- the signs its Russian uses besides (« » — ·; a run's number is "#", not
+-- "№", which Morpheus, Skurri and Expressway lack). A face short of one would
+-- draw it from a face of the game's, and the engine mixes up a face's letters
+-- with those it borrows from another (SurvivorUI.lua, the global font), or
+-- draw nothing there: such a face gives way to the addon's Noto Sans SC, whose
+-- Cyrillic is whole. The faces that have them all (SurvivorUI_WRITERS.ru), by
+-- their cmaps, read with fontTools on 2026-11-04 (the game's 0.140): the
+-- addon's Fonts folder, and the game's own faces as the game reads them, Arial
+-- Narrow out of its patch.MPQ, and Friz Quadrata, Morpheus and Skurri out of
+-- AzerothSurvivors.exe, which carries them with Cyrillic ("Friz Quadrata TT",
+-- "Morpheus Cyr", "Skurri Cyr"; the 1.12 files in patch.MPQ have none):
+--   all of them: Friz Quadrata, Arial Narrow, Fira Sans, Noto Sans, Russo
+--     One, Noto Sans SC; and, short only of a № the addon no longer writes,
+--     Morpheus, Skurri, Expressway (dropped in, not shipped);
+--   no Cyrillic: Exo, Cinzel Decorative, Barlow Condensed, Barlow Semi
+--     Condensed.
+-- A face in no list is taken for one short of them.
+SurvivorUI_LANGUAGE_FONTS = SurvivorUI_LANGUAGE_FONTS or {}
+SurvivorUI_LANGUAGE_FONTS.ru = "Interface\\AddOns\\SurvivorUI\\Fonts\\NotoSansSC-Medium.ttf"
+SurvivorUI_WRITERS = SurvivorUI_WRITERS or {}
+SurvivorUI_WRITERS.ru = {
+	["fonts\\frizqt__.ttf"] = true,
+	["fonts\\arialn.ttf"] = true,
+	["interface\\addons\\survivorui\\fonts\\firasans-medium.ttf"] = true,
+	["interface\\addons\\survivorui\\fonts\\notosans-medium.ttf"] = true,
+	["interface\\addons\\survivorui\\fonts\\russoone-regular.ttf"] = true,
+	["interface\\addons\\survivorui\\fonts\\notosanssc-medium.ttf"] = true,
+	["fonts\\morpheus.ttf"] = true,
+	["fonts\\skurri.ttf"] = true,
+	["interface\\addons\\survivorui\\fonts\\expressway.ttf"] = true,
+}
+
 local spoken = false
 local languageWatch = CreateFrame("Frame")
-local zoneSeen
+local zoneSeen, languageSeen
 languageWatch:SetScript("OnUpdate", function()
-	if AZS_ZONE_UPDATED == zoneSeen then
+	-- The language changed without a new zone (the game's API answering, or
+	-- its setting changed) is seen here too, and its face worn.
+	Told()
+	if AZS_ZONE_UPDATED == zoneSeen and language == languageSeen then
 		return
 	end
-	zoneSeen = AZS_ZONE_UPDATED
+	zoneSeen, languageSeen = AZS_ZONE_UPDATED, language
+	if SurvivorUI_FitGlobalFont then
+		SurvivorUI_FitGlobalFont()
+	end
 	local now = Words() or false
 	if now == spoken then
 		return
@@ -343,3 +455,234 @@ languageWatch:SetScript("OnUpdate", function()
 		frame = EnumerateFrames(frame)
 	end
 end)
+
+------------------------------------------------------------------------------
+-- The options window in the game's language: its words in a table of their
+-- own (Locale_zh_Options.lua: SurvivorUI_OPTION_WORDS.zh, the window's
+-- English to the language's), the rest of the addon's (Locale_zh.lua) after
+-- them. A language with no table of the window's own leaves it all English.
+--
+-- The window is made in English as the files run, every piece laid out by
+-- its English. Each of its font strings is spoken (SurvivorUI_Spoken): what
+-- is set on it goes through the window's words as it is set, its English
+-- kept. As it opens in a language the addon has its words in (Options.lua
+-- asks, SurvivorUI_SpeakOptions), every text already in it is set again, in
+-- that language; the game set back to English, in English. A text not found
+-- is looked for again in capitals as it was written ("NUMBERS" by
+-- "Numbers"), as a name of the game's (SurvivorUI_Native), with its numbers
+-- out ("6 px" by "{1} px"), and piece by piece when it is a list ("Simple /
+-- Advanced", "Auto Shot, 32 yd"). Two texts that read the same in English and
+-- not in another language are told apart by a word before them, as
+-- SurvivorUI_T's: "@grow:Left" (the way a row grows) is "Left" in English.
+--
+--   SurvivorUI_OT("Reset this page")         "重置本页"
+--   SurvivorUI_OTF("{1} found.", 3)         "找到 3 项。"
+
+local spokenIn                  -- the language the window speaks: nil for English
+local said, saidCount = {}, 0   -- its texts so far, as they read in it
+local capitals                  -- the tables' words by their keys in capitals
+local JOINTS = { [" / "] = "(.-) / ", [", "] = "(.-), " }
+
+local function Found(text, own, rest)
+	local found = own[text] or (rest and rest[text])
+	if found or string.upper(text) ~= text or not string.find(text, "%a") then
+		return found
+	end
+	if not capitals then
+		capitals = {}
+		for key, value in pairs(rest or {}) do
+			capitals[string.upper(key)] = value
+		end
+		for key, value in pairs(own) do
+			capitals[string.upper(key)] = value
+		end
+	end
+	return capitals[text]
+end
+
+-- A text with its numbers out, {1} to {9}, its color codes kept: "{1} px"
+-- for "6 px", and the numbers.
+local function Shape(text)
+	local codes, values = {}, {}
+	local shape = string.gsub(text, "|c%x%x%x%x%x%x%x%x", function(code)
+		table.insert(codes, code)
+		return "\1"
+	end)
+	shape = string.gsub(shape, "%d[%d,%.]*", function(number)
+		local _, _, digits, tail = string.find(number, "^(.-)([,%.]*)$")
+		table.insert(values, digits)
+		return "{"..table.getn(values).."}"..tail
+	end)
+	local index = 0
+	shape = string.gsub(shape, "\1", function()
+		index = index + 1
+		return codes[index]
+	end)
+	return shape, values
+end
+
+-- A text without the words that tell it apart ("@grow:Left" as "Left"): in
+-- English, or in a language with no words of its own for it.
+local function Plain(text)
+	if type(text) == "string" and string.find(text, "@", 1, true) then
+		return (string.gsub(text, "@%a+:", ""))
+	end
+	return text
+end
+
+local function Spoken(text)
+	-- No letters (a number, a clock, words already in the language): as it is.
+	if not string.find(text, "%a") then
+		return text
+	end
+	local own = SurvivorUI_OPTION_WORDS[spokenIn]
+	local rest = SurvivorUI_WORDS and SurvivorUI_WORDS[spokenIn]
+	local found = Found(text, own, rest)
+	if found then
+		return found
+	end
+	-- A name of the game's (a spell of the build list's preview): its own.
+	if string.len(text) < 40 and not string.find(text, "[%d|;,.!?]") then
+		local native = SurvivorUI_Native(text)
+		if native ~= text then
+			return native
+		end
+	end
+	if string.find(text, "%d") and not string.find(text, "{%d}") then
+		local shape, values = Shape(text)
+		local form = table.getn(values) <= 9 and Found(shape, own, rest)
+		if form then
+			return (string.gsub(form, "{(%d)}", function(index) return values[tonumber(index)] or "" end))
+		end
+	end
+	-- A list ("Simple / Advanced", "Auto Shot, 32 yd"): each piece found, or
+	-- with no letters, joined as the language joins them (its own ", ").
+	for joint, pattern in pairs(JOINTS) do
+		if string.find(text, joint, 1, true) then
+			local pieces, changed, whole = {}, false, true
+			for piece in string.gfind(text..joint, pattern) do
+				local shown = SurvivorUI_OT(piece)
+				changed = changed or shown ~= piece
+				whole = whole and (shown ~= piece or not string.find(piece, "%a%a"))
+				table.insert(pieces, shown)
+			end
+			if changed and whole then
+				return table.concat(pieces, own[joint] or joint)
+			end
+		end
+	end
+	return Plain(text)
+end
+
+function SurvivorUI_OT(text)
+	if not spokenIn or type(text) ~= "string" or text == "" then
+		return Plain(text)
+	end
+	local known = said[text]
+	if not known then
+		known = Spoken(text)
+		if saidCount >= 3000 then
+			said, saidCount = {}, 0
+		end
+		said[text], saidCount = known, saidCount + 1
+	end
+	return known
+end
+
+-- A text with values in it, {1} to {4} where each goes, as SurvivorUI_TF.
+function SurvivorUI_OTF(text, ...)
+	local values = arg
+	return (string.gsub(SurvivorUI_OT(text), "{(%d)}", function(index)
+		local value = values[tonumber(index)]
+		return value ~= nil and tostring(value) or ""
+	end))
+end
+
+-- Set on a font string: in a language whose letters its face lacks (one of
+-- the previews' faces, Latin only), the language's own face (SurvivorUI.lua's
+-- SurvivorUI_LANGUAGE_FONTS) once the addon wears it.
+local function Put(region, text)
+	if spokenIn and type(text) == "string" and string.find(text, "[\128-\255]") then
+		local face = SurvivorUI_LANGUAGE_FONTS and SurvivorUI_LANGUAGE_FONTS[spokenIn]
+		local path, size, flags = region:GetFont()
+		if face and path and size and string.lower(path) ~= string.lower(face)
+			and string.lower(SurvivorUI_FONT or "") == string.lower(face) then
+			region:SetFont(face, size, flags)
+		end
+	end
+	region.suiSet(region, text)
+end
+
+local function Said(region, text)
+	region.suiMake = nil
+	if type(text) == "string" then
+		region.suiEnglish = text
+		text = SurvivorUI_OT(text)
+	else
+		region.suiEnglish = nil
+	end
+	Put(region, text)
+end
+
+-- A font string of the window's: whatever is set on it from now on in the
+-- window's words, its English kept. Given back.
+function SurvivorUI_Spoken(region)
+	if region and not region.suiSet then
+		region.suiSet = region.SetText
+		region.suiEnglish = region:GetText()
+		region.SetText = Said
+	end
+	return region
+end
+
+-- A text made of pieces (a name in a sentence), by Make: set now, and made
+-- again as the language changes.
+function SurvivorUI_SpokenBy(region, Make)
+	SurvivorUI_Spoken(region)
+	Put(region, Make())
+	region.suiEnglish, region.suiMake = nil, Make
+end
+
+local function Speak(frame)
+	local regions = { frame:GetRegions() }
+	for index = 1, table.getn(regions) do
+		local region = regions[index]
+		if region.GetObjectType and region:GetObjectType() == "FontString" then
+			SurvivorUI_Spoken(region)
+			if region.suiMake then
+				Put(region, region.suiMake())
+			elseif region.suiEnglish then
+				region:SetText(region.suiEnglish)
+			end
+		end
+	end
+	local children = { frame:GetChildren() }
+	for index = 1, table.getn(children) do
+		Speak(children[index])
+	end
+end
+
+-- The window's frames (those given) in the game's language, when the addon
+-- has the window's words in it, else in English: every text in them set
+-- again. True when the language changed.
+function SurvivorUI_SpeakOptions(...)
+	local now = Words() and language
+	if now and not (SurvivorUI_OPTION_WORDS and SurvivorUI_OPTION_WORDS[now]) then
+		now = nil
+	end
+	if now == spokenIn then
+		return false
+	end
+	spokenIn, said, saidCount, capitals = now, {}, 0, nil
+	for index = 1, table.getn(arg) do
+		if arg[index] then
+			Speak(arg[index])
+		end
+	end
+	return true
+end
+
+-- The language the window speaks: nil for English.
+function SurvivorUI_OptionsLanguage()
+	return spokenIn
+end

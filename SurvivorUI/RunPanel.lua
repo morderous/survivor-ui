@@ -311,7 +311,7 @@ local function Title(text, tip)
 	handle:SetScript("OnDragStop", function() panel:StopMovingOrSizing() SavePanel() end)
 	handle:SetScript("OnEnter", function()
 		Beside(this, panel)
-		GameTooltip:SetText(text, 1, 0.82, 0)
+		GameTooltip:SetText(SurvivorUI_T(text), 1, 0.82, 0)
 		GameTooltip:AddLine(SurvivorUI_MoveHint(), 1, 1, 1)
 		GameTooltip:AddLine(SurvivorUI_T(this.tip), 0.7, 0.7, 0.7, 1)
 		GameTooltip:Show()
@@ -998,6 +998,19 @@ critBox:SetBackdrop({ bgFile = FLAT })
 critBox:SetBackdropColor(0.04, 0.04, 0.07, 0.55)
 critBox:SetMovable(true)
 critBox:Hide()
+
+-- No backgrounds (the options' No backgrounds, Experimental): This Run's and
+-- Biggest Crits' shade away, each unless kept ("run", "crits"); the rows keep
+-- their washes and the crits' strip its own. Painted as the world loads and
+-- as the options change it (Options.lua: every SurvivorUI_Grounds).
+SurvivorUI_Grounds = SurvivorUI_Grounds or {}
+function SurvivorUI_Grounds.run()
+	local db = SurvivorUIDB
+	local bare = db and db.noBackgrounds
+	local kept = db and db.noBackgroundsOff or {}
+	panel:SetBackdropColor(0.04, 0.04, 0.07, (bare and not kept.run) and 0 or 0.55)
+	critBox:SetBackdropColor(0.04, 0.04, 0.07, (bare and not kept.crits) and 0 or 0.55)
+end
 
 local function CritsShown()
 	return SurvivorUIDB and SurvivorUIDB.critBox == true

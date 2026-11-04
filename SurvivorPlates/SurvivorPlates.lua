@@ -112,7 +112,9 @@ local BORDER_TEXTURE = "Interface\\Tooltips\\Nameplate-Border"
 -- Each kind's plate, SurvivorUI Classic's: the enemies' names a fifth smaller
 -- and their bars a tenth than its first ones (Lucas, 2026-11-02). A skull over
 -- the name, three of them, each meaner: our plain bone one over an elite's,
--- the minimap's for lairs over a guardian's, our infernal one over a boss's.
+-- the horned one Survivor UI's minimap pins put on the lairs over a
+-- guardian's (Art\MinimapSkull, a copy of its Art\PinLair: the plates run
+-- without Survivor UI too; v3.0.56, Lucas), our infernal one over a boss's.
 -- Each kind's plate raised over the rest by `rise` frame levels (Lucas: the
 -- bosses in front, then the guardians, then the elites).
 local KINDS = {
@@ -120,7 +122,7 @@ local KINDS = {
 	elite    = { width = 95,  height = 9,  name = 9,  share = 7, color = { 0.12, 0.72, 0.12 },
 		skull = "EliteSkull", skullSize = 14, rise = 10 },
 	guardian = { width = 106, height = 10, name = 9,  share = 8, color = { 0.00, 0.44, 0.87 },
-		skull = "MinimapSkull", skullSize = 16, rise = 20 },
+		skull = "MinimapSkull", skullSize = 19, rise = 20 },
 	boss     = { width = 119, height = 11, name = 10, share = 8, color = { 0.64, 0.21, 0.93 },
 		skull = "BossSkull", skullSize = 22, rise = 30 },
 	final    = { width = 128, height = 11, name = 10, share = 8, color = { 1.00, 0.50, 0.00 },
@@ -1429,4 +1431,48 @@ function SurvivorPlates_SetScale(value)
 		Settings().scale = math.max(0.5, math.min(2, math.floor(value * 100 + 0.5) / 100))
 		Restyle()
 	end
+end
+
+-- For Survivor UI's options, its preview: a kind's plate as drawn here, a
+-- copy (its size, color, name and share sizes, skull, the rank and file's
+-- fade, whether its debuffs go inside), with the art, the face, your
+-- target's gold and the inside debuffs' room.
+function SurvivorPlates_Look(kind)
+	local style = KINDS[kind]
+	if not style then
+		return nil
+	end
+	local color, gold = style.color, EDGES.target
+	return { width = style.width, height = style.height, name = style.name, share = style.share,
+		color = { color[1], color[2], color[3] }, rim = style.rim, skull = style.skull and ART..style.skull,
+		skullSize = style.skullSize, fade = kind == "normal" and FADE or 1, inside = INSIDE_KINDS[kind] == true,
+		round = ROUND, gold = ART.."PlateGold", ends = END, rimShare = RIM, target = { gold[1], gold[2], gold[3] },
+		font = SurvivorUI_FONT or FONT, bump = FONT_BUMP, room = INSIDE_ROOM, debuffSize = DEBUFF_SIZE }
+end
+
+-- Survivor UI's Reset this page: the plates as first installed, v3.0.53's
+-- defaults, quietly: on; the rank and file off, the elites, guardians,
+-- bosses and every friend on; a name on every plate; a target of a kind
+-- left out without one; the debuffs inside; clicks through; V and Shift+V
+-- ignored; overlapping; the first size. The key stays.
+function SurvivorPlates_Defaults()
+	local settings = Settings()
+	settings.hidden = nil
+	local show = settings.show
+	show.normal = false
+	show.elite, show.guardian, show.boss = true, true, true
+	show.pet, show.totem, show.party = true, true, true
+	settings.friendsChosen = true
+	settings.names = true
+	settings.targetPlate = false
+	settings.insideDebuffs = nil
+	settings.clickThrough = true
+	settings.keysAllowed = nil
+	settings.scale = 1
+	if Layout() then
+		settings.layoutSet = true
+		SurvivorPlates_SetOverlapping(true)
+	end
+	ApplyShown()
+	Restyle()
 end

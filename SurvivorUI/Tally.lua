@@ -45,6 +45,26 @@ local function Settings()
 	return SurvivorUIDB
 end
 
+-- Whether this line's coin shines while you can pay: its own switch since
+-- v3.0.56 (tallyCoinShine; Lucas: the tracker's Coin shines should go with
+-- its Cache coin alone). Before, one switch for both coins
+-- (trackerCoinShine): who had it off keeps this one off too, once.
+function SurvivorUI_TallyCoinShine()
+	local db = Settings()
+	if not db.coinShineSplit then
+		db.coinShineSplit = true
+		if db.trackerCoinShine == false and db.tallyCoinShine == nil then
+			db.tallyCoinShine = false
+		end
+	end
+	return db.tallyCoinShine ~= false
+end
+
+function SurvivorUI_SetTallyCoinShine(on)
+	SurvivorUI_TallyCoinShine()
+	Settings().tallyCoinShine = (not on) and false or nil
+end
+
 -- 2,054
 local function Thousands(value)
 	local text = tostring(math.floor(tonumber(value) or 0))
@@ -150,15 +170,15 @@ local ORDERS = {
 	gold = { GOLD, CACHE },
 }
 
--- While the cache can be paid the coin shines (the run tracker's switch,
--- "Shine when you can pay", is both coins'): a gold glow breathes behind it
+-- While the cache can be paid the coin shines (its own switch, the Kills &
+-- gold tab's; the tracker's coin has another): a gold glow breathes behind it
 -- and it brightens with the glow, a spark twinkles on its rim now and then,
 -- and the moment the gold is first enough, a burst.
 local SHINE_BREATH = 1.4            -- seconds a breath takes
 local SPARK_EVERY = 2.2             -- seconds between two twinkles
 local BURST = 0.7                   -- seconds the burst takes
 slot:SetScript("OnUpdate", function()
-	if not this.pays or (SurvivorUIDB and SurvivorUIDB.trackerCoinShine == false) then
+	if not this.pays or not SurvivorUI_TallyCoinShine() then
 		if not this.still then
 			this.still = true
 			glow:Hide()

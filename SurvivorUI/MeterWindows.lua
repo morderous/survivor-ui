@@ -65,6 +65,22 @@ local function Text(parent, size, color)
 	return text
 end
 
+-- A window's shade, or none (the options' No backgrounds, Experimental): as
+-- the main one's (Meter.lua), unless the meter is kept; the bars keep theirs.
+local function Ground(window)
+	local db = SurvivorUIDB
+	local bare = db and db.noBackgrounds and not (db.noBackgroundsOff and db.noBackgroundsOff.meter)
+	window:SetBackdropColor(0.04, 0.04, 0.07, bare and 0 or 0.55)
+end
+
+-- Every window made, painted again as the options change it (Options.lua).
+SurvivorUI_Grounds = SurvivorUI_Grounds or {}
+function SurvivorUI_Grounds.meterWindows()
+	for _, window in pairs(windows) do
+		Ground(window)
+	end
+end
+
 ------------------------------------------------------------------------------
 -- A window's place: where it was moved to, else left of the main one, each
 -- next further left.
@@ -321,7 +337,7 @@ local function Window(index)
 	window:SetWidth(M.WIDTH + 8)
 	window:SetHeight(M.BARS_TOP + 4 + LINES * (M.BAR_HEIGHT + M.BAR_GAP))
 	window:SetBackdrop({ bgFile = FLAT })
-	window:SetBackdropColor(0.04, 0.04, 0.07, 0.55)
+	Ground(window)
 	window:SetMovable(true)
 	window:EnableMouse(true)
 	window:SetClampedToScreen(true)

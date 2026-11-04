@@ -40,6 +40,22 @@ end
 local function History()
 	local db = Settings()
 	db.runHistory = db.runHistory or {}
+	-- Runs saved before v3.0.56 after a class changed in the menu kept the
+	-- class the game opened with as their key (UnitClass, SurvivorUI.lua),
+	-- their class the run's own (the zone's): once, each such key set from
+	-- its class (by its English name; the race and the name stay as saved).
+	if not db.historyClassKeys then
+		db.historyClassKeys = true
+		local KEYS = { Warrior = "WARRIOR", Paladin = "PALADIN", Hunter = "HUNTER", Rogue = "ROGUE", Priest = "PRIEST",
+			Shaman = "SHAMAN", Mage = "MAGE", Warlock = "WARLOCK", Druid = "DRUID" }
+		for index = 1, table.getn(db.runHistory) do
+			local record = db.runHistory[index]
+			local key = type(record) == "table" and KEYS[record.class or ""]
+			if key and record.classKey ~= key then
+				record.classKey = key
+			end
+		end
+	end
 	return db.runHistory
 end
 
@@ -1273,9 +1289,8 @@ pinButton:SetScript("OnClick", function()
 end)
 
 -- Career (Career.lua): every run added up, in this window's place; a crown
--- (the lair marks' own).
-local careerButton = SurvivorUI_GoldButton(window, 70, "Interface\\AddOns\\SurvivorUI\\Art\\LairMarks",
-	{ 0.5, 0.75, 0, 0.5 }, "Career")
+-- (Art\Career).
+local careerButton = SurvivorUI_GoldButton(window, 70, "Interface\\AddOns\\SurvivorUI\\Art\\Career", nil, "Career")
 careerButton:SetPoint("LEFT", pinButton, "RIGHT", 6, 0)
 careerButton.tipTitle = SurvivorUI_T("Career")
 careerButton.tipText = SurvivorUI_T("Every run kept, added up by class and by map.")
@@ -2253,7 +2268,7 @@ tracker.xpBack:SetWidth(INNER)
 tracker.xpBack:SetHeight(5)
 tracker.xpFill = Flat(tracker, "ARTWORK", { 0.58, 0.30, 0.85 }, 1)
 tracker.xpFill:SetHeight(5)
-tracker.ticks, tracker.segments, tracker.slots, tracker.guardMarks = {}, {}, {}, {}
+tracker.ticks, tracker.segments, tracker.slots = {}, {}, {}
 -- The guardians' cells, for a count with each lair's time (Guardians.lua).
 tracker.guardCells = CreateFrame("Frame", nil, tracker)
 tracker.guardCells:SetWidth(INNER)
@@ -2484,7 +2499,6 @@ local function DrawTracker(shot, result)
 	-- stretch of the bar a lair, the 8:00 achievement over it.
 	local guard = shot.guardians
 	local lairs = guard and not guard.count and guard.lairs or {}
-	local marked = 0
 	local style = guard and (guard.count == true and "count" or guard.count)
 	local cells = {}
 	if guard then
@@ -2513,23 +2527,6 @@ local function DrawTracker(shot, result)
 				end
 			end
 			At(tracker.guardCells, tracker, x, y - 6)
-			-- The lairs' marks after the title, as the count showed them.
-			for index = 1, table.getn(style == "count" and guard.lairs or {}) do
-				local lair = guard.lairs[index]
-				if lair.mark and SurvivorUI_SetLairMark then
-					marked = marked + 1
-					local texture = tracker.guardMarks[marked]
-					if not texture then
-						texture = tracker:CreateTexture(nil, "ARTWORK")
-						texture:SetWidth(11)
-						texture:SetHeight(11)
-						tracker.guardMarks[marked] = texture
-					end
-					texture:ClearAllPoints()
-					texture:SetPoint("LEFT", tracker.guardTitle, "RIGHT", 4 + (marked - 1) * 12, 0)
-					SurvivorUI_SetLairMark(texture, lair.mark, lair.empty)
-				end
-			end
 			y = y - 6 - 12 - (style == "row" and 12 + 3 or 0)
 		else
 			local goal = guard.goalColor or DIM
@@ -2552,33 +2549,8 @@ local function DrawTracker(shot, result)
 				local color = lair.color or SPAWNED
 				piece.fill:SetWidth(math.max(1, each * Num(lair.share)))
 				piece.fill:SetVertexColor(color[1], color[2], color[3], 0.9)
-				-- Its lair's mark at its left end; the words in what is left.
-				if not piece.mark then
-					piece.mark = piece:CreateTexture(nil, "OVERLAY")
-					piece.mark:SetWidth(13)
-					piece.mark:SetHeight(13)
-					piece.mark:SetPoint("LEFT", piece, "LEFT", -1, 0)
-					-- The lair the game's flag pointed at, its mark glowing.
-					piece.flagGlow = piece:CreateTexture(nil, "ARTWORK")
-					piece.flagGlow:SetTexture("Interface\\AddOns\\SurvivorUI\\Art\\PaceGlow")
-					piece.flagGlow:SetBlendMode("ADD")
-					piece.flagGlow:SetVertexColor(1, 0.82, 0.2, 0.8)
-					piece.flagGlow:SetWidth(32)
-					piece.flagGlow:SetHeight(32)
-					piece.flagGlow:SetPoint("CENTER", piece.mark, "CENTER", 0, 0)
-				end
-				if lair.mark and SurvivorUI_SetLairMark then
-					SurvivorUI_SetLairMark(piece.mark, lair.mark, lair.empty)
-					piece.text:SetPoint("CENTER", piece, "CENTER", 6, 0)
-				else
-					piece.mark:Hide()
-					piece.text:SetPoint("CENTER", piece, "CENTER", 0, 0)
-				end
-				if lair.flag and lair.mark then
-					piece.flagGlow:Show()
-				else
-					piece.flagGlow:Hide()
-				end
+				-- Its words in the middle (a run kept before v3.0.56 may hold
+				-- its lairs' marks: no longer shown).
 				piece.text:SetText(SurvivorUI_T(lair.text or ""))
 				At(piece, tracker, x + (index - 1) * (each + 3), y)
 			end
@@ -2592,7 +2564,6 @@ local function DrawTracker(shot, result)
 		end
 	end
 	HideAll(tracker.segments, table.getn(lairs) + 1)
-	HideAll(tracker.guardMarks, marked + 1)
 	if SurvivorUI_LairCells then
 		if style == "line" then
 			SurvivorUI_LairCells(tracker.guardCells, cells, "line", tracker.guardTitle:GetStringWidth() + 8, INNER, 0)

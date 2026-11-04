@@ -37,6 +37,83 @@ SurvivorUI_CanStandBy = true
 SurvivorUI_Standby = SurvivorUIClassicDB and SurvivorUIClassicDB.use == "classic" or nil
 if SurvivorUI_Standby then return end
 
+-- The hero as the run has it (Lucas, 2026-11-03): the game's UnitClass and
+-- UnitRace on "player" keep the hero it opened with (seen in the test game:
+-- opened on a Troll Shaman, run as a Tauren Warrior, the game said Shaman and
+-- Troll all run long), so a class changed in the menu before the run wore the
+-- first one's color, on the frames and in every piece that asks, and the
+-- character pane said "Troll Warrior". The run's zone (AZS_ZONE: class
+-- "warrior", cname "Warrior", race "Tauren", hero the name) says the hero's
+-- own, so "player" is answered from it once it is there; any other unit as
+-- the game has it. The name likely the same (not seen: the name was kept).
+do
+	local GameUnitClass, GameUnitRace, GameUnitName = UnitClass, UnitRace, UnitName
+	-- The game's own answers, for a test to compare.
+	SurvivorUI_GameUnitClass, SurvivorUI_GameUnitRace, SurvivorUI_GameUnitName = GameUnitClass, GameUnitRace, GameUnitName
+
+	-- The run's zone, when it holds field as a word, and unit is the player.
+	local function Told(unit, field)
+		local zone = AZS_ZONE
+		if zone and type(zone[field]) == "string" and zone[field] ~= "" and type(unit) == "string"
+			and string.lower(unit) == "player" then
+			return zone
+		end
+	end
+
+	function UnitClass(unit)
+		local zone = Told(unit, "class")
+		if zone then
+			return zone.cname or (GameUnitClass(unit)), string.upper(zone.class)
+		end
+		return GameUnitClass(unit)
+	end
+
+	-- The race's token as the game's own: no spaces ("NightElf"), the Undead
+	-- "Scourge" (as 1.12's).
+	function UnitRace(unit)
+		local zone = Told(unit, "race")
+		if zone then
+			local token = string.gsub(zone.race, " ", "")
+			return zone.race, token == "Undead" and "Scourge" or token
+		end
+		return GameUnitRace(unit)
+	end
+
+	function UnitName(unit)
+		local zone = Told(unit, "hero")
+		if zone then
+			return zone.hero
+		end
+		return GameUnitName(unit)
+	end
+
+	-- The character pane's name (the game's CharacterFrame asks this one).
+	local GameUnitPVPName = UnitPVPName
+	if GameUnitPVPName then
+		function UnitPVPName(unit)
+			local zone = Told(unit, "hero")
+			if zone then
+				return zone.hero
+			end
+			return GameUnitPVPName(unit)
+		end
+	end
+
+	-- The sex too (kept as well: a Gnome man run after a Troll woman, the
+	-- game said 3): the zone's gender 0 a man, 1 a woman; the game's 2 and 3.
+	local GameUnitSex = UnitSex
+	if GameUnitSex then
+		function UnitSex(unit)
+			local zone = AZS_ZONE
+			local gender = zone and tonumber(zone.gender)
+			if (gender == 0 or gender == 1) and type(unit) == "string" and string.lower(unit) == "player" then
+				return gender + 2
+			end
+			return GameUnitSex(unit)
+		end
+	end
+end
+
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
 -- The interface's face, shared with the addon's other files: Friz Quadrata, the
 -- game's own, unless a face is dropped in: Expressway in SurvivorUI\Fonts, or
@@ -76,7 +153,8 @@ local FONT_BUMP = SurvivorUI_FONT_BUMP
 -- both faces' letters under one number, so a letter and a character trade
 -- places as they are drawn ("e克pty slot", seen 2026-10-27). The game's own
 -- faces for them (Fonts\AZS_SC.TTF and the like) cannot be set: they answer
--- as Friz Quadrata. Korean has no face here yet.
+-- as Friz Quadrata. Korean has no face here yet. Russian's face (Locale.lua)
+-- stands in only for a face chosen without its letters (SurvivorUI_WRITERS).
 SurvivorUI_LANGUAGE_FONTS = {
 	zh = "Interface\\AddOns\\SurvivorUI\\Fonts\\NotoSansSC-Medium.ttf",
 	ja = "Interface\\AddOns\\SurvivorUI\\Fonts\\NotoSansSC-Medium.ttf",
@@ -467,8 +545,9 @@ end
 -- A warlock's demons' spells, which the combat log writes as the hero's own,
 -- by the hero's own event ("Your Hellfire hits...", CHAT_MSG_SPELL_SELF_DAMAGE,
 -- seen 2026-10-20), named as the meter counts them (the Imp's Fireball goes to
--- the Imp's bar, the Pit Lord's Searing Pain is its Felseeker, under the Pit
--- Lord's bar since the game's 0.105). The demon's when the hero doesn't hold
+-- the Imp's bar, the Dread Lord's Searing Pain is its Felseeker, under the
+-- Dread Lord's bar; the game's 0.105 to 0.139 named it the Pit Lord, whose
+-- name the meter still knows, Meter.lua). The demon's when the hero doesn't hold
 -- the spell; when the hero does, the two read the same: Biggest Crits tells
 -- them apart by the hero's cooldown (RunPanel.lua, SurvivorUI_PetCast), the
 -- rest keeps them the hero's.
@@ -477,7 +556,7 @@ local PET_CASTS = {
 	["Firebolt"] = { "firebolt", "Imp's Firebolt" },
 	["Inferno"] = { "inferno", "Infernal's Inferno" },
 	["Hellfire"] = { "hellfire", "Infernal's Hellfire" },
-	["Searing Pain"] = { "searing_pain", "Pit Lord's Felseeker" },
+	["Searing Pain"] = { "searing_pain", "Dread Lord's Felseeker" },
 	["Shadow Bolt"] = { "shadow_bolt", "Doomguard's Shadow Bolt" },
 }
 
@@ -679,6 +758,14 @@ local accentWatch = CreateFrame("Frame")
 accentWatch:RegisterEvent("PLAYER_LOGIN")
 accentWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
 accentWatch:SetScript("OnEvent", SurvivorUI_UpdateAccent)
+-- And each time the zone is told again: the hero's class comes with it
+-- (UnitClass above), sometimes after the world is entered.
+accentWatch:SetScript("OnUpdate", function()
+	if AZS_ZONE_UPDATED ~= this.zoneSeen then
+		this.zoneSeen = AZS_ZONE_UPDATED
+		SurvivorUI_UpdateAccent()
+	end
+end)
 SurvivorUI_UpdateAccent()
 
 local POWER_COLORS = {
@@ -2219,11 +2306,17 @@ local function PathLoads(path)
 	return got ~= nil and string.lower(got) == string.lower(path)
 end
 
--- The face the game's language needs (SurvivorUI_LANGUAGE_FONTS), when it
--- loads; nil for every other language, and until the hero's race has told.
-local function LanguageFont()
+-- The face the game's language needs (SurvivorUI_LANGUAGE_FONTS) in place of
+-- path, the face chosen, when it loads; nil when path writes the language
+-- itself (SurvivorUI_WRITERS: Russian's, in Locale.lua), for every other
+-- language, and until the game has told.
+local function LanguageFont(path)
 	local language = SurvivorUI_Language and SurvivorUI_Language()
 	local face = language and SurvivorUI_LANGUAGE_FONTS[language]
+	local writers = face and SurvivorUI_WRITERS and SurvivorUI_WRITERS[language]
+	if writers and path and writers[string.lower(path)] then
+		return nil
+	end
 	if face and PathLoads(face) then
 		return face
 	end
@@ -2316,11 +2409,11 @@ local function Wear(face)
 	end
 end
 
--- The default global font: the face the game's language needs, else the face
--- found as the files ran, the game's Friz Quadrata unless one of one's own
--- was dropped in (Expressway).
+-- The default global font: the face found as the files ran, the game's Friz
+-- Quadrata unless one of one's own was dropped in (Expressway), or the face
+-- the game's language needs in its place.
 function SurvivorUI_DefaultFont()
-	return LanguageFont() or SurvivorUI_DEFAULT_FONT
+	return LanguageFont(SurvivorUI_DEFAULT_FONT) or SurvivorUI_DEFAULT_FONT
 end
 
 function SurvivorUI_DefaultFontName()
@@ -2335,15 +2428,33 @@ function SurvivorUI_DefaultFontName()
 	return "Friz Quadrata"
 end
 
--- path nil: the default face. Saved, and worn at once; in a language that
--- needs a face of its own, that one is worn and the choice kept for later.
+-- The face worn for path as the global font (nil: the default): in a
+-- language whose letters it lacks, the language's own face. (A global, not
+-- a local: this file's locals are near Lua 5.0's 200.)
+function SurvivorUI_FontFor(path)
+	if path and PathLoads(path) then
+		return LanguageFont(path) or path
+	end
+	return SurvivorUI_DefaultFont()
+end
+
+-- path nil: the default face. Saved, and worn at once; in a language whose
+-- letters it lacks, the language's face is worn and the choice kept for later.
 function SurvivorUI_SetGlobalFont(path)
 	Settings().globalFont = path
-	local needed = LanguageFont()
-	if path and PathLoads(path) and not (needed and string.lower(path) ~= string.lower(needed)) then
-		Wear(path)
-	else
-		Wear(SurvivorUI_DefaultFont())
+	Wear(SurvivorUI_FontFor(path))
+end
+
+function SurvivorUI_GlobalFont()
+	return SurvivorUIDB and SurvivorUIDB.globalFont
+end
+
+-- The face the choice and the game's language call for, worn when another is:
+-- as the language is told, or changes (Locale.lua).
+function SurvivorUI_FitGlobalFont()
+	local path = SurvivorUI_GlobalFont()
+	if string.lower(SurvivorUI_FONT) ~= string.lower(SurvivorUI_FontFor(path)) then
+		SurvivorUI_SetGlobalFont(path)
 	end
 end
 
@@ -2356,15 +2467,8 @@ languageWatch:SetScript("OnUpdate", function()
 		return
 	end
 	zoneSeen = AZS_ZONE_UPDATED
-	local needed = LanguageFont()
-	if needed and string.lower(SurvivorUI_FONT) ~= string.lower(needed) then
-		SurvivorUI_SetGlobalFont(Settings().globalFont)
-	end
+	SurvivorUI_FitGlobalFont()
 end)
-
-function SurvivorUI_GlobalFont()
-	return SurvivorUIDB and SurvivorUIDB.globalFont
-end
 
 -- What a new install starts with besides each file's own defaults, put in
 -- where nothing is set yet; the toggles keep false for off.
@@ -2429,10 +2533,8 @@ globalFont:SetScript("OnEvent", function()
 			paneStatsStep = 2, pinCacheSize = 12, pinLairSize = 11,
 			pieceFonts = { ["Damage meter"] = { step = -1 }, ["Jewelry"] = { step = -2 } },
 			-- The author's choices for v3.0.53, the new plates showing the
-			-- bosses (the boss bars off, BossBars.lua): the guardians as a count
-			-- in the run tracker and no level there, the enemies' raid marks
+			-- bosses (the boss bars off, BossBars.lua): the enemies' raid marks
 			-- drawn over them.
-			guardiansCount = "count", trackerXp = false,
 			markBosses = true, markGuardians = true, markElites = true,
 		}
 		for key, value in pairs(look) do

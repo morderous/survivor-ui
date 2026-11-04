@@ -3,15 +3,16 @@
 ## Author: morderous
 ## X-License: GPL-3.0
 ## X-Website: https://github.com/morderous/survivor-ui
-## Version: 3.0.55
+## Version: 3.0.56
 ## Notes: Flat, dark unit frames and a compact action bar (buttons 1 to 6 and the = button) for Azeroth Survivors.
-## OptionalDeps: SurvivorUIClassic
+## OptionalDeps: SurvivorUIClassic, SurvivorPlates
 ## SavedVariables: SurvivorUIDB, SurvivorUIJewelryBook
 ## SavedVariablesPerCharacter: SurvivorUIJewelry
 SurvivorUI.lua
 LocaleData.lua
 Locale.lua
 Locale_zh.lua
+Locale_ru.lua
 Mover.lua
 Hover.lua
 Tally.lua
@@ -37,6 +38,7 @@ AbilityTooltip.lua
 BossBars.lua
 MapPins.lua
 Guardians.lua
+Dial.lua
 WorldMarks.lua
 LootLog.lua
 ChatFilter.lua
@@ -51,6 +53,7 @@ Guide.lua
 Confirm.lua
 ChangeUI.lua
 CardsNotice.lua
+Locale_zh_Options.lua
 Options.lua
 EditCard.lua
 MinimapButton.lua

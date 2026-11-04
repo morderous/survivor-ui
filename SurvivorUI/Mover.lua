@@ -632,8 +632,12 @@ local PARTS = {
 		places = { { "bossLeft", "bossTop", "TOPLEFT" } } },
 	{ key = "loot", section = "Run", label = "Loot list", frames = { "SurvivorUILoot" },
 		places = { { "lootLeft", "lootTop", "TOPLEFT" } } },
+	-- Hung under the run tracker (v3.0.56, unless Free): at the tracker's size,
+	-- placed by Guardians.lua; its own size and place kept for when free.
 	{ key = "guardians", section = "Run", label = "Guardians", frames = { "SurvivorUIGuardians" },
-		places = { { "guardiansLeft", "guardiansTop", "TOPLEFT" } } },
+		places = { { "guardiansLeft", "guardiansTop", "TOPLEFT" } }, under = "tracker",
+		hangs = function() return SurvivorUI_GuardianListHangs and SurvivorUI_GuardianListHangs() end,
+		restore = function() if SurvivorUI_PlaceGuardians then SurvivorUI_PlaceGuardians() end end },
 	-- A co-op run's (Party.lua): the friends' frames, and the revive bar.
 	-- Placed by Party.lua again after: top to bottom, it hangs by its top.
 	{ key = "party", section = "Combat", label = "Party frames", frames = { "SurvivorUIParty" },
@@ -746,6 +750,17 @@ local function ApplyPart(part, from)
 			end
 		end
 	end
+	-- A part hung on another (part.under: the guardians' list under the run
+	-- tracker): that one's size, and placed by its own file; its own saved
+	-- place left for when it stands free.
+	local hung = part.under and part.hangs and part.hangs()
+	if hung then
+		for _, each in pairs(PARTS) do
+			if each.key == part.under then
+				scale = Effective(each)
+			end
+		end
+	end
 	-- Kept on the screen: the part's own frames, the ones it moves by. Not the
 	-- action buttons: the ones put away wait below the screen's edge.
 	local kept = {}
@@ -766,7 +781,7 @@ local function ApplyPart(part, from)
 	end
 	for _, place in pairs(part.places) do
 		local frame = getglobal(place[4] or part.frames[1])
-		if frame and db[place[1]] and db[place[2]] then
+		if frame and db[place[1]] and db[place[2]] and not hung then
 			frame:ClearAllPoints()
 			frame:SetPoint(place[3], UIParent, "BOTTOMLEFT", db[place[1]], db[place[2]])
 		end
@@ -776,6 +791,12 @@ local function ApplyPart(part, from)
 	end
 	if part.apply then
 		part.apply(scale)
+	end
+	-- The parts hung on this one take its new size.
+	for _, each in pairs(PARTS) do
+		if each.under == part.key and each.hangs and each.hangs() then
+			ApplyPart(each)
+		end
 	end
 end
 
@@ -1046,6 +1067,10 @@ end
 
 local function ShownOverCards(handle)
 	local name = string.gsub(handle.name or "", " %d+$", "")
+	-- A piece hung on another goes with it (the guardians' list, the tracker).
+	if handle.cardsAs and handle.cardsAs() then
+		name = handle.cardsAs()
+	end
 	return SurvivorUI_CardsShown()[cardGroup[name] or "other"] == true
 end
 

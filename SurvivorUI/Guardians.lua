@@ -22,7 +22,7 @@
 -- yards of a living one, its line (or stretch) flashes.
 --
 -- Or, with "Guardians as a bar in the run tracker" (/sui guardians bar), a bar
--- inside the tracker, under its experience: a stretch a lair, in the lairs'
+-- inside the tracker, under its bosses: a stretch a lair, in the lairs'
 -- order, green while its guardian is there (orange while awake) with its arrow
 -- in the middle (while awake, its health in its place: the fight is right
 -- there), red once slain with the time until its lair is claimed again;
@@ -35,15 +35,18 @@
 -- guardian there; or the count, and under it a cell a lair (its time, its
 -- health awake, alive). Hovered, each lair by name.
 --
--- Each lair wears its own mark, a heraldic charge (Art\LairMarks: crossed
--- swords, a shield, a crown, a chalice, a fleur-de-lis, a war hammer, a tower,
--- a helm), by its place among the run's lairs: the same mark on its stretch of
--- the bar, its line of the list, the count, its pin on the minimap, its boss
--- bar and the last runs, dimmed while the lair is empty. Off with the option
--- "Lair marks". The lair the game's red flag points at (from 0.102) has its
--- mark glowing gold, in place of the flag (the Minimap tab, "The game's flag").
+-- The lairs wear no mark here (v3.0.56: the heraldic marks are gone). On the
+-- minimap each lair is a horned skull (MapPins.lua, Art\PinLair), and the one
+-- the game's red flag points at (from 0.102) glows gold there, in place of
+-- the flag (the Minimap tab, "The game's flag").
 --
--- Hold Alt to move it; /sui guardians hides it.
+-- It hangs right under the run tracker, at its width and size, and goes
+-- with it (v3.0.56); or, Free (the options, Run tracker, Advanced), it
+-- stands on its own: hold Alt to move it. /sui guardians hides it.
+--
+-- In the tracker's Tracker Ring look (Dial.lua), the bar and the count give way
+-- to the dial's compass, a tile a lair (SurvivorUI_GuardianCompass), and so
+-- does the list while it hangs there.
 
 if SurvivorUI_Standby then return end
 
@@ -76,11 +79,6 @@ local NEARNESS = {
 }
 local BAR_HEIGHT, BAR_GAP, BAR_TOP = 9, 3, 6
 local LINE = 12                    -- the thin line over the bar
-local MARK_KINDS = 8               -- the marks' sheet: 4 x 2
-local MARK = 13                    -- a mark's size on the bar
-local ROW_MARK = 12                -- on a line of the list
-local COUNT_MARK = 11              -- in the count
-local MARK_NAMES = { "Crossed swords", "Shield", "Crown", "Chalice", "Fleur-de-lis", "War hammer", "Tower", "Helm" }
 
 local function Settings()
 	SurvivorUIDB = SurvivorUIDB or {}
@@ -100,64 +98,6 @@ end
 local function Clock(seconds)
 	seconds = math.max(0, math.floor(seconds + 0.5))
 	return string.format("%d:%02d", math.floor(seconds / 60), math.mod(seconds, 60))
-end
-
-------------------------------------------------------------------------------
--- The lairs' marks.
-
--- Each lair's mark, 1 to 8 by its place among the run's lairs (a ninth lair
--- starts them over): [place] = mark. Empty with the marks off.
-function SurvivorUI_LairMarks(lairs)
-	local marks = {}
-	if Settings().guardianMarks == false then
-		return marks
-	end
-	lairs = lairs or (AZS_GetLairs and AZS_GetLairs()) or {}
-	local places = {}
-	for index = 1, table.getn(lairs) do
-		table.insert(places, tonumber(Field(lairs[index], "index", 1)) or index)
-	end
-	table.sort(places)
-	for rank = 1, table.getn(places) do
-		marks[places[rank]] = math.mod(rank - 1, MARK_KINDS) + 1
-	end
-	return marks
-end
-
--- The mark of the guardian with this unit id (a boss bar's), nil for none.
-function SurvivorUI_GuardianMark(id)
-	id = tonumber(id)
-	if not id or Settings().guardianMarks == false then
-		return nil
-	end
-	local lairs = AZS_GetLairs and AZS_GetLairs() or {}
-	for index = 1, table.getn(lairs) do
-		if tonumber(Field(lairs[index], "id", 4)) == id then
-			return SurvivorUI_LairMarks(lairs)[tonumber(Field(lairs[index], "index", 1)) or index]
-		end
-	end
-end
-
-function SurvivorUI_LairMarkName(mark)
-	return mark and MARK_NAMES[mark]
-end
-
--- A texture showing a mark in its own colors, dimmed for an empty lair;
--- hidden for none.
-function SurvivorUI_SetLairMark(texture, mark, dim)
-	if not mark then
-		texture:Hide()
-		return
-	end
-	local column, line = math.mod(mark - 1, 4), math.floor((mark - 1) / 4)
-	texture:SetTexture(ART.."LairMarks")
-	texture:SetTexCoord(column / 4, (column + 1) / 4, line / 2, (line + 1) / 2)
-	if dim then
-		texture:SetVertexColor(0.5, 0.5, 0.5, 0.8)
-	else
-		texture:SetVertexColor(1, 1, 1, 1)
-	end
-	texture:Show()
 end
 
 -- An angle brought within half a turn either way.
@@ -192,18 +132,6 @@ goal:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -1)
 
 local rows = {}
 
--- The game's flag, ours (MapPins.lua, the options' Minimap tab): a gold glow
--- breathing behind the mark of the lair it points at.
-local function FlagGlow(parent, mark, layer)
-	local glow = parent:CreateTexture(nil, layer)
-	glow:SetTexture(ART.."PaceGlow")
-	glow:SetBlendMode("ADD")
-	glow:SetVertexColor(1, 0.82, 0.2)
-	glow:SetPoint("CENTER", mark, "CENTER", 0, 0)
-	glow:Hide()
-	return glow
-end
-
 -- A line: the name on the left; on the right, where it stands, how far, and
 -- the arrow last of all.
 local function Row(index)
@@ -232,7 +160,7 @@ local function Row(index)
 	row.flash:SetTexture(FLAT)
 	row.flash:SetBlendMode("ADD")
 	row.flash:SetPoint("TOPLEFT", frame, "TOPLEFT", -3, top + 1)
-	row.flash:SetWidth(WIDTH + 6)
+	row.flash:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 3, top + 1)
 	row.flash:SetHeight(ROW)
 	row.flash:Hide()
 	row.yards = frame:CreateFontString(nil, "OVERLAY")
@@ -249,31 +177,24 @@ local function Row(index)
 	row.name:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, top)
 	row.name:SetHeight(12)
 	row.name:SetJustifyH("LEFT")
-	row.top, row.room = top, 0
-	-- Its lair's mark, before the name.
-	row.mark = frame:CreateTexture(nil, "ARTWORK")
-	row.mark:SetWidth(ROW_MARK)
-	row.mark:SetHeight(ROW_MARK)
-	row.mark:SetPoint("TOPLEFT", frame, "TOPLEFT", -1, top + 1)
-	row.mark:Hide()
-	row.flagGlow = FlagGlow(frame, row.mark, "BORDER")
 	-- The line to head for: a faint wash of its color, fading to the right.
 	row.light = frame:CreateTexture(nil, "BACKGROUND")
 	row.light:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
 	row.light:SetPoint("TOPLEFT", frame, "TOPLEFT", -3, top + 1)
-	row.light:SetWidth(WIDTH + 6)
+	row.light:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 3, top + 1)
 	row.light:SetHeight(ROW)
 	row.light:Hide()
 	rows[index] = row
 	return row
 end
 
-local NAME_ROOM = WIDTH - 118
+local NAME_SIDE = 118        -- right of a name: where it stands, how far, the arrow
 
--- A name in its room (less a mark's): whole if it fits; else its first words
--- by their initial, the last whole ("K. Taskmaster"); else cut short.
-local function SetName(text, name, taken)
-	local room = NAME_ROOM - (taken or 0)
+-- A name in its room (the list's width less what stands right of it): whole
+-- if it fits; else its first words by their initial, the last whole
+-- ("K. Taskmaster"); else cut short.
+local function SetName(text, name)
+	local room = frame:GetWidth() - NAME_SIDE
 	text:SetWidth(0)
 	text:SetText(name)
 	if text:GetStringWidth() > room then
@@ -300,7 +221,6 @@ local function SetName(text, name, taken)
 end
 
 local function HideRow(row)
-	row.mark:Hide()
 	row.light:Hide()
 	row.arrow:Hide()
 	row.shadow:Hide()
@@ -311,7 +231,6 @@ local function HideRow(row)
 	row.yards:Hide()
 	row.place = nil
 	row.shownName = nil
-	row.flagged = nil
 end
 
 -- The arrow turned by angle (radians, clockwise from straight up): the cell of
@@ -481,9 +400,8 @@ local function Draw()
 		since = 0
 	end
 
-	-- Each lair: what it is and where, and its mark.
+	-- Each lair: what it is and where.
 	local entries = {}
-	local marks = SurvivorUI_LairMarks(lairs)
 	for index = 1, table.getn(lairs) do
 		local lair = lairs[index]
 		local place = tonumber(Field(lair, "index", 1)) or index
@@ -497,8 +415,7 @@ local function Draw()
 		end
 		lastState[place] = state
 		local entry = { place = place, state = state, alive = state ~= "empty", name = Field(lair, "name", 3) or "?",
-			id = tonumber(Field(lair, "id", 4)) or 0, mark = marks[place],
-			flag = tonumber(Field(lair, "flag", 11)) == 1 or nil }
+			id = tonumber(Field(lair, "id", 4)) or 0 }
 		if state == "empty" then
 			entry.left = (tonumber(Field(lair, "left", 5)) or -1) - since
 		elseif state == "awake" then
@@ -543,18 +460,9 @@ local function Draw()
 		local entry = list[index]
 		local row = Row(index)
 		row.place = entry.place
-		-- The mark first, the name after it.
-		local room = entry.mark and ROW_MARK + 2 or 0
-		if row.room ~= room then
-			row.room = room
-			row.name:SetPoint("TOPLEFT", frame, "TOPLEFT", room, row.top)
-			row.shownName = nil
-		end
-		SurvivorUI_SetLairMark(row.mark, entry.mark, entry.state == "empty")
-		row.flagged = entry.flag and SurvivorUI_GameFlag and SurvivorUI_GameFlag() == "ours"
 		if row.shownName ~= entry.name then
 			row.shownName = entry.name
-			SetName(row.name, entry.name, room)
+			SetName(row.name, entry.name)
 		end
 		if entry.state == "empty" then
 			row.name:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
@@ -699,29 +607,8 @@ local function Segment(index)
 	segment.time:SetFont(SurvivorUI_FONT, 8 + FONT_BUMP, "OUTLINE")
 	segment.time:SetPoint("CENTER", segment.back, "CENTER", 0, 0)
 	segment.time:SetTextColor(1, 1, 1)
-	-- Its lair's mark at its left end, over the fill.
-	segment.mark = bar:CreateTexture(nil, "OVERLAY")
-	segment.mark:SetWidth(MARK)
-	segment.mark:SetHeight(MARK)
-	segment.mark:SetPoint("LEFT", segment.back, "LEFT", -1, 0)
-	segment.mark:Hide()
-	segment.flagGlow = FlagGlow(bar, segment.mark, "ARTWORK")
-	segment.shift = 0
 	segments[index] = segment
 	return segment
-end
-
--- The arrow and the words in the middle of what the mark leaves of the
--- stretch.
-local function Middle(segment, shift)
-	if segment.shift == shift then
-		return
-	end
-	segment.shift = shift
-	for _, piece in pairs({ segment.shadow, segment.glow, segment.arrow, segment.time }) do
-		piece:ClearAllPoints()
-		piece:SetPoint("CENTER", segment.back, "CENTER", shift, 0)
-	end
 end
 
 local function Docked()
@@ -741,14 +628,12 @@ local function CountStyle()
 	return count
 end
 
--- The lairs as cells, for the count's kinds: each lair's mark (with the
--- marks on), then in red the time until it fills again while empty, its
--- health in orange while awake, or, alive, a green pip on the count's line
--- ("line": right-aligned between left and right, the marks gone when they do
--- not fit) or the word in the row under it ("row": a cell each from left to
--- right, evenly). Laid on holder, y under its middle; kept on holder.cells.
--- Each lair: { mark, empty, awake, text } (the tracker's, or Run History's
--- copy of it).
+-- The lairs as cells, for the count's kinds: in red the time until it fills
+-- again while empty, its health in orange while awake, or, alive, a green pip
+-- on the count's line ("line": right-aligned between left and right) or the
+-- word in the row under it ("row": a cell each from left to right, evenly).
+-- Laid on holder, y under its middle; kept on holder.cells. Each lair:
+-- { empty, awake, text } (the tracker's, or Run History's copy of it).
 local CELL_GAP, PIP = 6, 8
 
 -- The bar's own choices (the options, Run tracker): the arrows, and how
@@ -805,14 +690,10 @@ end
 function SurvivorUI_LairCells(holder, lairs, style, left, right, y)
 	holder.cells = holder.cells or {}
 	local cells, count = holder.cells, table.getn(lairs)
-	local total = 0
 	for index = 1, count do
 		local cell = cells[index]
 		if not cell then
 			cell = {}
-			cell.mark = holder:CreateTexture(nil, "ARTWORK")
-			cell.mark:SetWidth(COUNT_MARK)
-			cell.mark:SetHeight(COUNT_MARK)
 			cell.pip = holder:CreateTexture(nil, "ARTWORK")
 			cell.pip:SetTexture(ART.."Pip")
 			cell.pip:SetWidth(PIP)
@@ -834,38 +715,27 @@ function SurvivorUI_LairCells(holder, lairs, style, left, right, y)
 		cell.text:SetText(cell.words or "")
 		cell.text:SetTextColor(color[1], color[2], color[3])
 		cell.width = cell.words and cell.text:GetStringWidth() or PIP
-		total = total + cell.width + (lair.mark and COUNT_MARK + 2 or 0) + CELL_GAP
 	end
-	local marks = style == "row" or total - CELL_GAP <= right - left
 	local edge = right
 	for step = 1, count do
 		-- On the line from the right; in the row in order.
 		local index = style == "row" and step or count - step + 1
-		local cell, lair = cells[index], lairs[index]
-		local markWidth = (marks and lair.mark) and COUNT_MARK + 2 or 0
+		local cell = cells[index]
 		local x
 		if style == "row" then
-			x = left + (index - 0.5) * (right - left) / count - (markWidth + cell.width) / 2
+			x = left + (index - 0.5) * (right - left) / count - cell.width / 2
 		else
-			x = edge - markWidth - cell.width
+			x = edge - cell.width
 			edge = x - CELL_GAP
-		end
-		if markWidth > 0 then
-			SurvivorUI_SetLairMark(cell.mark, lair.mark, lair.empty)
-			cell.mark:ClearAllPoints()
-			cell.mark:SetPoint("LEFT", holder, "LEFT", x, y)
-		else
-			cell.mark:Hide()
 		end
 		local content = cell.words and cell.text or cell.pip
 		local other = cell.words and cell.pip or cell.text
 		content:ClearAllPoints()
-		content:SetPoint("LEFT", holder, "LEFT", x + markWidth, y)
+		content:SetPoint("LEFT", holder, "LEFT", x, y)
 		content:Show()
 		other:Hide()
 	end
 	for index = count + 1, table.getn(cells) do
-		cells[index].mark:Hide()
 		cells[index].pip:Hide()
 		cells[index].text:Hide()
 	end
@@ -873,7 +743,7 @@ end
 
 -- A lair as a cell (SurvivorUI_LairCells), from the last look.
 local function Cell(entry)
-	local cell = { mark = entry.mark, empty = (not entry.alive) or nil, awake = (entry.state == "awake") or nil }
+	local cell = { empty = (not entry.alive) or nil, awake = (entry.state == "awake") or nil }
 	if cell.empty then
 		cell.text = entry.left and entry.left > -1 and Clock(math.max(0, entry.left)) or nil
 	elseif cell.awake then
@@ -963,11 +833,37 @@ function SurvivorUI_GuardianSnapshot()
 			shot.alive = shot.alive + 1
 		end
 		table.insert(shot.lairs, { color = { color[1], color[2], color[3] }, share = share, text = text,
-			mark = entry.mark,
-			empty = (not entry.alive) or nil, awake = (entry.state == "awake") or nil,
-			flag = entry.flag and SurvivorUI_GameFlag and SurvivorUI_GameFlag() == "ours" or nil })
+			empty = (not entry.alive) or nil, awake = (entry.state == "awake") or nil })
 	end
 	return shot
+end
+
+-- For the run tracker's Tracker Ring (Dial.lua), its compass: the lairs in their
+-- order, from the last look, each its place, name, state ("asleep", "awake",
+-- "empty"), how far, the way its arrow points (radians, clockwise from up,
+-- as the bar's: North up as chosen; nil not known), the time to its return
+-- slain, its health awake, and whether walked straight at. nil out of a run
+-- or with the guardians off.
+function SurvivorUI_GuardianCompass()
+	if not active then
+		return nil
+	end
+	local places, out = Places(), {}
+	local north = Settings().guardiansNorth
+	for index = 1, table.getn(places) do
+		local place = places[index]
+		local entry = byPlace[place]
+		local angle = wanted[place] and (shownAngle[place] or wanted[place]) or nil
+		table.insert(out, { place = place, name = entry.name, state = entry.state, yards = entry.yards,
+			angle = angle, left = entry.left, share = entry.share,
+			ahead = angle and entry.alive and heading and not north and math.abs(Wrap(angle)) < AHEAD or nil })
+	end
+	return out
+end
+
+-- The way a lair's arrow points now, turning smoothly (each frame, Turn).
+function SurvivorUI_GuardianAngle(place)
+	return wanted[place] and (shownAngle[place] or wanted[place]) or nil
 end
 
 -- The count's tooltip: each lair by name, where it stands; the 8:00
@@ -994,8 +890,8 @@ local function CountTip()
 end
 
 -- The count in the tracker, at y; the y under it comes back. "count":
--- "Guardians [marks]   3 / 5 alive  · next 0:47"; "line": each lair's cell
--- on that line, in place of the count and the marks; "row": the count, and
+-- "Guardians   3 / 5 alive  · next 0:47"; "line": each lair's cell on that
+-- line, in place of the count; "row": the count, and
 -- the cells in a row under it. A function apart from SurvivorUI_GuardianBar
 -- (32 of the file's locals at most, in the game's Lua 5.0).
 local ROW_CELLS, BOX_PAD = 12, 3
@@ -1012,7 +908,6 @@ local function DrawCount(head, y)
 		counter.value = counter:CreateFontString(nil, "OVERLAY")
 		counter.value:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 		counter.value:SetPoint("RIGHT", counter, "RIGHT", 0, 0)
-		counter.marks = {}
 		counter.box = SurvivorUI_NewLairBox(counter)
 		counter:EnableMouse(true)
 		counter:SetScript("OnEnter", CountTip)
@@ -1021,27 +916,6 @@ local function DrawCount(head, y)
 	local width = head:GetWidth()
 	counter:SetWidth(width)
 	local places = Places()
-	-- With the count, between the title and it, the lairs' marks in their
-	-- order, the empty dimmed (the cells have their own).
-	local marked = 0
-	for index = 1, table.getn(places) do
-		local entry = byPlace[places[index]]
-		if style == "count" and entry.mark then
-			marked = marked + 1
-			local texture = counter.marks[marked]
-			if not texture then
-				texture = counter:CreateTexture(nil, "ARTWORK")
-				texture:SetWidth(COUNT_MARK)
-				texture:SetHeight(COUNT_MARK)
-				texture:SetPoint("LEFT", counter.title, "RIGHT", 4 + (marked - 1) * (COUNT_MARK + 1), 0)
-				counter.marks[marked] = texture
-			end
-			SurvivorUI_SetLairMark(texture, entry.mark, not entry.alive)
-		end
-	end
-	for index = marked + 1, table.getn(counter.marks) do
-		counter.marks[index]:Hide()
-	end
 	local alive, awake, cells = 0, 0, {}
 	for index = 1, table.getn(places) do
 		local entry = byPlace[places[index]]
@@ -1075,10 +949,12 @@ local function DrawCount(head, y)
 	return y - BAR_TOP - LINE - (style == "row" and ROW_CELLS + BOX_PAD or 0)
 end
 
--- Laid out by the run tracker (Tracker.lua) under its experience, at y; the
--- y under it comes back, so the tracker makes room.
+-- Laid out by the run tracker (Tracker.lua) under its bosses, at y; the y
+-- under it comes back, so the tracker makes room. The arrow and the words in
+-- the middle of the stretch.
 function SurvivorUI_GuardianBar(head, y)
-	if not (active and Docked()) then
+	-- Away in the Tracker Ring's look (Dial.lua), which has its compass.
+	if not (active and Docked()) or (SurvivorUI_DialOn and SurvivorUI_DialOn()) then
 		if bar then
 			bar:Hide()
 		end
@@ -1159,9 +1035,6 @@ function SurvivorUI_GuardianBar(head, y)
 		segment.fill:SetWidth(math.max(1, each * share))
 		segment.fill:SetVertexColor(color[1], color[2], color[3], 0.9)
 		segment.fill:Show()
-		SurvivorUI_SetLairMark(segment.mark, entry.mark, not entry.alive)
-		segment.flagged = entry.flag and SurvivorUI_GameFlag and SurvivorUI_GameFlag() == "ours"
-		Middle(segment, entry.mark and math.floor(MARK / 2) or 0)
 		local clickable = entry.alive
 		segment.button.target = clickable and entry.name or nil
 		segment.button:EnableMouse(clickable and true or false)
@@ -1192,7 +1065,6 @@ function SurvivorUI_GuardianBar(head, y)
 		end
 	end
 	for index = count + 1, table.getn(segments) do
-		segments[index].mark:Hide()
 		segments[index].fill:Hide()
 		segments[index].back:Hide()
 		segments[index].arrow:Hide()
@@ -1201,7 +1073,6 @@ function SurvivorUI_GuardianBar(head, y)
 		segments[index].flash:Hide()
 		segments[index].time:Hide()
 		segments[index].place = nil
-		segments[index].flagged = nil
 	end
 	return y - BAR_TOP - LINE - thick
 end
@@ -1255,30 +1126,149 @@ local function TurnOne(piece, place, step)
 	end
 end
 
--- The flagged lair's glow breathes, every frame, while its mark shows.
-local function Breathe(piece)
-	if piece.flagged and piece.mark:IsShown() then
-		local size = piece.mark:GetWidth() * (2.4 + 0.35 * math.sin(clock * 4))
-		piece.flagGlow:SetWidth(size)
-		piece.flagGlow:SetHeight(size)
-		piece.flagGlow:SetAlpha(0.6 + 0.3 * math.sin(clock * 4))
-		piece.flagGlow:Show()
-	else
-		piece.flagGlow:Hide()
-	end
-end
-
 local function Turn(elapsed)
 	clock = clock + elapsed
 	local step = math.min(1, elapsed * TURN)
 	for _, row in pairs(rows) do
 		TurnOne(row, row.place, step)
-		Breathe(row)
 	end
 	for _, segment in pairs(segments) do
 		TurnOne(segment, segment.place, step)
-		Breathe(segment)
 	end
+end
+
+------------------------------------------------------------------------------
+-- Its place. Hung (the default, v3.0.56): right under the run tracker's last
+-- line whatever it shows, at its width and size, going wherever it goes; the
+-- tracker's frame and shade reach round it (Tracker.lua), so what hangs under
+-- the tracker (the build list) stays clear of it, and the tracker kept on the
+-- screen keeps it there too. In its place while the tracker is off. Free (the
+-- options, Run tracker, Advanced: Free list): where it was put, at its own
+-- size, against the tracker's left side until moved.
+
+local hang = {
+	GAP = 10,       -- the tracker's last line to the list's title
+	as = nil,       -- how it hangs now: "under", "instead"; nil while free
+	top = nil,      -- hung under: its top, from the tracker's
+	lines = 0,      -- the lines shown at the last look
+}
+
+local function Hangs()
+	return not Settings().guardiansFree
+end
+
+-- For Mover.lua (hung, its size the tracker's) and the options.
+function SurvivorUI_GuardianListHangs()
+	return Hangs()
+end
+
+-- Its width; the names fitted again to it.
+local function Widen(width)
+	if math.abs(frame:GetWidth() - width) > 0.5 then
+		frame:SetWidth(width)
+		for _, row in pairs(rows) do
+			row.shownName = nil
+		end
+	end
+end
+
+-- Free: its own place and size.
+local function RestoreFree()
+	hang.as, hang.top = nil, nil
+	Widen(WIDTH)
+	if SurvivorUI_PartScale then
+		frame:SetScale(SurvivorUI_PartScale("guardians"))
+	end
+	frame:ClearAllPoints()
+	local tracker = getglobal("SurvivorUITracker")
+	if SurvivorUIDB and SurvivorUIDB.guardiansLeft and SurvivorUIDB.guardiansTop then
+		frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", SurvivorUIDB.guardiansLeft, SurvivorUIDB.guardiansTop)
+	elseif tracker then
+		-- Past the tracker's shade (8 to its left), and a little gap.
+		frame:SetPoint("TOPRIGHT", tracker, "TOPLEFT", -14, 0)
+	else
+		frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -260, -260)
+	end
+end
+
+-- Hung under the tracker's last line, content under its top.
+local function Under(tracker, content)
+	local top = -math.floor(content + hang.GAP + 0.5)
+	if top ~= hang.top then
+		hang.top = top
+		frame:ClearAllPoints()
+		frame:SetPoint("TOP", tracker, "TOP", 0, top)
+	end
+end
+
+-- Hung: under the tracker, or in its place. force: placed again though
+-- nothing changed (a reload, a size).
+local function Hang(force)
+	local tracker = getglobal("SurvivorUITracker")
+	if not tracker then
+		return
+	end
+	if math.abs(frame:GetScale() - tracker:GetScale()) > 0.001 then
+		frame:SetScale(tracker:GetScale())
+		force = true
+	end
+	Widen(tracker:GetWidth())
+	local how = tracker:IsShown() and "under" or "instead"
+	if how ~= hang.as or force then
+		hang.as, hang.top = how, nil
+		frame:ClearAllPoints()
+		if how == "under" then
+			Under(tracker, tracker.content or tracker:GetHeight())
+		else
+			frame:SetPoint("TOP", tracker, "TOP", 0, 0)
+		end
+		-- Over the tracker's shade, which reaches round it.
+		frame:SetFrameLevel(tracker:GetFrameLevel() + 3)
+	end
+end
+
+-- For the tracker as it draws (Tracker.lua): the list hung under its last
+-- line (content: how far under its top), and the room it takes there, the
+-- gap with it, so the tracker's frame and shade reach round it; with the
+-- tracker off, the list's height, for the tracker's place. 0 for none.
+function SurvivorUI_GuardianListRoom(content)
+	if not (frame:IsShown() and hang.lines > 0) then
+		return 0
+	end
+	if hang.as == "under" then
+		local tracker = getglobal("SurvivorUITracker")
+		if tracker and content then
+			Under(tracker, content)
+		end
+		return hang.GAP + frame:GetHeight()
+	elseif hang.as == "instead" then
+		return frame:GetHeight()
+	end
+	return 0
+end
+
+-- Hung, or with the bar in the tracker, the list has no place of its own
+-- to move to: its move handle (Mover.lua) away.
+local function Still()
+	if handle then
+		local still = (Docked() or Hangs()) and true or nil
+		if still and handle:IsShown() then
+			handle:EnableMouse(false)
+			handle:Hide()
+		end
+		handle.disabled = still
+	end
+end
+
+-- Placed as chosen, hung or free: a reload, a size (Mover.lua), Back to its
+-- place, the options.
+function SurvivorUI_PlaceGuardians()
+	if Hangs() then
+		Hang(true)
+	else
+		RestoreFree()
+	end
+	Still()
 end
 
 -- The reading goes on while there is a run with lairs, the list shown or the
@@ -1292,7 +1282,8 @@ updater:SetScript("OnUpdate", function()
 	wait = wait + arg1
 	if wait >= 0.1 then
 		wait = 0
-		frame:SetAlpha(Draw() == 0 and 0 or 1)
+		hang.lines = Draw()
+		frame:SetAlpha(hang.lines == 0 and 0 or 1)
 	end
 	Turn(arg1)
 end)
@@ -1308,15 +1299,19 @@ watcher:SetScript("OnUpdate", function()
 	watchWait = 0
 	local lairs = AZS_GetLairs and AZS_GetLairs()
 	active = Settings().guardians and Running() and lairs and table.getn(lairs) > 0 and true or false
-	if active and not Docked() then
+	-- Hung under the Tracker Ring with its compass (Dial.lua), the list gives way.
+	local giveWay = Hangs() and SurvivorUI_DialCompass and SurvivorUI_DialCompass()
+	if active and not Docked() and not giveWay then
 		frame:Show()
 	else
 		frame:Hide()
 	end
-	-- With the bar in the tracker, the list has no place to move.
-	if handle then
-		handle.disabled = Docked() and true or nil
+	if Hangs() then
+		Hang()
+	elseif hang.as then
+		RestoreFree()
 	end
+	Still()
 end)
 
 ------------------------------------------------------------------------------
@@ -1341,32 +1336,21 @@ function SurvivorUI_ToggleGuardians(argument)
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: the guardians' list is "..(settings.guardians and "on." or "off."))
 end
 
+-- Free and moved: its place kept (hung, it never moves on its own).
 local function SavePlace()
 	SurvivorUIDB = SurvivorUIDB or {}
 	SurvivorUIDB.guardiansLeft = math.floor(frame:GetLeft() + 0.5)
 	SurvivorUIDB.guardiansTop = math.floor(frame:GetTop() + 0.5)
 end
 
--- Its place: against the run tracker's left side, tops level, until moved.
-local function RestorePlace()
-	frame:ClearAllPoints()
-	local tracker = getglobal("SurvivorUITracker")
-	if SurvivorUIDB and SurvivorUIDB.guardiansLeft and SurvivorUIDB.guardiansTop then
-		frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", SurvivorUIDB.guardiansLeft, SurvivorUIDB.guardiansTop)
-	elseif tracker then
-		-- Past the tracker's shade (8 to its left), and a little gap.
-		frame:SetPoint("TOPRIGHT", tracker, "TOPLEFT", -14, 0)
-	else
-		frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -260, -260)
-	end
-end
-
 if SurvivorUI_RegisterMover then
-	handle = SurvivorUI_RegisterMover(frame, "Guardians", SavePlace, nil, RestorePlace)
+	handle = SurvivorUI_RegisterMover(frame, "Guardians", SavePlace, nil, SurvivorUI_PlaceGuardians)
+	-- Hung, it shows over the level's cards with the tracker (Mover.lua).
+	handle.cardsAs = function() return Hangs() and "Run tracker" or nil end
 end
 
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", function()
-	RestorePlace()
+	SurvivorUI_PlaceGuardians()
 end)

@@ -24,7 +24,12 @@
 --   (AZS_UNITS) in its kind's color, with no nameplate.
 -- - Range rings: the reach of the build's longest spell round the hero, on
 --   the minimap (its yards across, MapPins.lua) and on the ground (dots
---   along points of the circle, each a spot by offset).
+--   along points of the circle, each a spot by offset), each its own look
+--   (the options' Range ring tab).
+-- - Guardians' rings: where a sleeping guardian wakes, and how far from its
+--   lair an awake one lets you go before it gives up (the game's rule, read
+--   in its 0.139.2), with a warning in your last yards; on the minimap too
+--   (MapPins.lua).
 --
 -- An enemy whose Survivor Plates plate shows (SurvivorPlates_PlateShows) is
 -- left to it: the plate names it and wears the mark drawn beside its bar.
@@ -65,6 +70,8 @@ local DEFAULTS = {
 	worldDowned = true, worldCaches = true, worldLairs = true, worldArrows = true,
 	worldOrbs = true, worldBars = false, markDrawn = true, worldBeams = true,
 	rangeMinimap = true, rangeWorld = true,
+	-- The guardians' rings (below, and MapPins.lua's on the minimap).
+	leashWake = true, leashReset = true, leashWarn = true, leashMinimap = true,
 }
 -- A cache's beam (Lucas, 2026-11-02, after the world markers of the game's
 -- live client): a column of light BEAM_TALL yards up and BEAM_WIDE across, a
@@ -75,12 +82,48 @@ local BEAM_TALL, BEAM_WIDE, POOL_WIDE = 6, 2.4, 3.4
 local BEAM_COLOR = { 1.00, 0.77, 0.27 }
 -- The range rings (Lucas, 2026-11-02, after an idea of ProTecz's): as far as
 -- the build's longest spell strikes (BuildList.lua, SurvivorUI_LongestReach),
--- round the hero, light blue: on the minimap a ring, on the ground dots
--- along RING_POINTS points of the circle (both on at first), at least
--- DOT_GAP apart on the screen and never more than MOST_DOTS.
+-- round the hero: on the minimap along MAP_POINTS points of its circle, on
+-- the ground along RING_POINTS (both on at first). Each its look (the
+-- options' Range ring tab, 2026-11-03): its color, dots, dashes or a line
+-- (on the minimap all of dots, round you of pieces, below), the dots' size,
+-- the gap between them and how strong; round you its yards over it, on the
+-- minimap a shade inside. Never more than MOST_DOTS dots round you,
+-- MOST_MAP_DOTS on the minimap: the step between them widens first.
 local RING_COLOR = { 0.55, 0.82, 1.00 }
-local RING_POINTS = 48
-local DOT_GAP, DOT_SIZE, MOST_DOTS = 10, 6, 200
+local RING_POINTS, MAP_POINTS = 48, 64
+local MOST_DOTS, MOST_MAP_DOTS = 360, 240
+SurvivorUI_RANGE_COLORS = {
+	{ "ice", "Light blue", RING_COLOR },
+	{ "class", "Class color", nil },
+	{ "gold", "Gold", { 1.00, 0.78, 0.15 } },
+	{ "white", "White", { 1.00, 1.00, 1.00 } },
+	{ "red", "Red", { 1.00, 0.28, 0.22 } },
+	{ "orange", "Orange", { 1.00, 0.55, 0.15 } },
+	{ "green", "Green", { 0.40, 1.00, 0.45 } },
+	{ "teal", "Teal", { 0.30, 0.95, 0.90 } },
+	{ "purple", "Purple", { 0.72, 0.48, 1.00 } },
+	{ "pink", "Pink", { 1.00, 0.50, 0.80 } },
+}
+-- Each ring's first look: "World" round you, "Map" on the minimap (saved as
+-- ringWorldSize, ringMapLook...). The minimap's line as thin as its ring was.
+-- The guardians' (below): "Wake", the aggro ring, and "Leash", the reset
+-- area, in orange; "LeashWarn", the reset area in your last yards, a line
+-- (its size the reset area's and 2 more, its color going to red).
+local RING_LOOK = {
+	World = { Look = "dots", Color = "ice", Size = 6, Gap = 10, Alpha = 0.8, Yards = false },
+	Map = { Look = "line", Color = "ice", Size = 3, Gap = 6, Alpha = 0.9, Shade = false },
+	Wake = { Look = "dots", Color = "orange", Size = 5, Gap = 12, Alpha = 0.8 },
+	Leash = { Look = "dashes", Color = "orange", Size = 7, Gap = 9, Alpha = 0.85 },
+	LeashWarn = { Look = "line", Size = 9, Gap = 9, Alpha = 1 },
+}
+local looks = 0                  -- counts the changes of look, for the dots to take them
+-- A line or dashes round you (as big as the screen with a reach of 30 yards,
+-- where dots near enough to touch would be thousands): pieces of the
+-- RingLine art stretched and turned (SurvivorUI_RangePiece), as thick as
+-- LINE_SHARE of the dots' size, each no longer than PIECE_MOST times that,
+-- never more than MOST_PIECES. BAND_UV: the art's band, of its height.
+local LINE_SHARE, PIECE_MOST, MOST_PIECES = 0.6, 14, 300
+local BAND_UV = 4 / 64
 
 local function On(key)
 	local value = SurvivorUIDB and SurvivorUIDB[key]
@@ -109,6 +152,178 @@ local downedYards = {}           -- [name] = yards, this read
 -- How far a friend down is, in whole yards; nil when not down or not known.
 function SurvivorUI_DownedYards(name)
 	return name and downedYards[name]
+end
+
+-- A range ring's look, for the rings and the options' preview: which is
+-- "World" or "Map", field one of RING_LOOK's.
+function SurvivorUI_RangeLook(which, field)
+	if which == "LeashWarn" and field == "Size" then
+		return SurvivorUI_RangeLook("Leash", "Size") + 2
+	end
+	local value = SurvivorUIDB and SurvivorUIDB["ring"..which..field]
+	if value == nil then
+		return RING_LOOK[which][field]
+	end
+	return value
+end
+
+function SurvivorUI_SetRangeLook(which, field, value)
+	SurvivorUIDB = SurvivorUIDB or {}
+	if value == RING_LOOK[which][field] then
+		value = nil
+	end
+	SurvivorUIDB["ring"..which..field] = value
+	looks = looks + 1
+end
+
+-- Every ring on, each in its first look: the range rings and the guardians'.
+function SurvivorUI_ResetRangeRings()
+	SurvivorUIDB = SurvivorUIDB or {}
+	for which, fields in pairs(RING_LOOK) do
+		for field in pairs(fields) do
+			SurvivorUIDB["ring"..which..field] = nil
+		end
+	end
+	SurvivorUIDB.rangeWorld, SurvivorUIDB.rangeMinimap, SurvivorUIDB.rangeKept = nil, nil, nil
+	SurvivorUIDB.leashWake, SurvivorUIDB.leashReset, SurvivorUIDB.leashWarn, SurvivorUIDB.leashMinimap = nil, nil, nil, nil
+	looks = looks + 1
+end
+
+function SurvivorUI_RangeColor(which)
+	local chosen = SurvivorUI_RangeLook(which, "Color")
+	if chosen == "class" and SurvivorUI_ClassColor and UnitClass then
+		local _, class = UnitClass("player")
+		if class then
+			return SurvivorUI_ClassColor(class)
+		end
+	end
+	for index = 1, table.getn(SurvivorUI_RANGE_COLORS) do
+		local entry = SurvivorUI_RANGE_COLORS[index]
+		if entry[1] == chosen and entry[3] then
+			return entry[3][1], entry[3][2], entry[3][3]
+		end
+	end
+	return RING_COLOR[1], RING_COLOR[2], RING_COLOR[3]
+end
+
+-- Along a ring's way, lines[1] to lines[count] (each on, or left out; from x,
+-- y by dx, dy; its length): a dot each step, Put(n, x, y) placing the nth.
+-- Dots: a step of the gap. A line: steps under the dot's size, so they
+-- touch. Dashes: the line's steps, only along the first three dots' sizes
+-- of each stretch, the gap after. Returns how many were put.
+function SurvivorUI_RangeAlong(lines, count, which, most, Put)
+	local around = 0
+	for index = 1, count do
+		if lines[index].on then
+			around = around + lines[index].length
+		end
+	end
+	local look = SurvivorUI_RangeLook(which, "Look")
+	local size, gap = SurvivorUI_RangeLook(which, "Size"), SurvivorUI_RangeLook(which, "Gap")
+	local step, dash, stretch = gap, nil, nil
+	if look == "line" or look == "dashes" then
+		step = math.max(1, size * 0.4)
+	end
+	if look == "dashes" then
+		dash = size * 3
+		stretch = dash + gap
+	end
+	step = math.max(step, around / most)
+	local used, carry, run = 0, 0, 0
+	for index = 1, count do
+		local line = lines[index]
+		if not line.on then
+			carry = 0
+		elseif line.length > 0 then
+			local at = carry
+			while at < line.length and used < most do
+				if not stretch or math.mod(run + at, stretch) < dash then
+					used = used + 1
+					local share = at / line.length
+					Put(used, line.x + line.dx * share, line.y + line.dy * share)
+				end
+				at = at + step
+			end
+			carry = math.max(0, at - line.length)
+			run = run + line.length
+		end
+	end
+	return used
+end
+
+-- The pieces of a line, or of its dashes (three dots' sizes long, the gap
+-- after), along the same way: Put(n, x1, y1, x2, y2, thick) placing the nth,
+-- each piece within one line and no longer than PIECE_MOST times thick.
+-- Returns how many were put.
+function SurvivorUI_RangePieces(lines, count, which, most, Put)
+	local size, gap = SurvivorUI_RangeLook(which, "Size"), SurvivorUI_RangeLook(which, "Gap")
+	local thick = size * LINE_SHARE
+	local longest = PIECE_MOST * thick
+	local dash, stretch
+	if SurvivorUI_RangeLook(which, "Look") == "dashes" then
+		dash = size * 3
+		stretch = dash + gap
+	end
+	local used, run = 0, 0
+	for index = 1, count do
+		local line = lines[index]
+		if line.on and line.length > 0 then
+			-- Each stretch drawn on this line, s to e from its start: the
+			-- whole line, or each dash's share of it.
+			local k = stretch and math.floor(run / stretch) or 0
+			local s, e = 0, line.length
+			while used < most do
+				if stretch then
+					if k * stretch >= run + line.length then
+						break
+					end
+					s = math.max(k * stretch, run) - run
+					e = math.min(k * stretch + dash, run + line.length) - run
+					k = k + 1
+				elseif s >= e then
+					break
+				end
+				while s < e and used < most do
+					local t = math.min(e, s + longest)
+					used = used + 1
+					local a, b = s / line.length, t / line.length
+					Put(used, line.x + line.dx * a, line.y + line.dy * a, line.x + line.dx * b, line.y + line.dy * b, thick)
+					s = t
+				end
+			end
+			run = run + line.length
+		end
+	end
+	return used
+end
+
+-- One piece from x1, y1 to x2, y2 (y up), thick across: the texture's box
+-- the piece's own, sized here, and the art's band mapped onto the piece by
+-- SetTexCoord's eight corners (as the game's TaxiFrame draws its routes),
+-- each corner's UV inside the art, so nothing repeats: the band's middle
+-- half along it, BAND_UV across. A piece shorter than about its thickness
+-- draws its band a little longer, the corners kept inside. The caller
+-- places the texture by its middle: returned.
+function SurvivorUI_RangePiece(texture, x1, y1, x2, y2, thick)
+	local dx, dy = x2 - x1, y2 - y1
+	local length = math.sqrt(dx * dx + dy * dy)
+	if length < 0.01 then
+		length, dx, dy = 0.01, 0.01, 0
+	end
+	local ex, ey = dx / length, dy / length
+	local nx, ny = -ey, ex
+	local halfLength, halfThick = length / 2, thick * 0.75
+	local hx = halfLength * math.abs(ex) + halfThick * math.abs(nx)
+	local hy = halfLength * math.abs(ey) + halfThick * math.abs(ny)
+	local su = math.min(0.25 / halfLength, 0.5 / (halfLength + halfThick * 2 * math.abs(ex * ey)))
+	local sv = BAND_UV / thick
+	local a, b, c, d = hx * ex * su, hy * ey * su, hx * nx * sv, hy * ny * sv
+	-- Upper left, lower left, upper right, lower right.
+	texture:SetTexCoord(0.5 - a + b, 0.5 - c + d, 0.5 - a - b, 0.5 - c - d,
+		0.5 + a + b, 0.5 + c + d, 0.5 + a - b, 0.5 + c - d)
+	texture:SetWidth(2 * hx)
+	texture:SetHeight(2 * hy)
+	return (x1 + x2) / 2, (y1 + y2) / 2
 end
 
 if not (AZS_GetWorldAnchors and AZS_ProjectWorldAnchors and AZS_RegisterWorldAnchorFrameHandler) then
@@ -199,6 +414,11 @@ local function ReadAll()
 	local health = Health()
 	spots = {}
 	base = nil
+	-- Each lair, for the guardians' rings (below), whatever the marks: its
+	-- spot, its state, and whether its guardian is home (within 3 yards of
+	-- it: only then does it wake as the hero comes near).
+	local lairs = {}
+	spots.lairs = lairs
 	-- When each empty lair is claimed again (AZS_LAIRS' "left", seconds from
 	-- its line, as Guardians.lua reads it).
 	local refill = {}
@@ -237,9 +457,16 @@ local function ReadAll()
 			end
 		elseif entry.kind == "guardianLair" then
 			base = base or { id = entry.anchorId, x = entry.x, y = entry.y, z = entry.z }
+			local occupant = entry.occupantUnitId and units[tonumber(entry.occupantUnitId)]
+			if entry.x and entry.y then
+				local gx, gy = occupant and occupant.entry.x, occupant and occupant.entry.y
+				local away = gx and gy and math.sqrt((gx - entry.x) * (gx - entry.x) + (gy - entry.y) * (gy - entry.y)) or 0
+				table.insert(lairs, { anchor = entry.anchorId, x = entry.x, y = entry.y, z = entry.z or 0, state = entry.state,
+					home = away <= 3, gx = gx, gy = gy, away = away })
+			end
 			-- Asleep, over the lair; awake, over the guardian, which leaves it
 			-- to fight (with its own mark or bar, its name goes with them).
-			local guardian = entry.state == "awake" and entry.occupantUnitId and units[tonumber(entry.occupantUnitId)]
+			local guardian = entry.state == "awake" and occupant
 			if not On("worldLairs") then
 				spot = nil
 			elseif entry.state == "empty" then
@@ -714,17 +941,37 @@ end
 -- The range rings.
 
 local reach                      -- the longest spell's yards, this read
+local ringClass                  -- the hero's class, for a ring in its color
 
 -- On the minimap: a ring as wide as the yards across allow, under the pins
--- (MapPins.lua's stand 4 over the map); left out while it fits no more.
+-- (MapPins.lua's stand 4 over the map); left out while it fits no more. Its
+-- dots placed again only as its size or its look changes, its shade (a disc)
+-- under them.
 local mapRing = CreateFrame("Frame", "SurvivorUIRangeRing", Minimap)
 mapRing:SetFrameLevel(Minimap:GetFrameLevel() + 2)
 mapRing:SetPoint("CENTER", Minimap, "CENTER", 0, 0)
 mapRing:Hide()
-mapRing.ring = mapRing:CreateTexture(nil, "ARTWORK")
-mapRing.ring:SetTexture(ART.."Ring")
-mapRing.ring:SetAllPoints(mapRing)
-mapRing.ring:SetVertexColor(RING_COLOR[1], RING_COLOR[2], RING_COLOR[3], 0.9)
+mapRing.shade = mapRing:CreateTexture(nil, "BACKGROUND")
+mapRing.shade:SetTexture(ART.."Disc")
+mapRing.shade:SetAllPoints(mapRing)
+local mapDots, mapLines = {}, {}
+for index = 1, MAP_POINTS do
+	mapLines[index] = { on = true }
+end
+
+local function PutMapDot(index, x, y)
+	local dot = mapDots[index]
+	if not dot then
+		dot = mapRing:CreateTexture(nil, "ARTWORK")
+		dot:SetTexture(ART.."PaceDot")
+		mapDots[index] = dot
+	end
+	dot:SetWidth(mapRing.dotSize)
+	dot:SetHeight(mapRing.dotSize)
+	dot:SetVertexColor(mapRing.r, mapRing.g, mapRing.b, mapRing.alpha)
+	dot:SetPoint("CENTER", mapRing, "CENTER", x, y)
+	dot:Show()
+end
 
 local function PlaceMapRing(running)
 	local across = SurvivorUI_MinimapYards and SurvivorUI_MinimapYards()
@@ -734,8 +981,33 @@ local function PlaceMapRing(running)
 		mapRing:Hide()
 		return
 	end
-	mapRing:SetWidth(size)
-	mapRing:SetHeight(size)
+	local drawn = math.floor(size * 10 + 0.5) + looks * 100000
+	if mapRing.drawn ~= drawn then
+		mapRing.drawn = drawn
+		mapRing:SetWidth(size)
+		mapRing:SetHeight(size)
+		mapRing.r, mapRing.g, mapRing.b = SurvivorUI_RangeColor("Map")
+		mapRing.alpha = SurvivorUI_RangeLook("Map", "Alpha")
+		mapRing.dotSize = SurvivorUI_RangeLook("Map", "Size")
+		local radius = size / 2
+		for index = 1, MAP_POINTS do
+			local line = mapLines[index]
+			local from, to = 2 * math.pi * (index - 1) / MAP_POINTS, 2 * math.pi * index / MAP_POINTS
+			line.x, line.y = radius * math.cos(from), radius * math.sin(from)
+			line.dx, line.dy = radius * math.cos(to) - line.x, radius * math.sin(to) - line.y
+			line.length = math.sqrt(line.dx * line.dx + line.dy * line.dy)
+		end
+		local used = SurvivorUI_RangeAlong(mapLines, MAP_POINTS, "Map", MOST_MAP_DOTS, PutMapDot)
+		for index = used + 1, table.getn(mapDots) do
+			mapDots[index]:Hide()
+		end
+		if SurvivorUI_RangeLook("Map", "Shade") then
+			mapRing.shade:SetVertexColor(mapRing.r, mapRing.g, mapRing.b, 0.3 * mapRing.alpha)
+			mapRing.shade:Show()
+		else
+			mapRing.shade:Hide()
+		end
+	end
 	mapRing:Show()
 end
 
@@ -743,51 +1015,311 @@ end
 local ground = CreateFrame("Frame", "SurvivorUIWorldRange", WorldFrame)
 ground:SetAllPoints(WorldFrame)
 ground:Hide()
-local dots = {}
+ground.yards = Words(ground, 10)
+local dots, pieces = {}, {}
 local ringAsk, lines = {}, {}    -- the circle's points, asked anew each frame; the lines between
 for index = 1, RING_POINTS do
 	ringAsk[index] = { anchorId = "", attachment = "position", offset = { x = 0, y = 0, z = 0 } }
 	lines[index] = {}
 end
 
-local function Dot(index)
+-- A piece of the line or of a dash, in its look as it stands.
+local function PutPiece(index, x1, y1, x2, y2, thick)
+	local piece = pieces[index]
+	if not piece then
+		piece = ground:CreateTexture(nil, "BACKGROUND")
+		piece:SetTexture(ART.."RingLine")
+		pieces[index] = piece
+	end
+	if piece.looks ~= looks then
+		piece.looks = looks
+		local r, g, b = SurvivorUI_RangeColor("World")
+		piece:SetVertexColor(r, g, b, SurvivorUI_RangeLook("World", "Alpha"))
+	end
+	local x, y = SurvivorUI_RangePiece(piece, x1, y1, x2, y2, thick)
+	piece:SetPoint("CENTER", ground, "BOTTOMLEFT", x, y)
+	piece:Show()
+end
+
+-- A dot of the ring, in its look as it stands (taken again after a change).
+local function PutDot(index, x, y)
 	local dot = dots[index]
 	if not dot then
 		dot = ground:CreateTexture(nil, "BACKGROUND")
 		dot:SetTexture(ART.."PaceDot")
-		dot:SetWidth(DOT_SIZE)
-		dot:SetHeight(DOT_SIZE)
-		dot:SetVertexColor(RING_COLOR[1], RING_COLOR[2], RING_COLOR[3], 0.8)
 		dots[index] = dot
 	end
-	return dot
+	if dot.looks ~= looks then
+		dot.looks = looks
+		local size = SurvivorUI_RangeLook("World", "Size")
+		dot:SetWidth(size)
+		dot:SetHeight(size)
+		local r, g, b = SurvivorUI_RangeColor("World")
+		dot:SetVertexColor(r, g, b, SurvivorUI_RangeLook("World", "Alpha"))
+	end
+	dot:SetPoint("CENTER", ground, "BOTTOMLEFT", x, y)
+	dot:Show()
 end
 
-local function HideDots(first)
+-- The dots from first on and the pieces from firstPiece on hidden; with
+-- none left, the yards too.
+local function HideDots(first, firstPiece)
 	for index = first, table.getn(dots) do
 		dots[index]:Hide()
+	end
+	for index = firstPiece or first, table.getn(pieces) do
+		pieces[index]:Hide()
+	end
+	if first == 1 and (firstPiece or 1) == 1 then
+		ground.yards:Hide()
+	end
+end
+
+------------------------------------------------------------------------------
+-- The guardians' rings (Lucas, 2026-11-03), by the game's rule (read in its
+-- 0.139.2, the same for every zone, Heroic and guardian): a sleeping guardian
+-- wakes at any hit, from any distance, or with the hero within WAKE yards of
+-- it while it is home (within HOME yards of its lair); an awake one gives up
+-- when the hero, not it, is more than LEASH yards from its lair, wherever it
+-- stands itself: full health, its debuffs gone, asleep, walking home. Drawn
+-- on the ground in the range ring's own call (DrawRing, below), each lair's
+-- spot and state from the catalog's read (spots.lairs), each its switch and
+-- its look (the options' Range ring tab; orange dots and dashes at first):
+-- - the wake ring ("aggro ring"): round the nearest guardian asleep at home,
+--   within NEAR yards (one only: a ring round every lair would fill the
+--   screen);
+-- - the reset ring ("reset area") of an awake guardian's lair, along the arc
+--   within SEEN yards of the hero (the rest lies far off the screen), at the
+--   hero's height, where the ground near it is; in the last WARN yards
+--   ("Warning"), a line turning red, pulsing, the yards left beside it.
+-- The minimap's are MapPins.lua's.
+
+do
+	local WAKE, LEASH, WARN = 20, 97.5, 10   -- HOME, 3 yards: ReadAll's
+	-- The screen reaches about 90 yards up from the hero (the camera looks
+	-- ahead, from behind): SEEN past that.
+	local SEEN, NEAR = 120, 90
+	local WAKE_POINTS, ARC_POINTS = 32, 61   -- odd: the arc's middle point is the nearest to the hero
+	-- Each its look (RING_LOOK's Wake, Leash and LeashWarn; the options' Range
+	-- ring tab); the warning's red the empty lair's time's (RESPAWN).
+
+	local pool, wakeLines, arcLines, wakeDots, arcPieces = {}, {}, {}, {}, {}
+	for index = 1, ARC_POINTS do
+		wakeLines[index], arcLines[index] = {}, {}
+	end
+	local now = { arcs = {} }                -- this frame's asks: { wake = first, arcs = { { first, left } }, hero = index }
+	local tint = { 1, 1, 1, 1 }
+	local label = Words(ground, 12)
+	label:Hide()
+
+	-- The nth request after count, by offset from a lair's anchor.
+	local function Ask(asks, count, anchor, x, y, z)
+		count = count + 1
+		local ask = pool[count]
+		if not ask then
+			ask = { attachment = "position", offset = {} }
+			pool[count] = ask
+		end
+		ask.anchorId = anchor
+		ask.offset.x, ask.offset.y, ask.offset.z = x, y, z
+		asks[count] = ask
+		return count
+	end
+
+	-- This frame's rings asked after asks[count]; the new count back.
+	function ground.LeashAsk(asks, count)
+		local arcs = {}
+		now.arcs, now.wake, now.hero = arcs, nil, nil
+		local lairs = spots.lairs
+		if not (heroAt and lairs) then
+			return count
+		end
+		local nearest, nearestYards
+		for index = 1, table.getn(lairs) do
+			local lair = lairs[index]
+			local dx, dy = heroAt.x - lair.x, heroAt.y - lair.y
+			local yards = math.sqrt(dx * dx + dy * dy)
+			lair.yards = yards
+			if lair.state == "asleep" and lair.home and yards <= NEAR and (not nearestYards or yards < nearestYards) then
+				nearest, nearestYards = lair, yards
+			elseif lair.state == "awake" and On("leashReset") and yards > LEASH - SEEN and yards < LEASH + WARN
+					and table.getn(arcs) < 2 and count + ARC_POINTS + WAKE_POINTS + 1 <= 256 then
+				-- The arc's ends where the circle is SEEN yards from the hero.
+				local cosine = (LEASH * LEASH + yards * yards - SEEN * SEEN) / (2 * LEASH * yards)
+				cosine = math.max(-1, math.min(1, cosine))
+				local wide = math.atan2(math.sqrt(1 - cosine * cosine), cosine)
+				local toward = math.atan2(dy, dx)
+				table.insert(arcs, { first = count + 1, left = LEASH - yards })
+				for point = 1, ARC_POINTS do
+					local angle = toward - wide + 2 * wide * (point - 1) / (ARC_POINTS - 1)
+					count = Ask(asks, count, lair.anchor, LEASH * math.cos(angle), LEASH * math.sin(angle), heroAt.z - lair.z)
+				end
+				if not now.hero then
+					count = Ask(asks, count, lair.anchor, dx, dy, heroAt.z - lair.z)
+					now.hero = count
+				end
+			end
+		end
+		if nearest and On("leashWake") and count + WAKE_POINTS <= 256 then
+			now.wake = count + 1
+			local cx, cy = (nearest.gx or nearest.x) - nearest.x, (nearest.gy or nearest.y) - nearest.y
+			for point = 1, WAKE_POINTS do
+				local angle = 2 * math.pi * (point - 1) / WAKE_POINTS
+				count = Ask(asks, count, nearest.anchor, cx + WAKE * math.cos(angle), cy + WAKE * math.sin(angle), 0)
+			end
+		end
+		return count
+	end
+
+	-- The lines between points first to first + n - 1 on the screen, closed
+	-- (the last back to the first) or not: one with an end off it left out.
+	local function Join(lines, points, first, n, closed)
+		local last = closed and n or n - 1
+		for index = 1, last do
+			local a, b = points[first + index - 1], points[first + math.mod(index, n)]
+			local line = lines[index]
+			line.on = a and b and a.state == "onScreen" and b.state == "onScreen" and a.x and b.x and true or false
+			if line.on then
+				line.x, line.y, line.dx, line.dy = a.x, a.y, b.x - a.x, b.y - a.y
+				line.length = math.sqrt(line.dx * line.dx + line.dy * line.dy)
+			end
+		end
+		return last
+	end
+
+	-- The dots and the pieces of both rings, in the look being drawn (tint:
+	-- its color, opacity and dots' size); dotted and laid, those put so far.
+	local dotted, laid = 0, 0
+	local function PutDot(index, x, y)
+		local dot = wakeDots[dotted + index]
+		if not dot then
+			dot = ground:CreateTexture(nil, "BACKGROUND")
+			dot:SetTexture(ART.."PaceDot")
+			wakeDots[dotted + index] = dot
+		end
+		dot:SetWidth(tint.size)
+		dot:SetHeight(tint.size)
+		dot:SetVertexColor(tint[1], tint[2], tint[3], tint[4])
+		dot:SetPoint("CENTER", ground, "BOTTOMLEFT", x, y)
+		dot:Show()
+	end
+
+	local function PutPiece(index, x1, y1, x2, y2, thick)
+		local piece = arcPieces[laid + index]
+		if not piece then
+			piece = ground:CreateTexture(nil, "BACKGROUND")
+			piece:SetTexture(ART.."RingLine")
+			arcPieces[laid + index] = piece
+		end
+		piece:SetVertexColor(tint[1], tint[2], tint[3], tint[4])
+		local x, y = SurvivorUI_RangePiece(piece, x1, y1, x2, y2, thick)
+		piece:SetPoint("CENTER", ground, "BOTTOMLEFT", x, y)
+		piece:Show()
+	end
+
+	-- A ring's lines in a look ("Wake", "Leash" or "LeashWarn"): dots, or the
+	-- pieces of its dashes or line. The look's color unless given (r, g, b).
+	local function Trace(lines, count, which, r, g, b, a)
+		if not r then
+			r, g, b = SurvivorUI_RangeColor(which)
+		end
+		tint[1], tint[2], tint[3], tint[4] = r, g, b, a or SurvivorUI_RangeLook(which, "Alpha")
+		tint.size = SurvivorUI_RangeLook(which, "Size")
+		if SurvivorUI_RangeLook(which, "Look") == "dots" then
+			dotted = dotted + SurvivorUI_RangeAlong(lines, count, which, MOST_DOTS - dotted, PutDot)
+		else
+			laid = laid + SurvivorUI_RangePieces(lines, count, which, MOST_PIECES - laid, PutPiece)
+		end
+	end
+
+	-- This frame's rings drawn from the call's answers (points, nil: none).
+	function ground.LeashDraw(points)
+		local warned
+		dotted, laid = 0, 0
+		if points and now.wake then
+			Trace(wakeLines, Join(wakeLines, points, now.wake, WAKE_POINTS, true), "Wake")
+		end
+		for index = 1, table.getn(points and now.arcs or {}) do
+			local arc = now.arcs[index]
+			local count = Join(arcLines, points, arc.first, ARC_POINTS, false)
+			if arc.left < WARN and On("leashWarn") then
+				-- A line from the reset area's color half way to red at once,
+				-- all red at the limit; pulsing, a little thicker.
+				local share = 0.5 + 0.5 * math.max(0, math.min(1, 1 - arc.left / WARN))
+				local r, g, b = SurvivorUI_RangeColor("Leash")
+				Trace(arcLines, count, "LeashWarn", r + (RESPAWN[1] - r) * share, g + (RESPAWN[2] - g) * share,
+					b + (RESPAWN[3] - b) * share, 0.75 + 0.25 * math.sin(GetTime() * 6))
+				if not warned or arc.left < warned.left then
+					warned = arc
+				end
+			else
+				Trace(arcLines, count, "Leash")
+			end
+		end
+		for index = dotted + 1, table.getn(wakeDots) do
+			wakeDots[index]:Hide()
+		end
+		for index = laid + 1, table.getn(arcPieces) do
+			arcPieces[index]:Hide()
+		end
+		-- The yards left, by the arc's middle (the nearest point), on its
+		-- far side from the hero.
+		local middle = warned and points[warned.first + (ARC_POINTS - 1) / 2]
+		if not (middle and middle.state == "onScreen" and middle.x and warned.left > 0) then
+			label:Hide()
+			return
+		end
+		local hero = now.hero and points[now.hero]
+		local ux, uy = 0, 1
+		if hero and hero.state == "onScreen" and hero.x then
+			local dx, dy = middle.x - hero.x, middle.y - hero.y
+			local length = math.sqrt(dx * dx + dy * dy)
+			if length > 1 then
+				ux, uy = dx / length, dy / length
+			end
+		end
+		label:SetText(SurvivorUI_TF and SurvivorUI_TF("Resets in {1} yd", math.ceil(warned.left))
+			or ("Resets in "..math.ceil(warned.left).." yd"))
+		label:SetTextColor(RESPAWN[1], RESPAWN[2], RESPAWN[3])
+		label:ClearAllPoints()
+		label:SetPoint("CENTER", ground, "BOTTOMLEFT", middle.x + ux * 18, middle.y + uy * 14)
+		label:Show()
 	end
 end
 
 -- The circle's points on the screen, by offset from the anchor that stays
--- put, then dots along the lines between them: a line with an end off the
--- screen left out.
+-- put, then dots or pieces along the lines between them: a line with an end
+-- off the screen left out. Its yards, chosen, over the ring's highest point
+-- with room under the screen's top. The guardians' rings asked after its
+-- points, in the same call.
 local function DrawRing()
-	if not (reach and base and heroAt and On("rangeWorld")) then
+	local asks, count = {}, 0
+	local ringOn = reach and base and heroAt and On("rangeWorld")
+	if ringOn then
+		for index = 1, RING_POINTS do
+			local angle = 2 * math.pi * (index - 1) / RING_POINTS
+			local ask = ringAsk[index]
+			ask.anchorId = base.id
+			ask.offset.x = heroAt.x + reach * math.cos(angle) - base.x
+			ask.offset.y = heroAt.y + reach * math.sin(angle) - base.y
+			ask.offset.z = heroAt.z - base.z
+			asks[index] = ask
+		end
+		count = RING_POINTS
+	end
+	count = ground.LeashAsk(asks, count)
+	if count == 0 then
+		ground.LeashDraw(nil)
 		HideDots(1)
 		return
 	end
-	for index = 1, RING_POINTS do
-		local angle = 2 * math.pi * (index - 1) / RING_POINTS
-		local ask = ringAsk[index]
-		ask.anchorId = base.id
-		ask.offset.x = heroAt.x + reach * math.cos(angle) - base.x
-		ask.offset.y = heroAt.y + reach * math.sin(angle) - base.y
-		ask.offset.z = heroAt.z - base.z
-	end
-	local ok, result = pcall(AZS_ProjectWorldAnchors, ringAsk)
+	local ok, result = pcall(AZS_ProjectWorldAnchors, asks)
 	local points = ok and result and result.entries or {}
-	local around = 0
+	ground.LeashDraw(points)
+	if not ringOn then
+		HideDots(1)
+		return
+	end
 	for index = 1, RING_POINTS do
 		local a, b = points[index], points[math.mod(index, RING_POINTS) + 1]
 		local line = lines[index]
@@ -795,29 +1327,39 @@ local function DrawRing()
 		if line.on then
 			line.x, line.y, line.dx, line.dy = a.x, a.y, b.x - a.x, b.y - a.y
 			line.length = math.sqrt(line.dx * line.dx + line.dy * line.dy)
-			around = around + line.length
 		end
 	end
-	local gap = math.max(DOT_GAP, around / MOST_DOTS)
-	local used, carry = 0, 0
+	local used, laid = 0, 0
+	if SurvivorUI_RangeLook("World", "Look") == "dots" then
+		used = SurvivorUI_RangeAlong(lines, RING_POINTS, "World", MOST_DOTS, PutDot)
+	else
+		laid = SurvivorUI_RangePieces(lines, RING_POINTS, "World", MOST_PIECES, PutPiece)
+	end
+	HideDots(used + 1, laid + 1)
+	local label = ground.yards
+	if used + laid == 0 or not SurvivorUI_RangeLook("World", "Yards") then
+		label:Hide()
+		return
+	end
+	local roof = (ground:GetHeight() or 0) * 0.88
+	local topX, topY
 	for index = 1, RING_POINTS do
 		local line = lines[index]
-		if not line.on then
-			carry = 0
-		elseif line.length > 0 then
-			local at = carry
-			while at < line.length and used < MOST_DOTS do
-				used = used + 1
-				local dot = Dot(used)
-				local share = at / line.length
-				dot:SetPoint("CENTER", ground, "BOTTOMLEFT", line.x + line.dx * share, line.y + line.dy * share)
-				dot:Show()
-				at = at + gap
-			end
-			carry = at - line.length
+		if line.on and line.y < roof and (not topY or line.y > topY) then
+			topX, topY = line.x, line.y
 		end
 	end
-	HideDots(used + 1)
+	if not topX then
+		label:Hide()
+		return
+	end
+	if label.reach ~= reach or label.looks ~= looks then
+		label.reach, label.looks = reach, looks
+		label:SetText(Yards(reach))
+		label:SetTextColor(SurvivorUI_RangeColor("World"))
+	end
+	label:SetPoint("BOTTOM", ground, "BOTTOMLEFT", topX, topY + SurvivorUI_RangeLook("World", "Size") / 2 + 3)
+	label:Show()
 end
 
 local function Showing()
@@ -860,6 +1402,11 @@ reader:SetScript("OnUpdate", function()
 	local running = phase == "playing" or phase == "choosing" or phase == "paused"
 	reach = running and (On("rangeMinimap") or On("rangeWorld")) and SurvivorUI_LongestReach
 		and SurvivorUI_LongestReach() or nil
+	local _, class = UnitClass("player")
+	if class ~= ringClass then
+		ringClass = class
+		looks = looks + 1
+	end
 	PlaceMapRing(running)
 	if not Showing() then
 		return

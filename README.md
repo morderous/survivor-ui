@@ -73,7 +73,7 @@ Nameplates.
 
 - A thin bar with a black line round it, the name over it and the health's share small inside, on the right.
 - Each kind in its own color, each a little larger: the rank and file red, elites green, lair guardians blue, bosses purple, the final boss orange. From the game's 0.139.2 the game tells each one's kind, so a guardian and an elite of the same name each wear their own.
-- A skull over the name: a bone skull on an elite, its lair's mark on a guardian, a horned infernal skull on a boss and the final boss.
+- A skull over the name: a bone skull on an elite, the minimap's horned lair skull on a guardian, a horned infernal skull on a boss and the final boss.
 - In a crowd a boss's plate is in front, then a guardian's, then an elite's; the rank and file behind, a little faded (never your target).
 - The target's plate has a gold line and shows its debuffs and their stacks.
 - The plate under the mouse glows, comes to the front and takes the click, so you can pick one out of a crowd. A Survivor UI boss bar under the mouse lines its enemy's plate in white.
@@ -227,6 +227,107 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### Azeroth SurvivorUI Launcher 1.10.0, 2026-11-04
+
+The launcher in Russian, and in your Windows' language.
+
+- **Russian:** **Language**, on the Play tab, now has English, 中文 and Русский. Tabs, buttons, tips, messages and boxes are translated, and Russian counts its numbers right (1 забег, 2 забега, 5 забегов). Months and units (Oct 29, 12h 30m, MB) stay as they are.
+- **Follows Windows:** until you pick a language, the launcher follows the game's; with no game language yet, a Chinese or Russian Windows opens it in Chinese or Russian. The box on the Play tab still wins.
+- **Versions that fit:** with a newer launcher or Survivor UI out, the version lines at the top right no longer lose the new version: the launcher's takes a smaller font, Survivor UI's shows "Survivor UI → 3.0.56" (the one installed is in the Addons tab).
+- **Game line:** "new game data is out" no longer runs into **Graphics** on the Play tab; the **Update game** button under it says the rest.
+
+### v3.0.56, 2026-11-04
+
+Seven tabs of the options made anew, each with a live preview of what it sets: your range indicator (a tab of its own, each ring in its own look, and the spell each class shows in Spell per class), the minimap, the nameplates, the run tracker, your frames and bar, the tooltips and the build list.
+
+**Range indicator**
+- **A tab of its own:** the options' new **Range indicator** tab, after World markers, draws both rings as the game will: round your hero with enemies about it, and on the minimap at its zoom, with the spell that sets the reach. Each ring's switch left World markers for it, and the ring's key is there too.
+- **Each its own look:** dots, dashes or a line; light blue (as before), your class's color or one of eight others; the dots' size, the opacity and the gap. Round you, the line and the dashes stay whole even when the ring is wider than the screen; on the minimap the line keeps its thickness at any zoom.
+- **Its yards** (new, off): how far the ring reaches, over it on the ground.
+- **Shade inside** (new, off): a faint fill inside the minimap's ring, what is in reach.
+- **One ring at a time:** the tab picks **Character**, **Minimap**, **Guardian aggro** or **Guardian reset**. A dot on each is lit in its color while it shows. Under it you get that ring's switch, its extras and its look, faded while it is off. The gap and the key are in Advanced.
+- **Spell per class** (new, beside Range indicator): pick, once for each class, which spell's reach your range ring shows (a Warrior can pick Execute). Every hero of that class follows it. Until that spell is in your build the ring shows your longest reach, as before; Longest is the default. Each spell shows its yards at its first rank, and in your hero's row a dot marks the spells in your build now.
+- **Which spell:** a line under the Range indicator's preview says which spell sets your ring's reach and why, with a link to Spell per class.
+
+**Guardians' rings** (new, in the Range indicator tab: Guardian aggro and Guardian reset, each with its own look: dots, dashes or a line, color, size, opacity and gap; World markers links to them)
+- **Where it wakes:** orange dots 20 yards round the nearest guardian asleep at its lair. Walk in, or hit it from anywhere, and it wakes.
+- **Where it gives up:** once it is awake, an arc 97.5 yards from its lair. It is your distance to the lair that counts, not the guardian's: past it the guardian heals to full and walks home, and from outside it can't be worn down, as the first hit wakes it and it resets at once. In your last 10 yards the arc turns red and pulses, with the yards left beside it.
+- **On the minimap too:** the reset ring as dots round the awake guardian's lair, red in the last yards, and the wake ring at a close zoom. The game's rule, read in its 0.139.2.
+
+**Minimap**
+- **A live preview:** the minimap, square or round, with a sample of every pin as your settings stand: the lairs' skulls, empty lairs dimmed or hidden with their timers, the flagged lair's glow or the game's flag, caches, bosses, the final boss's glow, elites, pins on the edge, and the clock and FPS line.
+- **Fewer rows:** the pin kinds are chips, the choices sit side by side, and the sizes have S, M and L. The clock's Off sits beside 24 and 12 hours. The lair size, which also sizes the boss and elite skulls, is now called **Lair and boss pins**.
+- **What needs what:** a setting fades and stays still while what it needs is off, the reason on hover: the lair settings without the lairs' pins, every pin setting and both pin sizes without Pins on the minimap, Out of reach with no kind of pin on, Clock and FPS on the round minimap, the marker's color and size with the game's arrow. The preview keeps the game's red flag where the game still shows it.
+- **No more lair marks:** each lair is the horned skull on the minimap again, dimmed while empty, the one the game's flag points at in its gold glow; its tooltip says Lair. The guardians' bar, count and list in the run tracker, the boss bars and Run History show no marks either, and Lair marks left the Minimap and Run tracker tabs.
+- **You on the minimap** (new; an idea of ProTecz's): keep the game's arrow, or put a dot, a dot with a small arrow, a sharp arrow or a cross in its place, in your class's color or one of the range ring's, at S, M or L. The game's arrow shows where the camera looks and never turns as you walk; ours points the way you walk. The preview is now the minimap's real size with your marker in its middle, and the Range indicator tab links to it.
+
+**Nameplates** (Survivor Plates)
+- **A live preview** of one plate of each kind as Survivor Plates draws it, in its size, color, rounded bar and skull: the rank and file, an elite as your target, a guardian, a boss, the final boss, a co-op friend, a pet and a totem. It follows every choice: a kind left out fades, the names, the debuffs inside or over your target, the size.
+- **The kinds as chips in their plates' colors**, then the look, the size as S, M and L, and the plates' key beside Ignore V and Shift+V. **Suggested setup** (as `/splates suggested`) is the page's own button.
+- **A guardian's skull:** the minimap's horned lair skull, a little larger, in place of the white one with red eyes.
+
+**Run tracker**
+- **A live preview** beside the settings: the run's tags, the clock and the coin, the timeline and its pips, a boss in its health look, the guardians as chosen, the elites and your level; your run while one is on, a sample otherwise.
+- **Every setting kept, in fewer rows:** the guardians' six ways and the four health looks (1.2M / 3.4M too) side by side, the elite bars a step at a time, and the list's size, text size and place under Advanced. The coin's shine is here too, shared with Kills & gold.
+- **The guardians' list hangs under the tracker:** right under its last line, whatever it shows, at its width and size, inside its shade, moving with it; the build list under it moves down to make room. **Free list** (Advanced) stands it on its own again, at its own size and place.
+- **Tracker Ring** (a new look of the run tracker, Experimental: Tracker Ring, with its switch, preview and settings; the Classic lines stay the default, and the Run tracker tab keeps theirs with a link): the outer ring is the whole run, drawn smooth at any size, filling clockwise from the top, each boss a mark at its time: slain ones dimmed with a tick, the next glowing orange with its time beside it, the final boss a horned skull. A thin inner ring empties until the next boss. In the middle the difficulty and affixes, the clock, "of 16:00" and the next boss with its countdown.
+- **A boss alive:** the Dial stays the run's clock and spawn timer. The boss's mark pulses on the ring, its name and its health take the next boss's line ("Ragnaros 63%"), and the thin ring keeps counting down to the next one. No health ring or debuffs on the Dial: the nameplates and the boss bars show them. A long name gets smaller, then short ("Ossirian U. 63%"), to stay inside the ring; the % stays whole.
+- **Its own tags:** the difficulty and the affixes are always short (there's no room for words in the circle), and each can be shown or turned off in the Tracker Ring tab. The Run tracker tab's choices are for the Classic lines only.
+- **The guardians' compass** under the dial: a tile per lair with an arrow toward it and the yards, green while the guardian is up, orange in a fight with its health in % in place of the arrow, grey with a red clock emptying while slain; hover one for the guardian, click a living one to target it. Each tile is only as big as what it holds, the row centered. **Distance** (on) shows the yards; off, the tiles are shorter and a slain lair shows its wait in place of the clock. No lair marks on the tiles. In the corners the cache coin and its price, the elites alive, the lives left and the kill pace orb. The Dial keeps the tracker's place, Size, Text size and move mode, and the Build list still moves under it. Its own settings: the ring's color (green or your class's), the compass with Distance and North up, the difficulty and the affixes.
+- **Removed: the level and XP line** at the tracker's foot, with Level and XP and Time to next level: the XP bar already shows your level, its experience and the time to the next, so the tracker stays shorter. With the tracker on and the XP bar off, the game's own XP bar shows again.
+- **New default for a new install:** the guardians as the bar, with an arrow in the middle of each stretch pointing to its lair. Reset this page puts the bar's default back; your settings stay as they are.
+- **Difficulty and affixes:** the tags under the zone's name have their own rows: the difficulty short, in words or off, the affixes as icons, in words or off, and Centered. The preview shows a Heroic V with two affixes when your run has none. **Coin shines** now goes with the Cache coin alone and fades while it is off; the Kills & gold line's coin has a shine of its own, in that tab (who had the one shine off keeps both off).
+
+**Frames & bar and Tooltips**
+- **Frames & bar:** a live preview of the bottom row as it will look: your frame and your target's in each health look, the shield in light blue, your buffs and the target's debuffs, the action bar with its keys and a cooldown.
+- **Tooltips:** the tooltip's place and size moved here from Frames & bar, beside Spell ranks and the Flat tooltips and Ability tooltips switches, with a preview of a spell's tooltip as laid out (or as the game writes it) and a unit's where it opens.
+
+**Build list and Jewelry worn**
+- **Build list:** a live preview of the list at its size and text size, your run's build or a sample with each of Info's symbols, and a key of the symbols beside it. **Keep the game's row of spells too** is under Advanced.
+- **Every part of a row its own switch:** Info, Info's symbol, the cooldown and the rank, each on or off; what is off leaves the spell's name more room. **Info shows** (all on): a range or a cone's length, an area's radius, a buff's length and its timer, a heal, an absorb, each on or off; a kind off shows the spell's range instead, when it has one.
+- **Info in every language:** a heal's cross, a shield's and a buff's hourglass with their numbers now show in every language the game speaks, read in the game's own words (before, only the reach did outside English), and the cooldown is written in the language's seconds ("2.1 с", "2.1秒", "2.1 Sek."), the column a step smaller when it must.
+- **Long names fit:** a long spell name (in Russian, or at a bigger text size) is a point smaller, or cut with "..." with the whole name on its card. When a racial's name and its "(racial)" don't both fit, the name stands alone.
+- **The preview too:** the Build list tab's preview writes the cooldowns and fits the names the list's way, the sample's as well, so it shows what the list shows.
+- **Roman ranks here too:** the list's ranks follow Rank 63 or LXIII, the same choice as Spell ranks in Tooltips, now on this tab as well; the rank column widens to the longest numeral.
+- **Jewelry worn:** a live preview of the panel at its size and text size: what you wear in a run, else a sample with a legendary, an epic, a rare and an uncommon piece from the codex. Its stats or its name as two small pictures, then (new) the slot and the rank each on or off, the empty slots shown or hidden, and the rarity color in the row, in the words or none. Until you give it a size of its own, it takes the build list's. At a larger text size, what a piece gives no longer runs into its slot.
+
+**Experimental** (a new group of tabs: everything there is for testing and may change; feedback welcome on Discord)
+- **No backgrounds:** one switch takes the dark ground away from the windows, leaving their words, icons and bars on the world: the build list, the jewelry worn, the damage meter and its extra windows, Biggest Crits, the loot list, This Run, the Stats panel and the chat's panel. Off by default. Each window has its own chip: untick one to keep its background. Rows keep their own fills (the meter's bars, the build list's spell colors, the loot and jewelry quality colors). It applies at once, with no reload, and Move UI moves and sizes the windows as before.
+- **The chat:** with the Panel look, its ground, edges and the line under the tabs go, and the tabs, copy button, grip and typing box stay. Text on the world keeps its own Background.
+
+**Languages**
+- **The options window in Chinese:** with the game in Chinese, the whole options window is in Simplified Chinese: every tab, its help and tooltips, the previews, the confirm boxes and the search, in the game's own words for its spells, stats and terms. The search finds a setting by its Chinese words, or its English ones. In English the window stays as it was.
+- **Chinese words for their place:** the Minimap buttons' Left and Right read as the way the row grows (向左, 向右), apart from the party buffs' side (左侧, 右侧); Run History's time zone line names China's zone first, then Brazil's and Portugal's.
+- **Russian** (a first version; feedback from Russian players welcome on Discord): with the game in Russian, the run panels, Biggest Crits, the meter, the build list, the character pane, the Jewelry Collection, Run History, Career, the Guide, Change UI, the minimap buttons and the chat help speak Russian, in the game's own words (забег, босс, страж, логово, тайник), in your global font when it has the whole Cyrillic (Friz Quadrata, Arial Narrow, Fira Sans, Noto Sans, Russo One), else in Noto Sans SC; the font lists in Russian offer only the fonts that write it. The options window stays in English in Russian for now.
+- **The Guide fits in Russian:** the Sets page's class buttons share the row by their names; the Reduction page's talent chips and the Damage page's buffs take a long name on two lines; the Luck page's formulas start past the longest rarity name; "How often:", "How hard:" and "Best pick:" have their space back.
+- **The game's language from the game:** it now comes from the game itself as the interface loads, so Russian is told from Ukrainian for every race and the language's font is worn from the start; older games are still told by the hero's race. The meter's Melee row and Career's maps now show in your language too.
+- **The launcher in Russian:** pick Русский in Language on the Play tab. With no choice made it follows the game's language, and on a Chinese or Russian Windows with no game language yet it opens in Chinese or Russian. Russian counts its numbers right (1 забег, 2 забега, 5 забегов) in Statistics, Run History and the alerts.
+
+**Everywhere**
+- **Reset this page** on each of these tabs, asked first: the looks go back to their first; where things stand stays.
+- **Biggest Crits:** its header now points to Records for the new best crit.
+- **Tabs in their place:** Range indicator moved to Combat, after Combat text; Jewelry worn to Character, after Build list.
+- **A setting that depends on another** fades and stays still while that one is off, and says why on hover.
+- **Nameplates tab:** it no longer says Survivor Plates is missing when another addon makes Survivor UI load first.
+- **Your hero as you picked it:** with another class picked in the menu before the run, the game kept telling addons the hero it opened with. Your frame, the addon's color and the cursor wore the first class's color, the character pane read the first race ("Troll Warrior" for a Tauren Warrior), and your racial's lines were kept under that race. The addon now takes the hero's class, race and name from the run itself. Run History mends the runs it saved that way: their class is the one you played again (the race and the name stay as saved).
+- **Combat text fits again in Advanced:** its fine settings ran under the page's foot. The game's numbers' size now goes a step at a time beside their title, and the fine settings sit three to a row.
+- **Jewelry Collection, long names:** a name too long for its row (in Russian, or at a bigger text size) is a point smaller, or cut with "..." with the whole name in its tooltip. The group titles and the window's title fit too.
+- **Jewelry Collection counts:** 16 amulets and 14 trinkets to find, as the game's codex has them since the Star of Mystaria became a trinket. It said 17 and 13 ("14 / 13", and "1 more to find" with every amulet found).
+- **Jewelry worn by name:** a name that takes the whole row no longer has " · ...+" drawn over its end.
+- **Jewelry worn, long names:** by names, a long name is a point smaller (never under 7) or cut with "...", its rank kept ("Безупречная зачарованная водоросль... II"), the whole name on hover; a text size changed after a cut no longer runs it out of the panel.
+- **Damage meter under the right column:** a meter moved right under the column no longer ends up over Jewelry worn when the run tracker grows a row. It stands right under the column, with fewer lines if the screen's bottom is near, and goes back to its place as the column shrinks.
+- **Damage meter lines:** lines set in the options or on its card no longer reach past the screen's bottom and over the right column; the rest roll by the wheel.
+- **Damage meter Reset:** as wide as its word (Russian's is longer), with the fold button left of it.
+- **Guide:** a paragraph or tip that takes more lines than planned pushes what follows down; the DoTs page's facts and the Marks page's cards grow to their words, and a set's bonus too long for its column takes a smaller size.
+- **No more "cast":** the Guide's Haste and Not DoTs pages say a spell goes off, as it does in this game, in English, Chinese and Russian, and the Haste page's "This spell" line has room for two lines. The character pane's Damage tip too.
+
+**Game 0.140 (Scholomance)**
+- **Kill Command:** the Hunter's Jewelry Collection now counts Kill Command's legendary amulet, Heart of the Packlord, in place of Explosive Trap's, which the game no longer offers.
+- **Giantstalker's in the Guide:** the 8-piece bonus now reads as the game's: Kill Command's cooldown 20% shorter and 30% more damage.
+- **Tier 0.5 in the Guide:** the Sets page has each class's seventh set, from Scholomance: Heroism, Soulforge, Beastmaster, Darkmantle, Virtuous, Five Thunders, Sorcerer's, Deathmist and Feralheart. Each has a 4-piece bonus of its class's own and its 8-piece bonus at 3/5; at 5/5 it takes the numbers the game gives it instead of growing by half. The Marks page's table has its star costs: 5.5, 11, 16.5, 22 and 27.5 marks at no discount. The Guide's window is a little taller to hold the seventh set.
+- **Dread Lord:** the warlock's Pit Lord is a Dread Lord from this version; the damage meter gives it its icon again, the game's own for it (Pact of the Nathrezim's), in every language, and its Searing Pain shows as the Dread Lord's Felseeker in Biggest Crits and the combat numbers. The Summons show up to 2 Dread Lords again, with Pact of the Nathrezim's clock on them. The Pit Lord's name still works.
+- **Other languages:** Kill Command, the Devilsaur Matriarch and the game's changed bonus lines are read back in English again.
 
 ### v3.0.55, 2026-11-03
 

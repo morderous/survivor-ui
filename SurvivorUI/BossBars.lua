@@ -151,14 +151,8 @@ local function Bar(index)
 	bar.name:SetJustifyH("LEFT")
 	bar.name:SetTextColor(1, 1, 1)
 
-	-- A guardian's lair mark (Guardians.lua), before its name.
-	bar.mark = bar.health:CreateTexture(nil, "OVERLAY")
-	bar.mark:SetWidth(BAR_HEIGHT - 2)
-	bar.mark:SetHeight(BAR_HEIGHT - 2)
-	bar.mark:SetPoint("LEFT", bar, "LEFT", 2, 0)
-	bar.mark:Hide()
+	-- Its raid mark (Marks.lua), before its name.
 	bar.markRoom = 0
-	-- Its raid mark (Marks.lua), after the lair's.
 	bar.raid = bar.health:CreateTexture(nil, "OVERLAY")
 	bar.raid:SetWidth(BAR_HEIGHT - 2)
 	bar.raid:SetHeight(BAR_HEIGHT - 2)
@@ -372,21 +366,15 @@ local function Fill(bar, unit)
 	bar.health:SetStatusBarColor(style.color[1], style.color[2], style.color[3], 0.9)
 	bar.health:SetValue(share)
 
-	-- A guardian wears its lair's mark, the one of its stretch in the tracker
-	-- and its pin on the minimap.
-	local mark = kind == "guardian" and SurvivorUI_GuardianMark and SurvivorUI_GuardianMark(Field(unit, "id", 2))
-	if SurvivorUI_SetLairMark then
-		SurvivorUI_SetLairMark(bar.mark, mark)
-	end
-	local markRoom = mark and BAR_HEIGHT - 2 or 0
-	-- Its raid mark after it, when it wears one.
+	-- Its raid mark before its name, when it wears one.
+	local markRoom = 0
 	local raid = SurvivorUI_RaidMarkOf and SurvivorUI_RaidMarkOf(Field(unit, "id", 2))
 	if SurvivorUI_SetRaidMarkTexture then
 		SurvivorUI_SetRaidMarkTexture(bar.raid, raid)
 	end
 	if raid then
-		bar.raid:SetPoint("LEFT", bar, "LEFT", 2 + markRoom, 0)
-		markRoom = markRoom + BAR_HEIGHT - 1
+		bar.raid:SetPoint("LEFT", bar, "LEFT", 2, 0)
+		markRoom = BAR_HEIGHT - 1
 	end
 	if bar.markRoom ~= markRoom then
 		bar.markRoom = markRoom

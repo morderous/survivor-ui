@@ -270,16 +270,32 @@ local QUALITIES = {
 	ffa335ee = "epic", ffff8000 = "legendary", ffe6cc80 = "artifact",
 }
 
-local function Draw()
-	local settings = Settings()
-	log.marks:SetText(SurvivorUI_TF("Marks: {1}", Amount(earned.total)))
-	head:SetWidth(math.max(14, log.marks:GetStringWidth()) + 8)
-	-- Its background, unless switched off (the options, Loot list).
-	local back = settings.lootBackground ~= false
+-- Its background, unless switched off (the options, Loot list); and none at
+-- all, the title's band too, with No backgrounds on (the options' No
+-- backgrounds, Experimental) and the list not kept there: the rows keep their
+-- quality fills. Painted as the world loads and as the options change it.
+local function Ground()
+	local db = Settings()
+	local bare = db.noBackgrounds and not (db.noBackgroundsOff and db.noBackgroundsOff.loot)
+	local back = db.lootBackground ~= false and not bare
 	if log.back ~= back then
 		log.back = back
 		log:SetBackdropColor(0.04, 0.04, 0.07, back and 0.55 or 0)
 	end
+	if bare then
+		band:Hide()
+	else
+		band:Show()
+	end
+end
+SurvivorUI_Grounds = SurvivorUI_Grounds or {}
+SurvivorUI_Grounds.loot = Ground
+
+local function Draw()
+	local settings = Settings()
+	log.marks:SetText(SurvivorUI_TF("Marks: {1}", Amount(earned.total)))
+	head:SetWidth(math.max(14, log.marks:GetStringWidth()) + 8)
+	Ground()
 	local count = math.min(settings.lootLines or MAX_LINES, table.getn(entries))
 	for index = 1, count do
 		local entry = entries[index]

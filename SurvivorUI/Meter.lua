@@ -111,6 +111,17 @@ meter:EnableMouse(true)
 meter:RegisterForDrag("LeftButton")
 meter:Hide()
 
+-- No backgrounds (the options' No backgrounds, Experimental): the shade away,
+-- the bars keeping their own dark base and color, unless the meter is kept
+-- (its extra windows follow it: MeterWindows.lua). Painted as the world loads
+-- and as the options change it (Options.lua: every SurvivorUI_Grounds).
+SurvivorUI_Grounds = SurvivorUI_Grounds or {}
+function SurvivorUI_Grounds.meter()
+	local db = SurvivorUIDB
+	local bare = db and db.noBackgrounds and not (db.noBackgroundsOff and db.noBackgroundsOff.meter)
+	meter:SetBackdropColor(0.04, 0.04, 0.07, bare and 0 or 0.55)
+end
+
 local function SavePlace()
 	local settings = Settings()
 	settings.meterRight = math.floor(meter:GetRight() + 0.5)
@@ -127,16 +138,34 @@ end
 
 local shownLines = MAX_LINES
 
--- As many lines as given (the layout's fit), or as set on its card; as wide
--- as set there.
-local function SetLines(count)
-	count = math.max(LINES_LEAST, math.min(LINES_MOST, tonumber(Settings().meterLines) or count))
+-- How tall it is with this many lines, and how many lines a height holds.
+local function Tall(count)
+	return BARS_TOP + 4 + count * (BAR_HEIGHT + BAR_GAP)
+end
+
+local function LinesIn(room)
+	return math.floor((room - BARS_TOP - 4) / (BAR_HEIGHT + BAR_GAP))
+end
+
+-- The lines it wants: as many as given (the layout's fit), or as set on its
+-- card.
+local function Wanted(count)
+	return math.max(LINES_LEAST, math.min(LINES_MOST, tonumber(Settings().meterLines) or count))
+end
+
+-- As many lines as it wants, no more than most (the room the right column
+-- leaves it, Fit), three at least; as wide as set on its card.
+local function SetLines(count, most)
+	count = Wanted(count)
+	if most then
+		count = math.max(LINES_LEAST, math.min(count, most))
+	end
 	local width = MainWidth()
 	if count ~= shownLines or width ~= meter.barWidth then
 		shownLines = count
 		meter.barWidth = width
 		meter:SetWidth(width + 8)
-		meter:SetHeight(BARS_TOP + 4 + count * (BAR_HEIGHT + BAR_GAP))
+		meter:SetHeight(Tall(count))
 	end
 end
 
@@ -156,13 +185,37 @@ local function Seat(key, point, relative, relativePoint, x, y)
 	end
 end
 
+-- Moved, it keeps its place; but the right column above it (the pieces hung
+-- from the minimap) grows as a run's tracker takes more lines, and could run
+-- into it (seen 2026-11-04: a meter let go right under Jewelry worn, the
+-- tracker one row taller, its title over the last slot). Then it stands
+-- right under the column, as many lines as fit down to the screen's bottom,
+-- and goes back to its place as the column shrinks. Its bottom for now, and
+-- the lines that fit (nil: its own).
+local function ClearOfColumn(settings, above, right, bottom)
+	if not (above and above:IsShown() and above:GetLeft()) then
+		return bottom
+	end
+	-- The column's head: the tracker, or the build list moved on its own.
+	local head = SurvivorUITracker or above
+	if settings.buildLeft and above ~= SurvivorUITracker and SurvivorUIBuild then
+		head = SurvivorUIBuild
+	end
+	local ratio = above:GetEffectiveScale() / meter:GetEffectiveScale()
+	local under = above:GetBottom() * ratio
+	local top = bottom + Tall(Wanted(MAX_LINES))
+	local left = right - MainWidth() - 8
+	local headTop = head:GetTop() and head:GetTop() * head:GetEffectiveScale() / meter:GetEffectiveScale()
+	if under >= top or not headTop or headTop <= top
+		or left >= above:GetRight() * ratio or right <= above:GetLeft() * ratio then
+		return bottom
+	end
+	local most = LinesIn(under - 8)
+	return math.floor(under - Tall(math.max(LINES_LEAST, math.min(Wanted(MAX_LINES), most))) + 0.5), most
+end
+
 local function Fit()
 	local settings = Settings()
-	if settings.meterRight then
-		Seat("saved"..settings.meterRight..","..settings.meterBottom, "BOTTOMRIGHT", UIParent, "BOTTOMLEFT", settings.meterRight, settings.meterBottom)
-		SetLines(MAX_LINES)
-		return
-	end
 	local build, worn, tracker = SurvivorUIBuild, SurvivorUIWorn, SurvivorUITracker
 	local above, shift = nil, 0
 	if worn and worn:IsShown() and not settings.wornLeft and worn:GetBottom() then
@@ -172,6 +225,12 @@ local function Fit()
 	elseif tracker and tracker:GetBottom() then
 		above, shift = tracker, 8
 	end
+	if settings.meterRight then
+		local bottom, most = ClearOfColumn(settings, above, settings.meterRight, settings.meterBottom)
+		Seat("saved"..settings.meterRight..","..bottom, "BOTTOMRIGHT", UIParent, "BOTTOMLEFT", settings.meterRight, bottom)
+		SetLines(MAX_LINES, most)
+		return
+	end
 	if not above then
 		Seat("screen", "BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -12, 40)
 		SetLines(MAX_LINES)
@@ -180,8 +239,10 @@ local function Fit()
 	Seat(above:GetName(), "TOPRIGHT", above, "BOTTOMRIGHT", shift, -10)
 	-- The piece above has a size of its own: its bottom read in the meter's units.
 	local room = above:GetBottom() * above:GetEffectiveScale() / meter:GetEffectiveScale() - 10 - 8
-	local fit = math.floor((room - BARS_TOP - 4) / (BAR_HEIGHT + BAR_GAP))
-	SetLines(math.max(3, math.min(MAX_LINES, fit)))
+	local fit = LinesIn(room)
+	-- Lines set on its card or in the options: no more than fit, as more
+	-- would reach past the screen's bottom and be pushed up over the column.
+	SetLines(math.max(3, math.min(MAX_LINES, fit)), fit)
 end
 
 local function StartMove()
@@ -545,8 +606,11 @@ more:SetScript("OnClick", function()
 	end
 end)
 
+-- As wide as its word, 32 at least (Reset): a longer one (Сброс) reaches
+-- left, and the fold button stands left of it (Draw).
 local reset = CreateFrame("Button", nil, meter)
-reset:SetWidth(32)
+reset.least = 32
+reset:SetWidth(reset.least)
 reset:SetHeight(12)
 reset:SetPoint("TOPRIGHT", meter, "TOPRIGHT", -20, -5)
 reset.text = reset:CreateFontString(nil, "OVERLAY")
@@ -749,8 +813,9 @@ local PETS = {
 	["Felguard"] = "Spell_Shadow_Metamorphosis",
 	["Infernal"] = "Spell_Shadow_SummonInfernal",
 	["Doomguard"] = "Spell_Shadow_AntiMagicShell",
-	["Pit Lord"] = "Spell_Shadow_RitualOfSacrifice",
-	["Felseeker"] = "Spell_Fire_SoulBurn",        -- the Pit Lord's Searing Pain
+	["Dread Lord"] = "Spell_Shadow_UnholyStrength",    -- its talent's, Pact of the Nathrezim (the game's 0.140)
+	["Pit Lord"] = "Spell_Shadow_RitualOfSacrifice", -- the Dread Lord's name up to the game's 0.139
+	["Felseeker"] = "Spell_Fire_SoulBurn",        -- the Dread Lord's Searing Pain
 	["Water Elemental"] = "Spell_Frost_SummonWaterElemental",
 	["Spirit Wolf"] = "Spell_Nature_SpiritWolf",
 	["Treant"] = "Spell_Nature_ForceOfNature",
@@ -1573,7 +1638,10 @@ local function PaintBar(bar, line, top, key)
 		bar.name:SetWidth(room)
 	end
 	local ranked = rank and rank > 0 and SurvivorUIDB and SurvivorUIDB.meterRanks
-	bar.name:SetText(name..(ranked and "  |cffbdbdbd"..SurvivorUI_RankText(rank, true).."|r" or ""))
+	-- The white damage's row, which the game names in English in every
+	-- language: in the game's own word for it (Ближний бой, 近战).
+	local shown = MELEE[name] and SurvivorUI_Native and SurvivorUI_Native(name) or name
+	bar.name:SetText(shown..(ranked and "  |cffbdbdbd"..SurvivorUI_RankText(rank, true).."|r" or ""))
 	-- Others: grey, as its bar.
 	if folded then
 		bar.name:SetTextColor(0.8, 0.8, 0.84)
@@ -1697,8 +1765,13 @@ local function Draw()
 	local resettable = key == "damage" or key == "dps"
 	reset:SetAlpha(resettable and 1 or 0)
 	reset:EnableMouse(resettable)
+	-- Its word measured at the size it is drawn (the piece's text size).
+	local resetWidth = math.max(reset.least, math.ceil(reset.text:GetStringWidth()) + 2)
+	if math.abs(reset:GetWidth() - resetWidth) > 0.5 then
+		reset:SetWidth(resetWidth)
+	end
 	fold:ClearAllPoints()
-	fold:SetPoint("TOPRIGHT", meter, "TOPRIGHT", resettable and -54 or -19, -3)
+	fold:SetPoint("TOPRIGHT", meter, "TOPRIGHT", resettable and -(22 + resetWidth) or -19, -3)
 	SurvivorUI_MeterFoldShow(fold, key)
 	if table.getn(lines) == 0 then
 		meter.empty:SetText(SurvivorUI_T((key == "boss" and "No boss fight yet.") or (key == "healing" and "No healing yet.")

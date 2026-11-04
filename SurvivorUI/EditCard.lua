@@ -92,7 +92,11 @@ local GAME_FONTS = {
 -- writes Chinese or Japanese, none Korean; Exo, Cinzel Decorative and the two
 -- Barlows write no Cyrillic (Russian, Ukrainian), Russo One no Romanian ț,
 -- Noto Sans SC none of the Czech, Polish, Romanian, Turkish or Ukrainian
--- letters: each is offered only where it can write the game's language.
+-- letters: each is offered only where it can write the game's language. In
+-- Russian, the game's faces too: only those with every letter and sign the
+-- addon's Russian uses (Locale.lua's SurvivorUI_WRITERS, read off each face):
+-- Friz Quadrata, Arial Narrow, Morpheus and Skurri (the Russian writes a
+-- run's number with "#": Morpheus and Skurri have no №).
 local OWN_FONTS = "Interface\\AddOns\\SurvivorUI\\Fonts\\"
 local ADDON_FONTS = {
 	{ name = "Fira Sans", path = OWN_FONTS.."FiraSans-Medium.ttf", cannot = { ko = true } },
@@ -106,9 +110,10 @@ local ADDON_FONTS = {
 		cannot = { cs = true, pl = true, ro = true, tr = true, uk = true, ko = true } },
 }
 
--- Chinese and Japanese are written only by the faces that say so (writes):
--- any other draws those letters from a face of the game's, and the engine
--- mixes them up with its own (SurvivorUI.lua, the global font).
+-- Chinese and Japanese are written only by the faces that say so (writes),
+-- Russian only by those its list names (SurvivorUI_WRITERS): any other draws
+-- those letters from a face of the game's, and the engine mixes them up with
+-- its own (SurvivorUI.lua, the global font), or draws nothing there.
 local FAR_EAST = { zh = true, ja = true }
 
 local function Writes(face)
@@ -119,11 +124,16 @@ local function Writes(face)
 	if FAR_EAST[language] then
 		return face.writes ~= nil and face.writes[language] == true
 	end
+	local writers = SurvivorUI_WRITERS and SurvivorUI_WRITERS[language]
+	if writers then
+		return face.path ~= nil and writers[string.lower(face.path)] == true
+	end
 	return not (face.cannot and face.cannot[language])
 end
 
 -- A face by its file, as Writes says; one in no list (Expressway, dropped
--- in) writes every language but those two.
+-- in) writes every language but those two, and Russian as SurvivorUI_WRITERS
+-- says.
 local function WritesPath(path)
 	path = string.lower(path)
 	for _, list in pairs({ GAME_FONTS, ADDON_FONTS }) do
@@ -133,7 +143,7 @@ local function WritesPath(path)
 			end
 		end
 	end
-	return Writes({})
+	return Writes({ path = path })
 end
 
 -- Whether a face loads: set on a probe, it holds only when the file is there.

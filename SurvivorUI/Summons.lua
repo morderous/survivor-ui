@@ -6,7 +6,8 @@
 --   Spirit Wolves, a mage's Water Elemental): its icon alone, no number, and
 --   only with "Track permanent pets" on (the Summons tab; off by default);
 -- - a kind that comes and goes with a limit of its own (an Infernal or a
---   Doomguard, one at a time; a Felguard or a Pit Lord, two): "out/limit" in
+--   Doomguard, one at a time; a Felguard or a Dread Lord, the Pit Lord up to
+--   the game's 0.139, two): "out/limit" in
 --   the corner and the longest time one of them has left in the middle;
 -- - the Legion Gate's lesser demons (Imps, Succubi, Felhunters, Voidwalkers
 --   that come and go) as one icon, the talent's own, "out/12"; hover it for
@@ -17,7 +18,7 @@
 --
 -- And the talents' clocks, from its 0.115 (AZS_GetTimers: name, icon, kind,
 -- duration, remaining, ready): a summon's (Butcher's next Felguard, Pact of
--- the Annihilan's next Pit Lord, Legion Gate's next wave) on its demons'
+-- the Nathrezim's next Dread Lord, Legion Gate's next wave) on its demons'
 -- icon, a bar under it filling to the next one; none out yet, the icon
 -- dimmed, counting down. A cooldown's (a proc's, a heal's, a second life's
 -- wait), from MIN_COOLDOWN seconds long, an icon of its own, dimmed and
@@ -37,14 +38,14 @@ local Feature = SurvivorUI_Feature or function() return true end
 
 -- How many of a kind the game lets out at once (its 0.110): the greater
 -- demons by their talents; the rest stay for good and need none.
-local LIMITS = { infernal = 1, doomguard = 1, felguard = 2, pit_lord = 2, water_elemental = 1, treant = 2, spirit_wolf = 2 }
+local LIMITS = { infernal = 1, doomguard = 1, felguard = 2, pit_lord = 2, dread_lord = 2, water_elemental = 1, treant = 2, spirit_wolf = 2 }
 -- The Legion Gate's lesser demons: "3 random lesser demons every 4 sec (max 12)".
 local LESSER = { imp = true, succubus = true, felhunter = true, voidwalker = true }
 local GATE_MOST = 12
 local GATE_NAME = "Legion Gate"
 local GATE_ICON = "Interface\\Icons\\INV_Weapon_ShortBlade_05"   -- the talent's icon (Sinister Strike's too)
 -- A summoning talent's clock, by its name: the group its demons are in.
-local TIMER_GROUP = { ["Butcher"] = "felguard", ["Pact of the Annihilan"] = "pit_lord", ["Legion Gate"] = "gate" }
+local TIMER_GROUP = { ["Butcher"] = "felguard", ["Pact of the Nathrezim"] = "dread_lord", ["Legion Gate"] = "gate" }
 local MIN_COOLDOWN = 5          -- a shorter wait, a proc's limit (Nightfall's half second, Daybreak's 3, Hallowed Ground's 4), is not shown
 local NEXT_COLOR = { 0.78, 0.55, 1 }
 

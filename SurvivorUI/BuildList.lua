@@ -46,6 +46,13 @@ local function Settings()
 	return SurvivorUIDB
 end
 
+-- No backgrounds (the options' No backgrounds, Experimental): this window's
+-- ground away, with the switch on and the window not kept ("build", "worn").
+local function Bare(key)
+	local db = SurvivorUIDB
+	return db and db.noBackgrounds and not (db.noBackgroundsOff and db.noBackgroundsOff[key]) or false
+end
+
 local function Field(entry, name, index)
 	if entry[name] ~= nil then
 		return entry[name]
@@ -151,29 +158,45 @@ local COLUMN_WIDTH = { rank = 24, cd = 30, range = 34, symbol = 13 }
 local columns                   -- [key] = { right, width, divider }, the ones shown
 local columnsKey
 local nameRoom = WIDTH - ROW_HEIGHT - 70
+-- The rank column's width: a number's, or as wide as the longest Roman
+-- numeral shown needs (RankRoom, by Draw).
+local rankWidth = COLUMN_WIDTH.rank
 
-local function Columns(showRange, showCooldown)
-	local key = (showRange and "r" or "")..(showCooldown and "c" or "")
-	if key == columnsKey then
-		return false
+-- The columns for these choices (each on or off: Build list tab) and the
+-- room left for the name; the options' preview lays its rows out by them too
+-- (SurvivorUI_BuildLayout).
+local function Layout(showRange, showCooldown, showSymbol, showRank, rankRoom)
+	local laid = {}
+	local order = {}
+	if showRank then
+		table.insert(order, "rank")
 	end
-	columnsKey = key
-	columns = {}
-	local order = { "rank" }
 	if showCooldown then
 		table.insert(order, "cd")
 	end
 	if showRange then
 		table.insert(order, "range")
-		table.insert(order, "symbol")
+		if showSymbol then
+			table.insert(order, "symbol")
+		end
 	end
 	local right = 2
 	for index = 1, table.getn(order) do
-		local width = COLUMN_WIDTH[order[index]]
-		columns[order[index]] = { right = right, width = width, divider = right + width + 1 }
+		local key = order[index]
+		local width = key == "rank" and (rankRoom or COLUMN_WIDTH.rank) or COLUMN_WIDTH[key]
+		laid[key] = { right = right, width = width, divider = right + width + 1 }
 		right = right + width + 3
 	end
-	nameRoom = WIDTH - right - ROW_HEIGHT - 1
+	return laid, WIDTH - right - ROW_HEIGHT - 1
+end
+
+local function Columns(showRange, showCooldown, showSymbol, showRank)
+	local key = (showRange and "r" or "")..(showCooldown and "c" or "")..(showSymbol and "s" or "")..(showRank and rankWidth or "")
+	if key == columnsKey then
+		return false
+	end
+	columnsKey = key
+	columns, nameRoom = Layout(showRange, showCooldown, showSymbol, showRank, rankWidth)
 	return true
 end
 
@@ -394,6 +417,109 @@ local function Border(row, color, alpha)
 	end
 end
 
+-- Words cut to their room at the size they are at, "...", by whole letters
+-- (a Russian one two bytes, a Chinese one three), a last scrap of a word
+-- (three letters or less) left out, as the Jewelry Collection cuts its names
+-- (Jewelry.lua's Fit); after, kept whole behind the "..." (a piece's rank).
+-- Width measures words as they would show.
+local function Letters(text)
+	return string.len((string.gsub(text, "[\128-\191]", "")))
+end
+
+local function CutTo(words, room, Width, after)
+	after = after or ""
+	local count, cut = Letters(words), words
+	while count > 1 do
+		count = count - 1
+		cut = SurvivorUI_Cut(words, count)
+		if Width((string.gsub(cut, "%s+$", "")).."..."..after) <= room then
+			break
+		end
+	end
+	-- Cut inside a word: three letters or less of it are no help.
+	local inside = string.find(string.sub(words, string.len(cut) + 1, string.len(cut) + 1), "%S")
+	local _, _, whole, scrap = string.find(cut, "^(.*%S)%s+(%S+)$")
+	if inside and whole and Letters(scrap) <= 3 then
+		cut = whole
+	end
+	return (string.gsub(cut, "%s+$", "")).."..."..after
+end
+
+-- A spell's name fit to its column, measured (Lucas, 2026-11-04: a Russian
+-- one is long, "Автоматическая стрельба"): at its size; else a point smaller,
+-- never under 7; the racial's "(racial)" left out when the name alone fits
+-- so; else the name cut at its size, "...". Hover the row for its card, its
+-- whole name the card's title. Measured on a word of its own, as the name's
+-- column cuts what runs past it, and again only as the words, the room, the
+-- face or the list's text size change; a name not drawn yet measures
+-- nothing, and is fit on the next draw. The size is told to EditCard.lua's
+-- Dress as the name's own (base) and as the one it is at, so the text size
+-- step is not added twice (as FitTags, below).
+local nameProbe = list:CreateFontString(nil, "OVERLAY")
+nameProbe:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
+nameProbe:SetPoint("TOPLEFT", list, "TOPLEFT", 7, -6)
+nameProbe:SetTextColor(1, 1, 1, 0)
+
+-- The fit itself, the list's and the options' preview's (SurvivorUI_FitBuildName):
+-- the size the name goes at (9, or 8 a point smaller; nil: it measured
+-- nothing, not drawn yet) and its words, Width(points, words) their width at
+-- that size, the text size step in.
+local function FitChoice(name, tag, room, step, Width)
+	local smaller = math.max(6, 9 + FONT_BUMP + step) > 7
+	local whole = tag and (name.."  |cff8a8a8a"..tag.."|r") or name
+	local width = Width(9, whole)
+	if width == 0 then
+		return nil, whole
+	end
+	if width <= room then
+		return 9, whole
+	end
+	if smaller and Width(8, whole) <= room then
+		return 8, whole
+	end
+	if tag then
+		if Width(9, name) <= room then
+			return 9, name
+		end
+		if smaller and Width(8, name) <= room then
+			return 8, name
+		end
+	end
+	return 9, CutTo(name, room, function(words)
+		return Width(9, words)
+	end)
+end
+
+local function FitSpell(row, name, tag)
+	local step = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Build list") or 0
+	local path, _, flags = row.name:GetFont()
+	path, flags = path or SurvivorUI_FONT, flags or "OUTLINE"
+	local room = nameRoom
+	local key = name.."|"..(tag or "").."|"..math.floor(room + 0.5).."|"..step.."|"..path
+	if row.fitKey == key then
+		return
+	end
+	-- The probe's font set only when its size changes (the cut's words all at 9).
+	local at
+	local function Width(points, words)
+		local want = math.max(6, points + FONT_BUMP + step)
+		if want ~= at then
+			at = want
+			nameProbe:SetFont(path, want, flags)
+		end
+		nameProbe:SetText(words)
+		return nameProbe:GetStringWidth()
+	end
+	local points, words = FitChoice(name, tag, room, step, Width)
+	row.fitKey = points and key or nil
+	local base = (points or 9) + FONT_BUMP
+	local want = math.max(6, base + step)
+	row.name:SetFont(path, want, flags)
+	row.name.suiBase, row.name.suiSize, row.name.suiPath = base, want, row.name:GetFont()
+	row.name:SetText(words)
+	nameProbe:SetText("")
+end
+
 -- The top spell's name and rank a point larger, a touch brighter; set only
 -- when it changes, since setting a font costs the engine every time.
 local function Bold(row, bold)
@@ -437,6 +563,131 @@ end
 local scan = CreateFrame("GameTooltip", "SurvivorUIBuildScan", nil, "GameTooltipTemplate")
 local reaches = {}              -- [name:rank] = { text or false, when read }
 
+-- The game in another language says the same in its own words (LocaleData.lua,
+-- from its tables: SurvivorUI_LOCALE[language].reach): the yards' unit, and
+-- each phrase as the words either side of its number, in the language's order
+-- ("30码射程": "" and "码射程"). They are compared where each number stands,
+-- never sought along a line (a pattern of other scripts' letters sought so
+-- hung the game once, v3.0.17). The language not known yet (a race several of
+-- them name alike, "Дворф"): every language's words at once.
+local reachWords = {}           -- [language, or "?" for all] = { units, range, cone, radius, spot, near }
+
+local function ReachWords(language)
+	local words = reachWords[language or "?"]
+	if words then
+		return words.units[1] and words or nil
+	end
+	words = { units = {}, range = {}, cone = {}, radius = {}, spot = {}, near = {} }
+	local seen = {}
+	for code, data in pairs(SurvivorUI_LOCALE or {}) do
+		local reach = data.reach
+		-- All of them: but those in English's " yd" (Czech's), which English
+		-- has read already ("Cast once enemies are within 30 yd" a range else).
+		if reach and reach.unit and (code == language or not language and reach.unit ~= " yd") then
+			if not seen[reach.unit] then
+				seen[reach.unit] = true
+				table.insert(words.units, reach.unit)
+			end
+			for kind, list in pairs(words) do
+				local found = kind ~= "units" and reach[kind] or {}
+				for index = 1, table.getn(found) do
+					table.insert(list, found[index])
+				end
+			end
+		end
+	end
+	reachWords[language or "?"] = words
+	return words.units[1] and words or nil
+end
+
+-- The rest of Info in another language, the same way (LocaleData.lua:
+-- SurvivorUI_LOCALE[language].info): a heal's share of your max health or its
+-- amount, an absorb's amount and a buff's length, each by the patterns of the
+-- game's own lines for them, held to the start of the line its description
+-- opens ("^Исцеляет вас на .-, ([%d%.,]+)%% макс%."), the number caught in the
+-- language's own order; and its word for seconds (" с", "秒"). nil: English,
+-- read by its own words below as before.
+local function InfoWords(language)
+	local data = language and SurvivorUI_LOCALE and SurvivorUI_LOCALE[language]
+	return data and data.info
+end
+
+-- The number the first of these patterns a line opens with catches, as
+-- English writes it ("8.6").
+local function OpensWith(text, patterns)
+	for index = 1, table.getn(patterns or {}) do
+		local _, _, number = string.find(text, patterns[index])
+		if number then
+			return (string.gsub(number, ",", "."))
+		end
+	end
+end
+
+-- The unit right after a number that ends at last, if one of these: not one
+-- a word goes on from (" m" in "5 min").
+local function UnitAfter(text, last, units)
+	for index = 1, table.getn(units) do
+		local unit = units[index]
+		local stop = last + string.len(unit)
+		if string.sub(text, last + 1, stop) == unit then
+			local byte = stop < string.len(text) and string.byte(text, stop + 1)
+			if not (byte and (byte >= 65 and byte <= 90 or byte >= 97 and byte <= 122 or byte >= 192 and byte <= 223)) then
+				return unit
+			end
+		end
+	end
+end
+
+-- Whether one of these phrases stands round the number at first..last: its
+-- words before and after it; anchored, the line opening with them.
+local function Beside(text, first, last, list, anchored)
+	for index = 1, table.getn(list) do
+		local before, after = list[index][1], list[index][2]
+		local from = first - string.len(before)
+		if from >= 1 and (from == 1 or not anchored) and string.sub(text, from, first - 1) == before
+				and string.sub(text, last + 1, last + string.len(after)) == after then
+			return true
+		end
+	end
+	return false
+end
+
+-- A line in another language, read as an English one below: its first yards
+-- not those a spell waits for, whether it is a radius's line, one opening
+-- with a range or a cone, an area's spot. Into got (range, radius, area,
+-- ranged), each kept as first read; the numbers as English writes them.
+local function ReadOther(text, words, got)
+	local yards, round
+	local from = 1
+	while true do
+		local first, last, number = string.find(text, "(%d+[%.,]?%d*)", from)
+		if not first then
+			break
+		end
+		from = last + 1
+		if UnitAfter(text, last, words.units) then
+			number = string.gsub(number, ",", ".")
+			if Beside(text, first, last, words.range, true) or Beside(text, first, last, words.cone, true) then
+				got.ranged = true
+			end
+			if Beside(text, first, last, words.radius, true) then
+				round = true
+			end
+			if not got.area and Beside(text, first, last, words.spot) then
+				got.area = number
+			end
+			if not yards and not Beside(text, first, last, words.near) then
+				yards = number
+			end
+		end
+	end
+	if yards and round then
+		got.radius = got.radius or yards
+	elseif yards then
+		got.range = got.range or yards
+	end
+end
+
 local function Reach(actionSlot, name, rank)
 	local key = tostring(name)..":"..tostring(rank)
 	local known = reaches[key]
@@ -447,6 +698,10 @@ local function Reach(actionSlot, name, rank)
 	scan:ClearLines()
 	scan:SetAction(actionSlot)
 	local range, radius, area, ranged
+	-- The game's language (nil: English, or not known yet) and its words.
+	local language = SurvivorUI_Language and SurvivorUI_Language()
+	local words = language and ReachWords(language)
+	local got, texts = {}, {}
 	for line = 2, scan:NumLines() do
 		local text = getglobal("SurvivorUIBuildScanTextLeft"..line)
 		text = text and text:GetText() or ""
@@ -454,23 +709,39 @@ local function Reach(actionSlot, name, rank)
 		-- within 25 yd", Blizzard's "once enemies come within 30 yd": where it
 		-- is cast from, not how far it reaches.
 		text = string.gsub(string.gsub(text, "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
-		local _, _, spot = string.find(text, "within (%d+%.?%d*) yd of that spot")
-		area = area or spot
-		-- Its header line: "30 yd range", "10 yd radius", "13 yd cone".
-		if string.find(text, "^%d+%.?%d* yd range") or string.find(text, "^%d+%.?%d* yd cone") then
-			ranged = true
-		end
-		text = string.gsub(text, "once enemies [ac][ro][em]e? within [%d%.]+ yd", "")
-		local _, _, yards = string.find(text, "(%d+%.?%d*) yd")
-		if yards then
-			if string.find(text, "radius", 1, true) then
-				radius = radius or yards
-			else
-				range = range or yards
+		table.insert(texts, text)
+		if words then
+			ReadOther(text, words, got)
+		else
+			local _, _, spot = string.find(text, "within (%d+%.?%d*) yd of that spot")
+			area = area or spot
+			-- Its header line: "30 yd range", "10 yd radius", "13 yd cone".
+			if string.find(text, "^%d+%.?%d* yd range") or string.find(text, "^%d+%.?%d* yd cone") then
+				ranged = true
+			end
+			text = string.gsub(text, "once enemies [ac][ro][em]e? within [%d%.]+ yd", "")
+			local _, _, yards = string.find(text, "(%d+%.?%d*) yd")
+			if yards then
+				if string.find(text, "radius", 1, true) then
+					radius = radius or yards
+				else
+					range = range or yards
+				end
 			end
 		end
 	end
 	scan:Hide()
+	-- No yards read in English and the language not known yet: every
+	-- language's words.
+	if not language and not (range or radius or area) then
+		words = ReachWords(nil)
+		for index = 1, words and table.getn(texts) or 0 do
+			ReadOther(texts[index], words, got)
+		end
+	end
+	if words then
+		range, radius, area, ranged = got.range, got.radius, got.area, got.ranged
+	end
 	local reach = (range or radius) and ((range or radius).." yd") or false
 	if not area and radius and not ranged then
 		area = radius
@@ -479,8 +750,9 @@ local function Reach(actionSlot, name, rank)
 	return reach or nil, area
 end
 
--- Beside each spell (the options, Build list): its range, its cooldown, or
--- both. The first builds of v3.0.5-beta.2 kept one choice, buildShows.
+-- Beside each spell (the options, Build list): Info, its symbol, the
+-- cooldown and the rank, each on or off. The first builds of v3.0.5-beta.2
+-- kept one choice, buildShows.
 local function Shows()
 	local db = Settings()
 	if db.buildShows then
@@ -489,19 +761,127 @@ local function Shows()
 		end
 		db.buildShows = nil
 	end
-	return db.buildRange ~= false, db.buildCooldown == true
+	return db.buildRange ~= false, db.buildCooldown == true, db.buildSymbols ~= false, db.buildRank ~= false
 end
 
--- A spell's cooldown as the game has it now, haste in: "3.1s", "12s".
+-- A spell's rank as the list shows it: 63, or LXIII with the Roman ranks on
+-- (one choice for the whole interface: the options, Tooltips or Build list).
+local function RankText(rank)
+	rank = tonumber(rank)
+	if not rank then
+		return ""
+	end
+	return SurvivorUI_RankText and SurvivorUI_RankText(rank, true) or tostring(rank)
+end
+
+-- Whether a text is all ASCII.
+local function Ascii(text)
+	for index = 1, string.len(text) do
+		if string.byte(text, index) > 127 then
+			return false
+		end
+	end
+	return true
+end
+
+-- A spell's cooldown as the game has it now, haste in: "3.1s", "12s"; in
+-- another language with its own word for seconds, "3.1 с", "12秒", "12 Sek.":
+-- where the addon wears a face that writes it (SurvivorUI_LANGUAGE_FONTS) or
+-- it needs none ("s", "sn"); Ukrainian's "с" and Korean's "초" not yet.
 local function CooldownText(entry)
 	local cd = tonumber(Field(entry, "cdmax", 5)) or 0
 	if cd <= 0 then
 		return ""
 	end
+	local language = SurvivorUI_Language and SurvivorUI_Language()
+	local words = InfoWords(language)
+	local sec = words and words.sec
+	if sec and not (SurvivorUI_LANGUAGE_FONTS and SurvivorUI_LANGUAGE_FONTS[language] or Ascii(sec[1]..sec[2])) then
+		sec = nil
+	end
+	if sec then
+		return sec[1]..(cd >= 10 and string.format("%d", math.floor(cd + 0.5)) or string.format("%.1f", cd))..sec[2]
+	end
 	if cd >= 10 then
 		return string.format("%ds", math.floor(cd + 0.5))
 	end
 	return string.format("%.1fs", cd)
+end
+
+-- The cooldowns, all alike, a point smaller when the language's words make
+-- one wider than its column ("8.6 Sek."), then without the space before the
+-- word ("8.6Sek."), then a point smaller again: each text measured once, on a
+-- probe; the rows' font set only when that changes (see Bold). English's fit.
+local CD_STEPS = { { 8 }, { 7 }, { 7, true }, { 6, true } }   -- size, the space out
+local cdProbe = list:CreateFontString(nil, "OVERLAY")
+cdProbe:Hide()
+local cdSteps = {}               -- [face, column width, text] = the first step it fits at
+
+local function Spaceless(text)
+	return (string.gsub(text, " ", ""))
+end
+
+-- The first step a text fits its column's width at, Width(points, words) its
+-- width at that size (the list's probe, or the options' preview's words).
+local function StepOf(text, width, Width)
+	local step = 1
+	while step < table.getn(CD_STEPS) do
+		if Width(CD_STEPS[step][1], CD_STEPS[step][2] and Spaceless(text) or text) <= width then
+			break
+		end
+		step = step + 1
+	end
+	return step
+end
+
+local function CooldownStep(text, face, flags, column, textStep)
+	local key = face.."|"..column.width.."|"..textStep.."|"..text
+	if not cdSteps[key] then
+		cdSteps[key] = StepOf(text, column.width, function(points, words)
+			cdProbe:SetFont(face, math.max(6, points + FONT_BUMP + textStep), flags)
+			cdProbe:SetText(words)
+			return cdProbe:GetStringWidth()
+		end)
+	end
+	return cdSteps[key]
+end
+
+-- row.cdText keeps the cooldown as written (its cell may show it spaceless).
+local function FitCooldown(row)
+	local column = columns and columns.cd
+	local text = row.cd:GetText()
+	local textStep = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Build list") or 0
+	row.cdText, row.cdStep = text, 1
+	local face, _, flags = row.cd:GetFont()
+	face, flags = face or SurvivorUI_FONT, flags or "OUTLINE"
+	if column and text and text ~= "" and SurvivorUI_Language and SurvivorUI_Language() then
+		row.cdStep = CooldownStep(text, face, flags, column, textStep)
+	end
+	local step = 1
+	for _, each in pairs(rows) do
+		local shown = each:IsShown() and each.cd:GetText()
+		if shown and shown ~= "" and each.cdStep then
+			step = math.max(step, each.cdStep)
+		end
+	end
+	local size, spaceless = CD_STEPS[step][1], CD_STEPS[step][2]
+	for _, each in pairs(rows) do
+		if (each.cdSize or 8) ~= size then
+			each.cdSize = size
+			-- At the text size step, told to EditCard.lua's Dress as its own (as FitSpell).
+			local face, _, flags = each.cd:GetFont()
+			local base = size + FONT_BUMP
+			each.cd:SetFont(face or SurvivorUI_FONT, math.max(6, base + textStep), flags or "OUTLINE")
+			each.cd.suiBase, each.cd.suiSize, each.cd.suiPath = base, math.max(6, base + textStep), each.cd:GetFont()
+		end
+		local shown = each.cd:GetText()
+		if shown and shown ~= "" and each.cdText then
+			local want = spaceless and Spaceless(each.cdText) or each.cdText
+			if shown ~= want then
+				each.cd:SetText(want)
+			end
+		end
+	end
 end
 
 ------------------------------------------------------------------------------
@@ -516,7 +896,8 @@ end
 -- left out. Its length is the game's: the time
 -- left as its buff last went up (AZS_BUFFS, by its spell id
 -- in AZS_SPELLS; kept for the account, an upgrade can lengthen it), else read
--- off its tooltip ("for 8 sec", "For 14 sec").
+-- off its tooltip ("for 8 sec", "For 14 sec"; another language's by its
+-- patterns, InfoWords).
 
 local LASTING = { divine_shield = true, holy_shield = true, battle_shout = true,
 	slice_and_dice = true, adrenaline_rush = true, lightning_shield = true, thorns = true,
@@ -558,7 +939,8 @@ end
 ------------------------------------------------------------------------------
 -- A heal on yourself (2026-10-21): how much of your health it gives back says
 -- more than a range it has none of (Holy Light at once, Renew over its time). A green cross and its share, "48%", off
--- its tooltip ("48% of your max health"), else its amount ("Heals you for 287").
+-- its tooltip ("48% of your max health"), else its amount ("Heals you for 287");
+-- in another language by its patterns (InfoWords).
 
 local HEALING = { holy_light = true, renew = true, healing_wave = true, rejuvenation = true, regrowth = true }
 local CROSS = { 0.42, 1, 0.5 }
@@ -573,6 +955,15 @@ local SHIELD = { 0.59, 0.82, 1 }
 -- a heal, blue a shield.
 local RANGE = { 0.8, 0.8, 0.83 }
 local heals = {}                 -- [name:rank] = { text or false, when read }
+
+-- For the options' preview (Build list tab): the list's measures, its empty
+-- slots' color, each symbol's tint and the color its number takes (none: the
+-- row's own). Read only.
+SurvivorUI_BUILD_LOOK = {
+	width = WIDTH, row = ROW_HEIGHT, title = TITLE_HEIGHT, head = HEAD_HEIGHT, slots = SLOTS, muted = MUTED, rankWidth = COLUMN_WIDTH.rank,
+	tints = { Range = RANGE, Area = RANGE, Hourglass = HOURGLASS, HealCross = CROSS, Shield = SHIELD },
+	numbers = { Hourglass = HOURGLASS, HealCross = CROSS, Shield = SHIELD },
+}
 
 -- A tooltip's line as plain text, its colors taken out.
 local function Plain(text)
@@ -590,11 +981,19 @@ local function HealText(actionSlot, name, rank, amountPattern)
 	scan:ClearLines()
 	scan:SetAction(actionSlot)
 	local share, amount
+	-- The game's language (nil: English) and its patterns: an absorb's amount
+	-- (amountPattern given) or a heal's.
+	local words = InfoWords(SurvivorUI_Language and SurvivorUI_Language())
 	for line = 2, scan:NumLines() do
 		local text = getglobal("SurvivorUIBuildScanTextLeft"..line)
 		text = Plain(text and text:GetText())
-		local _, _, p = string.find(text, "(%d+%.?%d*)%% of your max health")
-		local _, _, n = string.find(text, amountPattern or "[Hh]eals you for (%d+)")
+		local _, p, n
+		if words then
+			p, n = OpensWith(text, words.share), OpensWith(text, words[amountPattern and "absorb" or "heal"])
+		else
+			_, _, p = string.find(text, "(%d+%.?%d*)%% of your max health")
+			_, _, n = string.find(text, amountPattern or "[Hh]eals you for (%d+)")
+		end
 		share, amount = share or p, amount or n
 	end
 	scan:Hide()
@@ -612,9 +1011,15 @@ local function TipLength(actionSlot, name, rank)
 		scan:SetOwner(WorldFrame, "ANCHOR_NONE")
 		scan:ClearLines()
 		scan:SetAction(actionSlot)
+		local words = InfoWords(SurvivorUI_Language and SurvivorUI_Language())
 		for line = 2, scan:NumLines() do
 			local text = getglobal("SurvivorUIBuildScanTextLeft"..line)
-			local _, _, secs = string.find(Plain(text and text:GetText()), "[Ff]or (%d+%.?%d*) sec")
+			local _, secs
+			if words then
+				secs = OpensWith(Plain(text and text:GetText()), words.length)
+			else
+				_, _, secs = string.find(Plain(text and text:GetText()), "[Ff]or (%d+%.?%d*) sec")
+			end
 			if secs and not lengths[key] then
 				lengths[key] = tonumber(secs)
 			end
@@ -687,19 +1092,74 @@ local function Drain(row, share, color)
 	end
 end
 
--- A lasting spell's cell: its time left while it is up, else its length.
--- Returns the share of its time left, for the row's timer.
-local function FillLasting(row, entry, key, actionSlot, name, showRange)
+-- A lasting spell's cell: its time left while it is up, else its length; the
+-- number, its color, and while it is up the share of its time left.
+local BRIGHT = { 1, 1, 1 }
+
+local function LastingCell(entry, key, actionSlot, name, showRange)
 	local left, length = Lasting(entry, key)
 	length = length or TipLength(actionSlot, name, Field(entry, "rank", 3))
 	if left then
-		timing = true
-		row.range:SetText(showRange and string.format("%.1f", left) or "")
-		row.range:SetTextColor(1, 1, 1)
-		return length and math.min(1, left / length) or 1
+		return showRange and string.format("%.1f", left) or "", BRIGHT, length and math.min(1, left / length) or 1
 	end
-	row.range:SetText(showRange and length and Length(length) or "")
-	row.range:SetTextColor(HOURGLASS[1], HOURGLASS[2], HOURGLASS[3])
+	return showRange and length and Length(length) or "", HOURGLASS
+end
+
+-- Returns the share of its time left, for the row's timer.
+local function FillLasting(row, entry, key, actionSlot, name, showRange)
+	local text, color, share = LastingCell(entry, key, actionSlot, name, showRange)
+	if share then
+		timing = true
+	end
+	row.range:SetText(text)
+	row.range:SetTextColor(color[1], color[2], color[3])
+	return share
+end
+
+-- What the Info cell holds, as Fill draws it: whether the spell is a lasting
+-- one (its number then LastingCell's), its symbol (an Art file) and tint, its
+-- number, and the number's color (none: the row's own).
+-- The kinds Info leaves out (the options, Build list: buildInfoOff, by
+-- symbol): such a spell shows its reach instead, as any spell's (a buff's
+-- row then no timer); the reach left out, nothing.
+local SHOWS_ALL = {}
+
+local function InfoOf(entry, key, actionSlot, name, isRacial, showRange)
+	local rank = Field(entry, "rank", 3)
+	local off = Settings().buildInfoOff or SHOWS_ALL
+	local lasting = LASTING[key] and not isRacial and not off.Hourglass
+	if lasting and showRange then
+		-- Up, or its length known or told; else its range, as any spell's.
+		local left, length = Lasting(entry, key)
+		lasting = (left or length or TipLength(actionSlot, name, rank)) and true
+	end
+	if lasting then
+		return true, showRange and "Hourglass", HOURGLASS
+	end
+	-- A heal's or an absorb's share of your health, when its tooltip tells it;
+	-- else its range, as any spell's.
+	local healing = HEALING[key] and not isRacial and showRange and not off.HealCross and HealText(actionSlot, name, rank)
+	if healing then
+		return false, "HealCross", CROSS, healing, CROSS
+	end
+	local absorbing = ABSORBING[key] and not isRacial and showRange and not off.Shield and HealText(actionSlot, name, rank, ABSORBING[key])
+	if absorbing then
+		return false, "Shield", SHIELD, absorbing, SHIELD
+	end
+	-- The measuring arrow stands for the yards: "22" beside it, not "22 yd".
+	-- An area (landing on a spot, around you, a totem's, a burst's): its
+	-- radius, under a ring.
+	local reach, area = nil, nil
+	if showRange then
+		reach, area = Reach(actionSlot, name, rank)
+	end
+	if area and not off.Area then
+		return false, "Area", RANGE, area
+	end
+	if off.Range then
+		return false, nil, RANGE, ""
+	end
+	return false, reach and "Range", RANGE, reach and (string.gsub(reach, " yd$", "")) or ""
 end
 
 local function Fill(row, entry, actionSlot, isRacial)
@@ -715,51 +1175,19 @@ local function Fill(row, entry, actionSlot, isRacial)
 	row.icon:SetAlpha(1)
 	-- Its name as the game writes it in its language (Locale.lua).
 	local shown = SurvivorUI_Native(name)
-	row.name:SetText(isRacial and shown.."  |cff8a8a8a"..SurvivorUI_T("(racial)").."|r" or shown)
-	row.rank:SetText(tonumber(Field(entry, "rank", 3)) or "")
+	FitSpell(row, shown, isRacial and SurvivorUI_T("(racial)"))
+	row.rank:SetText(RankText(Field(entry, "rank", 3)))
 	local showRange, showCooldown = Shows()
-	local lasting = LASTING[key] and not isRacial
-	if lasting and showRange then
-		-- Up, or its length known or told; else its range, as any spell's.
-		local left, length = Lasting(entry, key)
-		lasting = (left or length or TipLength(actionSlot, name, Field(entry, "rank", 3))) and true
-	end
-	-- A heal's or an absorb's share of your health, when its tooltip tells it;
-	-- else its range, as any spell's.
-	local healing = HEALING[key] and not isRacial and showRange
-		and HealText(actionSlot, name, Field(entry, "rank", 3))
-	local absorbing = ABSORBING[key] and not isRacial and showRange
-		and HealText(actionSlot, name, Field(entry, "rank", 3), ABSORBING[key])
-	if lasting then
-		PlaceReach(row, showRange and "Hourglass", HOURGLASS)
-	elseif healing then
-		PlaceReach(row, "HealCross", CROSS)
-		row.range:SetText(healing)
-	elseif absorbing then
-		PlaceReach(row, "Shield", SHIELD)
-		row.range:SetText(absorbing)
-	else
-		-- The measuring arrow stands for the yards: "22" beside it, not "22 yd".
-		-- An area (landing on a spot, around you, a totem's, a burst's): its
-		-- radius, under a ring.
-		local reach, area = nil, nil
-		if showRange then
-			reach, area = Reach(actionSlot, name, Field(entry, "rank", 3))
-		end
-		if area then
-			PlaceReach(row, "Area", RANGE)
-			row.range:SetText(area)
-		else
-			PlaceReach(row, reach and "Range", RANGE)
-			row.range:SetText(reach and (string.gsub(reach, " yd$", "")) or "")
-		end
+	local lasting, symbol, tint, number, numberColor = InfoOf(entry, key, actionSlot, name, isRacial, showRange)
+	PlaceReach(row, symbol, tint)
+	if not lasting then
+		row.range:SetText(number)
 	end
 	row.cd:SetText(showCooldown and CooldownText(entry) or "")
+	FitCooldown(row)
 	Paint(row, color, isRacial and 0.5 or 1, not isRacial)
-	if healing then
-		row.range:SetTextColor(CROSS[1], CROSS[2], CROSS[3])
-	elseif absorbing then
-		row.range:SetTextColor(SHIELD[1], SHIELD[2], SHIELD[3])
+	if numberColor then
+		row.range:SetTextColor(numberColor[1], numberColor[2], numberColor[3])
 	end
 	Drain(row, lasting and FillLasting(row, entry, key, actionSlot, name, showRange), color)
 	row:Show()
@@ -770,7 +1198,7 @@ local function Empty(row)
 	row.icon:SetTexture(FLAT)
 	row.icon:SetVertexColor(0.15, 0.15, 0.18)
 	row.icon:SetAlpha(0.8)
-	row.name:SetText(SurvivorUI_T("empty slot"))
+	FitSpell(row, SurvivorUI_T("empty slot"))
 	row.rank:SetText("")
 	PlaceReach(row, false)
 	row.range:SetText("")
@@ -856,6 +1284,58 @@ racialWatch:SetScript("OnEvent", function()
 	ReadRacial(arg1)
 end)
 
+-- The slotted spells from the highest rank down, ties to the earlier slot.
+local function RankOrder(spells, slotted)
+	local order = {}
+	for index = 1, slotted do
+		table.insert(order, index)
+	end
+	table.sort(order, function(a, b)
+		local ra = tonumber(Field(spells[a], "rank", 3)) or 0
+		local rb = tonumber(Field(spells[b], "rank", 3)) or 0
+		if ra ~= rb then
+			return ra > rb
+		end
+		return a < b
+	end)
+	return order
+end
+
+-- Roman ranks: the rank column as wide as the longest of them needs
+-- (LXXXVIII), a number's at least; measured on a word of its own (at the
+-- ranks' size, the piece's text size too) as the ranks change, the rows laid
+-- out again on the next draw.
+local probe = list:CreateFontString(nil, "OVERLAY")
+probe:SetFont(SurvivorUI_FONT, 10 + FONT_BUMP, "OUTLINE")
+probe:SetPoint("TOPLEFT", list, "TOPLEFT", 7, -6)
+probe:SetTextColor(1, 1, 1, 0)
+local measured = {}
+
+local function RankRoom()
+	if not SurvivorUIDB.romanRanks then
+		return COLUMN_WIDTH.rank
+	end
+	local _, size = probe:GetFont()
+	local key = tostring(size)
+	for index = 1, SLOTS + 1 do
+		if rows[index] and rows[index]:IsShown() then
+			key = key.."|"..(rows[index].rank:GetText() or "")
+		end
+	end
+	if measured.key ~= key then
+		local widest = 0
+		for word in string.gfind(key, "|([^|]*)") do
+			probe:SetText(word)
+			widest = math.max(widest, probe:GetStringWidth() or 0)
+		end
+		probe:SetText("")
+		-- Not drawn yet, it measures nothing: measured again next time.
+		measured.key = widest > 0 and key or nil
+		measured.width = math.max(COLUMN_WIDTH.rank, math.ceil(widest) + 4)
+	end
+	return measured.width
+end
+
 local function Draw()
 	timing = false
 	-- The columns as chosen; changed, every row laid out again.
@@ -872,18 +1352,7 @@ local function Draw()
 	-- The three highest ranks among the slotted spells, ties to the earlier
 	-- slot: the first bold with a full border, the second a full border, the
 	-- third a faint one; the rest plain. The list itself runs in that order.
-	local order = {}
-	for index = 1, slotted do
-		table.insert(order, index)
-	end
-	table.sort(order, function(a, b)
-		local ra = tonumber(Field(spells[a], "rank", 3)) or 0
-		local rb = tonumber(Field(spells[b], "rank", 3)) or 0
-		if ra ~= rb then
-			return ra > rb
-		end
-		return a < b
-	end)
+	local order = RankOrder(spells, slotted)
 	-- Rows from the highest rank down; each spell keeps its own action button
 	-- for its icon.
 	for place = 1, SLOTS do
@@ -914,6 +1383,7 @@ local function Draw()
 		racialRow:Hide()
 	end
 	list.count:SetText((slotted >= SLOTS and "|cffff8080" or "|cffd0d0d0")..math.min(slotted, SLOTS).." / "..SLOTS.."|r")
+	rankWidth = RankRoom()
 end
 
 ------------------------------------------------------------------------------
@@ -1047,6 +1517,23 @@ local function EnglishLine(text)
 	return SurvivorUI_EnglishLine and SurvivorUI_EnglishLine(text) or text
 end
 
+-- What a piece gives in short, off its lines in English (lower case): each
+-- line with a number in it by its short name, once each, "+61% DMG · -24% CDR".
+local function TagsOf(lines)
+	local tags, seen = {}, {}
+	for index = 1, table.getn(lines) do
+		local text = lines[index]
+		if string.find(text, "%d") then
+			local tag = StatOf(text)
+			if tag and not seen[tag] then
+				seen[tag] = true
+				table.insert(tags, Tagged(tag, Value(tag, text)))
+			end
+		end
+	end
+	return table.concat(tags, " · ")
+end
+
 local function ReadPiece(slot, link)
 	if pieces[link] then
 		return pieces[link]
@@ -1067,23 +1554,29 @@ local function ReadPiece(slot, link)
 	scan:SetOwner(WorldFrame, "ANCHOR_NONE")
 	scan:ClearLines()
 	scan:SetInventoryItem("player", slot)
-	local tags, seen = {}, {}
+	local lines = {}
 	for index = 2, scan:NumLines() do
 		local line = getglobal("SurvivorUIScanTipTextLeft"..index)
-		local text = line and string.lower(EnglishLine(line:GetText() or "")) or ""
-		if string.find(text, "%d") then
-			local tag = StatOf(text)
-			if tag and not seen[tag] then
-				seen[tag] = true
-				table.insert(tags, Tagged(tag, Value(tag, text)))
-			end
-		end
+		table.insert(lines, line and string.lower(EnglishLine(line:GetText() or "")) or "")
 	end
-	pieces[link] = { rank = rank or "I", spell = spell, tags = table.concat(tags, " · ") }
+	pieces[link] = { rank = rank or "I", spell = spell, tags = TagsOf(lines) }
 	return pieces[link]
 end
 
 local GEAR_TOP, GEAR_ROW = 21, 17
+
+-- How a piece's quality color shows (the options, Jewelry worn): filling its
+-- row, as at first; in its words over a plain row; or not at all; and an empty
+-- slot, faint. The row's fill and edge, plain (grey) or in the color.
+local GEAR_PAINT = {
+	row = { fill = 0.45, edge = 0.7 },
+	words = { fill = 0.1, edge = 0.3, plain = true, words = true },
+	none = { fill = 0.16, edge = 0.4, plain = true },
+	empty = { fill = 0.06, edge = 0.15, plain = true },
+}
+local PLAIN = { 0.5, 0.5, 0.55 }
+-- For the options' preview: the panel's measures and its looks.
+SurvivorUI_BUILD_LOOK.gear = { top = GEAR_TOP, row = GEAR_ROW, slots = table.getn(GEAR_SLOTS), paint = GEAR_PAINT, plain = PLAIN }
 
 local worn = CreateFrame("Frame", "SurvivorUIWorn", UIParent)
 worn:SetWidth(WIDTH + 12)
@@ -1098,6 +1591,15 @@ worn.title:SetFont(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE")
 worn.title:SetPoint("TOPLEFT", worn, "TOPLEFT", 7, -6)
 worn.title:SetTextColor(1, 0.82, 0)
 worn.title:SetText(SurvivorUI_T("Jewelry"))
+
+-- Each panel's dark ground, or none (No backgrounds): the rows keep their own
+-- fills, the words their outline. Painted as the world loads and as the
+-- options change it (Options.lua, No backgrounds: every SurvivorUI_Grounds).
+SurvivorUI_Grounds = SurvivorUI_Grounds or {}
+function SurvivorUI_Grounds.build()
+	list:SetBackdropColor(0.04, 0.04, 0.07, Bare("build") and 0 or 0.55)
+	worn:SetBackdropColor(0.04, 0.04, 0.07, Bare("worn") and 0 or 0.55)
+end
 
 local function SaveWorn()
 	local settings = Settings()
@@ -1213,20 +1715,39 @@ end
 
 -- Never over the slot's name and rank: a point or two smaller first, down
 -- to 7; still too long (a legendary amulet's four or five), the first ones
--- and "...+" for the rest, which the piece's tooltip shows on hover.
+-- and "...+" for the rest, which the piece's tooltip shows on hover. At the
+-- piece's text size (the options, Jewelry worn), sized again as it or the
+-- slot's words change.
 local SEPARATOR = " \194\183 "
 
 local function FitTags(line, text)
-	local key = (line.label:GetText() or "").."|"..text
+	-- No tags (a row by its name): nothing to fit, even when the name took
+	-- the whole row (fitted, it would be " · ...+" over the name's end).
+	if text == "" then
+		line.tags:SetText("")
+		line.tagText = nil
+		return
+	end
+	local step = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Jewelry worn") or 0
+	-- The face too: one worn since (the language's, the piece's) measures anew.
+	local face, labelSize = line.label:GetFont()
+	face = face or SurvivorUI_FONT
+	local key = (line.label:GetText() or "").."|"..text.."|"..step.."|"..math.floor((labelSize or 0) + 0.5).."|"..face
 	if line.tagText == key then
 		return
 	end
 	local labelWidth = line.label:GetStringWidth()
-	-- A label not drawn yet measures nothing: sized again next time.
-	line.tagText = labelWidth > 0 and key or nil
+	-- A label not drawn yet measures nothing: sized again next time (none,
+	-- the slot and rank both off, measures nothing too).
+	line.tagText = (labelWidth > 0 or (line.label:GetText() or "") == "") and key or nil
 	local room = WIDTH - 8 - labelWidth - 10
+	-- Its size told to EditCard.lua's Dress as its own (base) and as the one
+	-- it is at, so the text size is not added twice.
 	local function Fits(size, words)
-		line.tags:SetFont(SurvivorUI_FONT, size + FONT_BUMP, "OUTLINE")
+		local base = size + FONT_BUMP
+		local want = math.max(6, base + step)
+		line.tags:SetFont(face, want, "OUTLINE")
+		line.tags.suiBase, line.tags.suiSize, line.tags.suiPath = base, want, line.tags:GetFont()
 		line.tags:SetText(words)
 		return line.tags:GetStringWidth() <= room
 	end
@@ -1257,66 +1778,223 @@ local function FitTags(line, text)
 	Fits(6, parts[1]..SEPARATOR.."...+")
 end
 
--- A piece by its name, cut to the row when long. Measured only as it changes,
--- as FitTags is.
+-- The slot's words (or a piece's name) at a size: the piece's text size step
+-- on it, told to EditCard.lua's Dress as FitTags tells it. Its width.
+local function LabelAt(line, points, words, path, flags, step)
+	local base = points + FONT_BUMP
+	local want = math.max(6, base + step)
+	line.label:SetFont(path, want, flags)
+	line.label.suiBase, line.label.suiSize, line.label.suiPath = base, want, line.label:GetFont()
+	line.label:SetText(words)
+	return line.label:GetStringWidth(), want
+end
+
+-- A piece by its name, fit to the row as the Jewelry Collection's names are
+-- (Jewelry.lua's Fit; Lucas, 2026-11-04, a Russian name is long: "Безупречная
+-- зачарованная водоросль южных морей"): at its size; else a point smaller,
+-- never under 7; else cut at its size with "...", its rank kept after. Hover
+-- the row for the piece's tooltip, its whole name the title. Measured again
+-- only as the name, the face or the text size change (a size step put on
+-- after it was cut ran it out of the panel); a name not drawn yet measures
+-- nothing, and is fit on the next draw.
 local function FitName(line, name)
-	if line.named == name then
+	local step = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Jewelry worn") or 0
+	local path, _, flags = line.label:GetFont()
+	path, flags = path or SurvivorUI_FONT, flags or "OUTLINE"
+	local key = name.."|"..step.."|"..path
+	if line.named == key then
 		return
 	end
-	line.label:SetText(name)
-	local width = line.label:GetStringWidth()
-	-- A label not drawn yet measures nothing: cut next time.
-	line.named = width > 0 and name or nil
+	line.fitted = true
+	local width, want = LabelAt(line, 9, name, path, flags, step)
+	if width == 0 then
+		line.named = nil
+		return
+	end
+	line.named = key
 	local room = WIDTH - 8
-	if width <= room then
+	if width <= room or (want > 7 and LabelAt(line, 8, name, path, flags, step) <= room) then
 		return
 	end
-	local count = string.len((string.gsub(name, "[\128-\191]", "")))
-	while count > 1 and line.label:GetStringWidth() > room do
-		count = count - 1
-		line.label:SetText((string.gsub(SurvivorUI_Cut(name, count), "%s+$", ""))..".")
+	LabelAt(line, 9, name, path, flags, step)
+	local _, _, words, rank = string.find(name, "^(.-)( [IVXL]+%+?)$")
+	line.label:SetText(CutTo(words or name, room, function(shown)
+		line.label:SetText(shown)
+		return line.label:GetStringWidth()
+	end, rank))
+end
+
+-- The quality color a link carries: "|cffa335ee" is an epic's purple.
+local function Quality(link)
+	local _, _, rr, gg, bb = string.find(link, "|c%x%x(%x%x)(%x%x)(%x%x)")
+	return (tonumber(rr or "cc", 16) or 204) / 255, (tonumber(gg or "cc", 16) or 204) / 255, (tonumber(bb or "cc", 16) or 204) / 255
+end
+
+-- How a row tells a piece (the options, Jewelry worn): by its stats, the slot
+-- (a legendary amulet's spell, short, in its place) and the piece's rank as
+-- a Roman numeral at the left, either or both, "Ring  II", and what it gives
+-- at the right; or by its name alone, its rank on it or not. The words at the
+-- left and at the right.
+local function GearWords(label, piece, name)
+	local db = Settings()
+	if db.jewelryNames then
+		name = SurvivorUI_Native(name or "?")
+		if db.jewelryRank == false then
+			name = string.gsub(name, " [IVXL]+%+?$", "")
+		end
+		return name, ""
+	end
+	local slot = db.jewelrySlot ~= false and (piece.spell and Short(piece.spell) or SurvivorUI_T(label)) or nil
+	local rank = db.jewelryRank ~= false and piece.rank or nil
+	return slot and rank and (slot.."  "..rank) or slot or rank or "", piece.tags ~= "" and piece.tags or "-"
+end
+
+-- A row's words: a name cut to the row, or the left words and the right ones
+-- beside them, a point or two smaller when long; the right ones at the row's
+-- left when nothing is there (its slot and rank both off).
+local function GearText(line, left, right, named)
+	if named then
+		FitName(line, left)
+		FitTags(line, "")
+	else
+		line.named = nil
+		-- Back at its own size from a name's fit (a point smaller).
+		if line.fitted then
+			line.fitted = nil
+			local path, _, flags = line.label:GetFont()
+			LabelAt(line, 9, left, path or SurvivorUI_FONT, flags or "OUTLINE",
+				SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Jewelry worn") or 0)
+		end
+		line.label:SetText(left)
+		FitTags(line, right)
+	end
+	local alone = left == ""
+	if line.alone ~= alone then
+		line.alone = alone
+		line.tags:ClearAllPoints()
+		if alone then
+			line.tags:SetPoint("LEFT", line, "LEFT", 4, 0)
+		else
+			line.tags:SetPoint("RIGHT", line, "RIGHT", -4, 0)
+		end
+	end
+end
+
+-- A row in its place among those shown (the empty slots may be left out: the
+-- options, Jewelry worn), set only as it changes.
+local function PlaceGear(line, place)
+	if line.place ~= place then
+		line.place = place
+		line:ClearAllPoints()
+		line:SetPoint("TOPLEFT", worn, "TOPLEFT", 6, -GEAR_TOP - (place - 1) * GEAR_ROW)
 	end
 end
 
 local function DrawGear()
 	worn.title:SetText(SurvivorUI_T("Jewelry"))
-	local named = Settings().jewelryNames
+	local db = Settings()
+	local paint = GEAR_PAINT[db.jewelryColor or "row"] or GEAR_PAINT.row
+	local shown = 0
 	for index = 1, table.getn(GEAR_SLOTS) do
 		local slot, label = GEAR_SLOTS[index][1], GEAR_SLOTS[index][2]
 		local line = gearLines[index]
 		line.slot = slot
 		local link = GetInventoryItemLink and GetInventoryItemLink("player", slot)
-		if link then
-			-- The quality color the link carries: "|cffa335ee" is an epic's purple.
-			local _, _, rr, gg, bb = string.find(link, "|c%x%x(%x%x)(%x%x)(%x%x)")
-			local r = (tonumber(rr or "cc", 16) or 204) / 255
-			local g = (tonumber(gg or "cc", 16) or 204) / 255
-			local b = (tonumber(bb or "cc", 16) or 204) / 255
-			PaintGear(line, r, g, b, 0.45, 0.7)
-			if named then
-				local _, _, name = string.find(link, "%[(.-)%]")
-				FitName(line, SurvivorUI_Native(name or "?"))
-				FitTags(line, "")
-			else
-				-- The slot, then the piece's rank as a Roman numeral: "Ring  II". A
-				-- legendary amulet shows the spell it boosts in the slot's place.
-				local piece = ReadPiece(slot, link)
-				line.named = nil
-				line.label:SetText((piece.spell and Short(piece.spell) or SurvivorUI_T(label)).."  "..piece.rank)
-				FitTags(line, piece.tags ~= "" and piece.tags or "-")
-			end
-			line.label:SetTextColor(1, 1, 1)
-			line.tags:SetTextColor(1, 1, 1)
-		else
-			PaintGear(line, 0.5, 0.5, 0.55, 0.06, 0.15)
-			line.named = nil
-			line.label:SetText(SurvivorUI_T(label))
-			line.label:SetTextColor(0.45, 0.45, 0.5)
-			FitTags(line, SurvivorUI_T("empty"))
-			line.tags:SetTextColor(0.4, 0.4, 0.45)
+		if link or db.jewelryEmpty ~= false then
+			shown = shown + 1
+			PlaceGear(line, shown)
 		end
-		line:Show()
+		if link then
+			local r, g, b = Quality(link)
+			if db.jewelryNames then
+				local _, _, name = string.find(link, "%[(.-)%]")
+				GearText(line, GearWords(label, nil, name), "", true)
+			else
+				local left, right = GearWords(label, ReadPiece(slot, link))
+				GearText(line, left, right)
+			end
+			if paint.plain then
+				PaintGear(line, PLAIN[1], PLAIN[2], PLAIN[3], paint.fill, paint.edge)
+			else
+				PaintGear(line, r, g, b, paint.fill, paint.edge)
+			end
+			if not paint.words then
+				r, g, b = 1, 1, 1
+			end
+			line.label:SetTextColor(r, g, b)
+			line.tags:SetTextColor(r, g, b)
+			line:Show()
+		elseif db.jewelryEmpty ~= false then
+			PaintGear(line, PLAIN[1], PLAIN[2], PLAIN[3], GEAR_PAINT.empty.fill, GEAR_PAINT.empty.edge)
+			GearText(line, SurvivorUI_T(label), SurvivorUI_T("empty"))
+			line.label:SetTextColor(0.45, 0.45, 0.5)
+			line.tags:SetTextColor(0.4, 0.4, 0.45)
+			line:Show()
+		else
+			line:Hide()
+		end
 	end
+	-- As tall as the rows shown; with none, its title alone.
+	local tall = GEAR_TOP + shown * GEAR_ROW + 5
+	if worn.tall ~= tall then
+		worn.tall = tall
+		worn:SetHeight(tall)
+	end
+end
+
+-- For the options' preview (Jewelry worn tab): the rows as the panel shows
+-- them now, by the settings, one a slot shown: { left, right, color, empty,
+-- named }; the run's when in one with a piece worn, else a sample: a piece of
+-- each rarity, legendary to uncommon, with its codex bonus (JewelryData.lua),
+-- and an empty slot. And whether they are the run's.
+function SurvivorUI_WornRows()
+	local db = Settings()
+	local real = false
+	for index = 1, table.getn(GEAR_SLOTS) do
+		real = real or (Running() and GetInventoryItemLink("player", GEAR_SLOTS[index][1]) and true)
+	end
+	-- By slot: its name, rank, quality and rarity (a ring's or a trinket's
+	-- bonus, Common 1 to Legendary 5; an amulet has its own).
+	local sample = {
+		{ "Onyxia Tooth Pendant", "III", "ff8000" },
+		{ "Band of Accuria", "IV", "a335ee", 4 },
+		{ "Quick Strike Ring", "II", "0070dd", 3 },
+		{ "Carrot on a Stick", "V", "1eff00", 2 },
+	}
+	local rows = {}
+	for index = 1, table.getn(GEAR_SLOTS) do
+		local slot, label = GEAR_SLOTS[index][1], GEAR_SLOTS[index][2]
+		local link, each = nil, sample[index]
+		if real then
+			link = GetInventoryItemLink("player", slot)
+		elseif each then
+			link = "|cff"..each[3].."|Hitem:0|h["..SurvivorUI_Native(each[1]).." "..each[2].."]|h|r"
+		end
+		if link then
+			local left, right
+			if db.jewelryNames then
+				local _, _, name = string.find(link, "%[(.-)%]")
+				left, right = GearWords(label, nil, name)
+			elseif real then
+				left, right = GearWords(label, ReadPiece(slot, link))
+			else
+				local lines, given = {}, {}
+				for _, entry in pairs(SurvivorUI_JEWELRY and SurvivorUI_JEWELRY[label] or {}) do
+					if type(entry) == "table" and entry[1] == each[1] then
+						given = label == "Neck" and entry[3] or { entry[2][each[4]] }
+					end
+				end
+				for line = 1, table.getn(given) do
+					lines[line] = string.lower(given[line])
+				end
+				left, right = GearWords(label, { rank = each[2], tags = TagsOf(lines) })
+			end
+			table.insert(rows, { left = left, right = right, color = { Quality(link) }, named = db.jewelryNames })
+		elseif db.jewelryEmpty ~= false then
+			table.insert(rows, { left = SurvivorUI_T(label), right = SurvivorUI_T("empty"), empty = true })
+		end
+	end
+	return rows, real
 end
 
 local elapsed = 0
@@ -1350,7 +2028,7 @@ end)
 -- The game's own build, its row of spells and jewelry with their cooldowns:
 -- away while this list is on, unless asked to stay (gameBuildToo: since the
 -- game's 0.111 its talent icon is the only place that counts down to the
--- next Felguard or Pit Lord of Butcher and Pact of the Annihilan). The
+-- next Felguard or Dread Lord of Butcher and Pact of the Nathrezim). The
 -- setting is the game's and is saved, so the addon remembers that it was the
 -- one to turn it off.
 local function ApplyGameHud()
@@ -1418,30 +2096,173 @@ end
 -- spells that strike, in yards, and that spell's name, read off the buttons'
 -- tooltips as the list's Info is (a radius, for one with no range). Heals,
 -- shields and lasting buffs left out, and the racial. Read again every two
--- seconds, or as the game sends its list anew.
+-- seconds, or as the game sends its list anew, or as the class's spell
+-- changes (the options, Spell per class, Lucas 2026-11-04): that spell's
+-- reach wins while it is in the build, the longest till then. The third
+-- answer says which: "chosen" (the class's spell), "missing" (one chosen,
+-- not in the build yet: the longest), nil (none chosen: the longest).
 local longest = { at = -10 }
 
-function SurvivorUI_LongestReach()
-	if GetTime() - longest.at < 2 and longest.seen == AZS_SPELLS_UPDATED then
-		return longest.yards, longest.name
+-- The class's spell, by its key in AZS_SPELLS ("execute"), or nil for the
+-- longest; one for every hero of that class (SurvivorUIDB is the account's).
+-- The hero's class unless given; the class second.
+function SurvivorUI_RangeSpell(class)
+	if not class then
+		local _
+		_, class = UnitClass("player")
 	end
-	longest.at, longest.seen = GetTime(), AZS_SPELLS_UPDATED
-	longest.yards, longest.name = nil, nil
+	local chosen = SurvivorUIDB and SurvivorUIDB.rangeSpells
+	return class and chosen and chosen[class] or nil, class
+end
+
+-- key nil: back to the longest; the rings follow at once.
+function SurvivorUI_SetRangeSpell(class, key)
+	local db = Settings()
+	db.rangeSpells = db.rangeSpells or {}
+	db.rangeSpells[class] = key
+	if not next(db.rangeSpells) then
+		db.rangeSpells = nil
+	end
+	longest.at = -10
+end
+
+-- Whether the build holds this spell (the racial left out), and its reach
+-- now, in yards, read off its button's tooltip.
+function SurvivorUI_SpellReach(key)
 	local spells = AZS_SPELLS or {}
 	local count = table.getn(spells)
 	for index = 1, count - 1 do
 		local entry = spells[index]
+		if Field(entry, "key", 1) == key then
+			local reach = Reach(Slot(index, count), SpellName(key), Field(entry, "rank", 3))
+			return true, reach and tonumber((string.gsub(reach, " yd$", "")))
+		end
+	end
+	return false
+end
+
+function SurvivorUI_LongestReach()
+	local choice = SurvivorUI_RangeSpell()
+	if GetTime() - longest.at < 2 and longest.seen == AZS_SPELLS_UPDATED and longest.choice == choice then
+		return longest.yards, longest.name, longest.why
+	end
+	longest.at, longest.seen, longest.choice = GetTime(), AZS_SPELLS_UPDATED, choice
+	longest.yards, longest.name, longest.why = nil, nil, choice and "missing" or nil
+	local spells = AZS_SPELLS or {}
+	local count = table.getn(spells)
+	local chosenYards, chosenName
+	for index = 1, count - 1 do
+		local entry = spells[index]
 		local key = Field(entry, "key", 1)
+		if key and key == choice then
+			-- Held: no longer missing, though its reach may not read.
+			longest.why = nil
+		end
 		if key and not (LASTING[key] or HEALING[key] or ABSORBING[key]) then
 			local name = SpellName(key)
 			local reach = Reach(Slot(index, count), name, Field(entry, "rank", 3))
 			local yards = reach and tonumber((string.gsub(reach, " yd$", "")))
+			if yards and key == choice then
+				chosenYards, chosenName = yards, name
+			end
 			if yards and yards > (longest.yards or 0) then
 				longest.yards, longest.name = yards, name
 			end
 		end
 	end
-	return longest.yards, longest.name
+	if chosenYards then
+		longest.yards, longest.name, longest.why = chosenYards, chosenName, "chosen"
+	end
+	return longest.yards, longest.name, longest.why
+end
+
+-- For the options' preview (Build list tab): the columns for these choices
+-- and the name's room, as the list lays them out (the symbol and the rank
+-- shown unless false; the rank column a number's wide unless given), and
+-- what each row shows as chosen: Info, the cooldown, Info's symbol, the rank.
+function SurvivorUI_BuildLayout(showRange, showCooldown, showSymbol, showRank, rankRoom)
+	return Layout(showRange, showCooldown, showSymbol ~= false, showRank ~= false, rankRoom)
+end
+
+function SurvivorUI_BuildShows()
+	return Shows()
+end
+
+-- And the rows as the list draws them now: the spells from the highest rank
+-- down, the empty slots, then the racial. Each { name (as shown), spell and
+-- tag (the name and the racial's "(racial)" apart, for their fit), rank, icon,
+-- color, racial, empty, symbol (an Art file), tint, number, numberColor (none:
+-- the row's own), cd, share (a lasting spell's time left, for its timer) };
+-- nil out of a run.
+function SurvivorUI_BuildRows()
+	if not Running() then
+		return nil
+	end
+	local spells = AZS_SPELLS
+	local count = table.getn(spells)
+	local order = RankOrder(spells, math.max(0, count - 1))
+	local showRange, showCooldown = Shows()
+	local shown = {}
+	local function Add(entry, actionSlot, racial)
+		local key = Field(entry, "key", 1)
+		local name = SpellName(key)
+		local native = SurvivorUI_Native(name)
+		local row = {
+			name = racial and native.."  |cff8a8a8a"..SurvivorUI_T("(racial)").."|r" or native,
+			spell = native, tag = racial and SurvivorUI_T("(racial)") or nil,
+			rank = tonumber(Field(entry, "rank", 3)) or "", racial = racial,
+			icon = GetActionTexture and GetActionTexture(actionSlot) or nil,
+			color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(name) or { 0.8, 0.8, 0.8 },
+			cd = showCooldown and CooldownText(entry) or "",
+		}
+		local lasting
+		lasting, row.symbol, row.tint, row.number, row.numberColor = InfoOf(entry, key, actionSlot, name, racial, showRange)
+		if lasting then
+			row.number, row.numberColor, row.share = LastingCell(entry, key, actionSlot, name, showRange)
+		end
+		table.insert(shown, row)
+	end
+	for place = 1, SLOTS do
+		if order[place] then
+			Add(spells[order[place]], Slot(order[place], count), false)
+		else
+			table.insert(shown, { empty = true, name = SurvivorUI_T("empty slot") })
+		end
+	end
+	if count >= 1 then
+		Add(spells[count], Slot(count, count), true)
+	end
+	return shown
+end
+
+-- And the list's fits on the preview's own words: a name's (FitSpell's: its
+-- size, 9 or 8, nil while it measures nothing, and its words; Width(points,
+-- words) their width at that size in the list's measures, step the text size
+-- step), the cooldowns' (FitCooldown's: the size they all go at, and each as
+-- its cell shows it, measured by Width the same way), and a cooldown of so
+-- many seconds as the list writes it (its sample's).
+function SurvivorUI_FitBuildName(name, tag, room, step, Width)
+	return FitChoice(name, tag, room, step, Width)
+end
+
+function SurvivorUI_FitCooldowns(texts, width, Width)
+	local step = 1
+	if SurvivorUI_Language and SurvivorUI_Language() then
+		for index = 1, table.getn(texts) do
+			if texts[index] ~= "" then
+				step = math.max(step, StepOf(texts[index], width, Width))
+			end
+		end
+	end
+	local shown = {}
+	for index = 1, table.getn(texts) do
+		shown[index] = CD_STEPS[step][2] and Spaceless(texts[index]) or texts[index]
+	end
+	return CD_STEPS[step][1], shown
+end
+
+function SurvivorUI_CooldownText(seconds)
+	return CooldownText({ cdmax = seconds })
 end
 
 -- For the last runs too: the jewelry lines as they read, one a slot: { label,

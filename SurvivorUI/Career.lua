@@ -341,7 +341,9 @@ local function Draw()
 				end
 			else
 				color = ZONE
-				line.name:SetText(group.key)
+				-- The runs keep the map in English; the zones are in the
+				-- locale tables.
+				line.name:SetText(SurvivorUI_T(group.key))
 				line.icon:SetTexture(MAP_ICON)
 				line.icon:SetTexCoord(0, 1, 0, 1)
 				line.icon:Show()

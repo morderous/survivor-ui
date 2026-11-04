@@ -49,9 +49,10 @@
 //     only with the size and sha256 Aethus gave. A break taken up where it
 //     stopped, and Try another source (the Play button meanwhile) goes on
 //     with the next. A line at the bottom says whose game it is, with a link to his site;
-//   - speaks English or Chinese, picked on the Play tab; it starts by itself
-//     again in the other one. Chinese is lang-zh.json inside the exe; a text
-//     missing there stays English;
+//   - speaks English, Chinese or Russian, picked on the Play tab; it starts by
+//     itself again in the one picked. Unpicked, it follows the game's language,
+//     else Windows' (a Chinese or Russian Windows gets its own). Chinese is lang-zh.json
+//     inside the exe, Russian lang-ru.json; a text missing there stays English;
 //   - keeps the game current: under the folder, the game's version (read in
 //     its exe) against the newest its server lists, asked with each look at
 //     GitHub; a newer one out, Play turns to "Update game", which takes the
@@ -138,7 +139,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.9.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.10.0.0")]
 
 namespace SurvivorInstaller
 {
@@ -156,18 +157,28 @@ namespace SurvivorInstaller
         }
     }
 
-    // The launcher's language: English, the texts as they stand in this file, or
-    // Chinese, from lang-zh.json inside the exe. Read once, as it starts, before
-    // any window: launcher.ini's language=, else the game's own language.
+    // The launcher's language: English, the texts as they stand in this file,
+    // Chinese or Russian, from lang-zh.json or lang-ru.json inside the exe. Read
+    // once, as it starts, before any window: launcher.ini's language=, else the
+    // game's own language, else (no game language yet) Windows' own: a Chinese
+    // Windows (any zh) gets Chinese, a Russian one Russian (1.10.0).
     static class Lang
     {
+        // The picker's order on the Play tab.
+        public static readonly string[] Codes = { "en", "zh", "ru" };
+        public static readonly string[] Names = { "English", "中文", "Русский" };
         public static readonly string Code = Pick();
         static readonly Dictionary<string, string> words = Load();
 
-        // The window's face: Segoe UI has no Chinese.
+        // The window's face: Segoe UI has no Chinese (it has Cyrillic).
         public static string Face
         {
             get { return Code == "zh" ? "Microsoft YaHei UI" : "Segoe UI"; }
+        }
+
+        static string Known(string code)
+        {
+            return Array.IndexOf(Codes, code) >= 0 ? code : "en";
         }
 
         static string Pick()
@@ -177,9 +188,15 @@ namespace SurvivorInstaller
                 string ini = Path.Combine(SettingsFolder.Dir, "launcher.ini");
                 if (File.Exists(ini))
                     foreach (string line in File.ReadAllLines(ini))
-                        if (line.StartsWith("language=")) return line.Substring(9).Trim() == "zh" ? "zh" : "en";
+                        if (line.StartsWith("language=")) return Known(line.Substring(9).Trim());
                 string game = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "wenilla-rogue", "language.txt");
-                if (File.Exists(game) && File.ReadAllText(game).Trim() == "zh") return "zh";
+                if (File.Exists(game))
+                {
+                    string said = File.ReadAllText(game).Trim();
+                    return said == "zh" || said == "ru" ? said : "en";
+                }
+                string windows = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+                if (windows == "zh" || windows == "ru") return windows;
             }
             catch { }
             return "en";
@@ -188,10 +205,10 @@ namespace SurvivorInstaller
         static Dictionary<string, string> Load()
         {
             Dictionary<string, string> found = new Dictionary<string, string>();
-            if (Code != "zh") return found;
+            if (Code == "en") return found;
             try
             {
-                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("lang-zh.json"))
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("lang-" + Code + ".json"))
                 using (StreamReader reader = new StreamReader(stream, System.Text.Encoding.UTF8))
                 {
                     JavaScriptSerializer json = new JavaScriptSerializer();
@@ -208,6 +225,27 @@ namespace SurvivorInstaller
         {
             string found;
             return text != null && words.TryGetValue(text, out found) ? found : text;
+        }
+
+        // A name for a narrow place (the zones over Statistics' grid): the language's
+        // "<name>, short" when it has one, else the name as T gives it.
+        public static string Short(string text)
+        {
+            string found;
+            return words.TryGetValue(text + ", short", out found) ? found : T(text);
+        }
+
+        // A text after a number: in Russian its words hold three forms, "one|few|many"
+        // (1 забег, 2 забега, 5 забегов), the one for n picked; other languages as T.
+        public static string N(long n, string text)
+        {
+            string said = T(text);
+            string[] forms = said.Split('|');
+            if (forms.Length != 3) return said;
+            n = Math.Abs(n);
+            return n % 10 == 1 && n % 100 != 11 ? forms[0]
+                : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? forms[1]
+                : forms[2];
         }
     }
 
@@ -473,6 +511,7 @@ namespace SurvivorInstaller
         // The game's graphics (Play tab): its own choice, or DirectX 12 or
         // Vulkan asked of it (WGPU_BACKEND, which its renderer reads).
         readonly ComboBox graphicsBox = new ComboBox();
+        readonly Label graphicsLabel = new Label();     // its word, the end of the game line's room
         static readonly string[] GraphicsKeys = { "auto", "dx12", "vulkan" };
         static readonly string[] GraphicsNames = { Lang.T("Auto"), "DirectX 12", "Vulkan" };
         readonly Button gameCheckButton = new Button();
@@ -1704,8 +1743,8 @@ namespace SurvivorInstaller
             if (sessionStart != DateTime.MinValue) seconds += (int)(DateTime.Now - sessionStart).TotalSeconds;
             SaveStats stats = shownStats ?? ReadSaveStats();
             long played = stats != null ? stats.Total("runs") : 0;
-            string so = seconds >= 60 && played > 0 ? Hours(seconds) + Lang.T(" of play and ") + Count(played) + Lang.T(" runs so far.\n")
-                : played > 0 ? Count(played) + Lang.T(" runs so far.\n") : "";
+            string so = seconds >= 60 && played > 0 ? Hours(seconds) + Lang.T(" of play and ") + Count(played) + Lang.N(played, " runs so far.\n")
+                : played > 0 ? Count(played) + Lang.N(played, " runs so far.\n") : "";
             return so + Lang.T("Survivor UI, Survivor Plates and this launcher are free, made in my spare time.\n") +
                 Lang.T("If they made your runs better, a donation on Ko-fi says thanks and keeps them coming.\n") +
                 Lang.T("Thank you!  morderous");
@@ -2337,7 +2376,7 @@ namespace SurvivorInstaller
             Rectangle inner = Rectangle.Inflate(r, -S(4), -S(4));
             using (Brush wash = new SolidBrush(Color.FromArgb(70 + (int)(90 * glow), 46, 190, 80))) g.FillRectangle(wash, inner);
             using (Pen edge = new Pen(Color.FromArgb(120 + (int)(120 * glow), 150, 255, 160))) g.DrawRectangle(edge, inner.X, inner.Y, inner.Width - 1, inner.Height - 1);
-            string words = alerts.Count == 0 ? "" : alerts.Count == 1 ? "\u2191  " + alerts[0].Key + Lang.T(" is out") : "\u2191  " + alerts.Count + Lang.T(" updates waiting");
+            string words = alerts.Count == 0 ? "" : alerts.Count == 1 ? "\u2191  " + alerts[0].Key + Lang.T(" is out") : "\u2191  " + alerts.Count + Lang.N(alerts.Count, " updates waiting");
             TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
             using (Font font = new Font(Lang.Face, SF(8.5f), FontStyle.Bold))
             {
@@ -2562,7 +2601,6 @@ namespace SurvivorInstaller
             // DirectX 12 or Vulkan, for a PC whose driver fails the one the
             // game picks (the launcher also turns to DirectX 12 by itself when
             // the game closes as it starts: WatchStart).
-            Label graphicsLabel = new Label();
             graphicsLabel.Text = Lang.T("Graphics");
             graphicsLabel.Font = new Font(Lang.Face, 8.5f);
             graphicsLabel.ForeColor = Muted;
@@ -2726,17 +2764,17 @@ namespace SurvivorInstaller
             page.Controls.Add(languageLabel);
             ComboBox languageBox = new ComboBox();
             DarkCombo(languageBox);
-            languageBox.Items.AddRange(new object[] { "English", "\u4e2d\u6587" });
+            languageBox.Items.AddRange(Lang.Names);
             languageBox.Location = new Point(366, 362);
             languageBox.Size = new Size(96, 24);
-            languageBox.SelectedIndex = Lang.Code == "zh" ? 1 : 0;
+            languageBox.SelectedIndex = Array.IndexOf(Lang.Codes, Lang.Code);
             languageBox.SelectedIndexChanged += delegate
             {
-                string code = languageBox.SelectedIndex == 1 ? "zh" : "en";
+                string code = Lang.Codes[Math.Max(0, languageBox.SelectedIndex)];
                 if (code == Lang.Code) return;
                 if (installing || addonBusy)
                 {
-                    languageBox.SelectedIndex = Lang.Code == "zh" ? 1 : 0;
+                    languageBox.SelectedIndex = Array.IndexOf(Lang.Codes, Lang.Code);
                     Status(Lang.T("Wait for what is running to finish."));
                     return;
                 }
@@ -3029,8 +3067,10 @@ namespace SurvivorInstaller
             addonList.Columns.Add(Lang.T("By"), 86);
             addonList.Columns.Add(Lang.T("Latest"), 80);
             addonList.Columns.Add(Lang.T("Installed"), 80);
-            addonList.Columns.Add(Lang.T("State"), 84);
-            addonList.Columns.Add(Lang.T("Auto Update when ready"), 150);
+            // Russian's "Not installed" is longer; its "Auto Update" header shorter.
+            int stateWidth = Lang.Code == "ru" ? 106 : 84;
+            addonList.Columns.Add(Lang.T("State"), stateWidth);
+            addonList.Columns.Add(Lang.T("Auto Update when ready"), 234 - stateWidth);
             addonList.OwnerDraw = true;
             typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(addonList, true, null);
             addonList.DrawColumnHeader += delegate (object sender, DrawListViewColumnHeaderEventArgs e)
@@ -3643,7 +3683,7 @@ namespace SurvivorInstaller
                     picked = Array.FindIndex(names, name => name.IndexOf(repoName, StringComparison.OrdinalIgnoreCase) >= 0
                         || Array.Exists(addon.Folders ?? new string[0], folder => name.IndexOf(folder, StringComparison.OrdinalIgnoreCase) >= 0));
                 }
-                if (picked < 0) throw new Exception(Lang.T("its release holds ") + names.Length + Lang.T(" zips, none of them ") + (addon.Asset ?? Lang.T("named as it")));
+                if (picked < 0) throw new Exception(Lang.T("its release holds ") + names.Length + Lang.N(names.Length, " zips, none of them ") + (addon.Asset ?? Lang.T("named as it")));
                 zip = zips[picked];
             }
             if (zip == null)
@@ -3874,7 +3914,7 @@ namespace SurvivorInstaller
                 {
                     found = LookUpRepo(repo, zip, names => (int)Invoke(new Func<int>(delegate
                     {
-                        return Choose(repo + Lang.T("'s newest release holds ") + names.Length + Lang.T(" zips. Which one is the addon?"),
+                        return Choose(repo + Lang.T("'s newest release holds ") + names.Length + Lang.N(names.Length, " zips. Which one is the addon?"),
                             Lang.T("Add an addon from GitHub"), names, 0);
                     })));
                 }
@@ -4549,7 +4589,7 @@ namespace SurvivorInstaller
                 ShowUpdateState();
                 string them = done.Count == 1 ? Lang.T("it") : Lang.T("them");
                 string loads = running ? Lang.T("The game is open: restart it to load ") + them + "." : Lang.T("The game loads ") + them + Lang.T(" the next time it starts.");
-                string stayed = left > 0 ? "\n\n" + left + Lang.T(" files of ") + (done.Count == 1 ? Lang.T("its zip") : Lang.T("their zips")) +
+                string stayed = left > 0 ? "\n\n" + left + Lang.N(left, " files of ") + (done.Count == 1 ? Lang.T("its zip") : Lang.T("their zips")) +
                     Lang.T(" stayed out: not an addon's kind (programs, ") + (done.Count == 1 ? Lang.T("its author's") : Lang.T("their authors'")) + Lang.T(" tools).") : "";
                 if (failed.Count == 0)
                 {
@@ -5208,7 +5248,7 @@ namespace SurvivorInstaller
         static readonly string[] ZoneIds = { "elwynn", "duskwood", "wsg", "ungoro", "ab", "feralas", "arena", "sm", "av", "brm", "aq", "naxx" };
         static readonly string[] ZoneNames = { Lang.T("Elwynn Forest"), Lang.T("Duskwood"), Lang.T("Warsong Gulch"), Lang.T("Un'Goro Crater"), Lang.T("Arathi Basin"), Lang.T("Feralas"),
             Lang.T("Gurubashi Arena"), Lang.T("Scarlet Monastery"), Lang.T("Alterac Valley"), Lang.T("Blackrock Mountain"), Lang.T("Gates of Ahn'Qiraj"), Lang.T("Naxxramas") };
-        static readonly string[] ZoneShort = { Lang.T("Elwynn"), Lang.T("Duskwood"), "WSG", Lang.T("Un'Goro"), "AB", Lang.T("Feralas"), Lang.T("Arena"), "SM", "AV", "BRM", "AQ", Lang.T("Naxx") };
+        static readonly string[] ZoneShort = { Lang.T("Elwynn"), Lang.Short("Duskwood"), "WSG", Lang.T("Un'Goro"), "AB", Lang.Short("Feralas"), Lang.T("Arena"), "SM", "AV", "BRM", "AQ", Lang.T("Naxx") };
 
         // The achievements' names, as the game shows them in English; the ones
         // made from a class or a zone are put together in AchievementName.
@@ -5404,9 +5444,9 @@ namespace SurvivorInstaller
             collectionLine.Text = stats == null
                 ? (saveThere ? Lang.T("The save could not be read just now; it is read again each time this tab opens.")
                     : Lang.T("No save yet in ") + GameSave.SaveFolder() + Lang.T(": play the game once first."))
-                : Lang.T("Collection:  ") + stats.Items + Lang.T(" pieces of gear  ·  ") + stats.Seen + Lang.T(" jewels seen in the codex  ·  ") +
-                  stats.Pets + (stats.Pets == 1 ? Lang.T(" pet") : Lang.T(" pets")) + "  ·  " + stats.Tabards + (stats.Tabards == 1 ? Lang.T(" tabard") : Lang.T(" tabards")) +
-                  "  ·  " + stats.Heroes.Count + (stats.Heroes.Count == 1 ? Lang.T(" hero") : Lang.T(" heroes"));
+                : Lang.T("Collection:  ") + stats.Items + Lang.N(stats.Items, " pieces of gear  ·  ") + stats.Seen + Lang.N(stats.Seen, " jewels seen in the codex  ·  ") +
+                  stats.Pets + Lang.N(stats.Pets, stats.Pets == 1 ? " pet" : " pets") + "  ·  " + stats.Tabards + Lang.N(stats.Tabards, stats.Tabards == 1 ? " tabard" : " tabards") +
+                  "  ·  " + stats.Heroes.Count + Lang.N(stats.Heroes.Count, stats.Heroes.Count == 1 ? " hero" : " heroes");
             playChart.Invalidate();
             achList.Invalidate();
             classGrid.Invalidate();
@@ -5620,7 +5660,15 @@ namespace SurvivorInstaller
 
         void BuildRunsPage(Panel page)
         {
-            Caption(page, Lang.T("Show"), 20, 12);
+            Label show = Caption(page, Lang.T("Show"), 20, 12);
+            // A longer word (Russian's): a smaller step until it ends before the
+            // class box, kept level with it.
+            for (float size = 9f; show.Right > 61 && size >= 7f; size -= 0.5f)
+            {
+                int high = show.Height;
+                show.Font = new Font(Lang.Face, size);
+                show.Top += (high - show.Height) / 2;
+            }
             DarkCombo(runClass);
             runClass.Location = new Point(62, 8);
             runClass.Size = new Size(140, 24);
@@ -6042,7 +6090,7 @@ namespace SurvivorInstaller
             shownRun = keep != null ? (RunRecord)keep.Tag : null;
             runList.EndUpdate();
             fillingRuns = false;
-            runCount.Text = runs.Count == 0 ? "" : shown + (shown == 1 ? Lang.T(" run") : Lang.T(" runs")) + "  ·  " + wins + (wins == 1 ? Lang.T(" victory") : Lang.T(" victories"));
+            runCount.Text = runs.Count == 0 ? "" : shown + Lang.N(shown, shown == 1 ? " run" : " runs") + "  ·  " + wins + Lang.N(wins, wins == 1 ? " victory" : " victories");
             FitRunColumns();
             if (keep != null) keep.EnsureVisible();
             runDetail.Invalidate();
@@ -6261,11 +6309,11 @@ namespace SurvivorInstaller
                     double added = view.Num(key) - run.Num(key);
                     return added > 0 ? " (+" + (key == "dealt" || key == "taken" ? Big(added) : ((long)added).ToString("N0", invariant)) + ")" : "";
                 };
-                string numbers = ((long)view.Num("kills")).ToString("N0", invariant) + more("kills") + Lang.T(" kills  ·  ") + Big(view.Num("meterDps")) + " DPS  ·  " +
+                string numbers = ((long)view.Num("kills")).ToString("N0", invariant) + more("kills") + Lang.N((long)view.Num("kills"), " kills  ·  ") + Big(view.Num("meterDps")) + " DPS  ·  " +
                     Big(view.Num("dealt")) + more("dealt") + Lang.T(" damage  ·  ") + Big(view.Num("taken")) + Lang.T(" taken  ·  ") +
-                    ((long)view.Num("gold")).ToString("N0", invariant) + more("gold") + Lang.T(" gold  ·  ") + (int)view.Num("bosses") + Lang.T(" bosses  ·  ") +
-                    (int)view.Num("guardians") + Lang.T(" guardians  ·  ") + (int)view.Num("elites") + Lang.T(" elites  ·  ") +
-                    looted + Lang.T(" looted") + (fresh > 0 ? ", " + fresh + Lang.T(" new") : "");
+                    ((long)view.Num("gold")).ToString("N0", invariant) + more("gold") + Lang.T(" gold  ·  ") + (int)view.Num("bosses") + Lang.N((int)view.Num("bosses"), " bosses  ·  ") +
+                    (int)view.Num("guardians") + Lang.N((int)view.Num("guardians"), " guardians  ·  ") + (int)view.Num("elites") + Lang.N((int)view.Num("elites"), " elites  ·  ") +
+                    looted + Lang.T(" looted") + (fresh > 0 ? ", " + fresh + Lang.N(fresh, " new") : "");
                 Txt(g, numbers, small, new Rectangle(10, 32, width - 20, 16), TextColor, TextOnly | TextFormatFlags.EndEllipsis);
 
                 g.DrawLine(line, 10, 52, width - 10, 52);
@@ -7488,9 +7536,14 @@ namespace SurvivorInstaller
                     Lang.T("Click Update game in the launcher, or play: the game updates itself as it starts."), ToolTipIcon.Info);
             }
             installItem.Text = updateWaiting ? Lang.T("Install ") + latest.Tag : current ? Lang.T("Up to date (") + latest.Tag + ")" : Lang.T("Install the update");
-            // Survivor UI's version under the launcher's, and the newer one out.
-            addonLabel.Text = installed == null ? Lang.T("Survivor UI not installed")
+            // Survivor UI's version under the launcher's, and the newer one out;
+            // with no room for both, the newer one alone after the arrow (the
+            // one installed is in the Addons tab).
+            string addonLine = installed == null ? Lang.T("Survivor UI not installed")
                 : Lang.T("Survivor UI ver. ") + installed + (updateWaiting ? " → " + latest.Tag.TrimStart('v', 'V') : "");
+            if (updateWaiting && installed != null && !Fits(addonLine, addonLabel, 8f)) addonLine = "Survivor UI → " + latest.Tag.TrimStart('v', 'V');
+            addonLabel.Text = addonLine;
+            FitLine(addonLabel);
             addonLabel.ForeColor = updateWaiting ? Color.FromArgb(110, 225, 125) : installed == null ? Muted : VersionYellow;
             tips.SetToolTip(addonLabel, stable != null ? Lang.T("Latest release on GitHub: ") + stable.Tag : Lang.T("GitHub not asked yet."));
 
@@ -8442,6 +8495,7 @@ namespace SurvivorInstaller
             versionLabel.Text = pending != null ? Lang.T("Launcher ver. ") + Short(OwnVersion) + " \u2192 " + Short(pending.InstallerVersion)
                 : Lang.T("Launcher ") + Short(OwnVersion);
             versionLabel.ForeColor = pending != null ? Color.FromArgb(110, 225, 125) : VersionYellow;
+            FitLine(versionLabel);
             if (pending != null)
             {
                 selfButton.Text = selfUpdating ? Lang.T("Updating...") : Lang.T("Update to ") + Short(pending.InstallerVersion);
@@ -8460,6 +8514,26 @@ namespace SurvivorInstaller
                 selfButton.FlatAppearance.BorderColor = RedEdge;
                 tips.SetToolTip(selfButton, Lang.T("Asks GitHub now for a new launcher and a new Survivor UI."));
             }
+        }
+
+        // The versions at the top right, each in a box of its own width: with a
+        // newer one out the line grows ("Launcher ver. 1.10 → 1.11"), so its font
+        // goes half a step smaller at a time until the words fit (7.5 at least),
+        // and back to its own 9 once they do.
+        bool Fits(string text, Label label, float size)
+        {
+            using (Font font = new Font(Lang.Face, SF(size)))
+                return TextRenderer.MeasureText(text, font).Width <= label.Width;
+        }
+
+        void FitLine(Label label)
+        {
+            // Not while the window is still in its old units (ScaleWindow to come):
+            // measured there the words come out a little wider than at its scale.
+            if (ui != planned) return;
+            float size = 9f;
+            while (size > 7.5f && !Fits(label.Text, label, size)) size -= 0.5f;
+            if (Math.Abs(label.Font.Size - SF(size)) > 0.01f) label.Font = new Font(Lang.Face, SF(size));
         }
 
         // A newer installer out: offered, or taken at once when it updates itself.
@@ -8913,7 +8987,11 @@ namespace SurvivorInstaller
             else if (state.Behind)
             {
                 bool sameExe = state.LatestSha256 == state.Sha256;
-                gameLabel.Text = name + "  ·  " + (sameExe ? Lang.T("new game data is out") : state.Latest + Lang.T(" is out")) + Lang.T(": click Update game");
+                string said = name + "  ·  " + (sameExe ? Lang.T("new game data is out") : state.Latest + Lang.T(" is out"));
+                gameLabel.Text = said + Lang.T(": click Update game");
+                // No room for it before Graphics (new game data, longer words): the
+                // Update game button right under the line says it.
+                if (gameLabel.Left + gameLabel.PreferredWidth > graphicsLabel.Left - S(6)) gameLabel.Text = said;
                 gameLabel.ForeColor = Color.FromArgb(90, 220, 110);
             }
             else if (state.Latest != null)

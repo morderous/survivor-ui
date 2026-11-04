@@ -54,7 +54,9 @@
 
 if SurvivorUI_Standby then return end
 
-local WIDTH, HEIGHT = 770, 584
+-- Tall enough for the Sets page's seven sets (the game's 0.140); a 768 high
+-- screen, the game's at UI scale 1, still holds it.
+local WIDTH, HEIGHT = 770, 670
 local LEFT = 130                -- the pages' left edge, past the tabs
 local PAGE_WIDTH = WIDTH - LEFT - 26
 local PAGE_TOP = -36
@@ -62,9 +64,6 @@ local TEXT = 13                 -- the words' size
 local SMALL = 11
 local LINE = 16                 -- a line of the words
 local FLAT = "Interface\\ChatFrame\\ChatFrameBackground"
--- Friz whatever font the options choose, as the pages are laid out by its
--- lines; in a language the addon speaks, that language's face.
-local FONT = "Fonts\\FRIZQT__.TTF"
 local MARBLE = "Interface\\AddOns\\SurvivorUI\\Art\\Marble"
 local NEW_MARK = "Interface\\AddOns\\SurvivorUI\\Art\\GuideNew"
 local MAP_ICON = "Interface\\AddOns\\SurvivorUI\\Art\\MapIcon"
@@ -173,106 +172,126 @@ local DISC_MOST = 48            -- the widest circle's radius
 -- Hellfire looks the same and works another way: nothing stays on the ground.
 local HELLFIRE = { "Hellfire", "Spell_Fire_Incinerate", "WARLOCK", "Warlock spell" }
 local ROW_STEP = 14
--- The six sets in the Collection Log's order: the rarity, its color, its two
--- zones, the set's place in a class's list below, its 4-piece bonus, each
--- star's marks on one piece at no discount, and the color an item tooltip
--- gives that quality's name.
+-- The seven sets in the Collection Log's order: the rarity, its color, its
+-- zones (Tier 0.5 has one), the set's place in a class's list below, its
+-- 4-piece bonus (Tier 0.5's is each class's own), each star's marks on one
+-- piece at no discount, and the color an item tooltip gives that quality's
+-- name. Read in the game's 0.140.
+local TIER = 7
 local SET_KINDS = {
 	{ "Common", { 1, 1, 1 }, "Elwynn Forest", "Duskwood", 1, "+25% gold, +30% pickup range", { 1, 2, 3, 4, 30 }, { 1, 1, 1 } },
 	{ "Uncommon", { 0.12, 1, 0 }, "Warsong Gulch", "Un'Goro Crater", 2, "1.5% max health per second after 3 seconds unhurt", { 2, 4, 6, 8, 30 }, { 0.12, 1, 0 } },
 	{ "Rare", { 0.31, 0.64, 1 }, "Arathi Basin", "Feralas", 3, "+1 target to every ability", { 3, 6, 9, 12, 30 }, { 0, 0.44, 0.87 } },
 	{ "Epic", { 0.73, 0.54, 0.95 }, "Gurubashi Arena", "Scarlet Monastery", 4, "6% chance for an ability to strike twice", { 4, 8, 12, 16, 30 }, { 0.64, 0.21, 0.93 } },
 	{ "PvP", { 0.73, 0.54, 0.95 }, "Alterac Valley", "Blackrock Mountain", 6, "+12% damage reduction with 5 or more enemies close", { 5, 10, 15, 20, 25 }, { 0.64, 0.21, 0.93 } },
+	{ "Tier 0.5", { 0.73, 0.54, 0.95 }, "Scholomance", false, TIER, false, { 5.5, 11, 16.5, 22, 27.5 }, { 0.64, 0.21, 0.93 } },
 	{ "Legendary", { 1, 0.6, 0.18 }, "Gates of Ahn'Qiraj", "Naxxramas", 5, "+30% critical damage", { 6, 12, 18, 24, 30 }, { 1, 0.5, 0 } },
 }
 local PVP_SET = "Field Marshal's / Warlord's"
--- Each class: its key, its name, its five sets' names, and its six 8-piece
--- bonuses, each with its numbers and, after them, the same Empowered.
+-- Each class: its key, its name, its sets' names (the PvP one is PVP_SET),
+-- its seven 8-piece bonuses, each with its numbers and, after them, the same
+-- Empowered, and its Tier 0.5 4-piece bonus. Tier 0.5's 8-piece bonus does
+-- not grow by half at 5/5: it takes the numbers the game gives it, and its
+-- words there when they say more, with a third number if it has one.
 local SETS = {
-	{ "WARRIOR", "Warrior", { "Recruit's", "Valor", "Might", "Wrath", "Dreadnaught" }, {
+	{ "WARRIOR", "Warrior", { "Recruit's", "Valor", "Might", "Wrath", "Dreadnaught", [TIER] = "Heroism" }, {
 		{ "Cleave strikes {v} more enemies in a {v2}% wider arc.", 2, 30, 3, 45 },
 		{ "Thunder Clap claps again for {v}% of its damage.", 50, 0, 75, 0 },
 		{ "Whirlwind is {v}% wider and deals {v2}% more damage.", 50, 30, 75, 45 },
 		{ "Each Bloodthirst hit gives {v}% damage for 8 sec, stacking 5 times.", 5, 0, 7.5, 0 },
 		{ "Execute strikes {v} more of the most wounded enemies, and each of its kills takes {v2} sec off your other spells' cooldowns.", 2, 0.5, 3, 0.75 },
 		{ "Enemies hit by Mortal Strike take {v}% more damage from everything for 4 sec.", 20, 0, 30, 0 },
-	} },
-	{ "PALADIN", "Paladin", { "Squire's", "Lightforge", "Lawbringer", "Judgement", "Redemption" }, {
+		{ "Shield Slam deals {v}% more damage, plus Physical damage equal to {v2}% of your max health.", 20, 4.5, 30, 6 },
+	}, "Fortified shields up to 50% of your max health (62% with Shield Mastery), and Shield Slam deals 10% more damage while it holds." },
+	{ "PALADIN", "Paladin", { "Squire's", "Lightforge", "Lawbringer", "Judgement", "Redemption", [TIER] = "Soulforge" }, {
 		{ "Hammer of Wrath comes back, striking again for {v}%.", 60, 0, 90, 0 },
 		{ "Consecration moves with you and deals {v}% more damage.", 20, 0, 30, 0 },
 		{ "A Holy Shock kill fires another Holy Shock, once every {v} sec.", 1.5, 0, 1, 0 },
 		{ "Enemies killed by Judgement explode for {v}% of their max health on everything within 8 yards.", 15, 0, 22.5, 0 },
 		{ "Exorcism leaps to {v} more enemies for 75% of its damage.", 3, 0, 5, 0 },
 		{ "Hammer of Justice strikes {v} more enemies, deals 300% more damage and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 5, 100, 8, 150 },
-	} },
-	{ "HUNTER", "Hunter", { "Tracker's", "Beaststalker's", "Giantstalker's", "Dragonstalker's", "Cryptstalker" }, {
+		{ "Hammer of Justice deals {v}% of its target's max health, up from 1.5%, and bursts within 10 yards of it for {v2}% of the shield you have left.", 1.75, 40, 1.9, 65 },
+	}, "Hammer of the Righteous's shields explode for 75% of what they absorbed, up from 50%." },
+	{ "HUNTER", "Hunter", { "Tracker's", "Beaststalker's", "Giantstalker's", "Dragonstalker's", "Cryptstalker", [TIER] = "Beastmaster" }, {
 		{ "Every {v} Auto Shots fire a free Multi-Shot.", 5, 0, 4, 0 },
 		{ "When its victim dies, Serpent Sting leaps to {v} enemies near it.", 2, 0, 3, 0 },
-		{ "Explosive Trap is {v}% wider and deals {v2}% more damage.", 50, 30, 75, 45 },
+		{ "Kill Command's cooldown is {v}% shorter and it deals {v2}% more damage.", 20, 30, 30, 45 },
 		{ "Volley moves with you and lasts {v}% longer.", 50, 0, 75, 0 },
 		{ "Aimed Shot pierces to {v} more enemies for 60% of its damage.", 4, 0, 6, 0 },
 		{ "Concussive Shot strikes {v} more enemies, deals 150% more damage and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 5, 100, 8, 150 },
-	} },
-	{ "ROGUE", "Rogue", { "Footpad's", "Shadowcraft", "Nightslayer", "Bloodfang", "Bonescythe" }, {
+		{ "A Devilsaur Matriarch joins you for good. Her bites deal 150% of the Wolf's, and {v}% more to Hunter's Mark targets.", 50, 0, 100, 0 },
+	}, "Bestial Wrath makes your pets' bites strike 5 more enemies for 150% damage each." },
+	{ "ROGUE", "Rogue", { "Footpad's", "Shadowcraft", "Nightslayer", "Bloodfang", "Bonescythe", [TIER] = "Darkmantle" }, {
 		{ "Every {v} Sinister Strikes strike twice.", 3, 0, 2, 0 },
 		{ "Enemies dying with your Rupture burst for {v}% of their max health on everything within 8 yards.", 15, 0, 22.5, 0 },
 		{ "Blade Flurry spins again for {v}% of its damage.", 60, 0, 90, 0 },
 		{ "An Eviscerate kill readies it again, once every {v} sec.", 1, 0, 0.67, 0 },
 		{ "Sinister Strike and Backstab have a {v}% chance to strike twice, and Adrenaline Rush lasts {v2}% longer.", 35, 50, 52.5, 75 },
 		{ "Kidney Shot strikes {v} more enemies, deals 200% more damage and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 5, 100, 8, 150 },
-	} },
-	{ "PRIEST", "Priest", { "Acolyte's", "Devout", "Prophecy", "Transcendence", "Faith" }, {
+		{ "Backstab and Eviscerate mark a boss or elite for death: it takes {v2}% more damage from you. One at a time.", 1, 35, 2, 40,
+			"Backstab and Eviscerate mark {v} bosses or elites for death: they take {v2}% more damage from you. Double damage starts below {v3}% health.", false, 45 },
+	}, "Backstab and Eviscerate deal double damage to enemies below 40% health, up from 30%." },
+	{ "PRIEST", "Priest", { "Acolyte's", "Devout", "Prophecy", "Transcendence", "Faith", [TIER] = "Virtuous" }, {
 		{ "Smite leaps to a second enemy for {v}% of its damage.", 50, 0, 75, 0 },
 		{ "When Power Word: Shield breaks it explodes for {v}% of what it absorbed on everything within 8 yards.", 200, 0, 300, 0 },
 		{ "Shadow Word: Pain strikes {v} more enemies and deals {v2}% more damage.", 2, 20, 3, 30 },
 		{ "Holy Nova rings twice, the second for {v}%, and is {v2}% wider.", 60, 30, 90, 45 },
 		{ "A Mind Flay kill fires a free Mind Blast, once every {v} sec.", 1, 0, 0.67, 0 },
 		{ "Psychic Scream deals 900% more damage and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 0, 100, 0, 150 },
-	} },
-	{ "SHAMAN", "Shaman", { "Primal", "Elements", "Earthfury", "Ten Storms", "Earthshatter" }, {
+		{ "Shadowform's death explosions deal {v}% of the enemy's max health, up from 4%, and Shadow Word: Pain jumps to {v2} enemies.", 8, 2, 10, 3,
+			"Shadowform's death explosions deal {v}% of the enemy's max health, Shadow Word: Pain jumps to {v2} enemies, and Shadowy Apparitions' chance rises to {v3}%.", false, 12 },
+	}, "Shadowy Apparitions has an 8% chance per Shadow Word: Pain tick to fire a free Mind Blast, up from 4%." },
+	{ "SHAMAN", "Shaman", { "Primal", "Elements", "Earthfury", "Ten Storms", "Earthshatter", [TIER] = "Five Thunders" }, {
 		{ "Lightning Bolt forks to a second enemy for {v}% of its damage.", 50, 0, 75, 0 },
 		{ "Enemies dying with your Flame Shock explode for {v}% of their max health on everything within 8 yards.", 15, 0, 22.5, 0 },
 		{ "Searing Totem deals {v}% more damage and stands {v2}% longer.", 50, 50, 75, 75 },
 		{ "Chain Lightning jumps {v} more times and deals {v2}% more damage.", 3, 20, 5, 30 },
 		{ "Fire Nova is {v}% wider and deals {v2}% more damage.", 50, 30, 75, 45 },
 		{ "Earth Shock strikes 2 more enemies, and they take {v}% more damage for 5 sec.", 20, 0, 30, 0 },
-	} },
-	{ "MAGE", "Mage", { "Apprentice's", "Magister's", "Arcanist", "Netherwind", "Frostfire" }, {
+		{ "Every Stormstrike sets off Thunderburst: Nature damage equal to {v}% of its damage on enemies within {v2} yards.", 25, 6, 50, 8 },
+	}, "Stormstrike deals 15% more damage and comes back 35% sooner." },
+	{ "MAGE", "Mage", { "Apprentice's", "Magister's", "Arcanist", "Netherwind", "Frostfire", [TIER] = "Sorcerer's" }, {
 		{ "Arcane Missiles fires {v} more missiles.", 2, 0, 3, 0 },
 		{ "Every {v} Arcane Explosions, one goes off twice.", 3, 0, 2, 0 },
 		{ "Flamestrike's flames strike twice, the second for {v}%.", 50, 0, 75, 0 },
 		{ "Blizzard moves with you and deals {v}% more damage.", 20, 0, 30, 0 },
 		{ "Fireball splits, striking {v} more enemies for 60% of its damage.", 2, 0, 3, 0 },
 		{ "Frost Nova is {v}% wider, deals 400% more damage and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 50, 100, 75, 150 },
-	} },
-	{ "WARLOCK", "Warlock", { "Novice's", "Dreadmist", "Felheart", "Nemesis", "Plagueheart" }, {
+		{ "Your Water Elemental's Frostbolts set off Splitting Ice too, and deal {v}% more damage to bosses and elites.", 100, 0, 150, 150,
+			"Your Water Elemental's Frostbolts set off Splitting Ice and deal {v}% more to bosses and elites. Splitting Ice deals {v2}%, your Frostbolt {v3}% more to them.", false, 50 },
+	}, "Splitting Ice reaches 7 yards, up from 5, and deals 125% damage, up from 100%." },
+	{ "WARLOCK", "Warlock", { "Novice's", "Dreadmist", "Felheart", "Nemesis", "Plagueheart", [TIER] = "Deathmist" }, {
 		{ "Shadow Bolt pierces to {v} more enemies for 50% of its damage.", 2, 0, 3, 0 },
 		{ "When its victim dies, Curse of Agony leaps to {v} enemies near it.", 2, 0, 3, 0 },
 		{ "Drain Life drains {v} more enemies at once.", 2, 0, 3, 0 },
 		{ "Rain of Fire sets enemies burning for {v}% of its hit over 3 sec.", 30, 0, 45, 0 },
 		{ "Corruption strikes {v} more enemies and deals {v2}% more damage.", 2, 25, 3, 37.5 },
 		{ "Death Coil strikes {v} more enemies, deals 50% more damage, horrifies them for 3 sec and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 5, 60, 8, 90 },
-	} },
-	{ "DRUID", "Druid", { "Thicket", "Wildheart", "Cenarion", "Stormrage", "Dreamwalker" }, {
+		{ "Conflagrate brands its main target for 10 sec: your direct spells deal {v}% more damage to branded bosses and elites.", 35, 0, 55, 40,
+			"Conflagrate brands its main target for 10 sec: your direct spells deal {v}% more damage to branded bosses and elites, and the brand burns for {v2}% of its hit over 4 sec." },
+	}, "Conflagrate explodes on everything within 8 yards for 35% of the direct hit that set it off." },
+	{ "DRUID", "Druid", { "Thicket", "Wildheart", "Cenarion", "Stormrage", "Dreamwalker", [TIER] = "Feralheart" }, {
 		{ "Every {v} Wraths, one strikes twice.", 4, 0, 3, 0 },
 		{ "Swipe is 50% wider and makes enemies bleed for {v}% of its hit over 6 sec.", 40, 0, 60, 0 },
 		{ "Entangling Roots strikes {v} more enemies.", 3, 0, 5, 0 },
 		{ "Starfire bursts on every enemy within 6 yards of its target for {v}% of its damage.", 35, 0, 52.5, 0 },
 		{ "Hurricane is {v}% wider and lasts {v2}% longer.", 40, 40, 60, 60 },
 		{ "Shred strikes {v} more enemies, has a 33% chance to stun them for 1 sec and comes back 40% sooner, and you deal {v2}% more damage to enemies you stun, root, slow or fear.", 2, 100, 3, 150 },
-	} },
+		{ "Each healing Tranquility plants Seed of Life on an enemy: 1.5 sec later it deals {v}% of Tranquility's hit to it and {v2} enemies within {v3} yards.", 60, 5, 100, 7,
+			"Each healing Tranquility plants Seed of Life on an enemy: 1.5 sec later it deals {v}% of Tranquility's hit to it and {v2} enemies within {v3} yards, bosses and elites twice.", 6, 8 },
+	}, "Regrowth and Rejuvenation heal 20% more, and Tranquility reaches 15 yards, up from 12." },
 }
 -- Each a button: its label, the stars it asks of every piece, its rule.
 local SET_STEPS = {
-	{ "4 pieces", 1, "Wear 4 armor pieces of one set at 1/5 or more. The bonus is the same for every class." },
+	{ "4 pieces", 1, "Wear 4 armor pieces of one set at 1/5 or more. Only Tier 0.5's bonus is the class's own." },
 	{ "8 pieces", 3, "Wear all 8 armor pieces of one set at 3/5 or more." },
-	{ "8 pieces, Empowered", 5, "All 8 pieces at 5/5: the 8-piece bonus is 50% stronger." },
+	{ "8 pieces, Empowered", 5, "All 8 pieces at 5/5: the 8-piece bonus is 50% stronger (Tier 0.5: numbers of its own)." },
 }
 local STAR_SIZE = 11
 local MARK_CARD = 86
 local OPEN_CARD = 72
 local COST_ROW = 16
-local SET_ROW, SET_TALL = 48, 61    -- a set's panel, and the PvP one's three lines
+local SET_ROW, SET_TALL = 48, 61    -- a set's panel, and the PvP and Tier 0.5 ones' three lines
 local SET_CAPTION = 17              -- its name and zones, over the panel
 -- A panel tinted in its own color: thin edge, the ground a dark shade of it.
 local TINTED = { bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } }
@@ -288,10 +307,12 @@ local try = {}                  -- the numbers being played with
 local pages, tabs = {}, {}
 local current
 
+-- Friz whatever font the options choose, as the pages are laid out by its
+-- lines; in a language the addon speaks, that language's face.
 local function Text(parent, template, size)
 	local look = TEMPLATES[template]
 	local text = parent:CreateFontString(nil, "OVERLAY")
-	text:SetFont(SurvivorUI_Translated() and SurvivorUI_FONT or FONT, size or look[1])
+	text:SetFont(SurvivorUI_Translated() and SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF", size or look[1])
 	text:SetTextColor(look[2], look[3], look[4])
 	text:SetShadowColor(0, 0, 0, 1)
 	text:SetShadowOffset(1, -1)
@@ -452,10 +473,56 @@ end
 
 ------------------------------------------------------------------------------
 -- What the pages are made of. The words go down the page, each a number of
--- lines tall (a wrapped text's height is not known until it is drawn).
+-- lines tall, more when they take more (a language's longer words: the game
+-- knows a wrapped text's height as soon as it is set).
 
 local function Paint(text, color)
 	text:SetTextColor(color[1], color[2], color[3])
+end
+
+-- Words fitted to their room (Fit.Size, Fit.TwoLines).
+local Fit = {}
+
+-- A text in another size, its face kept.
+function Fit.Size(text, size)
+	local face, _, flags = text:GetFont()
+	text:SetFont(face, size, flags)
+end
+
+-- A name beside its icon (anchored on the icon's right) in two lines as even
+-- as its words go, one over the other about the icon's middle; the wider
+-- line's width. A single word stays as it is.
+function Fit.TwoLines(text, icon)
+	local words = text:GetText()
+	local best, first, rest
+	local at = 0
+	while true do
+		local space = string.find(words, " ", at + 1, true)
+		if not space then
+			break
+		end
+		text:SetText(string.sub(words, 1, space - 1))
+		local wide = text:GetStringWidth()
+		text:SetText(string.sub(words, space + 1))
+		wide = math.max(wide, text:GetStringWidth())
+		if not best or wide < best then
+			best, first, rest = wide, string.sub(words, 1, space - 1), string.sub(words, space + 1)
+		end
+		at = space
+	end
+	text:SetText(words)
+	if not first then
+		return text:GetStringWidth()
+	end
+	text:SetText(first)
+	text:ClearAllPoints()
+	text:SetPoint("BOTTOMLEFT", icon, "RIGHT", 4, 0)
+	local face, size, flags = text:GetFont()
+	local more = Text(text:GetParent(), "GameFontHighlight", size)
+	more:SetFont(face, size, flags)
+	more:SetPoint("TOPLEFT", icon, "RIGHT", 4, 0)
+	more:SetText(rest)
+	return best
 end
 
 local function Words(parent, x, y, width, text, size, color)
@@ -471,8 +538,13 @@ local function Words(parent, x, y, width, text, size, color)
 end
 
 local function Para(page, text, lines)
-	Words(page, 0, page.y, PAGE_WIDTH, text)
-	page.y = page.y - lines * LINE - 6
+	local words = Words(page, 0, page.y, PAGE_WIDTH, text)
+	local tall = words:GetHeight()
+	if math.floor(tall / TEXT + 0.5) > lines then
+		page.y = page.y - tall - 10
+	else
+		page.y = page.y - lines * LINE - 6
+	end
 end
 
 local function Title(page, text)
@@ -483,8 +555,13 @@ local function Title(page, text)
 end
 
 local function Tip(page, text, lines)
-	Words(page, 0, page.y, PAGE_WIDTH, text, SMALL + 1)
-	page.y = page.y - (lines or 1) * 15 - 3
+	local words = Words(page, 0, page.y, PAGE_WIDTH, text, SMALL + 1)
+	local tall = words:GetHeight()
+	if math.floor(tall / (SMALL + 1) + 0.5) > (lines or 1) then
+		page.y = page.y - tall - 5
+	else
+		page.y = page.y - (lines or 1) * 15 - 3
+	end
 end
 
 local function Heading(page, text)
@@ -651,7 +728,7 @@ local function BuildLuck(page)
 	local bag = Box(page, SurvivorUI_T("What's in the bag"), nil, 0, top, BAG_WIDTH, BAG_HEIGHT)
 	Words(bag, 10, -28, BAG_WIDTH - 20, SurvivorUI_T("|cffffd100m|r is your magic number: 1 + Luck + Level"))
 	page.magic = Words(bag, 10, -44, BAG_WIDTH - 20, "")
-	local rows = {}
+	local rows, widest = {}, 0
 	for index = 1, table.getn(RARITIES) do
 		local rarity = RARITIES[index]
 		local y = -64 - (index - 1) * 16
@@ -661,14 +738,22 @@ local function BuildLuck(page)
 		marble:SetWidth(13)
 		marble:SetHeight(13)
 		marble:SetPoint("TOPLEFT", bag, "TOPLEFT", 10, y)
-		Words(bag, 28, y, 100, SurvivorUI_T(rarity[1]), TEXT, rarity[2])
-		Words(bag, 118, y, 120, rarity[3], SMALL + 1, { 0.8, 0.8, 0.8 })
+		local name = Words(bag, 28, y, 100, SurvivorUI_T(rarity[1]), TEXT, rarity[2])
+		widest = math.max(widest, name:GetStringWidth())
+		local formula = Words(bag, 118, y, 120, rarity[3], SMALL + 1, { 0.8, 0.8, 0.8 })
 		local count = Text(bag, "GameFontHighlight", TEXT)
 		count:SetPoint("TOPRIGHT", bag, "TOPLEFT", COUNT_AT, y)
 		local percent = Text(bag, "GameFontHighlight", TEXT)
 		percent:SetPoint("TOPRIGHT", bag, "TOPLEFT", PERCENT_AT, y)
 		Paint(percent, rarity[2])
-		rows[index] = { count = count, percent = percent }
+		rows[index] = { count = count, percent = percent, formula = formula, y = y }
+	end
+	-- The formulas past the longest name (a language's longer words).
+	if 28 + widest + 8 > 118 then
+		for index = 1, table.getn(rows) do
+			rows[index].formula:ClearAllPoints()
+			rows[index].formula:SetPoint("TOPLEFT", bag, "TOPLEFT", 28 + widest + 8, rows[index].y)
+		end
 	end
 	page.total = Words(bag, 10, -148, BAG_WIDTH - 20, "")
 	page.three = Words(bag, 10, -166, BAG_WIDTH - 20, "")
@@ -805,14 +890,13 @@ local function BuildDamage(page)
 	page.sum:SetPoint("CENTER", strip, "CENTER", 0, 0)
 	page.y = page.y - 28 - 10
 	Heading(page, SurvivorUI_T("Buffs go in the |cff59f273green box|r"))
-	local x = 0
+	local items = {}
 	for index = 1, table.getn(BUFFS) do
 		local buff = BUFFS[index]
 		local icon = page:CreateTexture(nil, "ARTWORK")
 		icon:SetTexture(buff[2])
 		icon:SetWidth(24)
 		icon:SetHeight(24)
-		icon:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
 		local name = Text(page, "GameFontHighlight", SMALL)
 		name:SetPoint("LEFT", icon, "RIGHT", 4, 0)
 		name:SetText(SurvivorUI_Native(buff[1]))
@@ -825,7 +909,37 @@ local function BuildDamage(page)
 		spot.buff = buff
 		spot:SetScript("OnEnter", BuffEnter)
 		spot:SetScript("OnLeave", CloseTip)
-		x = x + 24 + 4 + name:GetStringWidth() + 12
+		items[index] = { icon = icon, name = name, spot = spot, wide = name:GetStringWidth() }
+	end
+	-- A row too long for the page (a language's longer names): the longest
+	-- names in two lines, one by one, until it fits.
+	local function Row()
+		local total = (table.getn(items) - 1) * 12
+		for index = 1, table.getn(items) do
+			total = total + 24 + 4 + items[index].wide
+		end
+		return total
+	end
+	while Row() > PAGE_WIDTH do
+		local longest
+		for index = 1, table.getn(items) do
+			local item = items[index]
+			if not item.split and (not longest or item.wide > longest.wide) then
+				longest = item
+			end
+		end
+		if not longest then
+			break
+		end
+		longest.split = true
+		longest.wide = Fit.TwoLines(longest.name, longest.icon)
+	end
+	local x = 0
+	for index = 1, table.getn(items) do
+		local item = items[index]
+		item.icon:SetPoint("TOPLEFT", page, "TOPLEFT", x, page.y)
+		item.spot:SetWidth(24 + 4 + item.wide)
+		x = x + 24 + 4 + item.wide + 12
 	end
 	page.y = page.y - 32
 	Para(page, SurvivorUI_T("These add to Damage while they last, just like your level or your gear. They do not multiply it. So +95% and a +40% buff make +135%: that is 2.35 against 1.95, about 20% harder, not 40%. The fuller a box is, the less the same bonus gives."), 3)
@@ -942,7 +1056,8 @@ local function Fact(page, color, x, y, width, title, words)
 	head:SetPoint("CENTER", box, "TOP", 0, -14)
 	head:SetText(title)
 	Paint(head, color)
-	Words(box, 9, -28, width - 18, words, SMALL + 1)
+	box.need = 28 + Words(box, 9, -28, width - 18, words, SMALL + 1):GetHeight() + 6
+	return box
 end
 
 -- What must not be missed: a band in its color whose light comes and goes,
@@ -975,17 +1090,22 @@ local function BuildDots(page)
 	Para(page, SurvivorUI_T("A DoT doesn't hit once. It sticks to the enemy and bites again and again. Each bite is a |cffffd100tick|r, about one a second."), 2)
 	Warning(page, WARNING, SurvivorUI_T("CRIT AND CRIT DMG DO NOTHING FOR DOTS"), SurvivorUI_T("Building a DoT run? Don't pick them and don't rank them up."))
 	local width = math.floor((PAGE_WIDTH - CARD_GAP) / 2)
+	-- Two facts side by side, as tall as the longer one's words need.
+	local function Row(one, two)
+		local height = math.max(FACT_HEIGHT, math.max(one.need, two.need))
+		one:SetHeight(height)
+		two:SetHeight(height)
+		return height
+	end
 	local top = page.y
-	Fact(page, GREEN, 0, top, width, SurvivorUI_T("Set when it lands"),
-		SurvivorUI_T("Spell x Damage is counted once, as the DoT lands. A buff that ends later still counts. One that starts later doesn't."))
-	Fact(page, PEACH, width + CARD_GAP, top, width, SurvivorUI_T("Not plain DoTs"),
-		SurvivorUI_T("Bleeds and burns born from a crit take a share of that crit. Ground spells like Consecration aren't DoTs: they can crit."))
-	top = top - FACT_HEIGHT - 6
-	Fact(page, RED, 0, top, width, SurvivorUI_T("The enemy box, every tick"),
-		SurvivorUI_T("Each tick goes through the enemy box as it lands: elite or boss, under 30% health, more damage to afflicted enemies."))
-	Fact(page, PURPLE, width + CARD_GAP, top, width, SurvivorUI_T("Copies"),
-		SurvivorUI_T("One enemy carries 1 copy of each DoT, 2 from level 15, 3 from 30, 4 from 45. A new one replaces the copy with the fewest ticks left."))
-	page.y = top - FACT_HEIGHT - 10
+	top = top - Row(Fact(page, GREEN, 0, top, width, SurvivorUI_T("Set when it lands"),
+		SurvivorUI_T("Spell x Damage is counted once, as the DoT lands. A buff that ends later still counts. One that starts later doesn't.")),
+		Fact(page, PEACH, width + CARD_GAP, top, width, SurvivorUI_T("Not plain DoTs"),
+		SurvivorUI_T("Bleeds and burns born from a crit take a share of that crit. Ground spells like Consecration aren't DoTs: they can crit."))) - 6
+	page.y = top - Row(Fact(page, RED, 0, top, width, SurvivorUI_T("The enemy box, every tick"),
+		SurvivorUI_T("Each tick goes through the enemy box as it lands: elite or boss, under 30% health, more damage to afflicted enemies.")),
+		Fact(page, PURPLE, width + CARD_GAP, top, width, SurvivorUI_T("Copies"),
+		SurvivorUI_T("One enemy carries 1 copy of each DoT, 2 from level 15, 3 from 30, 4 from 45. A new one replaces the copy with the fewest ticks left."))) - 10
 	Heading(page, SurvivorUI_T("Each marble is a tick, each row a copy on one enemy"))
 	page.y = page.y - 14
 	local level = Try(page, 8, page.y, 180, SurvivorUI_T("Level"), 1, 60, 1, function(value) return tostring(value) end,
@@ -1160,8 +1280,12 @@ local function BuildHaste(page)
 	MyHero(page, PAGE_WIDTH - 84, page.y + 4)
 	page.y = page.y - 34
 	page.shown = Words(page, 0, page.y, PAGE_WIDTH, "")
+	-- This spell's words in two lines' room, sitting on its marbles: one line
+	-- when they fit, else a second one above it.
 	page.spell = Words(page, 0, page.y - LINE, PAGE_WIDTH, "")
-	page.y = page.y - 2 * LINE - 6
+	page.spell:ClearAllPoints()
+	page.spell:SetPoint("BOTTOMLEFT", page, "TOPLEFT", 0, page.y - 3 * LINE + 3)
+	page.y = page.y - 3 * LINE - 6
 	local slow = MarbleRow(page, page.y, SurvivorUI_T("No Haste"), CASTS, CAST_MARBLE, CAST_MARBLE, GREY)
 	local fast = MarbleRow(page, page.y - CAST_MARBLE - 2, SurvivorUI_T("Your Haste"), CASTS, CAST_MARBLE, CAST_MARBLE, TEAL)
 	page.y = page.y - 2 * CAST_MARBLE - 12
@@ -1174,7 +1298,7 @@ local function BuildHaste(page)
 	page.y = page.y - 2 * STRIKE_STEP - 4
 	page.together = Words(page, 0, page.y, PAGE_WIDTH, "")
 	page.y = page.y - LINE - 6
-	Tip(page, SurvivorUI_T("|cffffd100Each strike is a whole cast:|r it aims again and rolls its own Crit. A DoT lands again, a ground spell opens one more circle."), 2)
+	Tip(page, SurvivorUI_T("|cffffd100Each strike is a whole spell:|r it aims again and rolls its own Crit. A DoT lands again, a ground spell opens one more circle."), 2)
 	Tip(page, SurvivorUI_T("|cff4de6d9Every \"-10% cooldowns\"|r goes into one number first. Two -50% don't make 0: they make half."))
 	Tip(page, SurvivorUI_T("|cff4de6d9Demons|r echo only through Master Demonologist."))
 
@@ -1191,14 +1315,14 @@ local function BuildHaste(page)
 			page.spell:SetText(string.format(SurvivorUI_T("This spell: %s becomes |cffffd1000.25 sec|r, the floor. |cffff7366Past %s, more Haste is lost on it.|r"),
 				Seconds(try.wait), Signed(try.wait / FLOOR - 1)))
 		else
-			page.spell:SetText(string.format(SurvivorUI_T("This spell: %s becomes |cffffd100%s|r: %s casts a minute instead of %s. A marble is a cast:"),
+			page.spell:SetText(string.format(SurvivorUI_T("This spell: %s becomes |cffffd100%s|r: it goes off %s times a minute instead of %s. A marble is one time:"),
 				Seconds(try.wait), Seconds(real), Count(after), Count(before)))
 		end
 		DrawCasts(slow, before)
 		DrawCasts(fast, after)
 		local strikes = DrawStrikes(plain, Echoes(try.echo, 0))
 		DrawStrikes(cascade, Echoes(try.echo, CASCADE))
-		page.together:SetText(string.format(SurvivorUI_T("Together they multiply: %s casts a minute x %.2f strikes = |cffffd100%s strikes a minute|r."),
+		page.together:SetText(string.format(SurvivorUI_T("Together they multiply: %s times a minute x %.2f strikes = |cffffd100%s strikes a minute|r."),
 			Count(after), strikes, Count(after * strikes)))
 	end
 end
@@ -1264,6 +1388,16 @@ local function SpellCard(page, spell, x, y, width, words, marks, tip)
 	local tags = Text(card, "GameFontNormal", SMALL)
 	tags:SetPoint("TOPRIGHT", card, "TOPRIGHT", -8, -7)
 	tags:SetText(marks)
+	-- Words past the card's edge (a language's longer ones): a size smaller,
+	-- or two; the name so too beside its marks.
+	for size = SMALL - 1, SMALL - 2, -1 do
+		if line:GetStringWidth() > width - 45 then
+			Fit.Size(line, size)
+		end
+	end
+	if name:GetStringWidth() + tags:GetStringWidth() > width - 60 then
+		Fit.Size(name, TEXT - 1)
+	end
 end
 
 local function BuildGround(page)
@@ -1292,7 +1426,7 @@ local function BuildGround(page)
 			string.format(SurvivorUI_T("Every %s sec for %s sec"), spell[8], spell[9]), both, tip)
 	end
 	local rows = math.ceil(table.getn(GROUND) / 2)
-	SpellCard(page, HELLFIRE, 0, page.y - rows * SPELL_ROW, PAGE_WIDTH, SurvivorUI_T("Not on the ground: a blast around you, cast again and again."),
+	SpellCard(page, HELLFIRE, 0, page.y - rows * SPELL_ROW, PAGE_WIDTH, SurvivorUI_T("Not on the ground: a blast around you, going off again and again."),
 		SurvivorUI_T("|cffffad61Crit|r"), function()
 			GroundTip(HELLFIRE, {
 				{ SurvivorUI_T("Hits every enemy within 7 yd of you."), 1, 1, 1 },
@@ -1333,13 +1467,16 @@ local function ChipLeave()
 	CloseTip()
 end
 
--- The talents as chips on their class's color, four to a row.
+-- The talents as chips on their class's color, four to a row. A name too long
+-- for its chip (a language's longer words) takes a size smaller in every
+-- chip; one still too long, every chip grows and such a name takes two lines.
 local function Chips(page, list)
 	local width = math.floor((PAGE_WIDTH - 3 * CHIP_GAP) / 4)
+	local room = width - 28           -- past the icon, to the edge
+	local chips, widest, height = {}, 0, CHIP_HEIGHT
 	for index = 1, table.getn(list) do
 		local spell = list[index]
-		local chip = Tinted(page, { 1, 1, 1 }, math.mod(index - 1, 4) * (width + CHIP_GAP),
-			page.y - math.floor((index - 1) / 4) * (CHIP_HEIGHT + CHIP_GAP), width, CHIP_HEIGHT)
+		local chip = Tinted(page, { 1, 1, 1 }, 0, page.y, width, CHIP_HEIGHT)
 		chip.spell = spell
 		chip.tint = ClassTint(spell[3])
 		chip:EnableMouse(true)
@@ -1360,8 +1497,35 @@ local function Chips(page, list)
 		local name = Text(chip, "GameFontHighlight", SMALL)
 		name:SetPoint("LEFT", icon, "RIGHT", 4, 0)
 		name:SetText(SurvivorUI_Native(spell[1]))
+		chip.icon, chip.name = icon, name
+		chips[index] = chip
+		widest = math.max(widest, name:GetStringWidth())
 	end
-	page.y = page.y - math.ceil(table.getn(list) / 4) * (CHIP_HEIGHT + CHIP_GAP)
+	if widest > room then
+		widest = 0
+		for index = 1, table.getn(chips) do
+			Fit.Size(chips[index].name, SMALL - 1)
+			widest = math.max(widest, chips[index].name:GetStringWidth())
+		end
+	end
+	if widest > room then
+		height = 32                   -- two lines
+		for index = 1, table.getn(chips) do
+			local chip = chips[index]
+			Fit.Size(chip.name, SMALL)
+			if chip.name:GetStringWidth() > room then
+				Fit.TwoLines(chip.name, chip.icon)
+			end
+		end
+	end
+	for index = 1, table.getn(chips) do
+		local chip = chips[index]
+		chip:SetHeight(height)
+		chip:ClearAllPoints()
+		chip:SetPoint("TOPLEFT", page, "TOPLEFT", math.mod(index - 1, 4) * (width + CHIP_GAP),
+			page.y - math.floor((index - 1) / 4) * (height + CHIP_GAP))
+	end
+	page.y = page.y - math.ceil(table.getn(list) / 4) * (height + CHIP_GAP)
 end
 
 -- A bar: what holds in green, what is lost past the cap in red, the cap in gold.
@@ -1590,14 +1754,18 @@ local function Discount(value)
 	return string.format(SurvivorUI_T("%d, %d%% off"), value, value * 5)
 end
 
--- An 8-piece bonus in words, its numbers in the color.
+-- An 8-piece bonus in words, its numbers in the color. A Tier 0.5 one has
+-- words of its own at 5/5, after its numbers, and can have a third number.
 local function SetWords(line, strong, color)
-	local v, v2 = line[2], line[3]
+	local v, v2, v3, words = line[2], line[3], line[7], line[1]
 	if strong then
-		v, v2 = line[4], line[5]
+		v, v2, v3, words = line[4], line[5], line[8], line[6] or line[1]
 	end
-	local words = string.gsub(SurvivorUI_T(line[1]), "{v2}", color..v2.."|r")
+	words = string.gsub(SurvivorUI_T(words), "{v2}", color..v2.."|r")
 	words = string.gsub(words, "{v}", color..v.."|r")
+	if v3 then
+		words = string.gsub(words, "{v3}", color..v3.."|r")
+	end
 	return words
 end
 
@@ -1643,6 +1811,9 @@ local function EmpoweredTip()
 	GameTooltip:AddLine(SurvivorUI_T("At 5/5, Empowered:"), 1, 0.82, 0)
 	GameTooltip:AddLine(SetWords(line, true, GOLD), 1, 1, 1, 1)
 	GameTooltip:AddLine(" ")
+	GameTooltip:AddLine(SurvivorUI_T("Tier 0.5 has numbers of its own at 5/5:"), 1, 0.82, 0)
+	GameTooltip:AddLine(SetWords(SETS[HeroSet()][4][TIER], true, GOLD), 1, 1, 1, 1)
+	GameTooltip:AddLine(" ")
 	GameTooltip:AddLine(SurvivorUI_T("Numbers that count things round to a whole number."), 0.7, 0.7, 0.7, 1)
 	GameTooltip:Show()
 	SolidTip()
@@ -1657,33 +1828,44 @@ local function BuildMarks(page)
 		{ SurvivorUI_T("2. Keep"), SurvivorUI_T("Marks stay with the class that earned them. Each class saves its own.") },
 		{ SurvivorUI_T("3. Spend"), SurvivorUI_T("In the Armory, each piece goes up one star at a time, up to 5.") },
 	}
+	-- A row of cards as tall as the longest words in it need.
+	local cards, tall = {}, MARK_CARD
+	local function Even()
+		for index = 1, 3 do
+			cards[index]:SetHeight(tall)
+		end
+		page.y = page.y - tall - 8
+	end
 	for index = 1, 3 do
 		local card = Tinted(page, YELLOW, (index - 1) * (width + CARD_GAP), page.y, width, MARK_CARD)
 		Band(card, YELLOW, "TOP", 20)
 		local title = Text(card, "GameFontNormal", TEXT)
 		title:SetPoint("CENTER", card, "TOP", 0, -14)
 		title:SetText(steps[index][1])
-		Words(card, 9, -26, width - 18, steps[index][2], SMALL + 1)
+		tall = math.max(tall, 26 + Words(card, 9, -26, width - 18, steps[index][2], SMALL + 1):GetHeight() + 6)
+		cards[index] = card
 	end
-	page.y = page.y - MARK_CARD - 8
+	Even()
 	Heading(page, SurvivorUI_T("What stars open on a set"))
 	local opens = {
 		{ SurvivorUI_T("1/5: 4-piece bonus"), SurvivorUI_T("4 pieces of one set at 1/5 or more") },
 		{ SurvivorUI_T("3/5: 8-piece bonus"), SurvivorUI_T("All 8 pieces at 3/5 or more") },
 		{ SurvivorUI_T("5/5: Empowered"), SurvivorUI_T("The 8-piece bonus gets 50% stronger: 20% becomes 30%. Hover for your class.") },
 	}
+	tall = OPEN_CARD
 	for index = 1, 3 do
 		local card = Tinted(page, YELLOW, (index - 1) * (width + CARD_GAP), page.y, width, OPEN_CARD)
 		Tint(card, YELLOW, 0.5)
 		Words(card, 9, -7, width - 18, opens[index][1], TEXT, YELLOW)
-		Words(card, 9, -25, width - 18, opens[index][2], SMALL)
+		tall = math.max(tall, 25 + Words(card, 9, -25, width - 18, opens[index][2], SMALL):GetHeight() + 6)
 		if index == 3 then
 			card:EnableMouse(true)
 			card:SetScript("OnEnter", EmpoweredTip)
 			card:SetScript("OnLeave", CloseTip)
 		end
+		cards[index] = card
 	end
-	page.y = page.y - OPEN_CARD - 8
+	Even()
 	Heading(page, SurvivorUI_T("Cost per upgrade, per piece"))
 	-- The discount to play with: the game counts it for each star on its own,
 	-- the page takes one count for all of them.
@@ -1838,7 +2020,7 @@ end
 
 -- A set's panel at y: its name and zones over it, its two columns in it.
 local function SetRow(page, kind, y)
-	local height = kind[5] == 6 and SET_TALL or SET_ROW
+	local height = (kind[5] == 6 or kind[5] == TIER) and SET_TALL or SET_ROW
 	local row = Tinted(page, YELLOW, 0, y - SET_CAPTION, PAGE_WIDTH, height)
 	-- Over the panel: the set's name in its rarity's color, as a tooltip has
 	-- an item's, "(Epic set)" beside it; the zones it drops in to the right,
@@ -1852,17 +2034,37 @@ local function SetRow(page, kind, y)
 	Paint(row.rarity, kind[8])
 	row.zones = Text(page, "GameFontHighlight", SMALL)
 	row.zones:SetPoint("BOTTOMRIGHT", row, "TOPRIGHT", -2, 4)
-	row.zones:SetText(SurvivorUI_T(kind[3])..", "..SurvivorUI_T(kind[4]))
+	-- Tier 0.5 drops in one zone only.
+	if kind[4] then
+		row.zones:SetText(SurvivorUI_T(kind[3])..", "..SurvivorUI_T(kind[4]))
+	else
+		row.zones:SetText(SurvivorUI_T(kind[3]))
+	end
 	Paint(row.zones, ZONE_GREEN)
 	row.map = page:CreateTexture(nil, "ARTWORK")
 	row.map:SetTexture(MAP_ICON)
 	row.map:SetWidth(16)
 	row.map:SetHeight(16)
 	row.map:SetPoint("RIGHT", row.zones, "LEFT", -3, 0)
-	row.four = SetCell(row, 3, 198, SurvivorUI_T("4 pieces"))
-	row.four.text:SetText(SurvivorUI_T(kind[6]))
-	row.eight = SetCell(row, 203, PAGE_WIDTH - 206, SurvivorUI_T("8 pieces"))
+	-- A class's own 4-piece bonus is longer: its column is wider.
+	local four = kind[6] and 198 or 270
+	row.four = SetCell(row, 3, four, SurvivorUI_T("4 pieces"))
+	row.eight = SetCell(row, four + 5, PAGE_WIDTH - four - 8, SurvivorUI_T("8 pieces"))
+	-- Under the column's name, inside its edge.
+	row.four.room, row.eight.room = height - 22, height - 22
 	return row, height
+end
+
+-- A column's bonus in its room: a size smaller, or two, while it is taller
+-- (a language's longer words).
+function Fit.Cell(cell)
+	local text = cell.text
+	for size = SMALL, SMALL - 2, -1 do
+		if size == SMALL or text:GetHeight() > cell.room then
+			Fit.Size(text, size)
+			text:SetText(text:GetText())
+		end
+	end
 end
 
 -- A column lit, dim, or in gold.
@@ -1897,6 +2099,8 @@ local function PaintSetRow(row, kind, entry, step, base, tint)
 	row:SetBackdropColor(0.04 + (base[1] - 0.04) * 0.16, 0.04 + (base[2] - 0.04) * 0.16, 0.04 + (base[3] - 0.04) * 0.16, 0.95)
 	row:SetBackdropBorderColor(base[1], base[2], base[3], 0.4)
 	Lit(row.four, "lit", base, tint)
+	-- One 4-piece bonus for every class, but Tier 0.5's, the class's own.
+	row.four.text:SetText(SurvivorUI_T(kind[6] or entry[5]))
 	local line = entry[4][kind[5]]
 	if step == 1 then
 		Lit(row.eight, "dim", base, tint)
@@ -1908,6 +2112,8 @@ local function PaintSetRow(row, kind, entry, step, base, tint)
 		Lit(row.eight, "gold", base, tint)
 		row.eight.text:SetText(SetWords(line, true, GOLD))
 	end
+	Fit.Cell(row.four)
+	Fit.Cell(row.eight)
 end
 
 local function BuildSets(page)
@@ -1917,7 +2123,7 @@ local function BuildSets(page)
 	function page.Again()
 		page.class = HeroSet()
 	end
-	Title(page, SurvivorUI_T("Sets: six for each class, 8 armor pieces each"))
+	Title(page, SurvivorUI_T("Sets: seven for each class, 8 armor pieces each"))
 	local count = table.getn(SETS)
 	local width = math.floor((PAGE_WIDTH - (count - 1) * 4) / count)
 	local chips, steps, rows = {}, {}, {}
@@ -1932,6 +2138,47 @@ local function BuildSets(page)
 		end)
 		chips[index] = chip
 	end
+	-- A row of buttons at y, each width wide: so they stay while all their words
+	-- fit; else they share the page's width by their words (a language's longer
+	-- names), each its words' width and an even part of the rest, and a size
+	-- smaller when even that is too narrow.
+	local function Share(page, buttons, width, y)
+		local count = table.getn(buttons)
+		local room = PAGE_WIDTH - (count - 1) * 4
+		local needs, total, widest = {}, 0, 0
+		local function Measure()
+			total, widest = 0, 0
+			for index = 1, count do
+				needs[index] = buttons[index].text:GetStringWidth() + 10
+				total = total + needs[index]
+				widest = math.max(widest, needs[index])
+			end
+		end
+		Measure()
+		if widest <= width then
+			return
+		end
+		if total > room then
+			for index = 1, count do
+				Fit.Size(buttons[index].text, SMALL - 1)
+			end
+			Measure()
+		end
+		local spare = (room - total) / count
+		local x = 0
+		for index = 1, count do
+			local button = buttons[index]
+			local wide = math.floor(needs[index] + spare)
+			if index == count then
+				wide = PAGE_WIDTH - x
+			end
+			button:SetWidth(wide)
+			button:ClearAllPoints()
+			button:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
+			x = x + wide + 4
+		end
+	end
+	Share(page, chips, width, page.y)
 	page.y = page.y - CHIP_HEIGHT - 4
 	local third = math.floor((PAGE_WIDTH - 2 * 4) / 3)
 	for index = 1, 3 do

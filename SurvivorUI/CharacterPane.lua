@@ -245,7 +245,7 @@ local SECTIONS = {
 	{ title = "Offense", color = { 1.00, 0.45, 0.25 }, rows = {
 		{ "Crit",     function(s) return string.format("%.1f%%", s.crit * 100) end, "The chance a spell strikes critically. Past 100%, the rest adds to your critical damage." },
 		{ "Crit Dmg", function(s) return string.format("%.0f%%", s.cm * 100) end, "A critical strike deals this much of a spell's damage." },
-		{ "Damage",   function(s) return Pct(s.dmg - 1) end, "Every spell you cast deals this much more damage. It grows with your level, gear, talents, jewelry and buffs." },
+		{ "Damage",   function(s) return Pct(s.dmg - 1) end, "Every spell of yours deals this much more damage. It grows with your level, gear, talents, jewelry and buffs." },
 		{ "Haste",    function(s) return Pct(1 - s.cd) end, "Your spells come back this much sooner." },
 		{ "Echo",     function(s) return string.format("%.0f%%", s.echo * 100) end, "The chance a spell strikes twice. Past 100%, every spell strikes twice and the rest is the chance of a third." },
 	} },
@@ -586,6 +586,7 @@ local function MakeView(alone)
 		fill:SetTexture(FLAT)
 		fill:SetVertexColor(0.04, 0.04, 0.07, 0.55)
 		fill:SetAllPoints(stats)
+		view.fill = fill
 		local title = stats:CreateFontString(nil, "OVERLAY")
 		title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 		title:SetPoint("TOPLEFT", stats, "TOPLEFT", 8, -9)
@@ -1232,6 +1233,20 @@ end
 
 local paneView = MakeView(false)
 local panelView = MakeView(true)
+
+-- No backgrounds (the options' No backgrounds, Experimental): the Stats
+-- panel's shade away, unless kept ("stats"); its rows keep their washes and
+-- their outlined words. The pane's own numbers keep the pane's ground.
+-- Painted as the world loads and as the options change it (Options.lua).
+SurvivorUI_Grounds = SurvivorUI_Grounds or {}
+function SurvivorUI_Grounds.stats()
+	local db = SurvivorUIDB
+	if db and db.noBackgrounds and not (db.noBackgroundsOff and db.noBackgroundsOff.stats) then
+		panelView.fill:Hide()
+	else
+		panelView.fill:Show()
+	end
+end
 
 -- The pane's stats' text size, -4 to +8 over what their rows give (the
 -- options' Character pane tab; the Stats panel's is its own tab's).

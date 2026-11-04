@@ -42,7 +42,7 @@ end
 local CLASS_SPELLS = {
 	WARRIOR = { "Cleave", "Whirlwind", "Thunder Clap", "Mortal Strike", "Execute", "Demoralizing Shout", "Battle Shout", "Bloodthirst", "Rend", "Shield Slam", "Bloodrage" },
 	PALADIN = { "Consecration", "Exorcism", "Hammer Of Wrath", "Holy Shock", "Holy Wrath", "Judgement", "Hammer Of Justice", "Holy Light", "Divine Shield", "Holy Shield", "Redemption" },
-	HUNTER = { "Auto Shot", "Arcane Shot", "Multi Shot", "Serpent Sting", "Volley", "Explosive Trap", "Concussive Shot", "Aimed Shot", "Immolation Trap", "Frost Trap", "Hunter's Mark" },
+	HUNTER = { "Auto Shot", "Arcane Shot", "Multi Shot", "Serpent Sting", "Volley", "Kill Command", "Concussive Shot", "Aimed Shot", "Immolation Trap", "Frost Trap", "Hunter's Mark" },
 	ROGUE = { "Sinister Strike", "Eviscerate", "Blade Flurry", "Rupture", "Kidney Shot", "Gouge", "Ghostly Strike", "Adrenaline Rush", "Backstab", "Slice And Dice", "Seal Fate" },
 	PRIEST = { "Smite", "Shadow Word: Pain", "Mind Blast", "Holy Nova", "Power Word: Shield", "Renew", "Holy Fire", "Mind Flay", "Psychic Scream", "Devouring Plague", "Lightwell" },
 	SHAMAN = { "Lightning Bolt", "Chain Lightning", "Earth Shock", "Flame Shock", "Frost Shock", "Lightning Shield", "Magma Totem", "Searing Totem", "Fire Nova", "Healing Wave", "Stormstrike", "Rockbiter Weapon" },
@@ -52,8 +52,11 @@ local CLASS_SPELLS = {
 }
 
 -- The common pieces there are to find, for every class (the game's codex):
--- the legendary amulets are one per spell of a class, above.
-local COMMON_TOTALS = { Neck = 17, Ring = 9, Trinket = 13 }
+-- the legendary amulets are one per spell of a class, above. The Star of
+-- Mystaria is a trinket since the game's 0.111 (JewelryData.lua): 16 amulets
+-- and 14 trinkets, not 17 and 13 ("14 / 13", and "1 more to find" with every
+-- amulet found).
+local COMMON_TOTALS = { Neck = 16, Ring = 9, Trinket = 14 }
 
 local function Plain(text)
 	return string.gsub(string.lower(text or ""), "[^%a]", "")
@@ -638,6 +641,15 @@ panel:SetScript("OnUpdate", function()
 		overPanel = over
 		panelOutline(over)
 	end
+	-- A text not drawn yet measured nothing (Fit, below): the window drawn
+	-- again on the next frame, ten times at most in a row.
+	if this.unfit then
+		this.unfit = nil
+		if (this.refits or 0) < 10 then
+			this.refits = (this.refits or 0) + 1
+			this.Draw()
+		end
+	end
 end)
 
 local close = CreateFrame("Button", nil, panel)
@@ -716,6 +728,74 @@ local function Abbrev(name)
 		text = string.sub(text, 1, MAX_NAME - 1).."."
 	end
 	return text
+end
+
+-- A piece's name starts after its icon.
+local NAME_LEFT = 4 + (ROW - 3) + 4
+
+local function Letters(text)
+	return string.len((string.gsub(text, "[\128-\191]", "")))
+end
+
+-- Words fit to their room, measured: a name in another language is whole
+-- ("Безупречная зачарованная водоросль южных морей"), and the window's text
+-- size can be bigger. At their own size; else a point smaller; else shorter
+-- words when there are (the title without its class); else cut at their
+-- size, "...", a last scrap of a word (three letters or less) left out. A
+-- piece's whole name stays its tooltip's title. The size is told to
+-- EditCard.lua's Dress as the text's own (its base) and as the one it is at,
+-- so the window's text size step is not added twice (as BuildList.lua's
+-- FitTags). Measured again only as the words, the room or the step change; a
+-- text not drawn yet measures nothing, and is fit on the next frame.
+local function Fit(text, words, room, size, shorter)
+	local step = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Jewelry") or 0
+	local path, _, flags = text:GetFont()
+	path, flags = path or SurvivorUI_FONT, flags or "OUTLINE"
+	local key = words.."|"..(shorter or "").."|"..math.floor(room + 0.5).."|"..size.."|"..step.."|"..path
+	if text.fitKey == key then
+		return
+	end
+	local function At(points, shown)
+		local base = points + FONT_BUMP
+		local want = math.max(6, base + step)
+		text:SetFont(path, want, flags)
+		text.suiBase, text.suiSize, text.suiPath = base, want, text:GetFont()
+		text:SetText(shown)
+		return text:GetStringWidth(), want
+	end
+	local width, want = At(size, words)
+	if width == 0 and words ~= "" then
+		text.fitKey = nil
+		panel.unfit = true
+		return
+	end
+	text.fitKey = key
+	if width <= room or (want > 7 and At(size - 1, words) <= room) then
+		return
+	end
+	if shorter then
+		if At(size, shorter) > room and want > 7 then
+			At(size - 1, shorter)
+		end
+		return
+	end
+	At(size, words)
+	local count, cut = Letters(words), words
+	while count > 1 do
+		count = count - 1
+		cut = SurvivorUI_Cut(words, count)
+		text:SetText((string.gsub(cut, "%s+$", "")).."...")
+		if text:GetStringWidth() <= room then
+			break
+		end
+	end
+	-- Cut inside a word: three letters or less of it are no help.
+	local inside = string.find(string.sub(words, string.len(cut) + 1, string.len(cut) + 1), "%S")
+	local _, _, whole, scrap = string.find(cut, "^(.*%S)%s+(%S+)$")
+	if inside and whole and Letters(scrap) <= 3 then
+		cut = whole
+	end
+	text:SetText((string.gsub(cut, "%s+$", "")).."...")
 end
 
 -- The rows, made as they are needed.
@@ -888,8 +968,6 @@ local function Header(row, label, color, found, total, worn, slots, class)
 	else
 		row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
 	end
-	row.name:SetText(SurvivorUI_T(label))
-	row.name:SetTextColor(1, 1, 1)
 	row.extra:ClearAllPoints()
 	row.extra:SetPoint("LEFT", row.name, "RIGHT", 4, 0)
 	row.extra:SetText("- "..(worn or 0).."/"..(slots or 0))
@@ -897,6 +975,10 @@ local function Header(row, label, color, found, total, worn, slots, class)
 	row.count:SetText(found.." / "..total)
 	row.count:SetTextColor(1, 1, 1)
 	row.count:Show()
+	-- The name in what the counts leave.
+	Fit(row.name, SurvivorUI_T(label), COLUMN - 2 - row.count:GetStringWidth() - 4
+		- (coords and NAME_LEFT or 4) - 4 - row.extra:GetStringWidth(), 9)
+	row.name:SetTextColor(1, 1, 1)
 	row.track:Show()
 	row.track:SetVertexColor(color[1], color[2], color[3], 0.18)
 	row.bar:Show()
@@ -920,9 +1002,10 @@ local function Piece(row, entry)
 	row.name:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
 	-- In a language the addon speaks, the game's own name, whole; a class
 	-- amulet by its spell, as the ones still to find (its name is in no
-	-- table of the game's the addon has).
-	row.name:SetText(SurvivorUI_Translated() and SurvivorUI_Native(entry.spell or entry.name)
-		or Abbrev(entry.short or entry.name))
+	-- table of the game's the addon has). Fit to the row, short of the green
+	-- "E" when there: a long one a point smaller, or cut.
+	Fit(row.name, SurvivorUI_Translated() and SurvivorUI_Native(entry.spell or entry.name)
+		or Abbrev(entry.short or entry.name), COLUMN - NAME_LEFT - 2 - (entry.worn and (ROW - 3) + 3 or 0), 9)
 	local item = entry.item
 	if item then
 		local hex = item.color or "ffffff"
@@ -972,7 +1055,7 @@ local function More(row, count)
 	row.edge:SetVertexColor(0, 0, 0, 0)
 	row.name:ClearAllPoints()
 	row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
-	row.name:SetText(SurvivorUI_TF("{1} more to find", count))
+	Fit(row.name, SurvivorUI_TF("{1} more to find", count), COLUMN - 4 - 2, 9)
 	row.name:SetTextColor(0.45, 0.45, 0.5)
 end
 
@@ -1140,7 +1223,12 @@ function panel.Draw()
 		rows[index]:Hide()
 	end
 
-	title:SetText(SurvivorUI_T("Jewelry Collection").."  |cffe0e0e0"..found.."|r|cff8a8a90 / "..total.."  ·  "..SurvivorUI_T(className).."|r")
+	-- Short of the x; when long, without the class (its group says it).
+	local counts = SurvivorUI_T("Jewelry Collection").."  |cffe0e0e0"..found.."|r|cff8a8a90 / "..total
+	Fit(title, counts.."  ·  "..SurvivorUI_T(className).."|r", panel:GetWidth() - 8 - 3 - 14 - 4, 10, counts.."|r")
+	if not panel.unfit then
+		panel.refits = 0
+	end
 	local tallest = math.max(table.getn(left), table.getn(right))
 	panel:SetHeight(22 + tallest * ROW + 12 + 6)
 end
