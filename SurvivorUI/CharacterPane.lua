@@ -414,6 +414,18 @@ local function PanelOn()
 	return DB().statsPanel == true
 end
 
+-- The Stats panel's look (the options' Stats panel tab), the same for every
+-- class: its title's strip (statsHeader false: none, the rows from its top),
+-- its groups' titles (statsGroupTitles false: none, the groups still in
+-- their order) and each number's color, below.
+local function HeaderOn()
+	return DB().statsHeader ~= false
+end
+
+local function GroupTitlesOn()
+	return DB().statsGroupTitles ~= false
+end
+
 ------------------------------------------------------------------------------
 -- The order: each group, and each number within its group, where the player
 -- put it; a number can be switched off for good (the options, Stats panel).
@@ -559,6 +571,114 @@ function SurvivorUI_SetStatShown(label, shown)
 	HiddenSet()[label] = (not shown) or nil
 end
 
+-- Each number's color on the Stats panel, for every class: statColors[label]
+-- "class" (the hero's class's), a key of SurvivorUI_MAPBUTTON_COLORS
+-- (MinimapButton.lua), or nil: its group's, as at first. Its label and value
+-- wear it, its row washed in it. The character pane's numbers keep theirs.
+local GROUP_OF = {}
+for index = 1, table.getn(SECTIONS) do
+	for each = 1, table.getn(SECTIONS[index].rows) do
+		GROUP_OF[SECTIONS[index].rows[each][1]] = SECTIONS[index]
+	end
+end
+
+-- The choice: "group", "class" or a palette's key.
+function SurvivorUI_StatColorKey(label)
+	local colors = SurvivorUIDB and SurvivorUIDB.statColors
+	return colors and colors[label] or "group"
+end
+
+-- r, g, b; group, its group's color, else found by its label.
+function SurvivorUI_StatColor(label, group)
+	group = group or (GROUP_OF[label] and GROUP_OF[label].color) or { 1, 0.82, 0 }
+	local chosen = SurvivorUI_StatColorKey(label)
+	if chosen == "class" then
+		local _, class = UnitClass("player")
+		if class and SurvivorUI_ClassColor then
+			return SurvivorUI_ClassColor(class)
+		end
+	elseif chosen ~= "group" then
+		local list = SurvivorUI_MAPBUTTON_COLORS or {}
+		for index = 1, table.getn(list) do
+			local entry = list[index]
+			if entry[1] == chosen and entry[3] then
+				return entry[3][1], entry[3][2], entry[3][3]
+			end
+		end
+	end
+	return group[1], group[2], group[3]
+end
+
+-- One number's color (key "group" or nil: its group's), or every number's
+-- (label nil).
+function SurvivorUI_SetStatColor(label, key)
+	SurvivorUIDB = SurvivorUIDB or {}
+	if key == "group" then
+		key = nil
+	end
+	if not label then
+		local all
+		if key then
+			all = {}
+			for each in pairs(GROUP_OF) do
+				all[each] = key
+			end
+		end
+		SurvivorUIDB.statColors = all
+		return
+	end
+	local colors = SurvivorUIDB.statColors or {}
+	colors[label] = key
+	SurvivorUIDB.statColors = next(colors) and colors or nil
+end
+
+-- What a view shows of the numbers, s read as Stats() reads it (or nil):
+-- each group in its order, the rows of it that show (a group shows once
+-- one of its rows does), and the counts the rows' height is worked out by
+-- (as many again with the ones at 0 or below, for a panel sized: its rows
+-- as tall as its size makes them for all of these). While arranging, the
+-- hidden rows show too, faint, to bring them back, and the ones at 0.
+local function Visible(s, arranging)
+	local ordered = Ordered()
+	local shown = {}
+	local counts = { rows = 0, headers = 0, fullRows = 0, fullHeaders = 0 }
+	local hideZero = s and SurvivorUIDB and SurvivorUIDB.statsHideZero ~= false
+	for index = 1, table.getn(ordered) do
+		local visible, full = {}, 0
+		local section = ordered[index]
+		for each = 1, table.getn(section.rows) do
+			local entry = section.rows[each]
+			if not Hidden(entry[1]) then
+				full = full + 1
+			end
+			local relevant = not (hideZero and ReadsAtMostZero(entry, s))
+			if (relevant or arranging) and not Hidden(entry[1]) then
+				table.insert(visible, entry)
+			end
+		end
+		shown[index] = visible
+		if table.getn(visible) > 0 then
+			counts.rows = counts.rows + table.getn(visible)
+			counts.headers = counts.headers + 1
+		end
+		if full > 0 then
+			counts.fullRows, counts.fullHeaders = counts.fullRows + full, counts.fullHeaders + 1
+		end
+	end
+	return ordered, shown, counts
+end
+
+-- A panel sized by its corner: its rows as tall as room (its height less its
+-- top, its foot and its groups' titles) makes them for count rows, and the
+-- type to match.
+local function SizedRows(room, count)
+	local rowHeight = 26
+	if count > 0 and room > 0 then
+		rowHeight = math.max(ROW_MIN, math.min(26, math.floor(room / count)))
+	end
+	return rowHeight, math.max(8, math.min(15, rowHeight - 3))
+end
+
 ------------------------------------------------------------------------------
 -- A view of the numbers: its frame, its rows and headers, and the arranging
 -- by drag (in move mode or with Alt held). Made twice: in the character pane,
@@ -569,6 +689,9 @@ end
 local PANEL_WIDTH = 220
 local PANEL_ROW = 16
 local PANEL_HEADER = 14
+-- The rows' top in the panel: under its title's strip, or near its edge
+-- without it; and the strip it is taken by then, outside it.
+local TOPS = { title = 28, bare = 6, grip = 18 }
 
 local views = {}
 local UpdateAll                 -- every view shown drawn again; set below
@@ -580,20 +703,20 @@ local function MakeView(alone)
 	stats:SetWidth(alone and PANEL_WIDTH or STATS_WIDTH)
 	stats:SetHeight(ART_HEIGHT)
 
-	local headline, headlineCaption, grip
+	local headline, headlineCaption, grip, title
 	if alone then
 		local fill = stats:CreateTexture(nil, "BORDER")
 		fill:SetTexture(FLAT)
 		fill:SetVertexColor(0.04, 0.04, 0.07, 0.55)
 		fill:SetAllPoints(stats)
 		view.fill = fill
-		local title = stats:CreateFontString(nil, "OVERLAY")
+		title = stats:CreateFontString(nil, "OVERLAY")
 		title:SetFont(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE")
 		title:SetPoint("TOPLEFT", stats, "TOPLEFT", 8, -9)
 		title:SetTextColor(1, 0.82, 0)
 		title:SetText(SurvivorUI_T("Stats"))
 		-- The top strip, where the panel is taken to be moved (the rows under
-		-- it stay free for arranging).
+		-- it stay free for arranging); without the title, outside it (below).
 		grip = CreateFrame("Frame", nil, stats)
 		grip:SetPoint("TOPLEFT", stats, "TOPLEFT", 0, 0)
 		grip:SetPoint("TOPRIGHT", stats, "TOPRIGHT", 0, 0)
@@ -634,10 +757,71 @@ local function MakeView(alone)
 		this:SetVerticalScroll(scrollOffset)
 	end)
 
+	-- The panel's look, set again as it changes: its title's strip, or none
+	-- (the rows from its top, the panel shorter by it). Without it the strip
+	-- the panel is taken by (Mover.lua's handle, in move mode, with the move
+	-- key held or its tab open) stands outside it: over it, or under it where
+	-- the screen's top leaves no room. The rows keep the whole panel, free to
+	-- be dragged into another order. Returns the rows' top, and whether the
+	-- groups' titles show.
+	local headerShown, gripSide
+	local function Frame()
+		local header = DB().statsHeader ~= false
+		if header ~= headerShown then
+			headerShown = header
+			scroll:ClearAllPoints()
+			scroll:SetPoint("TOPLEFT", stats, "TOPLEFT", 4, -(header and TOPS.title or TOPS.bare))
+			scroll:SetPoint("BOTTOMRIGHT", stats, "BOTTOMRIGHT", -4, 6)
+			if header then
+				title:Show()
+			else
+				title:Hide()
+			end
+		end
+		local side = "in"
+		if not header then
+			local top = stats:GetTop()
+			local ratio = stats:GetEffectiveScale() / UIParent:GetEffectiveScale()
+			side = (top and GetScreenHeight() - top * ratio < TOPS.grip * ratio) and "under" or "over"
+		end
+		if side ~= gripSide then
+			gripSide = side
+			grip:ClearAllPoints()
+			if side == "in" then
+				grip:SetPoint("TOPLEFT", stats, "TOPLEFT", 0, 0)
+				grip:SetPoint("TOPRIGHT", stats, "TOPRIGHT", 0, 0)
+				grip:SetHeight(24)
+			elseif side == "under" then
+				grip:SetPoint("TOPLEFT", stats, "BOTTOMLEFT", 0, 0)
+				grip:SetPoint("TOPRIGHT", stats, "BOTTOMRIGHT", 0, 0)
+				grip:SetHeight(TOPS.grip)
+			else
+				grip:SetPoint("BOTTOMLEFT", stats, "TOPLEFT", 0, 0)
+				grip:SetPoint("BOTTOMRIGHT", stats, "TOPRIGHT", 0, 0)
+				grip:SetHeight(TOPS.grip)
+			end
+		end
+		return header and TOPS.title or TOPS.bare, DB().statsGroupTitles ~= false
+	end
+
 	-- The panel's size, dragged by its corner: { w, h }, or nil for the first.
 	local sizing = false
 	local function SavedSize()
 		return alone and DB().statsPanelSize or nil
+	end
+
+	-- Sized by its corner: the rows as tall as its size (the one given, or the
+	-- frame's while dragged) makes them with every row it can show, the ones
+	-- at 0 too, under its title and its groups' titles. The size is kept as
+	-- tall as the panel would stand with them: hiding the ones at 0, the title
+	-- or the groups' titles (heads: whether they show) takes their room off
+	-- the panel, and the rows keep their size. spared: the room it takes off
+	-- now, for the size it is let go at.
+	local spared = 0
+	local function SizedLook(counts, heads)
+		spared = (headerShown == false and TOPS.title - TOPS.bare or 0) + (heads and 0 or counts.fullHeaders * PANEL_HEADER)
+		local height = sizing and stats:GetHeight() + spared or SavedSize()[2]
+		return SizedRows(height - TOPS.title - 6 - counts.fullHeaders * PANEL_HEADER, counts.fullRows)
 	end
 
 	-- The rows and headers.
@@ -888,36 +1072,13 @@ local function MakeView(alone)
 			end
 		end
 
-		-- What shows: a group appears once one of its rows does. While arranging,
-		-- the hidden rows show too, faint, to bring them back, and the ones at 0.
-		local ordered = Ordered()
-		local shown = {}
-		local totalRows, totalHeaders = 0, 0
-		-- And as many with the ones at 0 or less shown (the panel sized, its
-		-- rows are as tall as its size makes them for all of these).
-		local fullRows, fullHeaders = 0, 0
-		local hideZero = s and SurvivorUIDB and SurvivorUIDB.statsHideZero ~= false
-		for index = 1, table.getn(ordered) do
-			local visible, full = {}, 0
-			local section = ordered[index]
-			for each = 1, table.getn(section.rows) do
-				local entry = section.rows[each]
-				if not Hidden(entry[1]) then
-					full = full + 1
-				end
-				local relevant = not (hideZero and ReadsAtMostZero(entry, s))
-				if (relevant or arranging) and not Hidden(entry[1]) then
-					table.insert(visible, entry)
-				end
-			end
-			shown[index] = visible
-			if table.getn(visible) > 0 then
-				totalRows = totalRows + table.getn(visible)
-				totalHeaders = totalHeaders + 1
-			end
-			if full > 0 then
-				fullRows, fullHeaders = fullRows + full, fullHeaders + 1
-			end
+		-- What shows (Visible). The panel: its title's strip or none (Frame),
+		-- and its groups' titles, or none but while arranging (faint then, to
+		-- drag a group by).
+		local ordered, shown, counts = Visible(s, arranging)
+		local top, titles = 0, true
+		if alone then
+			top, titles = Frame()
 		end
 
 		-- Rows as tall as the room allows, and the type to match; in the panel,
@@ -932,23 +1093,14 @@ local function MakeView(alone)
 		if alone and not sized then
 			rowHeight, fontSize = PANEL_ROW, 10
 		elseif alone then
-			-- Sized: the rows as tall as the size (the one given, or the frame's
-			-- while dragged) makes them with every row it can show, the ones at
-			-- 0 too. Hiding those takes their room off the panel, and the rows
-			-- keep their size.
-			local height = sizing and stats:GetHeight() or SavedSize()[2]
-			local room = height - 34 - fullHeaders * headerHeight
-			rowHeight = 26
-			if fullRows > 0 and room > 0 then
-				rowHeight = math.max(ROW_MIN, math.min(26, math.floor(room / fullRows)))
-			end
-			fontSize = math.max(8, math.min(15, rowHeight - 3))
+			-- Sized: the rows as tall as the size makes them (SizedLook).
+			rowHeight, fontSize = SizedLook(counts, titles or arranging)
 		else
-			local room = scroll:GetHeight() - totalHeaders * headerHeight
+			local room = scroll:GetHeight() - counts.headers * headerHeight
 			local most = sized and 26 or ROW_MAX
 			rowHeight = most
-			if totalRows > 0 and room > 0 then
-				rowHeight = math.max(ROW_MIN, math.min(most, math.floor(room / totalRows)))
+			if counts.rows > 0 and room > 0 then
+				rowHeight = math.max(ROW_MIN, math.min(most, math.floor(room / counts.rows)))
 			end
 			fontSize = math.max(8, math.min(sized and 15 or 11, rowHeight - 3))
 		end
@@ -970,21 +1122,27 @@ local function MakeView(alone)
 
 			if table.getn(visible) > 0 then
 				local color = section.color
-				headerCount = headerCount + 1
-				local header = Header(headerCount)
-				header:SetWidth(width)
-				header:SetHeight(headerHeight)
-				header:ClearAllPoints()
-				header:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
-				header.text:SetText(SurvivorUI_T(section.title))
-				header.text:SetTextColor(color[1], color[2], color[3])
-				header.left:SetVertexColor(color[1], color[2], color[3], 0.6)
-				header.right:SetVertexColor(color[1], color[2], color[3], 0.6)
-				header.section = section.title
-				header:Show()
-				local headerItem = { kind = "header", section = section.title, top = y, height = headerHeight }
-				table.insert(layout, headerItem)
-				y = y + headerHeight
+				local headerItem
+				if titles or arranging then
+					headerCount = headerCount + 1
+					local header = Header(headerCount)
+					header:SetWidth(width)
+					header:SetHeight(headerHeight)
+					header:ClearAllPoints()
+					header:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
+					header.text:SetText(SurvivorUI_T(section.title))
+					header.text:SetTextColor(color[1], color[2], color[3])
+					header.left:SetVertexColor(color[1], color[2], color[3], 0.6)
+					header.right:SetVertexColor(color[1], color[2], color[3], 0.6)
+					header.section = section.title
+					if not (dragging and dragging.section == section.title and dragging.kind == "section") then
+						header:SetAlpha(titles and 1 or 0.5)
+					end
+					header:Show()
+					headerItem = { kind = "header", section = section.title, top = y, height = headerHeight }
+					table.insert(layout, headerItem)
+					y = y + headerHeight
+				end
 
 				for each = 1, table.getn(visible) do
 					local entry = visible[each]
@@ -998,13 +1156,16 @@ local function MakeView(alone)
 						row.label:SetFont(SurvivorUI_FONT, fontSize + FONT_BUMP, alone and "OUTLINE" or "")
 						row.value:SetFont(SurvivorUI_FONT, fontSize + FONT_BUMP, alone and "OUTLINE" or "")
 					end
-					-- The panel: the row washed in its group's color, label too.
+					-- The panel: the row washed in its number's color (its group's
+					-- unless chosen), label too; the pane's in its group's.
+					local r, g, b = color[1], color[2], color[3]
 					if alone then
-						row.wash:SetVertexColor(color[1], color[2], color[3], 0.07)
-						row.rule:SetVertexColor(color[1], color[2], color[3], 0.28)
+						r, g, b = SurvivorUI_StatColor(entry[1], color)
+						row.wash:SetVertexColor(r, g, b, 0.07)
+						row.rule:SetVertexColor(r, g, b, 0.28)
 						row.wash:Show()
 						row.rule:Show()
-						row.label:SetTextColor(color[1], color[2], color[3])
+						row.label:SetTextColor(r, g, b)
 					else
 						row.wash:Hide()
 						row.rule:Hide()
@@ -1015,7 +1176,7 @@ local function MakeView(alone)
 					row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
 					row.label:SetText(SurvivorUI_StatName(entry[1]))
 					row.value:SetText(value)
-					row.value:SetTextColor(color[1], color[2], color[3])
+					row.value:SetTextColor(r, g, b)
 					row.title = SurvivorUI_StatName(entry[1]).." "..value
 					row.text = entry[3]
 					row.section, row.key = section.title, entry[1]
@@ -1035,7 +1196,9 @@ local function MakeView(alone)
 					table.insert(layout, { kind = "row", section = section.title, label = entry[1], top = y, height = rowHeight })
 					y = y + rowHeight
 				end
-				headerItem.block = y - headerItem.top
+				if headerItem then
+					headerItem.block = y - headerItem.top
+				end
 			end
 		end
 
@@ -1051,7 +1214,7 @@ local function MakeView(alone)
 		-- show than its size holds at their smallest, it grows to hold them all
 		-- (past its bottom they would only scroll, with nothing to say so).
 		if alone and not sizing then
-			stats:SetHeight(28 + math.max(10, y) + 6)
+			stats:SetHeight(top + math.max(10, y) + 6)
 		end
 		scrollRange = math.max(0, y - scroll:GetHeight())
 		if scrollOffset > scrollRange then
@@ -1181,7 +1344,7 @@ local function MakeView(alone)
 			end
 			stats:StopMovingOrSizing()
 			sizing = false
-			DB().statsPanelSize = { math.floor(stats:GetWidth() + 0.5), math.floor(stats:GetHeight() + 0.5) }
+			DB().statsPanelSize = { math.floor(stats:GetWidth() + 0.5), math.floor(stats:GetHeight() + spared + 0.5) }
 			-- Its place kept as it now stands.
 			SavePlace()
 			this:SetAlpha(MouseIsOver(this) and 1 or 0)
@@ -1246,6 +1409,49 @@ function SurvivorUI_Grounds.stats()
 	else
 		panelView.fill:Show()
 	end
+end
+
+-- The Stats panel as it draws itself now, for the options' preview (its
+-- tab): { width, top (the rows' top: under the title's strip, or without
+-- it), row and font (the rows' height and type), head (a group's title's
+-- height, 0 without them), header, ground (its shade, unless No backgrounds
+-- takes it), groups = { { title, color, rows = { { label, name, value, r,
+-- g, b } } } } }. The run's numbers, or sample's (AZS_STATS's keys) while
+-- there is no run.
+function SurvivorUI_StatsPanelLook(sample)
+	local s = Stats()
+	if not s and sample then
+		s = setmetatable({}, { __index = function(_, key) return sample[key] or 0 end })
+	end
+	local ordered, shown, counts = Visible(s, false)
+	local header, titles = HeaderOn(), GroupTitlesOn()
+	local db = DB()
+	local look = { header = header, top = header and TOPS.title or TOPS.bare, head = titles and PANEL_HEADER or 0,
+		row = PANEL_ROW, font = 10, width = PANEL_WIDTH, groups = {},
+		ground = not (db.noBackgrounds and not (db.noBackgroundsOff and db.noBackgroundsOff.stats)) }
+	local size = db.statsPanelSize
+	if size then
+		look.width = size[1] or PANEL_WIDTH
+		look.row, look.font = SizedRows((size[2] or 0) - TOPS.title - 6 - counts.fullHeaders * PANEL_HEADER, counts.fullRows)
+	end
+	if SurvivorUI_Translated() then
+		look.font = math.min(look.font, look.row - 2)
+	end
+	for index = 1, table.getn(ordered) do
+		local visible = shown[index]
+		if table.getn(visible) > 0 then
+			local section = ordered[index]
+			local group = { title = section.title, color = section.color, rows = {} }
+			for each = 1, table.getn(visible) do
+				local entry = visible[each]
+				local r, g, b = SurvivorUI_StatColor(entry[1], section.color)
+				table.insert(group.rows, { label = entry[1], name = SurvivorUI_StatName(entry[1], true),
+					value = s and entry[2](s) or "-", r = r, g = g, b = b })
+			end
+			table.insert(look.groups, group)
+		end
+	end
+	return look
 end
 
 -- The pane's stats' text size, -4 to +8 over what their rows give (the

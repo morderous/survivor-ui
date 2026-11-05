@@ -36,7 +36,9 @@
 -- most of its kind that can stand, "12/30" all in one size and color (the
 -- cap the game tells, since v3.0.57; Lucas: the seconds until the next one
 -- ends told little), or with an older game with those seconds beside it. Each counter is on or
--- off in the options (Counters); /sui dots switches them all.
+-- off in the options (Counters); /sui dots switches them all. Their looks
+-- (Frames & bar, Advanced, v3.0.58): the Totem counter's and the Debuff
+-- counter's (every other count) each a size, a color and a format of its own.
 
 if SurvivorUI_Standby then return end
 
@@ -71,6 +73,71 @@ end
 local function On(key)
 	local settings = Settings()
 	return settings.counters ~= false and settings[key] ~= false
+end
+
+-- The two counters' looks, by kind: "totem" (totemCounterSize, ...Color,
+-- ...Format) and "debuff", every other count (DoTs, fears, marks, shouts,
+-- Battle Shout's seconds: debuffCounterSize...). Each nil as it was: the
+-- Counters tab's counterSize (older saves), the spell's damage meter color,
+-- "12/30" for a totem and "12" for the rest. Global, for the options'
+-- preview to draw the same.
+
+-- A counter's size: its own, else counterSize, else 1.
+function SurvivorUI_CounterSize(kind)
+	local settings = SurvivorUIDB or {}
+	return tonumber(settings[kind.."CounterSize"]) or tonumber(settings.counterSize) or 1
+end
+
+-- A counter's color for a spell: "class", the hero's class's; a key of
+-- SurvivorUI_RANGE_COLORS (WorldMarks.lua), that one; else ("meter", nil) the
+-- spell's damage meter color, white without one.
+function SurvivorUI_CounterColor(kind, spell)
+	local chosen = SurvivorUIDB and SurvivorUIDB[kind.."CounterColor"]
+	if chosen == "class" then
+		local _, class = UnitClass("player")
+		if class and SurvivorUI_ClassColor then
+			return SurvivorUI_ClassColor(class)
+		end
+	elseif chosen and chosen ~= "meter" then
+		local list = SurvivorUI_RANGE_COLORS or {}
+		for index = 1, table.getn(list) do
+			local entry = list[index]
+			if entry[1] == chosen and entry[3] then
+				return entry[3][1], entry[3][2], entry[3][3]
+			end
+		end
+	end
+	local color = spell and SurvivorUI_MeterColor and SurvivorUI_MeterColor(spell)
+	if color then
+		return color[1], color[2], color[3]
+	end
+	return 1, 1, 1
+end
+
+-- A counter's words: its number, and the seconds small beside it (nil for
+-- none). A totem's: "12/30", against the most of its kind that can stand
+-- (the game's cap); "12" ("count"); or "12/30" with the seconds until the
+-- soonest one ends ("timer"). With no cap (a game before 0.124): the number
+-- and those seconds, or the number alone ("count"). The rest: "12", or "x12"
+-- ("x"). No count (Battle Shout's): the seconds left as the number.
+function SurvivorUI_CounterText(kind, count, seconds, cap)
+	if not count then
+		return math.ceil(seconds or 0).."s"
+	end
+	local format = SurvivorUIDB and SurvivorUIDB[kind.."CounterFormat"]
+	local number = math.max(1, math.floor(count + 0.5))
+	if kind ~= "totem" then
+		return (format == "x" and "x" or "")..number
+	end
+	local timer = seconds and seconds > 0 and math.ceil(seconds).."s" or nil
+	if format == "count" then
+		return tostring(number)
+	elseif cap and format ~= "timer" then
+		return number.."/"..cap
+	elseif cap then
+		return number.."/"..cap, timer
+	end
+	return tostring(number), timer
 end
 
 local ticks = {}        -- [spell] = { the GetTime() of each DoT tick, oldest first }
@@ -196,38 +263,61 @@ local function Badge(button)
 	return badge
 end
 
--- A spell's number over its button, in its meter color; a totem's as "12/30"
--- with its cap, all one size and color (Lucas), else with its seconds left;
--- no count (a buff's): the seconds left as the number.
-local function Light(lit, spell, count, seconds, cap)
+-- A counter within its button's width (room), the number and a totem's
+-- seconds beside it (small, or nil) as one (Lucas, 2026-11-05): in the size
+-- chosen (size), else smaller till it fits, 7 at the least. zoom: the
+-- options' preview's, times every measure. Back: how far left of the
+-- button's middle the number stands, so the pair is centered over it.
+function SurvivorUI_FitCounter(word, small, room, size, zoom)
+	zoom = zoom or 1
+	local big, little = math.floor(13 * size + 0.5) + FONT_BUMP, math.floor(9 * size + 0.5) + FONT_BUMP
+	local text, said = word:GetText() or "", small and small:GetText() or ""
+	local scale = 1
+	for pass = 1, 8 do
+		local a, b = math.max(7, math.floor(big * scale + 0.5)), math.max(6, math.floor(little * scale + 0.5))
+		word:SetFont(SurvivorUI_FONT, math.max(6, math.floor(a * zoom + 0.5)), "THICKOUTLINE")
+		word:SetText(text)
+		local wide = word:GetStringWidth()
+		if small then
+			small:SetFont(SurvivorUI_FONT, math.max(6, math.floor(b * zoom + 0.5)), "OUTLINE")
+			small:SetText(said)
+			wide = wide + 2 * zoom + small:GetStringWidth()
+		end
+		if wide <= room or a <= 7 then
+			break
+		end
+		-- Down by the overflow, and a point at least.
+		scale = math.min(scale * room / wide, (a - 1) / big)
+	end
+	return small and (2 * zoom + small:GetStringWidth()) / 2 or 0
+end
+
+-- A spell's number over its button, in its counter's look (kind: "totem" or
+-- "debuff", above): by default in its meter color, a totem's as "12/30" with
+-- its cap, all one size and color (Lucas), else with its seconds left; no
+-- count (a buff's): the seconds left as the number. Within the button's
+-- width, smaller when it would spill past it (SurvivorUI_FitCounter).
+local function Light(lit, kind, spell, count, seconds, cap)
 	local button = SurvivorUI_SpellButton and SurvivorUI_SpellButton(spell)
 	if not (button and button:IsVisible()) then
 		return
 	end
 	local badge = Badge(button)
-	-- At the size set in the options' Counters tab.
-	local size = SurvivorUIDB and tonumber(SurvivorUIDB.counterSize) or 1
-	if badge.size ~= size then
-		badge.size = size
-		badge:SetFont(SurvivorUI_FONT, math.floor(13 * size + 0.5) + FONT_BUMP, "THICKOUTLINE")
-		badge.timer:SetFont(SurvivorUI_FONT, math.floor(9 * size + 0.5) + FONT_BUMP, "OUTLINE")
+	local size = SurvivorUI_CounterSize(kind)
+	local text, timer = SurvivorUI_CounterText(kind, count, seconds, cap)
+	local room = math.floor(button:GetWidth() + 0.5)
+	local key = text.."\n"..(timer or "").."\n"..size.."\n"..room
+	if badge.fitted ~= key then
+		badge.fitted = key
+		badge:SetText(text)
+		badge.timer:SetText(timer or "")
+		local left = SurvivorUI_FitCounter(badge, timer and badge.timer, room, size)
+		badge:ClearAllPoints()
+		badge:SetPoint("BOTTOM", button, "TOP", -left, 2)
 	end
-	if count and cap then
-		badge:SetText(math.max(1, math.floor(count + 0.5)).."/"..cap)
-	elseif count then
-		badge:SetText(math.max(1, math.floor(count + 0.5)))
-	else
-		badge:SetText(math.ceil(seconds).."s")
-	end
-	local color = SurvivorUI_MeterColor and SurvivorUI_MeterColor(spell)
-	if color then
-		badge:SetTextColor(color[1], color[2], color[3])
-	else
-		badge:SetTextColor(1, 1, 1)
-	end
+	badge:SetTextColor(SurvivorUI_CounterColor(kind, spell))
 	badge:Show()
-	if count and seconds and not cap then
-		badge.timer:SetText(math.ceil(seconds).."s")
+	if timer then
 		badge.timer:Show()
 	else
 		badge.timer:Hide()
@@ -419,6 +509,7 @@ frame:SetScript("OnUpdate", function()
 	if Settings().counters == false then
 		for _, badge in pairs(badges) do
 			badge:Hide()
+			badge.timer:Hide()
 		end
 		return
 	end
@@ -440,7 +531,7 @@ frame:SetScript("OnUpdate", function()
 		if on and list[1] then
 			local count = recent / WINDOW * Interval()
 			shown[spell] = shown[spell] and shown[spell] + (count - shown[spell]) * math.min(1, elapsed * 4) or count
-			Light(lit, spell, shown[spell])
+			Light(lit, "debuff", spell, shown[spell])
 		else
 			shown[spell] = nil
 		end
@@ -452,7 +543,7 @@ frame:SetScript("OnUpdate", function()
 			table.remove(list, 1)
 		end
 		if On("fearCounter") and list[1] then
-			Light(lit, spell, table.getn(list))
+			Light(lit, "debuff", spell, table.getn(list))
 		end
 	end
 	-- The marks: the enemies hit within the time one holds.
@@ -462,7 +553,7 @@ frame:SetScript("OnUpdate", function()
 			table.remove(list, 1)
 		end
 		if On("markCounter") and list[1] then
-			Light(lit, spell, table.getn(list))
+			Light(lit, "debuff", spell, table.getn(list))
 		end
 	end
 	-- The totems: as the game tells them (0.124 on), with the cap of each kind,
@@ -476,7 +567,7 @@ frame:SetScript("OnUpdate", function()
 				local left = tonumber(totem.remaining) or 0
 				local cap = tonumber(totem.cap) or 0
 				if count > 0 then
-					Light(lit, TotemSpell(totem), count, left > 0 and left or nil, cap > 0 and cap or nil)
+					Light(lit, "totem", TotemSpell(totem), count, left > 0 and left or nil, cap > 0 and cap or nil)
 				end
 			end
 		end
@@ -490,7 +581,7 @@ frame:SetScript("OnUpdate", function()
 				table.remove(totem.ends, 1)
 			end
 			if totem.ends[1] then
-				Light(lit, totem.name, table.getn(totem.ends), totem.ends[1] - runNow)
+				Light(lit, "totem", totem.name, table.getn(totem.ends), totem.ends[1] - runNow)
 			end
 		end
 	end
@@ -499,12 +590,12 @@ frame:SetScript("OnUpdate", function()
 	if On("shoutCounter") then
 		for spell, cast in pairs(shouts) do
 			if now - cast.at < (Holds(spell) or 6) then
-				Light(lit, spell, cast.count)
+				Light(lit, "debuff", spell, cast.count)
 			end
 		end
 		local left = BuffLeft("battle_shout")
 		if left then
-			Light(lit, "Battle Shout", nil, left)
+			Light(lit, "debuff", "Battle Shout", nil, left)
 		end
 	end
 	for _, badge in pairs(badges) do

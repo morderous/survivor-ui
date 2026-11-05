@@ -1394,7 +1394,8 @@ local function LayoutBar()
 		end
 	end
 
-	-- The experience bar: a thin flat strip under the whole row.
+	-- The experience bar: a thin flat strip under the whole row, kept out of
+	-- sight since v3.0.58 (Tracker.lua's watcher): the XP bar is the one.
 	local xp = getglobal("MainMenuExpBar")
 	if xp then
 		xp:ClearAllPoints()
@@ -4193,6 +4194,11 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 	elseif msg == "dots" then
 		if SurvivorUI_ToggleDots then
 			SurvivorUI_ToggleDots()
+		end
+	elseif msg == "kitmarks" then
+		-- Lucas's: a dot after each options tab made with the kit (Options.lua).
+		if SurvivorUI_ToggleKitMarks then
+			SurvivorUI_ToggleKitMarks()
 		end
 	elseif msg == "guardians" or msg == "guardians north" or msg == "guardians bar" then
 		if SurvivorUI_ToggleGuardians then

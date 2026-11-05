@@ -338,8 +338,10 @@ end
 -- and each affix: Art\Endless, Art\Affix*), or in words (the options,
 -- Run tracker: Difficulty and affixes, Words); the full name under the
 -- mouse. Either side can be put away there (Off, since v3.0.56: the
--- difficulty with endless mode, or the affixes). Run History's copy of the
--- tracker wears them too.
+-- difficulty with endless mode, or the affixes), or, in the tracker, the
+-- whole row (the section's switch, v3.0.58; or Compact, the tags beside the
+-- zone's name: DrawCompact). Run History's copy of the tracker wears them
+-- too, on their row (its looks and Centered, not the switch or Compact).
 local TAG_COLORS = {
 	normal  = { 0.62, 0.62, 0.66 },
 	heroic  = { 1.00, 0.48, 0.18 },
@@ -410,7 +412,10 @@ end
 -- tags = { difficulty, endless, affixes = {} }, made by the caller. The left
 -- edge for how the run stands comes back (after the left ones, or after the
 -- last when centered), and whether the row holds anything.
-function SurvivorUI_TagRow(tags, frame, heroic, endless, affixes, left, right, y, centered, short)
+-- TagList paints them, not placed yet: { tag, width } first to last, how
+-- many stand at the left, and how wide all of them stand side by side (the
+-- tracker's Compact line places them itself, after the zone's name).
+local function TagList(tags, frame, heroic, endless, affixes, short)
 	local words = not short and SurvivorUIDB and SurvivorUIDB.trackerTagWords == true
 	local named = not short and SurvivorUIDB and SurvivorUIDB.trackerAffixWords == true
 	-- Either side put away (Off): the difficulty and endless mode, the affixes.
@@ -444,6 +449,15 @@ function SurvivorUI_TagRow(tags, frame, heroic, endless, affixes, left, right, y
 		local tag = tags.affixes[index]
 		if not tag then
 			tag = SurvivorUI_NewTag(frame)
+			-- In the face and size the row's difficulty tag wears: a piece's own
+			-- font (EditCard.lua) dresses only what stands as it is worn, and
+			-- these come later, with the run's affixes.
+			local model = tags.difficulty.text
+			local face, size, flags = model:GetFont()
+			if face and size then
+				tag.text:SetFont(face, size, flags)
+				tag.text.suiBase, tag.text.suiPath, tag.text.suiSize = model.suiBase, model.suiPath, model.suiSize
+			end
 			if SurvivorUI_AffixTip then
 				SurvivorUI_AffixTip(tag)
 			end
@@ -457,13 +471,18 @@ function SurvivorUI_TagRow(tags, frame, heroic, endless, affixes, left, right, y
 	for index = count + 1, table.getn(tags.affixes) do
 		tags.affixes[index]:Hide()
 	end
+	local wide = -3
+	for each = 1, table.getn(row) do
+		wide = wide + row[each].width + 3
+	end
+	return row, leftCount, wide
+end
+
+function SurvivorUI_TagRow(tags, frame, heroic, endless, affixes, left, right, y, centered, short)
+	local row, leftCount, wide = TagList(tags, frame, heroic, endless, affixes, short)
 	local total = table.getn(row)
 	local x = left
 	if centered or (SurvivorUIDB and SurvivorUIDB.trackerTagsCentered == true) then
-		local wide = -3
-		for each = 1, total do
-			wide = wide + row[each].width + 3
-		end
 		x = left + math.floor((frame:GetWidth() + right - left - wide) / 2 + 0.5)
 		for each = 1, total do
 			row[each].tag:SetPoint("TOPLEFT", frame, "TOPLEFT", x, y)
@@ -859,18 +878,186 @@ end
 -- under the row comes back (y itself with nothing in it: no room taken). A
 -- function apart from Draw (32 of the file's locals at most, in Lua 5.0).
 head.tags = { difficulty = SurvivorUI_NewTag(head), endless = SurvivorUI_NewTag(head), affixes = {} }
-local function DrawTags(game, zone, y, state)
+local function DrawTags(game, zone, y, state, side)
 	local affixes = SurvivorUI_RunAffixes and SurvivorUI_RunAffixes() or nil
-	local x, any = SurvivorUI_TagRow(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes, 0, 0, y - 1)
 	head.state:SetText(state)
-	head.state:SetJustifyH("LEFT")
 	head.state:ClearAllPoints()
-	head.state:SetPoint("TOPLEFT", head, "TOPLEFT", x > 0 and x + 1 or 0, y - 3)
 	head.state:Show()
+	local x, any
+	if side == "center" then
+		x, any = SurvivorUI_TagRow(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes, 0, 0, y - 1)
+	else
+		-- Line up Left or Right (the options, Run tracker: Title): all the
+		-- tags together at that end, first to last; how the run stands after
+		-- them, or before them at the right.
+		local row, _, wide = TagList(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes)
+		local total = table.getn(row)
+		any = total > 0
+		x = side == "right" and WIDTH - wide or 0
+		for each = 1, total do
+			row[each].tag:SetPoint("TOPLEFT", head, "TOPLEFT", x, y - 1)
+			x = x + row[each].width + 3
+		end
+		if side == "right" then
+			head.state:SetJustifyH("RIGHT")
+			head.state:SetPoint("TOPRIGHT", head, "TOPRIGHT", any and -(wide + 6) or 0, y - 3)
+		end
+	end
+	if side ~= "right" then
+		head.state:SetJustifyH("LEFT")
+		head.state:SetPoint("TOPLEFT", head, "TOPLEFT", x > 0 and x + 1 or 0, y - 3)
+	end
 	if any or state ~= "" then
 		return y - 17
 	end
 	return y
+end
+
+-- The run's tags away: the row off (the options, Run tracker: Difficulty
+-- and affixes), or the Tracker Ring in the lines' place.
+local function HideTags()
+	head.tags.difficulty:Hide()
+	head.tags.endless:Hide()
+	for _, tag in pairs(head.tags.affixes) do
+		tag:Hide()
+	end
+end
+
+-- The zone's name in a room so wide: whole when it fits, else its last
+-- letters give way to "..." (a letter of any language at a time). The last
+-- cut is kept, for the same name, room, face and text size.
+local cut = {}
+local function CutName(name, room)
+	local text = head.zone
+	local face, size = text:GetFont()
+	local key = name.."\n"..room.."\n"..tostring(face).."\n"..tostring(size)
+	if cut.key == key then
+		text:SetText(cut.shown)
+		return
+	end
+	text:SetText(name)
+	local shown = name
+	while text:GetStringWidth() > room and shown ~= "" do
+		shown = string.gsub(shown, "[%z\1-\127\194-\244][\128-\191]*$", "")
+		shown = string.gsub(shown, "%s+$", "")
+		text:SetText(shown.."...")
+	end
+	cut.key, cut.shown = key, text:GetText()
+end
+
+-- Compact (the options, Run tracker: Compact): the zone's name and the
+-- run's tags on one line, each tag as chosen; the name cut short when the
+-- line is wider than the tracker (whole in the tooltip). How the run stands
+-- beside them when it fits, else on a line under. The title's Line up puts
+-- it all in the middle (side "center"), from the left or flush right. Apart
+-- (the options, Run tracker: Apart; Lucas, 2026-11-05): the name at one end
+-- and the tags at the other, the name at the right with Right, else at the
+-- left; how the run stands then beside the name, in the room between. The y
+-- under it comes back.
+local function DrawCompact(game, zone, zoneName, y, state, side, apart)
+	local affixes = SurvivorUI_RunAffixes and SurvivorUI_RunAffixes() or nil
+	local row, _, wide = TagList(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes)
+	local total = table.getn(row)
+	local tagsWide = total > 0 and wide + 5 or 0
+	apart = apart and total > 0
+	CutName(zoneName, WIDTH - tagsWide)
+	local text = head.zone
+	local nameWide = math.ceil(text:GetStringWidth())
+	local line = nameWide + tagsWide
+	head.state:SetText(state)
+	local said = state ~= "" and math.ceil(head.state:GetStringWidth()) or 0
+	local beside = said > 0 and line + 6 + said <= WIDTH
+	local start, room = 0, WIDTH - line - (beside and said + 6 or 0)
+	local x = nameWide + 5
+	if apart then
+		if side == "right" then
+			start, x = WIDTH - nameWide, 0
+		else
+			x = WIDTH - wide
+		end
+	elseif side == "center" then
+		start = math.floor(room / 2 + 0.5)
+		x = start + nameWide + 5
+	elseif side == "right" then
+		start = room
+		x = start + nameWide + 5
+	end
+	text:SetTextColor(0.45, 0.90, 0.45)
+	text:SetJustifyH("LEFT")
+	text:SetWidth(WIDTH)
+	text:ClearAllPoints()
+	text:SetPoint("TOPLEFT", head, "TOPLEFT", start, y)
+	text:Show()
+	for each = 1, total do
+		row[each].tag:SetPoint("TOPLEFT", head, "TOPLEFT", x, y - 1)
+		x = x + row[each].width + 3
+	end
+	head.state:SetJustifyH("LEFT")
+	head.state:ClearAllPoints()
+	head.state:Show()
+	if beside then
+		local at = start + line + 6
+		if apart then
+			at = side == "right" and start - 6 - said or start + nameWide + 6
+		end
+		head.state:SetPoint("TOPLEFT", head, "TOPLEFT", at, y - 3)
+		return y - 17
+	end
+	local under = 0
+	if side == "right" then
+		under = WIDTH - said
+	elseif side == "center" and not apart then
+		under = math.floor((WIDTH - said) / 2 + 0.5)
+	end
+	head.state:SetPoint("TOPLEFT", head, "TOPLEFT", under, y - 17)
+	return said > 0 and y - 30 or y - 17
+end
+
+-- The title's Line up (the options, Run tracker: Title): "left", "right" or
+-- "center" (at first).
+local function LineUp(db)
+	local side = db.trackerLineUp
+	return (side == "left" or side == "right") and side or "center"
+end
+
+-- The tracker's top, as chosen (the options, Run tracker: Title, Difficulty
+-- and affixes): the zone's name in green, in the middle, from the left or
+-- flush right (Line up), or away; under it the run's tags (DrawTags), or
+-- away, how the run stands then alone at that side. Or Compact, with the
+-- name and the tags both on. What is away gives its room back: the clock and
+-- all under it move up. The y under it comes back.
+local function DrawTop(game, zone, zoneName, y, state)
+	local db = SurvivorUIDB or {}
+	local side, tagsOn = LineUp(db), db.trackerTags ~= false
+	if db.trackerTitle == false then
+		head.zone:Hide()
+	elseif tagsOn and db.trackerCompact == true then
+		return DrawCompact(game, zone, zoneName, y, state, side, db.trackerApart == true)
+	else
+		head.zone:SetText(zoneName)
+		head.zone:SetTextColor(0.45, 0.90, 0.45)
+		head.zone:SetJustifyH(side == "center" and "CENTER" or side == "right" and "RIGHT" or "LEFT")
+		head.zone:SetWidth(WIDTH)
+		head.zone:ClearAllPoints()
+		head.zone:SetPoint("TOP", head, "TOP", 0, y)
+		head.zone:Show()
+		y = y - 15
+	end
+	if tagsOn then
+		return DrawTags(game, zone, y, state, side)
+	end
+	HideTags()
+	head.state:SetText(state)
+	head.state:ClearAllPoints()
+	if side == "right" then
+		head.state:SetJustifyH("RIGHT")
+		head.state:SetPoint("TOPRIGHT", head, "TOPRIGHT", 0, y - 3)
+	else
+		head.state:SetJustifyH("LEFT")
+		head.state:SetPoint("TOPLEFT", head, "TOPLEFT", 0, y - 3)
+	end
+	head.state:Show()
+	return state ~= "" and y - 17 or y
 end
 
 local function Draw(game, phase)
@@ -895,15 +1082,8 @@ local function Draw(game, phase)
 	-- The zone's name centered, in green; under it the run's tags, its
 	-- difficulty and endless mode at the left, its affixes at the right, and
 	-- after the left ones how the run stands: won, fallen, paused..., and the
-	-- lives left. The clock's sides hold the coin and the kill pace.
-	head.zone:SetText(zoneName)
-	head.zone:SetTextColor(0.45, 0.90, 0.45)
-	head.zone:SetJustifyH("CENTER")
-	head.zone:SetWidth(WIDTH)
-	head.zone:ClearAllPoints()
-	head.zone:SetPoint("TOP", head, "TOP", 0, y)
-	head.zone:Show()
-	y = y - 15
+	-- lives left (DrawTop: each as chosen). The clock's sides hold the coin
+	-- and the kill pace.
 	local parts = {}
 	if phase == "victory" then
 		table.insert(parts, "|cff4dd94d"..SurvivorUI_T("Victory").."|r")
@@ -921,7 +1101,7 @@ local function Draw(game, phase)
 	if lives > 0 then
 		table.insert(parts, "|cffff8080"..SurvivorUI_TF(lives == 1 and "{1} life left" or "{1} lives left", lives).."|r")
 	end
-	y = DrawTags(game, zone, y, table.concat(parts, "  "))
+	y = DrawTop(game, zone, zoneName, y, table.concat(parts, "  "))
 
 	-- Elapsed / the zone's full length, the time to victory. In endless mode,
 	-- once chosen, the elapsed time alone.
@@ -999,8 +1179,12 @@ local function Draw(game, phase)
 
 	local schedule = AZS_SCHEDULE or {}
 	local count = table.getn(schedule)
-	-- The same number of lines all run long: the zone's bosses, at least five.
-	local slots = math.max(BOSS_SLOTS, Num(zone.bt), count)
+	-- The same number of lines all run long: the zone's bosses, at least five
+	-- (in Compact, the zone's bosses alone, and no line kept for endless
+	-- mode's next boss: what stands under them comes up; Lucas, 2026-11-05).
+	local tight = SurvivorUIDB and SurvivorUIDB.trackerCompact == true and SurvivorUIDB.trackerTitle ~= false
+		and SurvivorUIDB.trackerTags ~= false
+	local slots = math.max(tight and 0 or BOSS_SLOTS, Num(zone.bt), count)
 	local nextShown = false
 	for index = 1, count do
 		local entry = schedule[index]
@@ -1058,7 +1242,9 @@ local function Draw(game, phase)
 		y = Put(nextLine, y, 13)
 	else
 		nextLine:Hide()
-		y = y - 13
+		if not tight then
+			y = y - 13
+		end
 	end
 	local slain = EndlessSlain(game)
 	if slain then
@@ -1197,11 +1383,7 @@ local function HideLines()
 		head.nextBoss:Hide()
 		head.endlessSlain:Hide()
 	end
-	head.tags.difficulty:Hide()
-	head.tags.endless:Hide()
-	for _, tag in pairs(head.tags.affixes) do
-		tag:Hide()
-	end
+	HideTags()
 	HideElites()
 	-- The guardians' bar or count: it gives way to the dial (Guardians.lua).
 	if SurvivorUI_GuardianBar then
@@ -1249,6 +1431,7 @@ end)
 -- The frame's own OnUpdate stops while it is hidden, so a watcher shows it.
 local watcher = CreateFrame("Frame")
 local watched = 0
+local ourBar
 watcher:SetScript("OnUpdate", function()
 	watched = watched + arg1
 	if watched < 0.25 then
@@ -1273,13 +1456,18 @@ watcher:SetScript("OnUpdate", function()
 			head:SetHeight(room)
 		end
 	end
-	-- One experience bar is enough: the XP bar of its own (XpBar.lua) puts the
-	-- game's away, before the run starts too; back with it off (the tracker
-	-- has no level line since v3.0.56).
+	-- One experience bar is enough. Under the addon's action bar the game's,
+	-- a strip under the row, stays away for good (v3.0.58): the XP bar of its
+	-- own (XpBar.lua) is the one, and with it off there is none, nor any over
+	-- the Level Up! screen. With the game's bar its experience bar comes back
+	-- with the XP bar off. The action bar as the run loaded it: a change to it
+	-- waits for a reload.
 	local bar = getglobal("MainMenuExpBar")
 	if bar then
-		local settings = Settings()
-		local want = settings.xpBar and 0 or 1
+		if ourBar == nil and SurvivorUIDB then
+			ourBar = not SurvivorUI_Feature or SurvivorUI_Feature("actionBar")
+		end
+		local want = (ourBar or Settings().xpBar) and 0 or 1
 		if bar:GetAlpha() ~= want then
 			bar:SetAlpha(want)
 			if bar.EnableMouse then
@@ -1299,8 +1487,14 @@ head:SetScript("OnEnter", function()
 		return
 	end
 	local zone = AZS_ZONE or {}
+	-- The zone's name in full (Compact may cut it in the tracker), the
+	-- client's own when the run's is missed, as Draw has it.
+	local name = zone.zname
+	if not name or name == "" then
+		name = (GetRealZoneText and GetRealZoneText()) or GetZoneText() or ""
+	end
 	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
-	GameTooltip:SetText(zone.zname or SurvivorUI_T("This run"), 1, 0.82, 0)
+	GameTooltip:SetText(name ~= "" and name or SurvivorUI_T("This run"), 1, 0.82, 0)
 	if Num(game.endl) == 1 then
 		GameTooltip:AddLine(SurvivorUI_T("Endless mode: bosses return on a timer."), 0.85, 0.5, 1, 1)
 	elseif Num(game.left) >= 0 then

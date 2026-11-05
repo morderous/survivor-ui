@@ -230,6 +230,38 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.58, 2026-11-05
+
+One experience bar, boss bars whose debuffs leave the name alone, a Stats panel and a run tracker with room to spare, and counters in your own size, color and format.
+
+**Action bar**
+- **No second experience bar:** from v3.0.56, turning the XP bar off brought the game's own experience strip back under the action bar, with no way to put it away, and it showed over the Level Up! screen too. It now stays away: the XP bar is the one, and with it off there is none. With the addon's action bar off, the game's bar keeps its experience bar as before.
+
+**Boss bars**
+- **Debuffs off the name:** in co-op the debuffs piled up inside a boss's bar and covered its name. They now sit **under** each bar by default, or **over** it, **left** or **right** of it, or **inside** it as before (Boss bars tab, Debuffs). Outside the bar they have their own size (Advanced) and, under or over it, line up from the bar's left, middle or right (Advanced); **Right to left** runs them from the right end, the first (yours, with Yours first) rightmost. Left of the bar they run outward to the left, right of it outward to the right, inside it from the health leftward; a line by the Debuffs title says which way, as chosen. The column keeps room for them, so they never sit on the next bar.
+- **How many, and whose:** **Most per bar** sets how many debuffs a bar shows (6 at first). In a group, **Friends' debuffs** shows your party's too, and **Yours first** puts yours ahead when a bar has more than it shows. The game does not say whose a debuff is: one of your build's spells counts as yours (a spell you both have too), so one your talents or jewelry lay may count as a friend's.
+- **Each kind on its own:** **Bosses**, **Guardians** and **Elites** each on or off, each with its own health look (or **Off**, the name alone) and, under Advanced, its own size. **Size** still sets the whole column. Advanced also sets the most bars at once (8 at first).
+- **Elites' debuffs:** the game sends none for elites, so an elite's bar shows them while it is your target or under the mouse.
+- **The tab's preview** draws the column as it will be: a boss, a guardian and an elite, each at its size and look, sample debuffs where chosen.
+
+**Stats panel**
+- **Its tab in the new style, in Run:** a live preview of the panel beside its settings, with your run's numbers or a sample run's, and every number of your class under them, ticked to show, in the pane and on the panel alike. The tab moved from Character to Run, under the run tracker.
+- **Title on or off:** without it the numbers start at the top and the panel is shorter, with No backgrounds too. To move it then, a strip shows over it (under it at the top of the screen) in move mode, with Alt held or while its tab is open.
+- **Group titles on or off:** without them the numbers follow one another, the groups in the same order; they come back, faint, in move mode or with Alt held, to drag a group.
+- **Each number's color:** its group's (as before), your class's or one of nine more, for every class; click a number in the preview or the dot after it in the list, then a color. The group's color is the tile of six colors, the class's is your class's icon. **All in this color** sets every number at once. The character pane's own numbers keep their look.
+- **Changing the order, said plainly:** the tab now says, in its color, to hold your move key (Alt, or the one chosen in Layout) and drag a number or a group on the panel to its place.
+
+**Run tracker**
+- **The title:** the zone's name has a switch of its own, and **Left**, **Center** and **Right** beside it. Center is as before: the name in the middle, the difficulty at the left and the affixes at the right. Left puts the name and all the tags at the left, Right all flush right. With the title off, the clock and all under it move up.
+- **The tags on or off:** **Difficulty and affixes** has a switch for the whole row of tags; while it is off, Difficulty, Affixes and Centered keep their choices, greyed out.
+- **Compact** (off at first): the zone's name and the tags on one line, as in "Gates of Ahn'Qiraj [Heroic V] [Bolstering] [Sanguine]", each tag short or in words as chosen. When the line is too long the name gives way ("Gates..."), in full when you hover the tracker. Victory, Fallen, Paused or the lives left go beside it when they fit, else on the line under. In Compact the tracker keeps no empty lines for bosses to come, so the guardians' bar sits right under the last boss.
+- **Apart** (with Compact): the zone's name at one end of the line and the tags at the other, as in "Elwynn Forest ........ [V] [Bolstering] [Sanguine]"; with the title's Right, the other way round.
+- **Fixed:** a run's affix tags could show in the addon's font instead of the tracker's.
+
+**Counters**
+- **Their own size, color and format:** Frames & bar has a new Advanced box for the **Totem counter** and the **Debuff counter** (every other count: DoTs, fears, Faerie Fire, Demoralizing Shout, Battle Shout's seconds), each on its own: its **size**, its **color** (the spell's damage meter color, as before, your class's or one of nine more) and its **format** (totems: 12/30, 12, or 12/30 with the seconds until the soonest one ends beside it; the rest: 12 or x12). The preview draws them over the first two buttons. A counter stays within its button's width: when the number (with a totem's seconds) would spill past it, it shrinks to fit.
+- **Size moved:** the Counters tab's Size bar gave way to a link to Frames & bar. A size set there before stays as the first of both counters.
+
 ### Azeroth SurvivorUI Launcher 1.11.1, 2026-11-05
 
 The Time Machine tells what plays differently in each old version, a line each, under its warning in red.

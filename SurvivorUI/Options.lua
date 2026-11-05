@@ -254,6 +254,9 @@ local TABS = {
 	{ key = "layout", label = "Layout", color = { 0.25, 0.85, 0.80 } },
 	{ group = "Run", color = { 0.35, 0.82, 0.50 } },
 	{ key = "tracker", label = "Run tracker", color = { 0.30, 0.82, 0.40 } },
+	-- The Stats panel in Run, by the run tracker, since v3.0.58 (Lucas; it was
+	-- in Character).
+	{ key = "stats", label = "Stats panel", color = { 0.95, 0.62, 0.88 } },
 	{ key = "pace", label = "Kill pace", color = { 0.78, 0.95, 0.30 } },
 	{ key = "bosses", label = "Boss bars", color = { 0.95, 0.45, 0.35 } },
 	{ key = "tally", label = "Kills & gold", color = { 1.00, 0.82, 0.30 } },
@@ -276,7 +279,6 @@ local TABS = {
 	{ key = "build", label = "Build list", color = { 0.45, 0.85, 1.00 } },
 	{ key = "worn", label = "Jewelry worn", color = { 0.92, 0.76, 0.45 } },
 	{ key = "character", label = "Character pane", color = { 1.00, 0.50, 0.70 } },
-	{ key = "stats", label = "Stats panel", color = { 0.95, 0.62, 0.88 } },
 	{ key = "jewelry", label = "Jewelry collection", color = { 0.92, 0.76, 0.45 } },
 	{ group = "Interface", color = { 0.45, 0.72, 1.00 } },
 	{ key = "units", label = "Frames & bar", color = { 1.00, 0.62, 0.25 } },
@@ -510,11 +512,34 @@ for index = 1, table.getn(TABS) do
 		button.label = Text(button, 11, TEXT)
 		button.label:SetPoint("LEFT", button, "LEFT", 12, 0)
 		button.label:SetText(tab.label)
+		-- A dot after its name for a tab made with the kit (Kit.Head): green with
+		-- its preview, amber without, blue for a preview alone; only with
+		-- /sui kitmarks (Lucas's, to see which tabs are reworked; the players
+		-- never see it).
+		button.dot = button:CreateTexture(nil, "OVERLAY")
+		button.dot:SetTexture(ART.."Disc")
+		button.dot:SetWidth(6)
+		button.dot:SetHeight(6)
+		button.dot:SetPoint("LEFT", button.label, "RIGHT", 5, 0)
+		button.dot:Hide()
 		button.key = tab.key
 		button.color = tab.color
 		function button:Refresh()
 			local chosen = current == self.key
 			local c = self.color
+			local page = pages[self.key]
+			if DB().kitMarks and page and (page.kit or page.previewed) then
+				if page.kit and page.previewed then
+					self.dot:SetVertexColor(0.40, 0.95, 0.45, 1)
+				elseif page.kit then
+					self.dot:SetVertexColor(1.00, 0.75, 0.25, 1)
+				else
+					self.dot:SetVertexColor(0.55, 0.72, 1.00, 1)
+				end
+				self.dot:Show()
+			else
+				self.dot:Hide()
+			end
 			self.wash:SetVertexColor(c[1], c[2], c[3], chosen and 0.16 or (self.hot and 0.07 or 0))
 			self.bar:SetAlpha(chosen and 1 or 0.45)
 			if chosen then
@@ -557,6 +582,18 @@ function side.Lay()
 			y = y - 6
 		end
 	end
+end
+
+-- /sui kitmarks (SurvivorUI.lua): the dots after the reworked tabs' names, on
+-- or off; off unless switched on.
+function SurvivorUI_ToggleKitMarks()
+	DB().kitMarks = not DB().kitMarks or nil
+	for _, button in pairs(tabButtons) do
+		button:Refresh()
+	end
+	DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T(DB().kitMarks
+		and "Survivor UI: a dot after each reworked options tab: green with a preview, amber without one, blue a preview alone."
+		or "Survivor UI: no dots after the options tabs."))
 end
 
 -- A group open, the rest shut; its head clicked again shuts it (clicked).
@@ -1944,7 +1981,7 @@ local MODULES = {
 		{ "Unit frames", FeatureOn("unitFrames"), FeatureToggle("unitFrames"),
 			"Your frame and your target's: flat, the portrait, the health in numbers, the target's debuffs over it. Off: the game's frames.", true },
 		{ "Action bar", FeatureOn("actionBar"), FeatureToggle("actionBar"),
-			"Buttons 1 to 6 and = in one flat row, the rest of the bar and the bags put away, the experience a strip under it. Off: the game's bar.", true },
+			"Buttons 1 to 6 and = in one flat row, the rest of the bar and the bags put away. Off: the game's bar.", true },
 		{ "Buffs", FeatureOn("buffs"), FeatureToggle("buffs"),
 			"Your buffs and debuffs over your frame, with time left and stacks. Off: the game's, at the top right.", true },
 		{ "Flat tooltips", FeatureOn("tooltip"), FeatureToggle("tooltip"),
@@ -2886,6 +2923,8 @@ end
 -- The game's beside it where the game has its own, and Back to its place.
 -- spec: { title, line, isOn, toggle, reloads, game, piece, back, advanced }.
 function Kit.Head(page, spec)
+	-- Made with the kit: its dot in the sidebar (/sui kitmarks).
+	page.kit = true
 	local color = page.color
 	local title = Text(page, 15, color)
 	title:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
@@ -2939,6 +2978,7 @@ end
 -- boxes in one layer may draw either way round, so one over another goes a
 -- layer up).
 function Kit.Preview(page, height, Paint)
+	page.previewed = true
 	local preview = CreateFrame("Frame", nil, page)
 	preview:SetWidth(PAGE_WIDTH)
 	preview:SetHeight(height)
@@ -3110,7 +3150,8 @@ end
 -- Made with the kit: the tracker is tall and narrow, so its preview stands in
 -- a column of its own beside the first settings, drawn as Tracker.lua and
 -- Guardians.lua lay it out, at its own size and text size: the zone and the
--- run's tags, the clock against the run's length with the cache's coin, the
+-- run's tags (each as chosen, or on one line: Compact), the clock against the
+-- run's length with the cache's coin, the
 -- timeline and its pips, a boss alive in its health look and the next, the
 -- guardians as chosen (the list hung under the tracker, in its shade), the
 -- elites. The run on now when there is one, a sample run else;
@@ -3128,7 +3169,7 @@ do
 		STATE = { due = { 0.55, 0.55, 0.55 }, next = { 1, 1, 1 }, up = { 1.00, 0.55, 0.25 }, dead = { 0.30, 0.85, 0.35 } },
 		TAG = { normal = { 0.62, 0.62, 0.66 }, heroic = { 1.00, 0.48, 0.18 }, endless = { 0.82, 0.50, 1.00 }, affix = { 1.00, 0.35, 0.29 } },
 		SPAWNED = { 0.30, 1.00, 0.40 }, AWAKE = { 1.00, 0.55, 0.15 }, RESPAWN = { 1.00, 0.28, 0.22 },
-		DIM = { 0.55, 0.55, 0.58 }, NAME = { 0.88, 0.88, 0.90 }, WHITE = { 1, 1, 1 },
+		DIM = { 0.55, 0.55, 0.58 }, NAME = { 0.88, 0.88, 0.90 }, WHITE = { 1, 1, 1 }, ZONE = { 0.45, 0.90, 0.45 },
 		NEARNESS = { { 0.78, 1.00, 0.62 }, { 0.36, 0.86, 0.40 }, { 0.15, 0.56, 0.22 }, { 0.06, 0.30, 0.10 } },
 		DOT = "\194\183",
 		GAP = 10,           -- the tracker's last line to the hung list's title (Guardians.lua)
@@ -3445,9 +3486,16 @@ do
 		end
 	end
 
-	-- Words in the tracker's face, at its text size (TR.step).
+	-- Words in the tracker's face, at its text size (TR.step): the face the
+	-- tracker wears (its own, chosen on its card, or the addon's), so a name
+	-- the tracker cuts (Compact) is cut here as there.
 	function TR.Word(self, size, flags, color, text)
-		return self:Word(SurvivorUI_FONT, size + FONT_BUMP + TR.step, flags, color[1], color[2], color[3], text or "")
+		return self:Word(TR.face or SurvivorUI_FONT, size + FONT_BUMP + TR.step, flags, color[1], color[2], color[3], text or "")
+	end
+
+	function TR.Face()
+		local tracker = getglobal("SurvivorUITracker")
+		return tracker and tracker.zone and tracker.zone:GetFont() or nil
 	end
 
 	-- The arrows' sheet: 8 x 8, each turned 360/64 more (clockwise from up).
@@ -3518,9 +3566,10 @@ do
 	-- The tracker's parts, from the top down, each at y; the y under it comes
 	-- back.
 
-	-- The tags under the zone's name (SurvivorUI_TagRow), then how the run
-	-- stands after the left ones.
-	function TR.Tags(self, m, x0, y, state)
+	-- The tags (Tracker.lua's TagList): each in its words or symbol, as
+	-- chosen, not placed yet; how many stand at the left, and how wide all of
+	-- them stand side by side.
+	function TR.TagList(self, m)
 		local db = DB()
 		local words, named = db.trackerTagWords == true, db.trackerAffixWords == true
 		local level = db.trackerDifficulty ~= false
@@ -3539,8 +3588,8 @@ do
 			table.insert(row, { kind = "affix", text = (named or not affix.symbol) and SurvivorUI_T(affix.name or "?") or nil,
 				symbol = affix.symbol })
 		end
-		local total, wide = table.getn(row), -3
-		for index = 1, total do
+		local wide = -3
+		for index = 1, table.getn(row) do
 			local tag = row[index]
 			tag.width = 13
 			if tag.text then
@@ -3549,8 +3598,51 @@ do
 			end
 			wide = wide + tag.width + 3
 		end
+		return row, leftCount, wide
+	end
+
+	-- Each tag where it stands (tag.x), its top at y: a thin border of its
+	-- color over a dark wash of it, its words or symbol in the middle.
+	function TR.PaintTags(self, row, y)
+		for index = 1, table.getn(row) do
+			local tag = row[index]
+			local color = TR.TAG[tag.kind]
+			TR.Box(self, color[1] * 0.85, color[2] * 0.85, color[3] * 0.85, 1, nil, "BORDER", tag.x, y - 1, tag.width, 13)
+			TR.Box(self, color[1] * 0.16, color[2] * 0.16, color[3] * 0.16, 1, nil, "ARTWORK", tag.x + 1, y - 2, tag.width - 2, 11)
+			if tag.word then
+				tag.word:SetPoint("CENTER", self, "TOPLEFT", tag.x + tag.width / 2, y - 7.5)
+			else
+				TR.Box(self, color[1], color[2], color[3], 1, tag.symbol, "OVERLAY", nil, nil, 9, 9):SetPoint("CENTER", self, "TOPLEFT", tag.x + tag.width / 2, y - 7.5)
+			end
+		end
+	end
+
+	-- The tags under the zone's name (SurvivorUI_TagRow), then how the run
+	-- stands after the left ones.
+	function TR.Tags(self, m, x0, y, state, side)
+		local row, leftCount, wide = TR.TagList(self, m)
+		local total = table.getn(row)
 		local x = x0
-		if db.trackerTagsCentered == true then
+		if side ~= "center" then
+			-- Line up Left or Right: all together at that end; how the run
+			-- stands after them, or before them at the right.
+			x = side == "right" and x0 + TR.WIDTH - wide or x0
+			for index = 1, total do
+				row[index].x = x
+				x = x + row[index].width + 3
+			end
+			TR.PaintTags(self, row, y)
+			if state ~= "" then
+				local said = TR.Word(self, 9, "OUTLINE", TR.WHITE, state)
+				if side == "right" then
+					said:SetPoint("TOPRIGHT", self, "TOPLEFT", x0 + TR.WIDTH - (total > 0 and wide + 6 or 0), y - 3)
+				else
+					said:SetPoint("TOPLEFT", self, "TOPLEFT", x > x0 and x + 1 or x0, y - 3)
+				end
+			end
+			return (total > 0 or state ~= "") and y - 17 or y
+		end
+		if DB().trackerTagsCentered == true then
 			x = x0 + math.floor((TR.WIDTH - wide) / 2 + 0.5)
 			for index = 1, total do
 				row[index].x = x
@@ -3567,21 +3659,116 @@ do
 				edge = edge - row[index].width - 3
 			end
 		end
-		for index = 1, total do
-			local tag = row[index]
-			local color = TR.TAG[tag.kind]
-			TR.Box(self, color[1] * 0.85, color[2] * 0.85, color[3] * 0.85, 1, nil, "BORDER", tag.x, y - 1, tag.width, 13)
-			TR.Box(self, color[1] * 0.16, color[2] * 0.16, color[3] * 0.16, 1, nil, "ARTWORK", tag.x + 1, y - 2, tag.width - 2, 11)
-			if tag.word then
-				tag.word:SetPoint("CENTER", self, "TOPLEFT", tag.x + tag.width / 2, y - 7.5)
-			else
-				TR.Box(self, color[1], color[2], color[3], 1, tag.symbol, "OVERLAY", nil, nil, 9, 9):SetPoint("CENTER", self, "TOPLEFT", tag.x + tag.width / 2, y - 7.5)
-			end
-		end
+		TR.PaintTags(self, row, y)
 		if state ~= "" then
 			TR.Word(self, 9, "OUTLINE", TR.WHITE, state):SetPoint("TOPLEFT", self, "TOPLEFT", x > x0 and x + 1 or x0, y - 3)
 		end
 		if total > 0 or state ~= "" then
+			return y - 17
+		end
+		return y
+	end
+
+	-- A name in its room, its last letters giving way to "..." (Tracker.lua's
+	-- CutName): the words as shown, in the window's language.
+	function TR.Cut(word, room)
+		local shown = word:GetText() or ""
+		while word:GetStringWidth() > room and shown ~= "" do
+			shown = string.gsub(shown, "[%z\1-\127\194-\244][\128-\191]*$", "")
+			shown = string.gsub(shown, "%s+$", "")
+			word:SetText(shown.."...")
+		end
+	end
+
+	-- Compact (Tracker.lua's DrawCompact): the zone's name and the tags on one
+	-- line, the name cut to make room; how the run stands beside them when it
+	-- fits, else under; placed by the title's Line up; or Apart, the name at
+	-- one end and the tags at the other (at the right with Right).
+	function TR.Compact(self, m, x0, y, state, side)
+		local row, _, wide = TR.TagList(self, m)
+		local total = table.getn(row)
+		local tagsWide = total > 0 and wide + 5 or 0
+		local apart = DB().trackerApart == true and total > 0
+		local name = TR.Word(self, 12, "OUTLINE", TR.ZONE, m.zone)
+		TR.Cut(name, TR.WIDTH - tagsWide)
+		local nameWide = math.ceil(name:GetStringWidth())
+		local line = nameWide + tagsWide
+		local said = state ~= "" and TR.Word(self, 9, "OUTLINE", TR.WHITE, state)
+		local saidWide = said and math.ceil(said:GetStringWidth()) or 0
+		local beside = said and line + 6 + saidWide <= TR.WIDTH
+		local start, room = x0, TR.WIDTH - line - (beside and saidWide + 6 or 0)
+		local x = x0 + nameWide + 5
+		if apart then
+			if side == "right" then
+				start, x = x0 + TR.WIDTH - nameWide, x0
+			else
+				x = x0 + TR.WIDTH - wide
+			end
+		elseif side == "center" then
+			start = x0 + math.floor(room / 2 + 0.5)
+			x = start + nameWide + 5
+		elseif side == "right" then
+			start = x0 + room
+			x = start + nameWide + 5
+		end
+		name:SetPoint("TOPLEFT", self, "TOPLEFT", start, y)
+		for index = 1, total do
+			row[index].x = x
+			x = x + row[index].width + 3
+		end
+		TR.PaintTags(self, row, y)
+		if beside then
+			local at = start + line + 6
+			if apart then
+				at = side == "right" and start - 6 - saidWide or start + nameWide + 6
+			end
+			said:SetPoint("TOPLEFT", self, "TOPLEFT", at, y - 3)
+		elseif said then
+			local under = side == "right" and TR.WIDTH - saidWide or (side == "center" and not apart) and math.floor((TR.WIDTH - saidWide) / 2 + 0.5) or 0
+			said:SetPoint("TOPLEFT", self, "TOPLEFT", x0 + under, y - 17)
+			return y - 30
+		end
+		return y - 17
+	end
+
+	-- The title's Line up (Tracker.lua's LineUp): "left", "right" or
+	-- "center" (at first).
+	function TR.LineUp()
+		local side = DB().trackerLineUp
+		return (side == "left" or side == "right") and side or "center"
+	end
+
+	-- The tracker's top (Tracker.lua's DrawTop): the zone's name in the
+	-- middle, from the left or flush right, or away; the tags under it, or
+	-- away, how the run stands then alone at that side; or Compact. What is
+	-- away gives its room back.
+	function TR.Top(self, m, x0, y)
+		local db = DB()
+		local side, tags, state = TR.LineUp(), db.trackerTags ~= false, TR.State(m)
+		if db.trackerTitle ~= false then
+			if tags and db.trackerCompact == true then
+				return TR.Compact(self, m, x0, y, state, side)
+			end
+			local name = TR.Word(self, 12, "OUTLINE", TR.ZONE, m.zone)
+			if side == "center" then
+				name:SetPoint("TOP", self, "TOPLEFT", x0 + TR.WIDTH / 2, y)
+			elseif side == "right" then
+				name:SetPoint("TOPRIGHT", self, "TOPLEFT", x0 + TR.WIDTH, y)
+			else
+				name:SetPoint("TOPLEFT", self, "TOPLEFT", x0, y)
+			end
+			y = y - 15
+		end
+		if tags then
+			return TR.Tags(self, m, x0, y, state, side)
+		end
+		if state ~= "" then
+			local said = TR.Word(self, 9, "OUTLINE", TR.WHITE, state)
+			if side == "right" then
+				said:SetPoint("TOPRIGHT", self, "TOPLEFT", x0 + TR.WIDTH, y - 3)
+			else
+				said:SetPoint("TOPLEFT", self, "TOPLEFT", x0, y - 3)
+			end
 			return y - 17
 		end
 		return y
@@ -3925,13 +4112,13 @@ do
 		local m, way = TR.Model(), TR.Way()
 		local x0, y0 = math.floor((self:GetWidth() - TR.WIDTH) / 2), -18
 		local y, hung, bottom = y0, DB().guardiansFree ~= true, -self:GetHeight() + 5
-		if m.sample or (m.sampleTags and DB().tracker ~= false) then
+		if m.sample or (m.sampleTags and DB().tracker ~= false and DB().trackerTags ~= false) then
 			self:Word(SurvivorUI_FONT, 8 + FONT_BUMP, "", MUTED[1], MUTED[2], MUTED[3], m.sample and "A sample run" or "Sample tags"):SetPoint("TOPRIGHT", self, "TOPRIGHT", -8, -6)
 		end
 		if DB().tracker ~= false then
 			TR.step = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Run tracker") or 0
-			TR.Word(self, 12, "OUTLINE", { 0.45, 0.90, 0.45 }, m.zone):SetPoint("TOP", self, "TOPLEFT", x0 + TR.WIDTH / 2, y)
-			y = TR.Tags(self, m, x0, y - 15, TR.State(m))
+			TR.face = TR.Face()
+			y = TR.Top(self, m, x0, y)
 			y = TR.Time(self, m, x0, y)
 			y = TR.Bosses(self, m, x0, y)
 			if way == "bar" then
@@ -3940,6 +4127,7 @@ do
 				y = TR.Count(self, m, x0, y, way)
 			end
 			y = TR.Elites(self, m, x0, y)
+			TR.face = nil
 			if way == "list" and hung then
 				TR.step = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Guardians") or 0
 				y = TR.List(self, m, x0, y - TR.GAP, bottom, TR.WIDTH)
@@ -3975,7 +4163,8 @@ do
 	Kit.Stepper(tab, nil, -4, 8, 1, TR.StepGet("Run tracker"), TR.StepSet("Run tracker"), TR.StepText)
 	-- The run's difficulty and the week's affixes, the tags under the zone's
 	-- name (Tracker.lua's SurvivorUI_TagRow): each side short, in words or
-	-- away, a row each; Centered on the section's line, at its right.
+	-- away, a row each; the whole row by the switch on the section's line;
+	-- Centered and Compact (the name and the tags on one line) under them.
 	function TR.DifficultyLook()
 		local db = DB()
 		if db.trackerDifficulty == false then
@@ -4014,37 +4203,123 @@ do
 		return DB().trackerDifficulty ~= false or DB().trackerAffixes ~= false
 	end
 
+	-- The title and the tags on, each by its section's switch; Compact in
+	-- effect with both (Tracker.lua's DrawTop).
+	function TR.TitleOn()
+		return DB().trackerTitle ~= false
+	end
+
+	function TR.TagsOn()
+		return DB().trackerTags ~= false
+	end
+
+	function TR.CompactUsable()
+		return TR.TitleOn() and TR.TagsOn()
+	end
+
+	-- The tags' own Centered: with something on their row, not in Compact
+	-- (the tags then follow the name, the title's Line up places the line),
+	-- and with the title's Line up at Center; its why, as it stands.
+	TR.CENTER_WHY = {
+		off = { why = "The tags are off: the switch of Difficulty and affixes." },
+		none = { why = "Nothing to center: the difficulty and the affixes are both off." },
+		compact = { why = "In Compact the tags follow the zone's name: the title's Line up places the line." },
+		side = { why = "With the title's Line up at Left or Right the tags stand at that end too: Center for this." },
+	}
+
+	function TR.CenterWhy()
+		if not TR.TagsOn() then
+			return "off"
+		elseif not TR.AnyTag() then
+			return "none"
+		elseif TR.CompactUsable() and DB().trackerCompact == true then
+			return "compact"
+		elseif TR.LineUp() ~= "center" then
+			return "side"
+		end
+	end
+
+	function TR.CenterUsable()
+		return TR.CenterWhy() == nil
+	end
+
 	-- A choice on a row of its own, its name before it; on another page with
-	-- on (the Tracker Ring's).
-	function TR.Row(label, options, get, set, on)
+	-- on (the Tracker Ring's). usable (optional): faded and still, its name
+	-- too, while not.
+	function TR.Row(label, options, get, set, on, usable)
 		on = on or tab
 		local y = on.y
 		local name = Text(on, 10, TEXT)
 		name:SetPoint("TOPLEFT", on, "TOPLEFT", (on.inset or 0) + (on.left or 0) + 2, y - 7)
 		name:SetText(label)
-		local holder = Kit.Segments(on, options, get, set)
+		local holder = Kit.Segments(on, options, get, set, usable)
 		holder:ClearAllPoints()
 		holder:SetPoint("TOPLEFT", on, "TOPLEFT", (on.inset or 0) + (on.left or 0) + 64, y)
+		if usable then
+			local Shown = holder.Refresh
+			function holder:Refresh()
+				Shown(self)
+				name:SetAlpha(self:GetAlpha())
+			end
+		end
 		on.y = y - 30
 		return holder
 	end
 
+	-- The zone's name, the tracker's title: on or off by the switch on the
+	-- section's line, its Line up left of it (Left, Center, Right: the name
+	-- and the tags together; Lucas, 2026-11-05).
 	do
 		local top = tab.y
-		Kit.Section(tab, "Difficulty and affixes", "The tags under the zone's name. At the left the run's difficulty: N or the Heroic level (in words, Normal or Heroic II), and endless mode's symbol once the run goes on past its end. At the right the week's affixes, a Heroic run's from III (one) and V (two), each by its symbol or its name. Under the mouse, each in full; an affix with what it does. Off: that side away.")
+		Kit.Section(tab, "Title", "The zone's name at the tracker's top, in green. Line up: Center, the name in the middle, the difficulty at the left and the affixes at the right (or all in the middle: the tags' Centered); Left, all from the left; Right, all flush right. With Compact, the whole line. The switch off: no title, and all under it moves up.")
 		local below = tab.y
+		Kit.Switch(tab, left + width - 62, below + 20, OnUnlessOff("trackerTitle"), Flip("trackerTitle"))
 		tab.y = top + 1
+		local sides = Kit.Segments(tab, { { "left", "Left" }, { "center", "Center" }, { "right", "Right" } }, TR.LineUp,
+			function(side) DB().trackerLineUp = side ~= "center" and side or nil end,
+			function() return TR.TitleOn() or TR.TagsOn() end)
+		-- Narrow, to clear the section's name and its help at the left.
+		local at = 2
+		for index = 1, table.getn(sides.parts) do
+			local part = sides.parts[index]
+			part:SetWidth(part.words + 8)
+			part:ClearAllPoints()
+			part:SetPoint("TOPLEFT", sides, "TOPLEFT", at, -2)
+			at = at + part:GetWidth()
+		end
+		sides:SetWidth(at + 2)
+		sides:ClearAllPoints()
+		sides:SetPoint("TOPRIGHT", tab, "TOPLEFT", left + width - 68, top + 3)
+		-- A little room under it, before the next section's line.
+		tab.y = below - 3
+	end
+	-- The tags: the row on or off by the switch on the section's line; each
+	-- side a row; the tags' Centered and Compact under them.
+	do
+		Kit.Section(tab, "Difficulty and affixes", "The tags under the zone's name. At the left the run's difficulty: N or the Heroic level (in words, Normal or Heroic II), and endless mode's symbol once the run goes on past its end. At the right the week's affixes, a Heroic run's from III (one) and V (two), each by its symbol or its name. Under the mouse, each in full; an affix with what it does. Off: that side away. The switch puts the whole row away.")
+		Kit.Switch(tab, left + width - 62, tab.y + 20, OnUnlessOff("trackerTags"), Flip("trackerTags"))
+		TR.Row("Difficulty", { { "short", "Short" }, { "words", "Words" }, { "off", "Off" } }, TR.DifficultyLook, TR.SetDifficultyLook,
+			nil, TR.TagsOn)
+		TR.Row("Affixes", { { "icons", "Icons" }, { "words", "Words" }, { "off", "Off" } }, TR.AffixLook, TR.SetAffixLook, nil, TR.TagsOn)
 		Kit.Chips(tab, {
 			{ "Centered", OnlyIfOn("trackerTagsCentered"), function() DB().trackerTagsCentered = not DB().trackerTagsCentered or nil end,
 				"All the tags together in the middle. Off: the difficulty at the left, the affixes at the right.",
-				usable = TR.AnyTag, why = "Nothing to center: the difficulty and the affixes are both off." },
+				usable = TR.CenterUsable, why = TR.CENTER_WHY.none.why },
+			{ "Compact", OnlyIfOn("trackerCompact"), function() DB().trackerCompact = not DB().trackerCompact or nil end,
+				"The zone's name and the tags on one line, each tag as chosen. The name gives way when the line is too long (in full under the mouse); Victory, Paused or the lives left beside it when they fit, else under it. The title's Line up places the line.",
+				usable = TR.CompactUsable, why = "Only with the title and the tags on." },
+			{ "Apart", OnlyIfOn("trackerApart"), function() DB().trackerApart = not DB().trackerApart or nil end,
+				"In Compact, the zone's name at one end of the line and the tags at the other: the name at the left, or at the right with the title's Right. Victory, Paused or the lives left beside the name when they fit.",
+				usable = function() return TR.CompactUsable() and DB().trackerCompact == true end, why = "Only with Compact on." },
 		})
-		local chip = widgets[table.getn(widgets)]
-		chip:ClearAllPoints()
-		chip:SetPoint("TOPRIGHT", tab, "TOPLEFT", left + width, top + 1)
-		tab.y = below
-		TR.Row("Difficulty", { { "short", "Short" }, { "words", "Words" }, { "off", "Off" } }, TR.DifficultyLook, TR.SetDifficultyLook)
-		TR.Row("Affixes", { { "icons", "Icons" }, { "words", "Words" }, { "off", "Off" } }, TR.AffixLook, TR.SetAffixLook)
+		-- The tags' Centered says why it is still, as it stands.
+		local chip = widgets[table.getn(widgets) - 2]
+		local Shown = chip.Refresh
+		function chip:Refresh()
+			local why = TR.CENTER_WHY[TR.CenterWhy() or "none"]
+			self.why = why.why
+			Shown(self)
+		end
 	end
 	Kit.Section(tab, "Elites", "A small bar for each elite alive, bright once hurt; click one to target it. The bars shown, 4 to 12: the hurt first, the rest only in the count.")
 	Kit.Switch(tab, left + width - 62, tab.y + 20, OnUnlessOff("trackerElites"), Flip("trackerElites"))
@@ -4062,16 +4337,17 @@ do
 		})
 		tab.left, tab.width, tab.y = 0, width, y - 30
 	end
-	-- The Tracker Ring, the tracker's other look, in its own tab (Experimental):
-	-- in the room the column leaves beside the preview.
-	tab.y = tab.y + 4
-	Kit.Link(tab, "Try the tracker as a dial, in Experimental:", "dial")
 	Kit.Right(tab)
 	do
-		local preview = Kit.Preview(tab, 238, Paint.Tracker)
+		-- As tall as the column beside it, the link under it (238 at least).
+		local preview = Kit.Preview(tab, math.max(238, tab.splitY - tab.leftY - 36), Paint.Tracker)
 		preview:ClearAllPoints()
 		preview:SetPoint("TOPLEFT", tab, "TOPLEFT", tab.left, tab.splitY)
 		preview:SetWidth(tab.width)
+		-- The Tracker Ring, the tracker's other look, in its own tab
+		-- (Experimental): under the preview.
+		tab.y = tab.y + 4
+		Kit.Link(tab, "Try the tracker as a dial, in Experimental:", "dial")
 		-- The run's clock goes on: drawn again each second.
 		preview:SetScript("OnUpdate", function()
 			this.wait = (this.wait or 0) + arg1
@@ -4214,6 +4490,7 @@ do
 	function TR.Reset()
 		local db = DB()
 		for _, key in pairs({ "trackerTagWords", "trackerAffixWords", "trackerTagsCentered", "trackerDifficulty", "trackerAffixes",
+			"trackerTitle", "trackerLineUp", "trackerTags", "trackerCompact", "trackerApart",
 			"trackerHealthLook", "guardiansCount", "guardiansBarArrows", "guardiansNorth", "guardiansBarHeight",
 			"guardiansFree", "trackerElites", "trackerElitesMax", "trackerElitesHide", "trackerCoin", "trackerCoinShine" }) do
 			db[key] = nil
@@ -4236,7 +4513,7 @@ do
 		end
 	end
 	Kit.Foot(tab, { reset = Asked("Run tracker back to default?",
-		"The difficulty and the affixes short, at the row's ends; no boss health in the lines (73% when on); the guardians as a bar with its arrows, the list hung under the tracker; 8 elite bars; no coin (it shines when on); the first sizes and text sizes. Where the tracker stands stays, and the free list's place for when it is free again: Back to its place for those.",
+		"The zone's name centered, the tags under it: the difficulty and the affixes short, at the row's ends (not Compact); no boss health in the lines (73% when on); the guardians as a bar with its arrows, the list hung under the tracker; 8 elite bars; no coin (it shines when on); the first sizes and text sizes. Where the tracker stands stays, and the free list's place for when it is free again: Back to its place for those.",
 		"Back to default", TR.Reset) })
 end
 
@@ -4282,101 +4559,470 @@ page.y = page.y - 28
 ------------------------------------------------------------------------------
 -- Boss bars (BossBars.lua).
 
--- Reworked (the kit): the preview draws the bars as BossBars.lua does, a
--- boss's, a guardian's and an elite's, at their size and text size.
+-- Reworked with the kit, and again for co-op (round 8, Matenkai's picture:
+-- the debuffs piled up over a boss's name): where the debuffs go, how many,
+-- your friends' or not and yours first; each kind (bosses, guardians,
+-- elites) on its own, at its size, its health in its own look. The preview
+-- draws the column as BossBars.lua does (SurvivorUI_BossBarsLook): a boss
+-- with its raid mark, a guardian and an elite as your target, each kind on at
+-- its size and look, sample debuffs where chosen (a friend's dimmed), at the
+-- column's size and text size.
 
 page = pages.bosses
-Kit.Head(page, { line = "At the top of the screen: the bosses and the awake guardians, with their debuffs, apart from the run tracker.",
-	isOn = OnUnlessOff("bossBars"), toggle = Call("SurvivorUI_BossBars"), game = GAME.bosses, piece = "Boss bars", advanced = true })
-
-function Paint.Bosses(self)
-	self:Begin()
-	if DB().bossBars == false then
-		self:Word(SurvivorUI_FONT, 11 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], "No boss bars"):SetPoint("CENTER", self, "CENTER", 0, 0)
-		return
-	end
-	local scale = SurvivorUI_GetScale and SurvivorUI_GetScale("bosses") or 1
-	local step = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Boss bars") or 0
-	local look = DB().bossHealth or "absolutePercent"
-	local width, height = math.floor(220 * scale + 0.5), math.floor(18 * scale + 0.5)
-	local bars = {
-		{ { 0.72, 0.32, 1.00 }, "Hogger", 2400000, 3300000 },
-		{ { 0.20, 0.75, 0.95 }, "Lair guardian", 640000, 1500000 },
+do
+	local tab = pages.bosses
+	-- The page's own, kept off the file's locals (near Lua 5.0's 200).
+	local BB = {
+		PLACES = { { "under", "Under" }, { "over", "Over" }, { "left", "Left" }, { "right", "Right" }, { "inside", "Inside" } },
+		ALIGNS = { { "left", "Left" }, { "center", "Center" }, { "right", "Right" } },
+		KINDS = {
+			{ group = "Boss", name = "Bosses", key = "bossBarsBosses", help = "A bar for each boss alive, the final boss on top." },
+			{ group = "Guardian", name = "Guardians", key = "bossBarsGuardians", help = "A bar for each lair guardian once awake (or hurt)." },
+			{ group = "Elite", name = "Elites", key = "bossBarsElites", only = true, help = "The elites alive get a bar too, under the bosses and guardians." },
+		},
+		-- Sample debuffs in the game's order: yours (a warrior's) and a
+		-- friend's mixed, each part gone and seconds left.
+		DEBUFFS = {
+			{ icon = "Ability_Gouge", mine = true, share = 0.8, left = 12 },
+			{ icon = "Spell_Shadow_AbominationExplosion", share = 0.55, left = 10, dispel = "Magic" },
+			{ icon = "Spell_Nature_ThunderClap", mine = true, share = 0.35, left = 3 },
+			{ icon = "Spell_Shadow_ShadowWordPain", share = 0.9, left = 16, dispel = "Magic" },
+			{ icon = "Spell_Nature_StarFall", share = 0.2, left = 2, dispel = "Magic" },
+			{ icon = "Ability_ShockWave", mine = true, share = 0.65, left = 9 },
+			{ icon = "Spell_Shadow_CurseOfSargeras", share = 0.45, left = 7, dispel = "Curse" },
+			{ icon = "Ability_Warrior_Sunder", mine = true, stacks = 3 },
+		},
+		DARK = { 0.08, 0.08, 0.10 },
+		WHITE = { 1, 1, 1 },
+		BLACK = { 0, 0, 0 },
+		GOLD = { 1, 0.85, 0.3 },
 	}
-	if DB().bossBarsElites then
-		table.insert(bars, { { 0.35, 1.00, 0.20 }, "Elite", 90000, 120000 })
-	end
-	local x = math.floor((PAGE_WIDTH - width) / 2)
-	local y = -math.floor((self:GetHeight() - table.getn(bars) * (height + 4)) / 2) - 4
-	for index = 1, table.getn(bars) do
-		local bar = bars[index]
-		local color = bar[1]
-		-- The black edge a layer under; the health and the dark rest of the
-		-- bar side by side over it.
-		local border = self:Box(0, 0, 0, 1, nil, "BORDER")
-		border:SetPoint("TOPLEFT", self, "TOPLEFT", x - 1, y + 1)
-		border:SetWidth(width + 2)
-		border:SetHeight(height + 2)
-		local filled = math.floor(width * bar[3] / bar[4] + 0.5)
-		local fill = self:Box(color[1], color[2], color[3], 0.9)
-		fill:SetPoint("TOPLEFT", self, "TOPLEFT", x, y)
-		fill:SetWidth(filled)
-		fill:SetHeight(height)
-		local rest = self:Box(0.08, 0.08, 0.1, 1)
-		rest:SetPoint("TOPLEFT", fill, "TOPRIGHT", 0, 0)
-		rest:SetWidth(width - filled)
-		rest:SetHeight(height)
-		local size = (10 + FONT_BUMP + step) * math.max(0.7, scale)
-		self:Word(SurvivorUI_FONT, size, "OUTLINE", 1, 1, 1, bar[2]):SetPoint("LEFT", border, "LEFT", 6, 0)
-		local value = SurvivorUI_HealthText and SurvivorUI_HealthText(bar[3], bar[4], look) or ""
-		self:Word(SurvivorUI_FONT, size, "OUTLINE", 1, 1, 1, value):SetPoint("RIGHT", border, "RIGHT", -6, 0)
-		y = y - height - 4
-	end
-end
-Kit.Preview(page, 96, Paint.Bosses)
-
-Kit.Section(page, "Health", "As each bar's right end reads it. Always short: 1.2M for 1,200,000.")
-do
-	local looks = {}
+	-- A boss with its raid mark (a name the debuffs inside once cut), a
+	-- guardian, an elite as your target (its debuffs from the target: no
+	-- friends').
+	BB.SAMPLES = {
+		{ kind = "boss", group = "Boss", name = "Highlord Mograine", hp = 2400000, hpm = 3300000, mark = 8, debuffs = BB.DEBUFFS },
+		{ kind = "guardian", group = "Guardian", name = "Murloc Tidehunter", hp = 640000, hpm = 1500000,
+			debuffs = { BB.DEBUFFS[2], BB.DEBUFFS[1], BB.DEBUFFS[5], BB.DEBUFFS[3], BB.DEBUFFS[7] } },
+		{ kind = "elite", group = "Elite", name = "Gnoll Packleader", hp = 90000, hpm = 120000, target = true,
+			debuffs = { BB.DEBUFFS[6], BB.DEBUFFS[8] } },
+	}
+	-- The health's looks (HEALTH_LOOKS), and Off: the name alone.
+	BB.LOOKS = {}
 	for index = 1, table.getn(HEALTH_LOOKS) do
-		table.insert(looks, { HEALTH_LOOKS[index][1], HEALTH_LOOKS[index][2] })
+		table.insert(BB.LOOKS, { HEALTH_LOOKS[index][1], HEALTH_LOOKS[index][2] })
 	end
-	Kit.Segments(page, looks, function() return DB().bossHealth or "absolutePercent" end,
-		function(look) DB().bossHealth = look end)
-end
-Kit.Split(page)
-Kit.Size(page, "Size", 0.5, 2, 0.05,
-	function() return SurvivorUI_GetScale and SurvivorUI_GetScale("bosses") or 1 end,
-	function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("bosses", value) end end,
-	{ { "S", 0.8 }, { "M", 1 }, { "L", 1.25 } })
-Kit.Right(page)
-Kit.Section(page, "Shows", "Only the run tracker's own bosses? Untick Elites and The game's, and keep the tracker's Boss health on (Run tracker tab): with it on, the game's bars stay away anyway.")
-Kit.Chips(page, {
-	{ "Elites", OnlyIfOn("bossBarsElites"), Call("SurvivorUI_BossBars", "elites"), "The elites alive get a bar too, under the bosses and guardians." },
-})
-Kit.Join(page)
-do
-	local box = Kit.Advanced(page, "text size")
-	Kit.Stepper(box, "Text size", -4, 8, 1,
+	table.insert(BB.LOOKS, { "off", "Off" })
+
+	Kit.Head(tab, { line = "At the top of the screen: the bosses and the awake guardians, with their debuffs, apart from the run tracker.",
+		isOn = OnUnlessOff("bossBars"), toggle = Call("SurvivorUI_BossBars"), game = GAME.bosses, piece = "Boss bars", advanced = true })
+
+	----------------------------------------------------------------------------
+	-- The settings (BossBars.lua reads them; nil is the first look).
+
+	-- A setting kept only when not its default.
+	function BB.Get(key, default)
+		return function()
+			local value = DB()[key]
+			if value == nil then
+				return default
+			end
+			return value
+		end
+	end
+
+	function BB.Set(key, default)
+		return function(value)
+			if type(value) == "number" then
+				value = math.floor(value * 100 + 0.5) / 100
+			end
+			if value == default then
+				value = nil
+			end
+			DB()[key] = value
+		end
+	end
+
+	-- A kind on (the elites only when asked) and its switch.
+	function BB.KindOn(kind)
+		return function()
+			if kind.only then
+				return DB()[kind.key] == true
+			end
+			return DB()[kind.key] ~= false
+		end
+	end
+
+	-- A setting on unless false, switched (nil for on).
+	function BB.Flip(key)
+		return function()
+			local db = DB()
+			if db[key] == false then
+				db[key] = nil
+			else
+				db[key] = false
+			end
+		end
+	end
+
+	function BB.KindFlip(kind)
+		if not kind.only then
+			return BB.Flip(kind.key)
+		end
+		return function()
+			local db = DB()
+			db[kind.key] = not db[kind.key] or nil
+		end
+	end
+
+	-- A kind's health: its own look, else the bars' first one.
+	function BB.HealthGet(kind)
+		return function()
+			return DB()["bossBars"..kind.group.."Health"] or DB().bossHealth or "absolutePercent"
+		end
+	end
+
+	function BB.HealthSet(kind)
+		return function(look)
+			DB()["bossBars"..kind.group.."Health"] = look
+		end
+	end
+
+	function BB.Outside()
+		return (DB().bossBarsDebuffs or "under") ~= "inside"
+	end
+
+	function BB.Lined()
+		local place = DB().bossBarsDebuffs or "under"
+		return place == "under" or place == "over"
+	end
+
+	function BB.Friends()
+		return DB().bossBarsFriends ~= false
+	end
+
+	-- A piece faded and still while what it depends on is off (a bar of
+	-- Fine-tuning, a stepper): its own refresh, then its look and its mouse.
+	function BB.Still(holder, usable)
+		local Refresh = holder.Refresh
+		function holder:Refresh()
+			Refresh(self)
+			local on = usable()
+			self:SetAlpha(on and 1 or 0.4)
+			local children = { self:GetChildren() }
+			for index = 1, table.getn(children) do
+				children[index]:EnableMouse(on)
+				if children[index].EnableMouseWheel then
+					children[index]:EnableMouseWheel(on)
+				end
+			end
+		end
+		return holder
+	end
+
+	-- A stepper at the right end of a column (x, width: the page's measures)
+	-- at y, its name just before it.
+	function BB.Stepper(page, label, x, width, y, low, high, get, set, format)
+		page.left, page.y = x + width - 116, y
+		local stepper = Kit.Stepper(page, nil, low, high, 1, get, set, format)
+		page.left = nil
+		local text = Text(page, 10, TEXT)
+		text:SetPoint("RIGHT", stepper, "LEFT", -8, 0)
+		text:SetText(label)
+		side.Index(page, label, nil, y, 24)
+		return stepper
+	end
+
+	----------------------------------------------------------------------------
+	-- The preview: the column as BossBars.lua lays it out.
+
+	function BB.Put(self, x, y, width, height, color, a, texture, layer)
+		local box = self:Box(color[1], color[2], color[3], a, texture, layer)
+		box:SetPoint("TOPLEFT", self, "TOPLEFT", x, y)
+		box:SetWidth(math.max(1, width))
+		box:SetHeight(math.max(1, height))
+		return box
+	end
+
+	-- A word on one line, cut at its width: pooled, so each is given its
+	-- width, height and justification again.
+	function BB.Say(self, size, color, text, width, justify)
+		local word = self:Word(SurvivorUI_FONT, size, "OUTLINE", color[1], color[2], color[3], text)
+		word:SetWidth(math.max(1, width))
+		word:SetHeight(math.max(6, math.floor(size + 0.5)) + 4)
+		word:SetJustifyH(justify or "LEFT")
+		return word
+	end
+
+	function BB.Note(self, text)
+		BB.Say(self, 11 + FONT_BUMP, MUTED, text, PAGE_WIDTH - 40, "CENTER"):SetPoint("CENTER", self, "CENTER", 0, 0)
+	end
+
+	-- A bar's black edge (white on your target), round it, a strip a side.
+	function BB.Edge(self, x, y, width, height, color)
+		BB.Put(self, x - 1, y + 1, width + 2, 1, color, 1, nil, "BACKGROUND")
+		BB.Put(self, x - 1, y - height, width + 2, 1, color, 1, nil, "BACKGROUND")
+		BB.Put(self, x - 1, y, 1, height, color, 1, nil, "BACKGROUND")
+		BB.Put(self, x + width, y, 1, height, color, 1, nil, "BACKGROUND")
+	end
+
+	-- A sample debuff at x, y, size across (zoom: the bar's measures to the
+	-- preview's): edged in its dispel type's color, the time gone dark from
+	-- the top, a light line where it stands, its seconds and stacks; dimmed
+	-- when a friend's.
+	function BB.Icon(self, debuff, x, y, size, zoom, step, friend)
+		local tint = debuff.dispel and DebuffTypeColor and DebuffTypeColor[debuff.dispel]
+		BB.Put(self, x - 1, y + 1, size + 2, size + 2, tint and { tint.r, tint.g, tint.b } or BB.BLACK, 1, nil, "BORDER")
+		local art = "Interface\\Icons\\"..debuff.icon
+		local shade = friend and 0.4 or 1
+		local share = debuff.share or 1
+		local gone = math.floor(size * (1 - share) + 0.5)
+		if gone > 0 then
+			local dark = 0.32 * shade
+			BB.Put(self, x, y, size, gone, { dark, dark, dark }, 1, art, "ARTWORK"):SetTexCoord(0.08, 0.92, 0.08, 0.08 + 0.84 * (1 - share))
+			BB.Put(self, x, y - gone, size, 1, BB.WHITE, 0.75 * shade, nil, "ARTWORK")
+			gone = gone + 1
+		end
+		if size - gone >= 1 then
+			BB.Put(self, x, y - gone, size, size - gone, { shade, shade, shade }, 1, art, "ARTWORK"):SetTexCoord(0.08, 0.92, 0.92 - 0.84 * (size - gone) / size, 0.92)
+		end
+		local words = (8 + FONT_BUMP + math.floor((size / zoom - 14) / 4) + step) * zoom
+		if debuff.left and words >= 5 then
+			BB.Say(self, words, BB.WHITE, tostring(debuff.left), size + 8, "CENTER"):SetPoint("CENTER", self, "TOPLEFT", x + size / 2, y - size / 2)
+		end
+		if debuff.stacks and words >= 5 then
+			BB.Say(self, words - zoom, BB.GOLD, tostring(debuff.stacks), size, "RIGHT"):SetPoint("BOTTOMRIGHT", self, "TOPLEFT", x + size + 2 * zoom, y - size - zoom)
+		end
+	end
+
+	-- The kinds on, each with the debuffs its bar shows and its row.
+	function BB.Rows(look, shape)
+		local rows = {}
+		for index = 1, table.getn(BB.SAMPLES) do
+			local sample = BB.SAMPLES[index]
+			local own = shape.kinds[sample.group]
+			if own.on then
+				local named = sample.group ~= "Elite"
+				local shown = look.Pick(sample.debuffs, shape, named)
+				local tall, top, each = look.Row(shape, table.getn(shown), named)
+				table.insert(rows, { sample = sample, own = own, shown = shown, named = named,
+					tall = tall, top = top, each = each })
+			end
+		end
+		return rows
+	end
+
+	-- One bar at x, y (its top left), zoom the bar's measures to the preview's.
+	function BB.Bar(self, look, shape, row, x, y, zoom, step)
+		local sample, own = row.sample, row.own
+		local width, height = look.WIDTH * zoom, look.HEIGHT * zoom
+		local color = look.KINDS[sample.kind].color
+		BB.Edge(self, x, y, width, height, sample.target and BB.WHITE or BB.BLACK)
+		local filled = math.floor(width * sample.hp / sample.hpm + 0.5)
+		BB.Put(self, x, y, filled, height, color, 0.9, nil, "BACKGROUND")
+		BB.Put(self, x + filled, y, width - filled, height, BB.DARK, 0.92, nil, "BACKGROUND")
+		local font = (10 + FONT_BUMP + step) * zoom
+		local markRoom = 0
+		if sample.mark and SurvivorUI_SetRaidMarkTexture then
+			SurvivorUI_SetRaidMarkTexture(BB.Put(self, x + 2 * zoom, y - zoom, height - 2 * zoom, height - 2 * zoom, BB.WHITE, 1, nil, "BORDER"), sample.mark)
+			markRoom = look.HEIGHT - 1
+		end
+		local valueRoom = 4
+		if own.health ~= "off" then
+			local text = SurvivorUI_HealthText and SurvivorUI_HealthText(sample.hp, sample.hpm, own.health) or "73%"
+			local value = BB.Say(self, font, BB.WHITE, text, width - 10 * zoom, "RIGHT")
+			value:SetPoint("RIGHT", self, "TOPLEFT", x + width - 5 * zoom, y - height / 2)
+			valueRoom = math.max(look.VALUE_ROOM, math.ceil(value:GetStringWidth() / zoom) + 12)
+		end
+		local count = table.getn(row.shown)
+		for index = 1, count do
+			local debuff = row.shown[index]
+			local at, down, size = look.IconAt(shape, index, row.each, valueRoom, count)
+			BB.Icon(self, debuff, x + at * zoom, y - down * zoom, size * zoom, zoom, step, row.named and not debuff.mine)
+		end
+		local inside = shape.place == "inside" and count * (look.DEBUFF_SIZE + look.DEBUFF_GAP) or 0
+		local name = BB.Say(self, font, BB.WHITE, sample.name, (look.WIDTH - valueRoom - 8 - markRoom - inside) * zoom, "LEFT")
+		name:SetPoint("LEFT", self, "TOPLEFT", x + (5 + markRoom) * zoom, y - height / 2)
+	end
+
+	function Paint.Bosses(self)
+		self:Begin()
+		local look = SurvivorUI_BossBarsLook
+		if DB().bossBars == false or not look then
+			BB.Note(self, "No boss bars")
+			return
+		end
+		local shape = look.Shape()
+		local rows = BB.Rows(look, shape)
+		if table.getn(rows) == 0 then
+			BB.Note(self, "Bosses, guardians and elites are all off")
+			return
+		end
+		local left, widest, right = look.Column(shape)
+		local across, tall = left + widest + right, -look.GAP
+		for index = 1, table.getn(rows) do
+			tall = tall + rows[index].tall * rows[index].own.size + look.GAP
+		end
+		-- As large as in play, else as large as the strip lets it (it says so).
+		local scale = SurvivorUI_GetScale and SurvivorUI_GetScale("bosses") or 1
+		local height = self:GetHeight()
+		local zoom = math.min(scale, (PAGE_WIDTH - 24) / across, (height - 12) / tall)
+		local x = math.floor((PAGE_WIDTH - across * zoom) / 2 + left * zoom + 0.5)
+		local y = -math.floor((height - tall * zoom) / 2 + 0.5)
+		local step = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Boss bars") or 0
+		for index = 1, table.getn(rows) do
+			local row = rows[index]
+			local size = row.own.size * zoom
+			BB.Bar(self, look, shape, row, x, y - row.top * size, size, step)
+			y = y - (row.tall * row.own.size + look.GAP) * zoom
+		end
+		if shape.friends then
+			local legend = BB.Say(self, 8 + FONT_BUMP, MUTED, "Dimmed here: a friend's", 200, "LEFT")
+			legend:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", 8, 5)
+		end
+		if zoom < scale * 0.95 then
+			local note = BB.Say(self, 8 + FONT_BUMP, MUTED, SurvivorUI_OTF("At {1}% of its size", math.floor(zoom / scale * 100 + 0.5)), 200, "RIGHT")
+			note:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -8, 5)
+		end
+	end
+	Kit.Preview(tab, 132, Paint.Bosses)
+
+	----------------------------------------------------------------------------
+	-- Debuffs: where, how many, whose.
+
+	-- Which way they run, as chosen, on the section's line (Lucas,
+	-- 2026-11-05): the first is yours with Yours first, else the game's.
+	do
+		local head = Kit.Section(tab, "Debuffs", "Each bar's debuffs, draining as they run out: under it, over it, left or right of it, or inside it before its health, where many cover its name. Most per bar: of the 16 the game sends at most. In a group, Friends' debuffs shows your party's too, and Yours first puts yours ahead when a bar has more than it shows. The game does not tell whose a debuff is: one of your build's spells counts as yours (a spell you both have too), any other as a friend's, so one your talents or jewelry lay may count as a friend's. Out of a group, all are yours.")
+		local way = Text(tab, 9, MUTED)
+		way:SetPoint("LEFT", head, "RIGHT", 28, 0)
+		table.insert(widgets, { Refresh = function()
+			local place = DB().bossBarsDebuffs or "under"
+			if place == "inside" then
+				way:SetText(SurvivorUI_OT("They run right to left: the first by the health."))
+			elseif place == "left" then
+				way:SetText(SurvivorUI_OT("They run outward, to the left: the first by the bar."))
+			elseif place == "right" then
+				way:SetText(SurvivorUI_OT("They run outward, to the right: the first by the bar."))
+			elseif DB().bossBarsDebuffOrder == "right" then
+				way:SetText(SurvivorUI_OT("They run right to left: the first at the right end."))
+			else
+				way:SetText(SurvivorUI_OT("They run left to right: the first at the left end."))
+			end
+		end })
+	end
+	do
+		local top = tab.y
+		Kit.Segments(tab, BB.PLACES, BB.Get("bossBarsDebuffs", "under"), BB.Set("bossBarsDebuffs", "under"))
+		BB.Stepper(tab, "Most per bar", 0, PAGE_WIDTH, top - 1, 1, 16,
+			BB.Get("bossBarsDebuffMost", 6), BB.Set("bossBarsDebuffMost", 6))
+		tab.y = top - 34
+	end
+	Kit.Chips(tab, {
+		{ "Friends' debuffs", BB.Friends, BB.Flip("bossBarsFriends"),
+			"In a group, the debuffs your friends lay too. Off: yours alone, as far as the game lets them be told apart (the Debuffs help)." },
+		{ "Yours first", function() return DB().bossBarsMineFirst ~= false end, BB.Flip("bossBarsMineFirst"),
+			"When a bar has more debuffs than it shows, yours first, then your friends'. Off: in the game's order.",
+			usable = BB.Friends, why = "Only with Friends' debuffs on: without them, all shown are yours." },
+		{ "Right to left", function() return DB().bossBarsDebuffOrder == "right" end,
+			function() DB().bossBarsDebuffOrder = DB().bossBarsDebuffOrder ~= "right" and "right" or nil end,
+			"Under and over a bar, the debuffs run from the right: the first (yours, with Yours first) at the line's right end. Off: from the left. Where the line sits (left, middle or right) is under Advanced.",
+			usable = BB.Lined, why = "Only with the debuffs under or over the bars." },
+	})
+
+	----------------------------------------------------------------------------
+	-- Each kind: on or off, and how its health reads.
+
+	Kit.Section(tab, "Bars", "Each kind on its own, with how its health reads (Off: the name alone). Bosses: every boss alive, the final boss on top. Guardians: the lair guardians once awake. Elites: the elites alive. The game sends no debuffs for elites: an elite's show while it is your target or under the mouse, all as yours. Each kind's size is under Advanced.")
+	for index = 1, table.getn(BB.KINDS) do
+		local kind = BB.KINDS[index]
+		local top = tab.y
+		tab.y = top - 2
+		Kit.Chips(tab, { { kind.name, BB.KindOn(kind), BB.KindFlip(kind), kind.help } })
+		tab.y, tab.left = top, 112
+		Kit.Segments(tab, BB.LOOKS, BB.HealthGet(kind), BB.HealthSet(kind), BB.KindOn(kind))
+		tab.left, tab.y = nil, top - 30
+	end
+	tab.y = tab.y - 4
+
+	Kit.Split(tab)
+	Kit.Size(tab, "Size", 0.5, 2, 0.05,
+		function() return SurvivorUI_GetScale and SurvivorUI_GetScale("bosses") or 1 end,
+		function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("bosses", value) end end,
+		{ { "S", 0.8 }, { "M", 1 }, { "L", 1.25 } })
+	Kit.Right(tab)
+	Kit.Section(tab, "Text size")
+	Kit.Stepper(tab, nil, -4, 8, 1,
 		function() return SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Boss bars") or 0 end,
 		function(value) if SurvivorUI_SetPieceTextStep then SurvivorUI_SetPieceTextStep("Boss bars", value) end end,
 		function(value) return value == 0 and "normal" or ((value > 0 and "+" or "")..value) end)
-	Kit.EndAdvanced(page, box)
+	Kit.Join(tab)
+
+	----------------------------------------------------------------------------
+	-- Advanced: each kind's size, the icons outside, the most bars.
+
+	do
+		local box = Kit.Advanced(tab, "each kind's size, the icons' size and line, the most bars")
+		local column = math.floor((box.full - 24) / 2)
+		local fine = {
+			{ "Bosses' size", "bossBarsBossSize", BB.KindOn(BB.KINDS[1]) },
+			{ "Guardians' size", "bossBarsGuardianSize", BB.KindOn(BB.KINDS[2]) },
+			{ "Elites' size", "bossBarsEliteSize", BB.KindOn(BB.KINDS[3]) },
+		}
+		for index = 1, 4 do
+			local slot = math.mod(index - 1, 2)
+			local x = box.inset + slot * (column + 24)
+			local item = fine[index]
+			local holder
+			if item then
+				holder = SizeSlider(box, x, box.y, column, item[1], 0.5, 2, 0.05, BB.Get(item[2], 1),
+					function(value) BB.Set(item[2], 1)(value) tab.preview:Refresh() end)
+				BB.Still(holder, item[3])
+			else
+				holder = SizeSlider(box, x, box.y, column, "Icon size", 12, 28, 1, BB.Get("bossBarsDebuffSize", 16),
+					function(value) BB.Set("bossBarsDebuffSize", 16)(value) tab.preview:Refresh() end, "%d px")
+				BB.Still(holder, BB.Outside)
+			end
+			if slot == 1 then
+				box.y = box.y - 36
+			end
+		end
+		-- Under and over: lined up from the bar's left, its middle or its
+		-- right (which way they run: the Right to left chip).
+		local top = box.y
+		local line = Text(box, 10, TEXT)
+		line:SetPoint("TOPLEFT", box, "TOPLEFT", box.inset + 2, top - 6)
+		line:SetText("Line up")
+		-- Faded with its choice while the debuffs are not under or over.
+		table.insert(widgets, { Refresh = function() line:SetAlpha(BB.Lined() and 1 or 0.4) end })
+		side.Index(box, "Line up", "debuffs left center middle right", top, 26)
+		box.left = 80
+		Kit.Segments(box, BB.ALIGNS, BB.Get("bossBarsDebuffAlign", "left"), BB.Set("bossBarsDebuffAlign", "left"), BB.Lined)
+		box.left = nil
+		BB.Stepper(box, "Most bars at once", column + 24, column, top - 1, 1, 12,
+			BB.Get("bossBarsMost", 8), BB.Set("bossBarsMost", 8))
+		box.y = top - 34
+		Kit.EndAdvanced(tab, box)
+	end
+
+	Kit.Foot(tab, { reset = Asked("Boss bars back to default?",
+		"Debuffs under each bar, 6 at most, your friends' too and yours first; bosses and guardians on, no elites; each kind's health as 1.2M | 73% and its first size; the first size, text size and icon size, lined up from the left, 8 bars at most. Where it stands stays: Back to its place for that.", "Back to default",
+		function()
+			local db = DB()
+			for _, key in pairs({ "bossHealth", "bossBarsElites", "bossBarsBosses", "bossBarsGuardians", "bossBarsDebuffs",
+				"bossBarsDebuffSize", "bossBarsDebuffAlign", "bossBarsDebuffOrder", "bossBarsDebuffMost", "bossBarsFriends", "bossBarsMineFirst",
+				"bossBarsMost", "bossBarsBossSize", "bossBarsGuardianSize", "bossBarsEliteSize",
+				"bossBarsBossHealth", "bossBarsGuardianHealth", "bossBarsEliteHealth" }) do
+				db[key] = nil
+			end
+			if SurvivorUI_SetPartScale then
+				SurvivorUI_SetPartScale("bosses", 1)
+			end
+			if SurvivorUI_SetPieceTextStep then
+				SurvivorUI_SetPieceTextStep("Boss bars", 0)
+			end
+		end) })
 end
-Kit.Foot(page, { reset = Asked("Boss bars back to default?",
-	"The health as 1.2M | 73%, no elites, the first size and text size. Where it stands stays: Back to its place for that.", "Back to default",
-	function()
-		DB().bossHealth = nil
-		if DB().bossBarsElites and SurvivorUI_BossBars then
-			SurvivorUI_BossBars("elites")
-		end
-		if SurvivorUI_SetPartScale then
-			SurvivorUI_SetPartScale("bosses", 1)
-		end
-		if SurvivorUI_SetPieceTextStep then
-			SurvivorUI_SetPieceTextStep("Boss bars", 0)
-		end
-	end) })
 
 ------------------------------------------------------------------------------
 -- Kills & gold: the line of the kills, the gold and the cache (Tally.lua).
@@ -5111,7 +5757,7 @@ Check(page, "Damage and crits under the title", OnUnlessOff("critStats"), Flip("
 -- Counters: the numbers over the spells' buttons (DotCounter.lua).
 
 page = pages.counters
-Header(page, "Counters", "A number over a spell's button: how many of it are out right now (Battle Shout: the seconds it has left), in the spell's damage meter color. The game tells none of these outright: each is worked out from the combat log and your spells' cooldowns, so it can be off now and then.")
+Header(page, "Counters", "A number over a spell's button: how many of it are out right now (Battle Shout: the seconds it has left), by default in the spell's damage meter color. The game tells none of these outright: each is worked out from the combat log and your spells' cooldowns, so it can be off now and then.")
 PanelHead(page, OnUnlessOff("counters"), Flip("counters"))
 Subheader(page, "What is counted")
 Check(page, "DoTs", OnUnlessOff("dotCounter"), Flip("dotCounter"), "how many of each are ticking on the enemies, by their ticks over the last two seconds; one on an enemy that dies stays up to two seconds")
@@ -5120,9 +5766,14 @@ Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how ma
 Check(page, "Shouts", OnUnlessOff("shoutCounter"), Flip("shoutCounter"), "Demoralizing Shout: how many enemies its last cast weakened, for its time; Battle Shout: the seconds it has left")
 Check(page, "Marks", OnUnlessOff("markCounter"), Flip("markCounter"), "Faerie Fire: how many enemies carry it, bosses too; each one it hits counts for the mark's time (its tooltip's), so one hit again before it fades counts twice until it does")
 
+-- Their looks: the Totem counter's and the Debuff counter's, each its own
+-- size, color and format, in Frames & bar's Advanced box (the size that was
+-- here, counterSize, still the first of both).
 Subheader(page, "Look")
-Slider(page, "Size", 0.5, 2, 0.05, function() return tonumber(DB().counterSize) or 1 end,
-	function(value) DB().counterSize = math.floor(value * 100 + 0.5) / 100 end)
+Kit.Link(page, "Their size, color and format, in", "units"):SetScript("OnClick", function()
+	DB().optionsAdvanced = true
+	ShowPage("units")
+end)
 
 ------------------------------------------------------------------------------
 -- Summons (Summons.lua): your summons over the player frame.
@@ -6101,93 +6752,536 @@ Note(page, "The same numbers on the screen all the time are a panel of their own
 
 ------------------------------------------------------------------------------
 -- Stats panel: the run's numbers as a panel of their own on the screen, apart
--- from the character pane; and which numbers show, in both.
+-- from the character pane (CharacterPane.lua); and which numbers show, in
+-- both.
+
+-- Made with the kit: the panel's look (its title, its groups' titles, the
+-- numbers at 0, its size and its text's) and each number's color in the
+-- left column, the preview beside them, drawn as CharacterPane.lua lays the
+-- panel out (SurvivorUI_StatsPanelLook); under them every number of the
+-- class's, ticked shows, a dot after each to pick it for its color.
 
 page = pages.stats
-Header(page, "Stats panel", "The run's numbers as a panel of their own, on the screen all the time, apart from the character pane. Drag it by its title while this tab is open; its corner resizes it (a right click there: the first size again).")
-PanelHead(page, OnlyIfOn("statsPanel"), Call("SurvivorUI_ToggleStatsPanel"), "stats", "Stats")
-Subheader(page, "What shows")
-Check(page, "Hide the numbers at 0 or below", OnUnlessOff("statsHideZero"), Flip("statsHideZero"),
-	"in the pane and on the panel, back once past 0; every class")
+do
+	local tab = pages.stats
+	-- The page's own, kept off the file's locals: a run's numbers while none
+	-- is on (AZS_STATS's keys, a hero part way through a run: the ones at 0
+	-- hidden as the panel hides them), the column of each group in the list
+	-- (by their first order: Offense and Damage over time, Defense, Reach and
+	-- Utility, Bonus damage), and the number picked for its color.
+	local ST = {
+		SAMPLE = { crit = 0.22, cm = 1.75, dmg = 1.85, cd = 0.88, echo = 0, hp = 640, reg = 2.5, lch = 0, arm = 0.18,
+			heal = 0, thn = 0, liv = 1, area = 1.2, cnt = 1, pick = 12, spd = 1.1, xp = 1, gold = 1.15, luck = 0, bp = 0,
+			dots = 3, doth = 0.25, big = 0.3, exe = 0, cc = 0.2, dotd = 0.15, shd = 0, auto = 0, pet = 0 },
+		COLUMNS = { 1, 2, 3, 3, 1, 4 },
+		picked = "Crit",
+	}
+	Kit.Head(tab, { line = "The run's numbers in a panel of their own, on the screen all the time; which ones show is shared with the character pane, for each class. While this tab is open, drag it by its title, or by the strip beside it without one.",
+		isOn = OnlyIfOn("statsPanel"), toggle = Call("SurvivorUI_ToggleStatsPanel"), piece = "Stats" })
 
--- The class whose choices these are, named in the section's title.
-local classTitle = Subheader(page, "Stats for this class")
-local classWidget = {}
-function classWidget:Refresh()
-	local name = UnitClass and UnitClass("player")
-	classTitle:SetText(string.upper(name and SurvivorUI_OTF("Stats for {1}", name) or "Stats for this class"))
-end
-table.insert(widgets, classWidget)
-Note(page, "In the character pane and on the panel alike. Each class keeps its own; a number switched off never shows. For their order, drag a number or a group's title in either, in move mode or holding the move key (Alt unless chosen in Layout).")
+	function ST.Pick(label)
+		ST.picked = label
+		RefreshAll()
+	end
 
--- Every number, by group, in two columns: on shows, off never does.
-local function StatCheck(x, y, width, label, color)
-	local check = CreateFrame("Button", nil, page)
-	check:SetWidth(width)
-	check:SetHeight(15)
-	check:SetPoint("TOPLEFT", page, "TOPLEFT", x, y)
-	check.edge = Fill(check, "BORDER", 0.3, 0.3, 0.35, 1)
-	check.edge:SetWidth(10)
-	check.edge:SetHeight(10)
-	check.edge:SetPoint("LEFT", check, "LEFT", 2, 0)
-	check.box = Fill(check, "ARTWORK", 0, 0, 0, 1)
-	check.box:SetPoint("TOPLEFT", check.edge, "TOPLEFT", 1, -1)
-	check.box:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -1, 1)
-	check.label = Text(check, 9, TEXT)
-	check.label:SetPoint("LEFT", check.edge, "RIGHT", 6, 0)
-	check.label:SetText(SurvivorUI_StatName and SurvivorUI_StatName(label, true) or label)
-	check:SetScript("OnClick", function()
-		if SurvivorUI_SetStatShown and SurvivorUI_StatShown then
-			SurvivorUI_SetStatShown(label, not SurvivorUI_StatShown(label))
+	-- A number's group's color, by its label.
+	function ST.GroupColor(label)
+		local groups = SurvivorUI_StatList and SurvivorUI_StatList() or {}
+		for index = 1, table.getn(groups) do
+			for each = 1, table.getn(groups[index].rows) do
+				if groups[index].rows[each][1] == label then
+					return groups[index].color
+				end
+			end
 		end
-		this:Refresh()
+		return ACCENT
+	end
+
+	-- The colors to pick, by their place: its group's (as at first), then the
+	-- minimap buttons' (MinimapButton.lua's, read as they refresh: it loads
+	-- after this file), the class's first among them. Its key, its name, its
+	-- color (nil: the class's).
+	function ST.Choice(index)
+		if index == 1 then
+			return "group", "Its group's color", ST.GroupColor(ST.picked)
+		end
+		local entry = SurvivorUI_MAPBUTTON_COLORS and SurvivorUI_MAPBUTTON_COLORS[index - 1]
+		if entry then
+			return entry[1], entry[2], entry[3]
+		end
+	end
+
+	-- The preview: the panel as CharacterPane.lua lays it out (its title's
+	-- strip or none, its groups' titles or none, the rows washed in their
+	-- numbers' colors, its shade unless No backgrounds takes it), at its size
+	-- as far as the preview's width lets it and its text size, the rows that
+	-- fit; the run's numbers, or a sample run's. A click on a row picks its
+	-- number for the colors, a white edge round the one picked.
+	function Paint.Stats(self)
+		self:Begin()
+		self.hits = self.hits or {}
+		for index = 1, table.getn(self.hits) do
+			self.hits[index]:Hide()
+		end
+		local look = SurvivorUI_StatsPanelLook and SurvivorUI_StatsPanelLook(ST.SAMPLE)
+		if not look then
+			return
+		end
+		local step = SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Stats") or 0
+		-- A tenth smaller than on the screen, for a few groups to fit.
+		local zoom = math.min(0.9 * (SurvivorUI_GetScale and SurvivorUI_GetScale("stats") or 1), (self:GetWidth() - 16) / look.width)
+		local left = math.floor((self:GetWidth() - look.width * zoom) / 2)
+		local top, bottom = -18, -(self:GetHeight() - 6)
+		-- What fits above the preview's foot, from the rows' top down.
+		local pieces, y, cut = {}, 0, false
+		for index = 1, table.getn(look.groups) do
+			local group = look.groups[index]
+			if look.head > 0 then
+				if top - (look.top + y + look.head + look.row) * zoom < bottom then
+					cut = true
+					break
+				end
+				table.insert(pieces, { group = group, y = y })
+				y = y + look.head
+			end
+			for each = 1, table.getn(group.rows) do
+				if top - (look.top + y + look.row) * zoom < bottom then
+					cut = true
+					break
+				end
+				table.insert(pieces, { row = group.rows[each], y = y })
+				y = y + look.row
+			end
+			if cut then
+				break
+			end
+		end
+		local height = cut and (top - bottom) or (look.top + math.max(10, y) + 6) * zoom
+		if look.ground then
+			local shade = self:Box(0.04, 0.04, 0.07, 0.55, nil, "BORDER")
+			shade:SetPoint("TOPLEFT", self, "TOPLEFT", left, top)
+			shade:SetWidth(look.width * zoom)
+			shade:SetHeight(height)
+		end
+		if look.header then
+			local title = self:Word(SurvivorUI_FONT, (11 + FONT_BUMP + step) * zoom, "OUTLINE", 1, 0.82, 0, "Stats")
+			title:SetPoint("TOPLEFT", self, "TOPLEFT", left + 8 * zoom, top - 9 * zoom)
+		end
+		if table.getn(look.groups) == 0 then
+			local none = self:Word(SurvivorUI_FONT, 9 + FONT_BUMP, "OUTLINE", MUTED[1], MUTED[2], MUTED[3], "No number shown: tick them below")
+			none:SetPoint("TOP", self, "TOP", 0, top - (look.top + 8) * zoom)
+		end
+		ST.PaintPieces(self, look, pieces, left + 4 * zoom, top - look.top * zoom, (look.width - 8) * zoom, zoom, step)
+	end
+
+	-- The groups' titles and the rows, from x, y (the rows' top), width wide.
+	function ST.PaintPieces(self, look, pieces, x, y, width, zoom, step)
+		local rows = 0
+		for index = 1, table.getn(pieces) do
+			local piece = pieces[index]
+			local at = y - piece.y * zoom
+			if piece.group then
+				local color = piece.group.color
+				local middle = at - (look.head / 2 + 2) * zoom
+				local name = self:Word(SurvivorUI_FONT, (10 + FONT_BUMP + step) * zoom, "OUTLINE", color[1], color[2], color[3], piece.group.title)
+				name:SetPoint("CENTER", self, "TOPLEFT", x + width / 2, middle)
+				local reach = math.max(1, (width - name:GetStringWidth()) / 2 - 6 * zoom)
+				local line = self:Box(color[1], color[2], color[3], 0.6)
+				line:SetPoint("LEFT", self, "TOPLEFT", x, middle)
+				line:SetWidth(reach)
+				line:SetHeight(1)
+				line = self:Box(color[1], color[2], color[3], 0.6)
+				line:SetPoint("RIGHT", self, "TOPLEFT", x + width, middle)
+				line:SetWidth(reach)
+				line:SetHeight(1)
+			else
+				local row, tall = piece.row, look.row * zoom
+				local wash = self:Box(row.r, row.g, row.b, 0.07)
+				wash:SetPoint("TOPLEFT", self, "TOPLEFT", x, at - zoom)
+				wash:SetWidth(width)
+				wash:SetHeight(tall - 2 * zoom)
+				local rule = self:Box(row.r, row.g, row.b, 0.28)
+				rule:SetPoint("TOPLEFT", self, "TOPLEFT", x, at - tall + 1)
+				rule:SetWidth(width)
+				rule:SetHeight(1)
+				local size = (look.font + FONT_BUMP + step) * zoom
+				local word = self:Word(SurvivorUI_FONT, size, "OUTLINE", row.r, row.g, row.b, row.name)
+				word:SetPoint("LEFT", self, "TOPLEFT", x + 2 * zoom, at - tall / 2)
+				word = self:Word(SurvivorUI_FONT, size, "OUTLINE", row.r, row.g, row.b, row.value)
+				word:SetPoint("RIGHT", self, "TOPLEFT", x + width - 2 * zoom, at - tall / 2)
+				if row.label == ST.picked then
+					ST.Ring(self, x - 1, at + 1, width + 2, tall + 1)
+				end
+				rows = rows + 1
+				ST.Hit(self, rows, row, x, at, width, tall)
+			end
+		end
+	end
+
+	-- A white edge round the number picked.
+	function ST.Ring(self, x, y, width, height)
+		local edges = { { x, y, width, 1 }, { x, y - height + 1, width, 1 }, { x, y, 1, height }, { x + width - 1, y, 1, height } }
+		for index = 1, 4 do
+			local edge = self:Box(1, 1, 1, 0.9, nil, "OVERLAY")
+			edge:SetPoint("TOPLEFT", self, "TOPLEFT", edges[index][1], edges[index][2])
+			edge:SetWidth(edges[index][3])
+			edge:SetHeight(edges[index][4])
+		end
+	end
+
+	-- Over a row of the preview: a click picks its number.
+	function ST.Hit(self, index, row, x, y, width, height)
+		local hit = self.hits[index]
+		if not hit then
+			hit = CreateFrame("Button", nil, self)
+			hit:SetScript("OnClick", function() ST.Pick(this.key) end)
+			hit:SetScript("OnEnter", function()
+				GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+				GameTooltip:SetText(SurvivorUI_OT(this.title), 1, 1, 1)
+				GameTooltip:AddLine(SurvivorUI_OT("Click: its color, at the left"), 0.8, 0.8, 0.8)
+				GameTooltip:Show()
+			end)
+			hit:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			self.hits[index] = hit
+		end
+		hit.key, hit.title = row.label, row.name
+		hit:ClearAllPoints()
+		hit:SetPoint("TOPLEFT", self, "TOPLEFT", x, y)
+		hit:SetWidth(width)
+		hit:SetHeight(height)
+		hit:Show()
+	end
+
+	-- The look, in the left column: on or off, the size and the text size.
+	Kit.Split(tab)
+	Kit.Section(tab, "Look")
+	Kit.Chips(tab, {
+		{ "Title", OnUnlessOff("statsHeader"), Flip("statsHeader"),
+			"The panel's name across its top, in gold. Off: the numbers from the top, the panel shorter by its strip; to move it, a strip shows over it (under it at the screen's top) in move mode, with the move key held or while this tab is open." },
+		{ "Group titles", OnUnlessOff("statsGroupTitles"), Flip("statsGroupTitles"),
+			"Offense, Defense and the other groups' names over their numbers. Off: the numbers one after another, the groups in the same order; in move mode or with the move key held they show again, faint, to drag a group by." },
+		{ "Hide the numbers at 0 or below", OnUnlessOff("statsHideZero"), Flip("statsHideZero"),
+			"In the character pane and on the panel alike, for every class: each one back once it grows past 0." },
+	})
+	Kit.Size(tab, "Size", 0.5, 2, 0.05,
+		function() return SurvivorUI_GetScale and SurvivorUI_GetScale("stats") or 1 end,
+		function(value) if SurvivorUI_SetPartScale then SurvivorUI_SetPartScale("stats", value) end end,
+		{ { "S", 0.8 }, { "M", 1 }, { "L", 1.25 } })
+	do
+		-- Its text size (its card's A- and A+), the name at the left as Size's.
+		local left, width = Span(tab)
+		local y = tab.y
+		local label = Text(tab, 9, MUTED)
+		label:SetPoint("TOPLEFT", tab, "TOPLEFT", left, y - 6)
+		label:SetText(string.upper("Text size"))
+		local stepper = Kit.Stepper(tab, nil, -4, 8, 1,
+			function() return SurvivorUI_PieceTextStep and SurvivorUI_PieceTextStep("Stats") or 0 end,
+			function(value) if SurvivorUI_SetPieceTextStep then SurvivorUI_SetPieceTextStep("Stats", value) end end,
+			function(value) return value == 0 and "normal" or ((value > 0 and "+" or "")..value) end)
+		stepper:ClearAllPoints()
+		stepper:SetPoint("TOPRIGHT", tab, "TOPLEFT", left + width, y)
+		side.Index(tab, "Text size", "font text size", y, 24)
+	end
+
+	-- The picked number's color, its name after the section's; at the right,
+	-- every number in it.
+	local head = Kit.Section(tab, "Color", "The picked number's color on the panel, its words and its row: its group's (as at first), the class's or one of these. Click a number in the preview, or the dot after it in the list, to pick it. All in this color: every number in it. The character pane's numbers keep their own.")
+	local which = CreateFrame("Frame", nil, tab)
+	which:SetWidth(1)
+	which:SetHeight(1)
+	which:SetPoint("LEFT", head, "RIGHT", 28, 0)
+	which.text = Text(which, 9, TEXT)
+	which.text:SetPoint("LEFT", which, "LEFT", 0, 0)
+	function which:Refresh()
+		self.text:SetText(SurvivorUI_StatName and SurvivorUI_StatName(ST.picked, true) or ST.picked)
+		if SurvivorUI_StatColor then
+			self.text:SetTextColor(Kit.Light({ SurvivorUI_StatColor(ST.picked) }, 0.2))
+		end
+	end
+	table.insert(widgets, which)
+	local swatchesY = tab.y
+	for index = 1, 11 do
+		local swatch = CreateFrame("Button", nil, tab)
+		swatch.index = index
+		swatch:SetWidth(18)
+		swatch:SetHeight(ROW)
+		swatch:SetPoint("TOPLEFT", tab, "TOPLEFT", (index - 1) * 22, swatchesY)
+		swatch.edge = Fill(swatch, "BORDER", 0.3, 0.3, 0.35, 1)
+		swatch.edge:SetWidth(18)
+		swatch.edge:SetHeight(18)
+		swatch.edge:SetPoint("TOPLEFT", swatch, "TOPLEFT", 0, -1)
+		swatch.fill = Fill(swatch, "ARTWORK", 1, 1, 1, 1)
+		swatch.fill:SetPoint("TOPLEFT", swatch.edge, "TOPLEFT", 2, -2)
+		swatch.fill:SetPoint("BOTTOMRIGHT", swatch.edge, "BOTTOMRIGHT", -2, 2)
+		-- Its group's: a tile of the six groups' colors; the class's: the
+		-- hero's class icon (Lucas, 2026-11-05: each with its own look, not
+		-- one more color).
+		if index == 1 then
+			swatch.cells = {}
+			for cell = 1, 6 do
+				local part = Fill(swatch, "OVERLAY", 1, 1, 1, 1)
+				part:SetWidth(14 / 3)
+				part:SetHeight(7)
+				part:SetPoint("TOPLEFT", swatch.fill, "TOPLEFT", math.mod(cell - 1, 3) * 14 / 3, -math.floor((cell - 1) / 3) * 7)
+				swatch.cells[cell] = part
+			end
+		elseif index == 2 then
+			swatch.icon = swatch:CreateTexture(nil, "OVERLAY")
+			swatch.icon:SetAllPoints(swatch.fill)
+		end
+		swatch:SetScript("OnClick", function()
+			if this.key and SurvivorUI_SetStatColor then
+				SurvivorUI_SetStatColor(ST.picked, this.key)
+			end
+			RefreshAll()
+		end)
+		swatch:SetScript("OnEnter", function()
+			this.hot = true
+			this:Refresh()
+			GameTooltip:SetOwner(this, "ANCHOR_TOP")
+			GameTooltip:SetText(SurvivorUI_OT(this.name or ""), 1, 1, 1)
+			GameTooltip:Show()
+		end)
+		swatch:SetScript("OnLeave", function()
+			this.hot = nil
+			this:Refresh()
+			GameTooltip:Hide()
+		end)
+		function swatch:Refresh()
+			local key, name, tint = ST.Choice(self.index)
+			if not key then
+				self:Hide()
+				return
+			end
+			self:Show()
+			self.key, self.name = key, name
+			if tint then
+				self.fill:SetVertexColor(tint[1], tint[2], tint[3], 1)
+			else
+				self.fill:SetVertexColor(Paint.HeroColor())
+			end
+			local chosen = SurvivorUI_StatColorKey and SurvivorUI_StatColorKey(ST.picked) == key
+			if chosen then
+				self.edge:SetVertexColor(1, 1, 1, 1)
+			elseif self.hot then
+				self.edge:SetVertexColor(0.7, 0.7, 0.75, 1)
+			else
+				self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+			end
+			local alpha = (chosen or self.hot) and 1 or 0.75
+			self.fill:SetAlpha(alpha)
+			if self.cells then
+				local groups = SurvivorUI_StatList and SurvivorUI_StatList() or {}
+				for cell = 1, 6 do
+					local color = groups[cell] and groups[cell].color or tint or ACCENT
+					self.cells[cell]:SetVertexColor(color[1], color[2], color[3], alpha)
+				end
+			end
+			if self.icon then
+				local _, class = UnitClass("player")
+				local art, coords
+				if SurvivorUI_ClassIcon then
+					art, coords = SurvivorUI_ClassIcon(class)
+				end
+				if coords then
+					local cutX, cutY = (coords[2] - coords[1]) * 0.1, (coords[4] - coords[3]) * 0.1
+					self.icon:SetTexture(art)
+					self.icon:SetTexCoord(coords[1] + cutX, coords[2] - cutX, coords[3] + cutY, coords[4] - cutY)
+					self.icon:SetAlpha(alpha)
+					self.icon:Show()
+				else
+					self.icon:Hide()
+				end
+			end
+		end
+		table.insert(widgets, swatch)
+	end
+	side.Index(tab, "Color", "stat number color group class gold white red orange green teal blue purple pink", swatchesY, ROW)
+	tab.y = swatchesY - ROW - 8
+	local all = Kit.Quiet(tab, "All in this color", 130, function()
+		if SurvivorUI_SetStatColor and SurvivorUI_StatColorKey then
+			SurvivorUI_SetStatColor(nil, SurvivorUI_StatColorKey(ST.picked))
+		end
+		RefreshAll()
 	end)
-	check:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
-	check:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
-	function check:Refresh()
-		local on = not SurvivorUI_StatShown or SurvivorUI_StatShown(label)
-		self.box:SetVertexColor(color[1], color[2], color[3], on and 1 or 0)
-		self.edge:SetVertexColor(on and color[1] or 0.3, on and color[2] or 0.3, on and color[3] or 0.35, 1)
-		if self.hot then
-			self.label:SetTextColor(1, 1, 1)
-		elseif on then
-			self.label:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
-		else
-			self.label:SetTextColor(MUTED[1] * 0.8, MUTED[2] * 0.8, MUTED[3] * 0.8)
-		end
-	end
-	table.insert(widgets, check)
-	side.Index(page, SurvivorUI_StatName and SurvivorUI_StatName(label, true) or label, "stat "..label, y, 15)
-end
+	all:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, tab.y)
+	side.Index(tab, "All in this color", "stat number color every", tab.y, 24)
+	tab.y = tab.y - 32
 
-local groups = SurvivorUI_StatList and SurvivorUI_StatList() or {}
--- Three columns, each group into the shortest, in order.
-local columnWidth = PAGE_WIDTH / 3 - 4
-local columnX = { 0, PAGE_WIDTH / 3 + 2, 2 * PAGE_WIDTH / 3 + 4 }
-local columnY = { page.y, page.y, page.y }
-for index = 1, table.getn(groups) do
-	local group = groups[index]
-	local column = 1
-	for each = 2, 3 do
-		if columnY[each] > columnY[column] then
-			column = each
+	Kit.Link(tab, "The character pane's own numbers:", "character")
+	-- How to change the order, plain to see (Lucas, 2026-11-05): brighter
+	-- than a note, with the move key chosen in Layout.
+	do
+		local order = Kit.BuildNote(tab, SurvivorUI_OTF("To change the order: hold {1} (the move key, set in Layout) and drag a number or a group on the panel to its place.", "Shift"))
+		order:SetTextColor(Kit.Light(tab.color, 0.45))
+		table.insert(widgets, { Refresh = function()
+			local key = SurvivorUI_MoveKey and SurvivorUI_MoveKey() or "alt"
+			if key == "none" then
+				order:SetText(SurvivorUI_OT("To change the order: in Move UI, drag a number or a group on the panel to its place."))
+			else
+				order:SetText(SurvivorUI_OTF("To change the order: hold {1} (the move key, set in Layout) and drag a number or a group on the panel to its place.",
+					key == "ctrl" and "Ctrl" or key == "shift" and "Shift" or "Alt"))
+			end
+		end })
+	end
+
+	-- The preview in the right column, as tall as the left one and 44 more
+	-- (the room the page has left over the foot), for a few groups to fit.
+	Kit.Right(tab)
+	do
+		local preview = Kit.Preview(tab, math.max(160, tab.splitY - tab.leftY + 32), Paint.Stats)
+		preview:ClearAllPoints()
+		preview:SetPoint("TOPLEFT", tab, "TOPLEFT", tab.left, tab.splitY)
+		preview:SetWidth(tab.width)
+		-- The run's numbers move on: drawn again each second.
+		preview:SetScript("OnUpdate", function()
+			this.wait = (this.wait or 0) + arg1
+			if this.wait >= 1 then
+				this.wait = 0
+				this:Refresh()
+			end
+		end)
+	end
+	Kit.Join(tab)
+
+	-- Every number, by group, in four columns: ticked shows, here and in the
+	-- character pane, for this class; the dot after it picks it for its color.
+	-- The class named in the section's title.
+	ST.classTitle = Kit.Section(tab, "Stats for this class", "Ticked shows, on the panel and in the character pane's numbers alike; each class keeps its own, and a number unticked never shows. The dot after a number picks it for its color.")
+	ST.classWidget = {}
+	function ST.classWidget:Refresh()
+		local name = UnitClass and UnitClass("player")
+		ST.classTitle:SetText(string.upper(name and SurvivorUI_OTF("Stats for {1}", name) or "Stats for this class"))
+	end
+	table.insert(widgets, ST.classWidget)
+
+	function ST.Check(x, y, width, label, color)
+		local check = CreateFrame("Button", nil, tab)
+		check:SetWidth(width)
+		check:SetHeight(14)
+		check:SetPoint("TOPLEFT", tab, "TOPLEFT", x, y)
+		check.edge = Fill(check, "BORDER", 0.3, 0.3, 0.35, 1)
+		check.edge:SetWidth(10)
+		check.edge:SetHeight(10)
+		check.edge:SetPoint("LEFT", check, "LEFT", 2, 0)
+		check.box = Fill(check, "ARTWORK", 0, 0, 0, 1)
+		check.box:SetPoint("TOPLEFT", check.edge, "TOPLEFT", 1, -1)
+		check.box:SetPoint("BOTTOMRIGHT", check.edge, "BOTTOMRIGHT", -1, 1)
+		check.label = Text(check, 9, TEXT)
+		check.label:SetPoint("LEFT", check.edge, "RIGHT", 6, 0)
+		check.label:SetText(SurvivorUI_StatName and SurvivorUI_StatName(label, true) or label)
+		check:SetScript("OnClick", function()
+			if SurvivorUI_SetStatShown and SurvivorUI_StatShown then
+				SurvivorUI_SetStatShown(label, not SurvivorUI_StatShown(label))
+			end
+			RefreshAll()
+		end)
+		check:SetScript("OnEnter", function() this.hot = true this:Refresh() end)
+		check:SetScript("OnLeave", function() this.hot = nil this:Refresh() end)
+		-- Its color, a dot at the right: a click picks it.
+		local dot = CreateFrame("Button", nil, check)
+		dot:SetWidth(14)
+		dot:SetHeight(14)
+		dot:SetPoint("RIGHT", check, "RIGHT", 0, 0)
+		dot.edge = Fill(dot, "BORDER", 0.3, 0.3, 0.35, 1)
+		dot.edge:SetWidth(10)
+		dot.edge:SetHeight(10)
+		dot.edge:SetPoint("CENTER", dot, "CENTER", 0, 0)
+		dot.fill = Fill(dot, "ARTWORK", 1, 1, 1, 1)
+		dot.fill:SetPoint("TOPLEFT", dot.edge, "TOPLEFT", 2, -2)
+		dot.fill:SetPoint("BOTTOMRIGHT", dot.edge, "BOTTOMRIGHT", -2, 2)
+		dot:SetScript("OnClick", function() ST.Pick(label) end)
+		dot:SetScript("OnEnter", function()
+			this.hot = true
+			check:Refresh()
+			GameTooltip:SetOwner(this, "ANCHOR_TOP")
+			GameTooltip:SetText(SurvivorUI_OT(SurvivorUI_StatName and SurvivorUI_StatName(label, true) or label), 1, 1, 1)
+			GameTooltip:AddLine(SurvivorUI_OT("Click: its color, above"), 0.8, 0.8, 0.8)
+			GameTooltip:Show()
+		end)
+		dot:SetScript("OnLeave", function()
+			this.hot = nil
+			check:Refresh()
+			GameTooltip:Hide()
+		end)
+		function check:Refresh()
+			local on = not SurvivorUI_StatShown or SurvivorUI_StatShown(label)
+			self.box:SetVertexColor(color[1], color[2], color[3], on and 1 or 0)
+			self.edge:SetVertexColor(on and color[1] or 0.3, on and color[2] or 0.3, on and color[3] or 0.35, 1)
+			if self.hot then
+				self.label:SetTextColor(1, 1, 1)
+			elseif on then
+				self.label:SetTextColor(TEXT[1], TEXT[2], TEXT[3])
+			else
+				self.label:SetTextColor(MUTED[1] * 0.8, MUTED[2] * 0.8, MUTED[3] * 0.8)
+			end
+			if SurvivorUI_StatColor then
+				dot.fill:SetVertexColor(SurvivorUI_StatColor(label, color))
+			end
+			dot.fill:SetAlpha(on and 1 or 0.5)
+			if ST.picked == label then
+				dot.edge:SetVertexColor(1, 1, 1, 1)
+			elseif dot.hot then
+				dot.edge:SetVertexColor(0.7, 0.7, 0.75, 1)
+			else
+				dot.edge:SetVertexColor(0, 0, 0, 1)
+			end
 		end
+		table.insert(widgets, check)
+		side.Index(tab, SurvivorUI_StatName and SurvivorUI_StatName(label, true) or label, "stat "..label, y, 14)
 	end
-	local y = columnY[column]
-	local title = Text(page, 9, group.color)
-	title:SetPoint("TOPLEFT", page, "TOPLEFT", columnX[column], y)
-	title:SetText(group.title)
-	y = y - 15
-	for each = 1, table.getn(group.rows) do
-		StatCheck(columnX[column], y, columnWidth, group.rows[each][1], group.color)
-		y = y - 15
+
+	do
+		local groups = SurvivorUI_StatList and SurvivorUI_StatList() or {}
+		local columns, gap = 4, 8
+		local columnWidth = math.floor((PAGE_WIDTH - (columns - 1) * gap) / columns)
+		local columnY = { tab.y, tab.y, tab.y, tab.y }
+		for index = 1, table.getn(groups) do
+			local group = groups[index]
+			-- A group the list has no column for: the shortest.
+			local column = ST.COLUMNS[index]
+			if not column then
+				column = 1
+				for each = 2, columns do
+					if columnY[each] > columnY[column] then
+						column = each
+					end
+				end
+			end
+			local x = (column - 1) * (columnWidth + gap)
+			local y = columnY[column]
+			local title = Text(tab, 9, group.color)
+			title:SetPoint("TOPLEFT", tab, "TOPLEFT", x, y)
+			title:SetText(group.title)
+			y = y - 15
+			for each = 1, table.getn(group.rows) do
+				ST.Check(x, y, columnWidth, group.rows[each][1], group.color)
+				y = y - 14
+			end
+			columnY[column] = y - 6
+		end
+		tab.y = math.min(math.min(columnY[1], columnY[2]), math.min(columnY[3], columnY[4]))
 	end
-	columnY[column] = y - 6
+	local back = Kit.Quiet(tab, "Stats back to default", 170, Asked("Stats back to default?",
+		"This class's numbers all shown again, in their first order.", "Back to default",
+		function() if SurvivorUI_ResetStatOrder then SurvivorUI_ResetStatOrder() end end))
+	back:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, tab.y)
+	side.Index(tab, "Stats back to default", "stats order shown reset class", tab.y, 24)
+	tab.y = tab.y - 30
+
+	Kit.Foot(tab, { reset = Asked("Stats panel back to default?",
+		"Its title and its groups' titles shown, each number in its group's color, the numbers at 0 or below hidden, at the first size and text size. Which numbers show and their order stay (Stats back to default, for this class's), and so does where it stands (Back to its place).", "Back to default",
+		function()
+			DB().statsHeader, DB().statsGroupTitles, DB().statColors, DB().statsHideZero = nil, nil, nil, nil
+			if DB().partScale and DB().partScale.stats and SurvivorUI_SetPartScale then
+				SurvivorUI_SetPartScale("stats", 1)
+				DB().partScale.stats = nil
+			end
+			if SurvivorUI_SetPieceTextStep then
+				SurvivorUI_SetPieceTextStep("Stats", 0)
+			end
+		end) })
 end
-page.y = math.min(columnY[1], math.min(columnY[2], columnY[3])) - 4
-Button(page, "Stats back to default", 200, 0, Asked("Stats back to default?",
-	"This class's numbers all shown again, in their first order.", "Back to default",
-	function() if SurvivorUI_ResetStatOrder then SurvivorUI_ResetStatOrder() end end))
 
 ------------------------------------------------------------------------------
 -- Jewelry: the Jewelry Collection (Jewelry.lua).
@@ -6224,17 +7318,19 @@ page.y = page.y - 30
 
 do
 	local tab = pages.units
-	Kit.Head(tab, { line = "Your frame, your target's, the action bar and your buffs over your frame. While this tab is open, drag the frames, the buffs or the target's debuffs to move them." })
+	Kit.Head(tab, { line = "Your frame, your target's, the action bar and your buffs over your frame. While this tab is open, drag the frames, the buffs or the target's debuffs to move them.",
+		advanced = true })
 
 	-- SurvivorUI.lua's sizes: a button's side and the gap between two, the
 	-- gap between a frame and the buttons, a frame's bar, its power bar, a
 	-- buff's side; the power's colors; the bar's buttons (12 is the = key),
-	-- their keys, and a sample of each (spells, buffs) for an empty bar.
+	-- their keys, and a sample of each (spells, buffs) for an empty bar: a
+	-- DoT first and a totem second, for the counters over them.
 	Paint.ROW = { button = 36, gap = 2, apart = 6, bar = 150, power = 3, aura = 22 }
 	Paint.POWER = { [0] = { 0.25, 0.50, 1.00 }, [1] = { 0.85, 0.20, 0.20 }, [2] = { 1.00, 0.55, 0.15 }, [3] = { 1.00, 0.90, 0.25 } }
 	Paint.BAR = { 1, 2, 3, 4, 5, 6, 12 }
 	Paint.BAR_KEYS = { "1", "2", "3", "4", "5", "6", "=" }
-	Paint.BAR_SAMPLE = { "Spell_Fire_FlameBolt", "Spell_Shadow_ShadowWordPain", "Spell_Holy_HolyBolt", "Spell_Frost_FrostBolt02",
+	Paint.BAR_SAMPLE = { "Spell_Shadow_ShadowWordPain", "Spell_Fire_SearingTotem", "Spell_Holy_HolyBolt", "Spell_Frost_FrostBolt02",
 		"Spell_Nature_Lightning", "Spell_Nature_StarFall", "Spell_Holy_PowerWordShield" }
 	Paint.BUFF_SAMPLE = { { "Spell_Holy_WordFortitude", "2m" }, { "Spell_Nature_Regeneration", "45" }, { "Spell_Holy_PowerWordShield", "8.2" } }
 	-- The shield over the health (SurvivorUI.lua's SHIELD_LOOKS): its fill,
@@ -6483,6 +7579,46 @@ do
 		end
 	end
 
+	-- The counters over the buttons (DotCounter.lua) in the looks chosen
+	-- (Advanced, below), while they count (Counters): a DoT's 3 over the
+	-- first; a totem's 12 of 30, its soonest ending in 8 sec, over the second
+	-- (its seconds beside it, to the right, over nothing). In the meter's
+	-- color: a sample's (Shadow Word: Pain's purple, Searing Totem's orange),
+	-- the meter giving each spell its own as it comes.
+	Paint.COUNTERS = {
+		{ "debuff", "dotCounter", 3, nil, nil, { 0.65, 0.35, 0.90 } },
+		{ "totem", "totemCounter", 12, 8, 30, { 0.95, 0.50, 0.10 } },
+	}
+	function Paint.Counters(self, x, top, zoom)
+		local db = DB()
+		if db.counters == false or not SurvivorUI_CounterText then
+			return
+		end
+		local side = math.floor(Paint.ROW.button * zoom + 0.5)
+		local step = side + math.max(1, math.floor(Paint.ROW.gap * zoom + 0.5))
+		for index = 1, table.getn(Paint.COUNTERS) do
+			local sample = Paint.COUNTERS[index]
+			local kind = sample[1]
+			if db[sample[2]] ~= false then
+				local size = SurvivorUI_CounterSize(kind)
+				local text, timer = SurvivorUI_CounterText(kind, sample[3], sample[4], sample[5])
+				local r, g, b = sample[6][1], sample[6][2], sample[6][3]
+				if (db[kind.."CounterColor"] or "meter") ~= "meter" then
+					r, g, b = SurvivorUI_CounterColor(kind)
+				end
+				local word = self:Word(SurvivorUI_FONT, (math.floor(13 * size + 0.5) + FONT_BUMP) * zoom, "THICKOUTLINE", r, g, b, text)
+				local small
+				if timer then
+					small = self:Word(SurvivorUI_FONT, (math.floor(9 * size + 0.5) + FONT_BUMP) * zoom, "OUTLINE", 0.85, 0.85, 0.85, timer)
+					small:SetPoint("BOTTOMLEFT", word, "BOTTOMRIGHT", 2 * zoom, zoom)
+				end
+				-- Within the button's width, as on the bar (DotCounter.lua).
+				local left = SurvivorUI_FitCounter and SurvivorUI_FitCounter(word, small, side, size, zoom) or 0
+				word:SetPoint("BOTTOM", self, "TOPLEFT", x + (index - 1) * step + side / 2 - left, top + 2 * zoom)
+			end
+		end
+	end
+
 	-- A buff's time left as SurvivorUI.lua writes it.
 	function Paint.BuffTime(seconds)
 		if not seconds or seconds <= 0 then
@@ -6591,7 +7727,9 @@ do
 			end
 		end
 		if On("actionBar") then
-			Paint.Buttons(self, barX, math.floor(middle + R.button * bar * zoom / 2 + 0.5), bar * zoom)
+			local barTop = math.floor(middle + R.button * bar * zoom / 2 + 0.5)
+			Paint.Buttons(self, barX, barTop, bar * zoom)
+			Paint.Counters(self, barX, barTop, bar * zoom)
 		else
 			local off = self:Word(SurvivorUI_FONT, 9 + FONT_BUMP, "", MUTED[1], MUTED[2], MUTED[3], "Action bar off: the game's")
 			off:SetPoint("CENTER", self, "TOPLEFT", barX + barWide * zoom / 2, middle)
@@ -6654,7 +7792,7 @@ do
 		{ "Unit frames", FeatureOn("unitFrames"), FeatureToggle("unitFrames"),
 			"Your frame and your target's: flat, the portrait, the health in numbers, the target's debuffs over it. Off: the game's frames. After a reload." },
 		{ "Action bar", FeatureOn("actionBar"), FeatureToggle("actionBar"),
-			"Buttons 1 to 6 and = in one flat row, the rest of the bar and the bags put away, the experience a strip under it. Off: the game's bar. After a reload." },
+			"Buttons 1 to 6 and = in one flat row, the rest of the bar and the bags put away. Off: the game's bar. After a reload." },
 		{ "Buffs", FeatureOn("buffs"), FeatureToggle("buffs"),
 			"Your buffs and debuffs over your frame, with time left and stacks. Off: the game's, at the top right. After a reload." },
 	})
@@ -6705,13 +7843,191 @@ do
 	side.Index(tab, "Frames back in place", "reset place position player target buffs debuffs", y, 24)
 	tab.y = y - 30
 
+	-- The counters over the buttons (DotCounter.lua), in Advanced (the page
+	-- being full): the Totem counter's look or the Debuff counter's (every
+	-- other count: DoTs, fears, marks, shouts), one at a time as picked
+	-- beside Fine-tuning; for it its size on the left, its color and format on
+	-- the right. Each setting nil as it was (DotCounter.lua's), faded and
+	-- still while that counter counts nothing (Counters).
+	local CN = { editing = "totem" }
+	CN.KINDS = { { "totem", "Totem counter" }, { "debuff", "Debuff counter" } }
+	CN.FORMATS = {
+		totem = { { "cap", "12/30" }, { "count", "12" }, { "timer", "12/30 8s" } },
+		debuff = { { "count", "12" }, { "x", "x12" } },
+	}
+	CN.FORMAT_HELP = {
+		totem = "12/30: how many of a kind stand, out of the most that can stand at once, as the game tells it. 12: how many alone. 12/30 8s: and the seconds until the soonest one ends, small beside it. With a game before 0.124, which tells no most: the number and those seconds, or the number alone.",
+		debuff = "12: how many enemies each one is on (Battle Shout: its seconds left). x12: the same with an x before it.",
+	}
+	CN.COLOR_HELP = "The spell's damage meter color, as its bar in the meter (the default; the meter gives each spell its own as it comes), your class's color, or one of these for every spell."
+	CN.KINDS_HELP = "Totem counter: the totems down. Debuff counter: every other count, the DoTs, the fears, Faerie Fire and Demoralizing Shout, and Battle Shout's seconds."
+	CN.WHY = "Off in Counters: the counters, or every count of this one."
+	CN.SIZES = { { "S", 0.75 }, { "M", 1 }, { "L", 1.35 } }
+
+	-- Whether a counter counts anything now: the counters on, and its own.
+	function CN.Counts(kind)
+		local db = DB()
+		if db.counters == false then
+			return false
+		elseif kind == "totem" then
+			return db.totemCounter ~= false
+		end
+		return db.dotCounter ~= false or db.fearCounter ~= false or db.shoutCounter ~= false or db.markCounter ~= false
+	end
+
+	-- A setting of a counter's (kind..field: "totemCounterSize"), nil for its first.
+	function CN.Get(kind, field, first)
+		return function() return DB()[kind..field] or first end
+	end
+	function CN.Set(kind, field, first)
+		return function(value)
+			if CN.Counts(kind) then
+				DB()[kind..field] = value ~= first and value or nil
+			end
+		end
+	end
+
+	-- The colors, a row: the meter's (three of its colors in one), then the
+	-- Range indicator's (WorldMarks.lua), the class's among them.
+	function CN.Swatches(holder, kind, x, y)
+		local list = { { "meter", "Meter color" } }
+		for index = 1, table.getn(SurvivorUI_RANGE_COLORS or {}) do
+			table.insert(list, SurvivorUI_RANGE_COLORS[index])
+		end
+		for index = 1, table.getn(list) do
+			local swatch = CreateFrame("Button", nil, holder)
+			swatch.key, swatch.name, swatch.tint = list[index][1], list[index][2], list[index][3]
+			swatch:SetWidth(18)
+			swatch:SetHeight(ROW)
+			swatch:SetPoint("TOPLEFT", holder, "TOPLEFT", x + (index - 1) * 21, y)
+			swatch.edge = Fill(swatch, "BORDER", 0.3, 0.3, 0.35, 1)
+			swatch.edge:SetWidth(18)
+			swatch.edge:SetHeight(18)
+			swatch.edge:SetPoint("TOPLEFT", swatch, "TOPLEFT", 0, -1)
+			swatch.fills = {}
+			for part = 1, swatch.key == "meter" and 3 or 1 do
+				local fill = Fill(swatch, "ARTWORK", 1, 1, 1, 1)
+				fill:SetPoint("TOPLEFT", swatch.edge, "TOPLEFT", 2 + (part - 1) * 5, -2)
+				fill:SetWidth(swatch.key == "meter" and (part == 3 and 4 or 5) or 14)
+				fill:SetHeight(14)
+				swatch.fills[part] = fill
+			end
+			swatch:SetScript("OnClick", function()
+				CN.Set(kind, "CounterColor", "meter")(this.key)
+				RefreshAll()
+			end)
+			swatch:SetScript("OnEnter", function()
+				this.hot = true
+				this:Refresh()
+				GameTooltip:SetOwner(this, "ANCHOR_TOP")
+				GameTooltip:SetText(SurvivorUI_OT(this.name), 1, 1, 1)
+				if not CN.Counts(kind) then
+					GameTooltip:AddLine(SurvivorUI_OT(CN.WHY), MUTED[1], MUTED[2], MUTED[3], 1)
+				end
+				GameTooltip:Show()
+			end)
+			swatch:SetScript("OnLeave", function()
+				this.hot = nil
+				this:Refresh()
+				GameTooltip:Hide()
+			end)
+			function swatch:Refresh()
+				local chosen = CN.Get(kind, "CounterColor", "meter")() == self.key
+				for part = 1, table.getn(self.fills) do
+					local tint = self.tint or Paint.COUNTER_METER[part]
+					if self.key == "class" then
+						self.fills[part]:SetVertexColor(Paint.HeroColor())
+					else
+						self.fills[part]:SetVertexColor(tint[1], tint[2], tint[3], 1)
+					end
+					self.fills[part]:SetAlpha((chosen or self.hot) and 1 or 0.75)
+				end
+				if chosen then
+					self.edge:SetVertexColor(1, 1, 1, 1)
+				elseif self.hot then
+					self.edge:SetVertexColor(0.7, 0.7, 0.75, 1)
+				else
+					self.edge:SetVertexColor(0.3, 0.3, 0.35, 1)
+				end
+			end
+			table.insert(widgets, swatch)
+		end
+	end
+	-- The meter's swatch: three of the meter's colors (Meter.lua's first).
+	Paint.COUNTER_METER = { { 0.93, 0.70, 0.15 }, { 0.85, 0.20, 0.25 }, { 0.25, 0.45, 0.95 } }
+
+	-- A label in small grey capitals at x, y, a "?" after it.
+	function CN.Label(holder, text, x, y, help)
+		local label = Text(holder, 9, MUTED)
+		label:SetPoint("TOPLEFT", holder, "TOPLEFT", x, y)
+		label:SetText(string.upper(text))
+		Kit.Help(holder, label, text, help)
+		return label
+	end
+
+	-- One counter's settings, in a layer of the box's own, shown while picked.
+	function CN.Layer(box, kind, top)
+		local layer = CreateFrame("Frame", nil, box)
+		layer:SetPoint("TOPLEFT", box, "TOPLEFT", 0, 0)
+		layer:SetWidth(PAGE_WIDTH)
+		layer:SetHeight(-top + 50)
+		layer.color, layer.label, layer.inset, layer.full = box.color, box.label, box.inset, box.full
+		-- Its size on the left.
+		layer.y, layer.left, layer.width = top, 0, 180
+		local size = Kit.Size(layer, "Size", 0.5, 2, 0.05, function() return SurvivorUI_CounterSize and SurvivorUI_CounterSize(kind) or 1 end,
+			function(value)
+				value = math.floor(value * 100 + 0.5) / 100
+				CN.Set(kind, "CounterSize", tonumber(DB().counterSize) or 1)(value)
+			end, CN.SIZES)
+		layer.slider = size:GetChildren()
+		-- Its color and format on the right, on the lines of the S M L and the bar.
+		CN.Label(layer, "Color", 212, top - 4, CN.COLOR_HELP)
+		CN.Swatches(layer, kind, 276, top)
+		CN.Label(layer, "Format", 212, top - 29, CN.FORMAT_HELP[kind])
+		layer.y, layer.left, layer.width = top - 20, 264, 228
+		Kit.Segments(layer, CN.FORMATS[kind], CN.Get(kind, "CounterFormat", CN.FORMATS[kind][1][1]), CN.Set(kind, "CounterFormat", CN.FORMATS[kind][1][1]))
+		function layer:Refresh()
+			if CN.editing == kind then
+				self:Show()
+			else
+				self:Hide()
+			end
+			local counts = CN.Counts(kind)
+			self:SetAlpha(counts and 1 or 0.4)
+			self.slider:EnableMouse(counts)
+			self.slider:EnableMouseWheel(counts)
+		end
+		table.insert(widgets, layer)
+	end
+
+	do
+		local box = Kit.Advanced(tab, "the counters over the buttons, their size, color and format")
+		local top = box.y
+		-- Which counter, beside Fine-tuning at the right.
+		box.y = -5
+		local picker = Kit.Segments(box, CN.KINDS, function() return CN.editing end, function(value) CN.editing = value end)
+		picker:ClearAllPoints()
+		picker:SetPoint("TOPRIGHT", box, "TOPRIGHT", -12, -5)
+		local help = Kit.Help(box, picker, "Totem counter / Debuff counter", CN.KINDS_HELP)
+		help:ClearAllPoints()
+		help:SetPoint("RIGHT", picker, "LEFT", -6, 0)
+		CN.Layer(box, "totem", top)
+		CN.Layer(box, "debuff", top)
+		side.Index(box, "Counter size, color and format", "totem debuff dot counter number over the buttons size color colour format meter class", top, 46)
+		box.y = top - 50
+		Kit.EndAdvanced(tab, box)
+	end
+
 	-- Its looks back as they first were (Mover.lua's sizes: the center bar
-	-- 0.9, the bar 0.85); the modules and every place stay.
+	-- 0.9, the bar 0.85), the counters' too (the size the Counters tab had,
+	-- counterSize, with them); the modules and every place stay.
 	Kit.Foot(tab, { reset = Asked("Frames & bar back to default?",
-		"The health as 1.2M | 73% on both frames, the shield counted in yours, cooldown numbers with the short ones, no key labels, and the four sizes as they first were. The modules, the lock, the frames following the bar and where each stands stay.", "Back to default",
+		"The health as 1.2M | 73% on both frames, the shield counted in yours, cooldown numbers with the short ones, no key labels, the four sizes as they first were, and the counters over the buttons at their first size, in the meter's colors, as 12/30 and 12. The modules, the lock, the frames following the bar and where each stands stay.", "Back to default",
 		function()
 			local db = DB()
 			db.playerHealth, db.targetHealth, db.shieldText, db.shortCooldowns = nil, nil, nil, nil
+			db.totemCounterSize, db.totemCounterColor, db.totemCounterFormat = nil, nil, nil
+			db.debuffCounterSize, db.debuffCounterColor, db.debuffCounterFormat, db.counterSize = nil, nil, nil, nil
 			local features = db.features or {}
 			if features.hideKeys == false then
 				needsReload = true
@@ -8655,7 +9971,7 @@ do
 			look = "fill", colors = { { 0.64, 0.21, 0.93 }, { 0, 0.44, 0.87 }, { 0.12, 1, 0 } } },
 		{ "run", "This Run", "Its dark ground goes. Each row keeps its faint wash and its line in its own color; the titles stay.",
 			look = "faint", colors = { { 0.40, 0.85, 1 }, { 1, 0.86, 0.35 }, { 0.55, 0.85, 0.55 } } },
-		{ "stats", "Stats panel", "The Stats panel's dark ground goes, while the panel is on; its groups' names and rows stay, washed in their group's color. The character pane's own numbers keep the pane's ground.",
+		{ "stats", "Stats panel", "The Stats panel's dark ground goes, while the panel is on; its groups' names and rows stay, each row washed in its own color. The character pane's own numbers keep the pane's ground.",
 			look = "faint", colors = { { 0.72, 0.45, 1 }, { 1, 0.40, 0.40 }, { 0.30, 0.65, 1 } },
 			usable = function() return DB().noBackgrounds == true and SurvivorUI_StatsPanel ~= nil and SurvivorUI_StatsPanel() end,
 			why = "Turn No backgrounds on first, with the switch at the top, and the Stats panel (its tab)." },
