@@ -230,6 +230,20 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.59, 2026-11-05
+
+A spell at its fastest: its true cooldown in the build list, and an hourglass on its button. And a Biggest Crits box as short as you like.
+
+**Biggest Crits**
+- **Its lines, one at a time:** like the damage meter's Height, from 1 to 10 lines, on its card in move mode and in its options tab. The box still grows a line for each spell that crits, up to that many, the biggest crits first; its title stays where it is as it shrinks or grows. While you place it, it stands at all its lines, the ones with no crit yet as empty slots, so you see how tall it can get. Its card's Reset gives back all ten.
+
+**Build list**
+- **0.25s at the floor:** the game never lets a cooldown go under 0.25 sec, but it sends each one to one decimal, so a spell at that floor showed 0.2s. It now shows 0.25s. Under a second the list writes two decimals with no zero at the end (0.25s, 0.8s), from 1 to 10 sec one (3.1s), from 10 none (12s): the game tells no more than one decimal, so the second is only ever the floor's. A spell's card (its Cooldown line, on hover) does the same.
+
+**Action bar**
+- **An hourglass at its fastest:** a small gold hourglass at the foot of a spell's button once its cooldown is at the game's floor: 0.25 sec, Hellfire's 0.5, Divine Shield's 4. More haste or cooldown cards do nothing for that spell then; hover the hourglass to see. It hangs from the button's bottom edge, mostly over the button, so nothing under the bar moves, and the counters stay over the top. On or off in Counters (At its fastest), with the counters; Frames & bar's preview shows it under the fourth button.
+- **Where the game does not tell:** Soulfire, Polymorph, Hunter's Mark, Seal Fate, Bloodrage and Lightwell work their cooldown out their own way, which can go under 0.25 sec, so they get no hourglass and keep the cooldown as the game sends it. Hellfire's 0.5 is its floor or up to 0.05 sec over it (the game sends 0.5 to 0.55 alike). Divine Shield's floor is 4.4 sec at a run's start and 4 with any bonus to the shield's length, which the game does not tell for sure, so its hourglass shows only at 4 sec, the lowest it can be.
+
 ### v3.0.58, 2026-11-05
 
 One experience bar, boss bars whose debuffs leave the name alone, a Stats panel and a run tracker with room to spare, and counters in your own size, color and format.

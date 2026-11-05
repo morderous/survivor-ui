@@ -707,6 +707,17 @@ local function Seconds1(value)
 	return SurvivorUI_TF("{1} sec", string.format("%.1f", value))
 end
 
+-- A spell's cooldown in its card: at its floor the floor, 0.25 sec, which
+-- the game sends as 0.2 (FloorHourglass.lua); under a second as the build
+-- list writes it (BuildList.lua), else to one decimal.
+local function CooldownSeconds(spell, full)
+	local cd = SurvivorUI_TrueCooldown and SurvivorUI_TrueCooldown(Field(spell, "key", 1), full) or full
+	if cd < 1 and SurvivorUI_CooldownNumber then
+		return SurvivorUI_TF("{1} sec", SurvivorUI_CooldownNumber(cd))
+	end
+	return Seconds1(cd)
+end
+
 -- An ability's card as data: its title, color and lines ({ kind, label,
 -- value }), or nil with nothing to tell. kept: for the last runs, the lines
 -- of the moment only, not "ready in" nor "beaten ... ago".
@@ -744,7 +755,7 @@ local function CardOf(row, kept)
 		-- Its rank as the spells' tooltips have it: "Rank 2", or II.
 		local rank = Num(Field(spell, "rank", 3))
 		Add("head", SurvivorUI_T("Spell"), SurvivorUI_RankText and SurvivorUI_RankText(rank) or SurvivorUI_TF("Rank {1}", rank))
-		Add("row", SurvivorUI_T("Cooldown"), full > 0 and Seconds1(full) or SurvivorUI_T("none"))
+		Add("row", SurvivorUI_T("Cooldown"), full > 0 and CooldownSeconds(spell, full) or SurvivorUI_T("none"))
 		if not kept then
 			Add("row", SurvivorUI_T("Ready in"), left > 0.05 and Seconds1(left) or SurvivorUI_T("ready"))
 		end
@@ -997,6 +1008,24 @@ end
 -- downward; Alt moves it.
 
 local CRIT_ROWS = 10
+-- Its lines, as the damage meter's (Lucas, 2026-11-05: to show fewer if one
+-- wants): one to ten, a line at a time, on its card in move mode and in the
+-- options' Biggest Crits; the biggest crits first. Kept as critLines (nil:
+-- all ten).
+local CRIT_LINES_LEAST = 1
+SurvivorUI_CRIT_LINES = { LEAST = CRIT_LINES_LEAST, MOST = CRIT_ROWS }
+
+local function CritLines()
+	local lines = SurvivorUIDB and tonumber(SurvivorUIDB.critLines)
+	if not lines then
+		return CRIT_ROWS
+	end
+	return math.max(CRIT_LINES_LEAST, math.min(CRIT_ROWS, math.floor(lines + 0.5)))
+end
+
+function SurvivorUI_CritLines()
+	return CritLines()
+end
 
 local critBox = CreateFrame("Frame", "SurvivorUICrits", UIParent)
 critBox:SetWidth(WIDTH + 16)
@@ -1290,9 +1319,13 @@ local function DrawCrits()
 		table.insert(sorted, ability)
 	end
 	table.sort(sorted, function(a, b) return critBest[a] > critBest[b] end)
+	local lines = CritLines()
+	-- Being placed (move mode, the move key, its tab open): the box at all its
+	-- lines, each one with no crit yet an empty slot, so its height shows.
+	local placing = SurvivorUI_Placing and SurvivorUI_Placing("Biggest Crits")
 	for index = 1, CRIT_ROWS do
 		local row = critRows[index]
-		local ability = sorted[index]
+		local ability = index <= lines and sorted[index]
 		if ability then
 			row.ability = ability
 			row.label:SetText(SurvivorUI_Native(ability))
@@ -1320,11 +1353,15 @@ local function DrawCrits()
 			row:Show()
 		else
 			row.ability = nil
-			row.base:Hide()
+			if placing and index <= lines and index > 1 then
+				row.base:Show()
+			else
+				row.base:Hide()
+			end
 			row:Hide()
 		end
 	end
-	local count = math.min(CRIT_ROWS, table.getn(sorted))
+	local count = math.min(lines, table.getn(sorted))
 	-- From the run's start, crits or not: "No crits yet." until the first.
 	-- A run on as the game tells it (its own clock only for a game without
 	-- the phase, so the lobby shows no empty box).
@@ -1357,7 +1394,8 @@ local function DrawCrits()
 	else
 		critBox.empty:Hide()
 	end
-	critBox:SetHeight(TITLE_HEIGHT + 8 + (strip and STRIP_HEIGHT or 0) + math.max(1, count) * ROW_HEIGHT)
+	local shown = placing and lines or math.max(1, count)
+	critBox:SetHeight(TITLE_HEIGHT + 8 + (strip and STRIP_HEIGHT or 0) + shown * ROW_HEIGHT)
 	critBox:Show()
 end
 
@@ -1366,6 +1404,15 @@ function SurvivorUI_ToggleCrits()
 	SurvivorUIDB.critBox = not CritsShown()
 	DrawCrits()
 	DEFAULT_CHAT_FRAME:AddMessage("Survivor UI: Biggest Crits box "..(SurvivorUIDB.critBox and "on (it shows once something crits)." or "off."))
+end
+
+-- Its lines set (its card in move mode, the options' Biggest Crits): the box
+-- shrinks or grows from its top at once.
+function SurvivorUI_SetCritLines(lines)
+	SurvivorUIDB = SurvivorUIDB or {}
+	lines = math.max(CRIT_LINES_LEAST, math.min(CRIT_ROWS, math.floor((tonumber(lines) or CRIT_ROWS) + 0.5)))
+	SurvivorUIDB.critLines = lines ~= CRIT_ROWS and lines or nil
+	DrawCrits()
 end
 -- The game's own clock starts when the hero first moves, so this one does
 -- too: from "Move to begin" the hero's map position is watched for a change.

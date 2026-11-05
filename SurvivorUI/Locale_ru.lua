@@ -200,6 +200,9 @@ SurvivorUI_WORDS.ru = {
 	["LIFE"] = "ЖИЗНЬ",
 	["DMG"] = "УРОН",
 
+	-- The hourglass of a spell at its fastest (FloorHourglass.lua).
+	["At its fastest: {1}, the game's floor. More haste or cooldown cards do nothing for this spell."] = "Быстрее не бывает: {1}, нижний предел игры. Ни скорость, ни карты восстановления этому заклинанию уже не помогут.",
+
 	-- This Run and Biggest Crits (RunPanel.lua).
 	["This Run"] = "Этот забег",
 	["The game's numbers. Hover a row for more."] = "Числа игры. Наведите на строку, чтобы узнать больше.",
@@ -565,6 +568,7 @@ SurvivorUI_WORDS.ru = {
 	["Width"] = "Ширина",
 	["Height"] = "Высота",
 	["{1} lines"] = "Строк: {1}",
+	["{1} line"] = "Строк: {1}",
 	["Another window let go against it is linked to it."] = "Другое окно, отпущенное рядом с ним, связывается с ним.",
 	["Linked to {1}: drag it away to unlink."] = "Связано с «{1}»: оттащите, чтобы разъединить.",
 	["Let go against another meter window to link it."] = "Отпустите рядом с другим окном счётчика, чтобы связать их.",

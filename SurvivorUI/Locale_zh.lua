@@ -197,6 +197,9 @@ SurvivorUI_WORDS.zh = {
 	["LIFE"] = "生命数",
 	["DMG"] = "伤害",
 
+	-- The hourglass of a spell at its fastest (FloorHourglass.lua).
+	["At its fastest: {1}, the game's floor. More haste or cooldown cards do nothing for this spell."] = "已达最快：{1}，游戏的下限。再多的急速或冷却卡牌对这个法术都没有用了。",
+
 	-- This Run and Biggest Crits (RunPanel.lua).
 	["This Run"] = "本次冒险",
 	["The game's numbers. Hover a row for more."] = "游戏提供的数据。鼠标悬停在某一行上查看更多。",
@@ -562,6 +565,7 @@ SurvivorUI_WORDS.zh = {
 	["Width"] = "宽度",
 	["Height"] = "高度",
 	["{1} lines"] = "{1} 行",
+	["{1} line"] = "{1} 行",
 	["Another window let go against it is linked to it."] = "把另一个窗口贴着它放下，就会与它相连。",
 	["Linked to {1}: drag it away to unlink."] = "已连到{1}：拖开即可断开。",
 	["Let go against another meter window to link it."] = "贴着另一个统计窗口放下即可相连。",

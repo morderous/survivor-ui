@@ -174,7 +174,7 @@ SurvivorUI_OPTION_WORDS.zh = {
 	["Each source's damage, its crits on hover, the healing and the boss damage. It puts the game's meter away."] = "每个来源的伤害，悬停查看暴击，以及治疗和首领伤害。会隐藏游戏自带的统计。",
 	["The run's numbers, as the game's victory screen gives them."] = "本次冒险的数据，与游戏胜利界面给出的一致。",
 	["Each ability's biggest critical strike this run."] = "本次冒险中每个技能的最高暴击。",
-	["Over the spells' buttons: the DoTs ticking, the enemies feared, the totems down, the shouts."] = "显示在法术按钮上：生效中的持续伤害、被恐惧的敌人、放下的图腾、怒吼。",
+	["Over the spells' buttons: the DoTs ticking, the enemies feared, the totems down, the shouts; at a button's foot, an hourglass once its spell is at its fastest."] = "显示在法术按钮上：生效中的持续伤害、被恐惧的敌人、放下的图腾、怒吼；法术达到最快时，按钮底部还会显示一个沙漏。",
 	["Soul shards"] = "灵魂碎片",
 	["A warlock's, with Soul Fire: five violet gems under your frame, filling as the game counts your shards, emptied by the free Soul Fire. With a game before 0.105, worked out from your kills; dimmed, the count may be off (the chat says why)."] = "术士专用，配合灵魂之火：你的框体下方五颗紫色宝石，随游戏计算的碎片数填满，免费的灵魂之火会将其清空。游戏版本早于 0.105 时，根据你的击杀推算；变暗时计数可能不准（聊天框会说明原因）。",
 	["Combo points"] = "连击点数",
@@ -571,6 +571,7 @@ SurvivorUI_OPTION_WORDS.zh = {
 
 	-- Biggest Crits.
 	["Each ability's biggest critical strike this run; hover one for its card, its Reset clears them. A new best held still in the combat numbers is set in Records."] = "本次冒险中每个技能的最高暴击；悬停查看其卡片，重置会清空记录。新纪录在战斗数字中的停留效果在纪录中设置。",
+	["The box grows a line for each ability that crits, up to this many: the biggest crits first, the rest left out. Move mode sets it on the box's card too, and its Reset gives back all ten."] = "每有一个技能暴击，框体就多一行，最多到这个行数：最高的暴击排在前面，其余的不显示。移动模式中也可以在框体的卡片上设置，其重置会恢复全部十行。",
 	["Damage and crits under the title"] = "标题下显示伤害与暴击",
 	["your Damage, Crit and Crit Dmg, as the Stats panel has them; hover them for what each is"] = "你的伤害、暴击和暴击伤害，与属性面板一致；鼠标悬停查看说明",
 
@@ -587,6 +588,8 @@ SurvivorUI_OPTION_WORDS.zh = {
 	["Demoralizing Shout: how many enemies its last cast weakened, for its time; Battle Shout: the seconds it has left"] = "挫志怒吼：上一次削弱了多少个敌人，在其持续时间内显示；战斗怒吼：剩余秒数",
 	["Marks"] = "印记",
 	["Faerie Fire: how many enemies carry it, bosses too; each one it hits counts for the mark's time (its tooltip's), so one hit again before it fades counts twice until it does"] = "精灵之火：有多少个敌人带着它，包括首领；每个被命中的敌人按印记的时长（鼠标提示中的）计算，所以在消失前再次命中的敌人会被计两次，直到消失",
+	["At its fastest"] = "达到最快时",
+	["a small gold hourglass at the foot of a spell's button once its cooldown is at the game's floor, 0.25 sec (Hellfire's 0.5, Divine Shield's 4): more haste or cooldown cards do nothing for it then. Hover it to see. Not on Soulfire, Polymorph, Hunter's Mark, Seal Fate, Bloodrage and Lightwell, which the game times its own way."] = "法术的冷却达到游戏的下限时，按钮底部会出现一个金色小沙漏：0.25 秒（地狱烈焰 0.5 秒，圣盾术 4 秒），此时再多的急速或冷却卡牌对它都没有用。鼠标悬停可查看。灵魂之火、变形术、猎人印记、封印命运、血性狂暴和光束泉不显示，因为游戏用另一种方式计算它们的冷却。",
 	["Their size, color and format, in"] = "它们的大小、颜色和格式，在",
 
 	-- Summons.

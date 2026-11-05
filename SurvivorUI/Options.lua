@@ -1947,7 +1947,7 @@ local MODULES = {
 		{ "Biggest Crits", OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"),
 			"Each ability's biggest critical strike this run." },
 		{ "Counters", OnUnlessOff("counters"), Flip("counters"),
-			"Over the spells' buttons: the DoTs ticking, the enemies feared, the totems down, the shouts." },
+			"Over the spells' buttons: the DoTs ticking, the enemies feared, the totems down, the shouts; at a button's foot, an hourglass once its spell is at its fastest." },
 		{ "Soul shards", FeatureOn("soulShards"), FeatureToggle("soulShards", true),
 			"A warlock's, with Soul Fire: five violet gems under your frame, filling as the game counts your shards, emptied by the free Soul Fire. With a game before 0.105, worked out from your kills; dimmed, the count may be off (the chat says why)." },
 		{ "Combo points", FeatureOn("comboPoints"), FeatureToggle("comboPoints", true),
@@ -5750,6 +5750,20 @@ page.y = page.y - 30
 page = pages.crits
 Header(page, "Biggest Crits", "Each ability's biggest critical strike this run; hover one for its card, its Reset clears them. A new best held still in the combat numbers is set in Records.")
 PanelHead(page, OnlyIfOn("critBox"), Call("SurvivorUI_ToggleCrits"), "crits", "Biggest Crits")
+-- Its lines (RunPanel.lua), a line at a time as the damage meter's Height,
+-- the same as its card's in move mode.
+do
+	local lines = SurvivorUI_CRIT_LINES or { LEAST = 1, MOST = 10 }
+	Slider(page, "Height", lines.LEAST, lines.MOST, 1,
+		function() return SurvivorUI_CritLines and SurvivorUI_CritLines() or lines.MOST end,
+		function(value)
+			if SurvivorUI_SetCritLines then
+				SurvivorUI_SetCritLines(value)
+			end
+		end,
+		function(value) return string.format(value == 1 and "%d line" or "%d lines", value) end)
+end
+Note(page, "The box grows a line for each ability that crits, up to this many: the biggest crits first, the rest left out. Move mode sets it on the box's card too, and its Reset gives back all ten.")
 Check(page, "Damage and crits under the title", OnUnlessOff("critStats"), Flip("critStats"),
 	"your Damage, Crit and Crit Dmg, as the Stats panel has them; hover them for what each is")
 
@@ -5765,6 +5779,11 @@ Check(page, "Fears", OnUnlessOff("fearCounter"), Flip("fearCounter"), "how many 
 Check(page, "Totems", OnUnlessOff("totemCounter"), Flip("totemCounter"), "how many of each are down, out of the most that can stand at once, as the game tells them (its 0.124 on); with an older game each cast counts a totem for its tooltip's time, two with Call of the Elements, and Totemic Wrath's Searing Totem every 14 sec, told by the spells a run starts with, with the seconds until the next one ends beside it")
 Check(page, "Shouts", OnUnlessOff("shoutCounter"), Flip("shoutCounter"), "Demoralizing Shout: how many enemies its last cast weakened, for its time; Battle Shout: the seconds it has left")
 Check(page, "Marks", OnUnlessOff("markCounter"), Flip("markCounter"), "Faerie Fire: how many enemies carry it, bosses too; each one it hits counts for the mark's time (its tooltip's), so one hit again before it fades counts twice until it does")
+
+-- The hourglass at a button's foot while its spell is at the game's floor
+-- (FloorHourglass.lua): with the counters, as Lucas asked (2026-11-05).
+Subheader(page, "At its fastest")
+Check(page, "Hourglass", OnUnlessOff("floorHourglass"), Flip("floorHourglass"), "a small gold hourglass at the foot of a spell's button once its cooldown is at the game's floor, 0.25 sec (Hellfire's 0.5, Divine Shield's 4): more haste or cooldown cards do nothing for it then. Hover it to see. Not on Soulfire, Polymorph, Hunter's Mark, Seal Fate, Bloodrage and Lightwell, which the game times its own way.")
 
 -- Their looks: the Totem counter's and the Debuff counter's, each its own
 -- size, color and format, in Frames & bar's Advanced box (the size that was
@@ -7584,7 +7603,8 @@ do
 	-- first; a totem's 12 of 30, its soonest ending in 8 sec, over the second
 	-- (its seconds beside it, to the right, over nothing). In the meter's
 	-- color: a sample's (Shadow Word: Pain's purple, Searing Totem's orange),
-	-- the meter giving each spell its own as it comes.
+	-- the meter giving each spell its own as it comes. And the hourglass of a
+	-- spell at its fastest at the fourth's foot (v3.0.59).
 	Paint.COUNTERS = {
 		{ "debuff", "dotCounter", 3, nil, nil, { 0.65, 0.35, 0.90 } },
 		{ "totem", "totemCounter", 12, 8, 30, { 0.95, 0.50, 0.10 } },
@@ -7616,6 +7636,15 @@ do
 				local left = SurvivorUI_FitCounter and SurvivorUI_FitCounter(word, small, side, size, zoom) or 0
 				word:SetPoint("BOTTOM", self, "TOPLEFT", x + (index - 1) * step + side / 2 - left, top + 2 * zoom)
 			end
+		end
+		-- The hourglass at the fourth's foot, a spell at its fastest, 14 a
+		-- side and 3 under the button's edge (FloorHourglass.lua), while on.
+		if db.floorHourglass ~= false then
+			local mark = self:Box(1, 1, 1, 1, ART.."FloorHourglass", "OVERLAY")
+			local size = math.floor(14 * zoom + 0.5)
+			mark:SetWidth(size)
+			mark:SetHeight(size)
+			mark:SetPoint("BOTTOM", self, "TOPLEFT", x + 3 * step + side / 2, top - side - 3 * zoom)
 		end
 	end
 

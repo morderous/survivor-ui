@@ -97,6 +97,8 @@ local function SpellName(key)
 		return string.upper(initial)..rest
 	end))
 end
+-- For the hourglass's tooltip (FloorHourglass.lua).
+SurvivorUI_SpellKeyName = SpellName
 
 local function Running()
 	if not (AZS_GetPhase and AZS_SPELLS) then
@@ -784,14 +786,34 @@ local function Ascii(text)
 	return true
 end
 
--- A spell's cooldown as the game has it now, haste in: "3.1s", "12s"; in
--- another language with its own word for seconds, "3.1 с", "12秒", "12 Sek.":
--- where the addon wears a face that writes it (SurvivorUI_LANGUAGE_FONTS) or
--- it needs none ("s", "sn"); Ukrainian's "с" and Korean's "초" not yet.
+-- A cooldown's number: under a second to two decimals, no zero at the end
+-- ("0.25", "0.8"); to 10 sec to one ("3.1"); from 10 none ("12"). The game
+-- sends one decimal, so a second one is only ever the floor's 0.25.
+local function CooldownNumber(cd)
+	if cd >= 10 then
+		return string.format("%d", math.floor(cd + 0.5))
+	elseif cd >= 1 then
+		return string.format("%.1f", cd)
+	end
+	local text = string.gsub(string.format("%.2f", cd), "0+$", "")
+	text = string.gsub(text, "%.$", "")
+	return text
+end
+SurvivorUI_CooldownNumber = CooldownNumber
+
+-- A spell's cooldown as the game has it now, haste in: "0.25s", "3.1s",
+-- "12s"; in another language with its own word for seconds, "3.1 с", "12秒",
+-- "12 Sek.": where the addon wears a face that writes it
+-- (SurvivorUI_LANGUAGE_FONTS) or it needs none ("s", "sn"); Ukrainian's "с"
+-- and Korean's "초" not yet. At its floor, the floor: the game sends 0.25 as
+-- 0.2 (FloorHourglass.lua, SurvivorUI_TrueCooldown, by the spell's key).
 local function CooldownText(entry)
 	local cd = tonumber(Field(entry, "cdmax", 5)) or 0
 	if cd <= 0 then
 		return ""
+	end
+	if SurvivorUI_TrueCooldown then
+		cd = SurvivorUI_TrueCooldown(Field(entry, "key", 1), cd)
 	end
 	local language = SurvivorUI_Language and SurvivorUI_Language()
 	local words = InfoWords(language)
@@ -800,12 +822,9 @@ local function CooldownText(entry)
 		sec = nil
 	end
 	if sec then
-		return sec[1]..(cd >= 10 and string.format("%d", math.floor(cd + 0.5)) or string.format("%.1f", cd))..sec[2]
+		return sec[1]..CooldownNumber(cd)..sec[2]
 	end
-	if cd >= 10 then
-		return string.format("%ds", math.floor(cd + 0.5))
-	end
-	return string.format("%.1fs", cd)
+	return CooldownNumber(cd).."s"
 end
 
 -- The cooldowns, all alike, a point smaller when the language's words make

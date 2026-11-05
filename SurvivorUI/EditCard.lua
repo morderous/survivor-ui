@@ -46,7 +46,7 @@ local PIECES = {
 	["Boss bars"] = { part = "bosses", places = { "bossLeft", "bossTop" }, key = "bossBars", toggle = "SurvivorUI_BossBars" },
 	["Loot list"] = { part = "loot", places = { "lootLeft", "lootTop" }, key = "lootLog", toggle = "SurvivorUI_ToggleLoot" },
 	["This Run"] = { part = "run", places = { "runLeft", "runTop", "runBottom" }, key = "runPanel", toggle = "SurvivorUI_ToggleRun" },
-	["Biggest Crits"] = { part = "crits", places = { "critsLeft", "critsTop", "critsBottom" }, key = "critBox", offUnlessOn = true, toggle = "SurvivorUI_ToggleCrits" },
+	["Biggest Crits"] = { part = "crits", places = { "critsLeft", "critsTop", "critsBottom", "critLines" }, key = "critBox", offUnlessOn = true, toggle = "SurvivorUI_ToggleCrits" },
 	["Kills and gold line"] = { part = "tally", places = { "tallyLeft", "tallyX", "tallyTop" }, key = "tally", toggle = "SurvivorUI_Tally" },
 	["Guardians"] = { part = "guardians", places = { "guardiansLeft", "guardiansTop" }, key = "guardians", toggle = "SurvivorUI_ToggleGuardians" },
 	["New best crit"] = { places = { "recordLeft", "recordTop" }, key = "ctRecord", toggle = "SurvivorUI_ToggleRecord", noFont = true },
@@ -621,8 +621,11 @@ local function SetMeterSize(which, width, lines)
 	end
 end
 
--- A row: its name, a slider in the size's look, its value at the right.
-local function MeterSlider(label, low, high, step, y, show, set)
+-- A row: its name, a slider in the size's look, its value at the right. Of:
+-- what it sets for the piece picked, by its name (a meter window's which, by
+-- default); nil, nothing.
+local function MeterSlider(label, low, high, step, y, show, set, of)
+	of = of or MeterOf
 	local row = {}
 	row.name = Text(card, 10, TEXT)
 	row.name:SetPoint("TOPLEFT", card, "TOPLEFT", 12, y - 1)
@@ -658,8 +661,8 @@ local function MeterSlider(label, low, high, step, y, show, set)
 		local value = math.floor(this:GetValue() / step + 0.5) * step
 		done:SetWidth(math.max(1, (this:GetWidth() - 8) * (value - low) / (high - low) + 4))
 		row.value:SetText(show(value))
-		if not this.quiet and selected and MeterOf(selected.name) then
-			set(MeterOf(selected.name), value)
+		if not this.quiet and selected and of(selected.name) then
+			set(of(selected.name), value)
 		end
 	end)
 	bar:SetScript("OnMouseWheel", function()
@@ -675,6 +678,19 @@ local meterRows = {
 	MeterSlider("Height", 3, 20, 1, -150, function(value) return SurvivorUI_TF("{1} lines", value) end,
 		function(which, value) SetMeterSize(which, nil, value) end),
 }
+
+-- The Biggest Crits' lines (RunPanel.lua), a line at a time as the meter's,
+-- under the size; the rows after it move down to make room.
+local CRIT_ROW = 24
+local critLines = SurvivorUI_CRIT_LINES or { LEAST = 1, MOST = 10 }
+local critRow = MeterSlider("Height", critLines.LEAST, critLines.MOST, 1, -126,
+	function(value) return value == 1 and SurvivorUI_TF("{1} line", value) or SurvivorUI_TF("{1} lines", value) end,
+	function(_, value)
+		if SurvivorUI_SetCritLines then
+			SurvivorUI_SetCritLines(value)
+		end
+	end,
+	function(name) return name == "Biggest Crits" and SurvivorUI_CritLines ~= nil end)
 local linkText = Text(card, 9, MUTED)
 linkText:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -172)
 linkText:SetWidth(WIDTH - 24)
@@ -880,6 +896,7 @@ function Fill()
 		rows.Y:SetText(y and tostring(math.floor(y + 0.5)) or "")
 	end
 	local which = MeterOf(selected.name)
+	local crits = selected.name == "Biggest Crits" and SurvivorUI_CritLines ~= nil
 	if which and SurvivorUI_MeterMainSize then
 		local width, lines
 		if which == "main" then
@@ -917,7 +934,20 @@ function Fill()
 			row.bar:Hide()
 		end
 		linkText:Hide()
-		Lay(0)
+		Lay(crits and CRIT_ROW or 0)
+	end
+	-- The Biggest Crits' lines, in the meter's Width's place.
+	if crits then
+		critRow.bar.quiet = true
+		critRow.bar:SetValue(SurvivorUI_CritLines())
+		critRow.bar.quiet = nil
+		critRow.name:Show()
+		critRow.value:Show()
+		critRow.bar:Show()
+	else
+		critRow.name:Hide()
+		critRow.value:Hide()
+		critRow.bar:Hide()
 	end
 	if piece.part and SurvivorUI_GetScale then
 		slider.quiet = true
@@ -998,8 +1028,9 @@ local function Unpin()
 		Place()
 	end
 end
--- A meter window's width and lines move the card as much: the same.
-for _, bar in pairs({ slider, meterRows[1].bar, meterRows[2].bar }) do
+-- A meter window's width and lines move the card as much, and the Biggest
+-- Crits' lines: the same.
+for _, bar in pairs({ slider, meterRows[1].bar, meterRows[2].bar, critRow.bar }) do
 	bar:SetScript("OnMouseDown", Pin)
 	bar:SetScript("OnMouseUp", Unpin)
 end
