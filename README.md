@@ -230,6 +230,15 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### Azeroth SurvivorUI Launcher 1.11.1, 2026-11-05
+
+The Time Machine tells what plays differently in each old version, a line each, under its warning in red.
+
+- **What is different, a line each:** each old version now lists what plays differently from the game of today, one line per change with the version that changed it. A version's line grows to hold them, and the list scrolls on our own scroll bar when they no longer fit.
+  - **0.100.1:** Shaman totems have no cap per kind; Shadow Weaving strikes for 1% of the target's maximum health; the old Demonology talents, with Summon Imp and Summon Felguard; bosses have none of their raid mechanics yet; Ice Barrier and Power Word: Shield have no absorb cap.
+  - **0.123.0:** Divine Shield can stay up forever, and stuns, roots, fears and polymorph never wear off when used over and over; Ice Barrier and Power Word: Shield have no absorb cap; Shaman totems cap at 40 per kind (30 today).
+- **Just for fun, in red:** the warning at the top of the Time Machine tab is now red, so nobody misses it.
+
 ### Azeroth SurvivorUI Launcher 1.11.0, 2026-11-04
 
 The Time Machine, auto update for every addon, and a language button in the launcher's own look.

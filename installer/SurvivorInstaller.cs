@@ -82,7 +82,8 @@
 //   - in six tabs: Play, Savegame, Statistics, Run History, Addons (the
 //     Survivor UI tab folded into Addons in 1.6.0), Time Machine (1.11.0:
 //     older versions of the game, each in its own folder, on a save of its
-//     own where everything is open, never updating);
+//     own where everything is open, never updating; since 1.11.1 each with
+//     what is different in it, a line each, under a warning in red);
 //   - gets more addons (Addons tab, 1.6.0): the ones morderous checked,
 //     listed beside it (installer/addons.json), each from its
 //     author's own latest release, checked by the sha256 the author gives;
@@ -143,7 +144,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.11.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.11.1.0")]
 
 namespace SurvivorInstaller
 {
@@ -1024,7 +1025,9 @@ namespace SurvivorInstaller
             SkinTips(tips);
             SkinTips(folderTip);
             BuildAlert();
-            foreach (Control scrolled in new Control[] { gameNews, backupList, runList, addonList })
+            // The Time Machine's list too since 1.11.1, when its lines of
+            // differences no longer fit.
+            foreach (Control scrolled in new Control[] { gameNews, backupList, runList, addonList, timeList })
                 new ArtScroll(this, scrolled);
             ShowTab(currentTab, true);
 
@@ -3432,6 +3435,7 @@ namespace SurvivorInstaller
             public readonly List<string> Zips = new List<string>();
             public readonly List<OldFile> Data = new List<OldFile>();
             public readonly Dictionary<string, string> Notes = new Dictionary<string, string>();
+            public readonly Dictionary<string, List<string>> Changes = new Dictionary<string, List<string>>();
 
             // What is different in it, in the launcher's language when the list has it.
             public string Note
@@ -3441,6 +3445,19 @@ namespace SurvivorInstaller
                     string said;
                     if (Notes.TryGetValue(Lang.Code, out said) && !string.IsNullOrEmpty(said)) return said;
                     return Notes.TryGetValue("en", out said) ? said : "";
+                }
+            }
+
+            // The same, one difference a line (1.11.1, "changes" in the list): in
+            // the launcher's language when the list has it, else in English, else
+            // none (the note is shown).
+            public List<string> ChangeList
+            {
+                get
+                {
+                    List<string> said;
+                    if (Changes.TryGetValue(Lang.Code, out said) && said.Count > 0) return said;
+                    return Changes.TryGetValue("en", out said) ? said : new List<string>();
                 }
             }
         }
@@ -3456,28 +3473,32 @@ namespace SurvivorInstaller
         string timeGetting;
         int timeGot;
 
+        static readonly Color FunRed = Color.FromArgb(240, 78, 64);
+        static readonly Color FunFill = Color.FromArgb(52, 20, 17);
+
         void BuildTimePage(Panel page)
         {
             Section(page, Lang.T("Time Machine"), 20, 10, 720);
             Label note = Caption(page, Lang.T("The game as it was: each version in a place of its own, with its own data and its own saves."), 20, 32);
             note.Font = new Font(Lang.Face, 8f);
             // Said first and plainly (Lucas): the tab is for fun and nothing in it
-            // touches the game of today, its settings, its addons or its saves.
+            // touches the game of today, its settings, its addons or its saves. In
+            // red since 1.11.1 (Lucas): the bar, the title and the box.
             Panel apart = new Panel();
             apart.Location = new Point(20, 52);
             apart.Size = new Size(720, 44);
-            apart.BackColor = Color.FromArgb(34, 31, 24);
+            apart.BackColor = FunFill;
             Panel bar = new Panel();
             bar.Location = new Point(0, 0);
             bar.Size = new Size(3, 44);
-            bar.BackColor = Gold;
+            bar.BackColor = FunRed;
             apart.Controls.Add(bar);
             Label fun = new Label();
             fun.Text = Lang.T("Just for fun");
             fun.UseMnemonic = false;
             fun.AutoSize = true;
             fun.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
-            fun.ForeColor = Gold;
+            fun.ForeColor = FunRed;
             fun.BackColor = Color.Transparent;
             fun.Location = new Point(12, 4);
             apart.Controls.Add(fun);
@@ -3568,7 +3589,9 @@ namespace SurvivorInstaller
         }
 
         // {"data_sources": [where the MPQs are, by their sha256], "versions": [{"version",
-        // "date" (yyyy-mm-dd), "note", "note_zh", "note_ru", "zip" (one address or
+        // "date" (yyyy-mm-dd), "note", "note_zh", "note_ru", "changes", "changes_zh",
+        // "changes_ru" (1.11.1: what is different, a line each; the note is for 1.11.0,
+        // which shows three lines of it), "zip" (one address or
         // several), "size", "sha256", "exe_sha256", "addons" ("current" or "none"),
         // "data": [{"name", "size", "sha256"}]}]}. A version only digits and dots (it
         // names a folder), an MPQ only patch.MPQ or patch-?.MPQ.
@@ -3609,6 +3632,17 @@ namespace SurvivorInstaller
                 {
                     string said = text(entry, code == "en" ? "note" : "note_" + code);
                     if (said != null) old.Notes[code] = said;
+                    string key = code == "en" ? "changes" : "changes_" + code;
+                    if (entry.ContainsKey(key) && entry[key] is object[])
+                    {
+                        List<string> lines = new List<string>();
+                        foreach (object line in (object[])entry[key])
+                        {
+                            string one = line == null ? "" : Convert.ToString(line, System.Globalization.CultureInfo.InvariantCulture).Trim();
+                            if (one.Length > 0) lines.Add(one);
+                        }
+                        if (lines.Count > 0) old.Changes[code] = lines;
+                    }
                 }
                 if (old.Version != null && Regex.IsMatch(old.Version, @"^\d+(\.\d+){1,3}$") && old.Zips.Count > 0 && Regex.IsMatch(old.Sha256, "^[0-9a-f]{64}$")
                     && old.Size > 0 && dataOk && old.Data.Count > 0 && (old.ExeSha256 == "" || Regex.IsMatch(old.ExeSha256, "^[0-9a-f]{64}$")))
@@ -3677,24 +3711,69 @@ namespace SurvivorInstaller
                 : timeFailed ? Lang.T("The list of old versions could not be read: try again later.") : Lang.T("No old versions yet.");
             timeEmpty.Text = say ?? "";
             timeEmpty.Visible = say != null;
+            // Rows as tall as their lines of differences (1.11.1): a scroll bar
+            // only when they no longer fit, and the place scrolled to kept.
+            Point scrolled = timeList.AutoScrollPosition;
+            timeList.AutoScrollPosition = Point.Empty;
+            timeList.AutoScrollMargin = new Size(0, S(8));
             if (say == null)
             {
+                int width = timeList.ClientSize.Width - S(16) + (timeList.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0);
+                int needed = S(8);
+                foreach (OldGame old in oldGames) needed += TimeRowHeight(old, width) + S(6);
+                if (needed > timeList.ClientSize.Height) width -= SystemInformation.VerticalScrollBarWidth;
                 int y = S(8);
                 foreach (OldGame old in oldGames)
                 {
-                    timeList.Controls.Add(TimeRow(old, y));
-                    y += S(96);
+                    Panel row = TimeRow(old, y, width);
+                    timeList.Controls.Add(row);
+                    y += row.Height + S(6);
                 }
             }
             timeList.ResumeLayout();
+            if (say == null && scrolled.Y != 0) timeList.AutoScrollPosition = new Point(-scrolled.X, -scrolled.Y);
         }
 
-        Panel TimeRow(OldGame old, int y)
+        // The differences: from S(128) to S(178) short of the row's right.
+        int TimeNoteWidth(int rowWidth)
+        {
+            return rowWidth - S(128) - S(178);
+        }
+
+        Font TimeLineFont()
+        {
+            return new Font(Lang.Face, SF(8.5f));
+        }
+
+        // A line of the differences as tall as it wraps, beside its bullet.
+        int TimeLineHeight(string text, Font font, int noteWidth)
+        {
+            return TextRenderer.MeasureText(text, font, new Size(noteWidth - S(12), int.MaxValue),
+                TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.TextBoxControl).Height;
+        }
+
+        // Where the tick for the save stands: under the differences, never above
+        // where 1.11.0 had it.
+        int TimeTickTop(OldGame old, int rowWidth)
+        {
+            List<string> lines = old.ChangeList;
+            if (lines.Count == 0) return S(63);
+            int y = S(8);
+            using (Font font = TimeLineFont())
+                foreach (string line in lines) y += TimeLineHeight(line, font, TimeNoteWidth(rowWidth)) + S(3);
+            return Math.Max(S(63), y + S(2));
+        }
+
+        int TimeRowHeight(OldGame old, int rowWidth)
+        {
+            return TimeTickTop(old, rowWidth) + S(27);
+        }
+
+        Panel TimeRow(OldGame old, int y, int width)
         {
             Panel row = new Panel();
             row.Location = new Point(S(8), y);
-            bool scrolls = S(8) + oldGames.Count * S(96) > timeList.ClientSize.Height;
-            row.Size = new Size(timeList.ClientSize.Width - S(16) - (scrolls ? SystemInformation.VerticalScrollBarWidth : 0), S(90));
+            row.Size = new Size(width, TimeRowHeight(old, width));
             row.BackColor = Color.FromArgb(28, 27, 24);
             Label version = new Label();
             version.Text = old.Version;
@@ -3714,23 +3793,56 @@ namespace SurvivorInstaller
             day.BackColor = Color.Transparent;
             day.Location = new Point(S(12), S(40));
             row.Controls.Add(day);
-            Label note = new Label();
-            note.Text = old.Note;
-            note.UseMnemonic = false;
-            note.Font = new Font(Lang.Face, SF(9f));
-            note.ForeColor = TextColor;
-            note.BackColor = Color.Transparent;
-            note.AutoSize = false;
-            note.Location = new Point(S(128), S(8));
-            note.Size = new Size(row.Width - S(128) - S(178), S(54));
-            row.Controls.Add(note);
+            List<string> lines = old.ChangeList;
+            int noteWidth = TimeNoteWidth(row.Width);
+            if (lines.Count == 0)
+            {
+                Label note = new Label();
+                note.Text = old.Note;
+                note.UseMnemonic = false;
+                note.Font = new Font(Lang.Face, SF(9f));
+                note.ForeColor = TextColor;
+                note.BackColor = Color.Transparent;
+                note.AutoSize = false;
+                note.Location = new Point(S(128), S(8));
+                note.Size = new Size(noteWidth, S(54));
+                row.Controls.Add(note);
+            }
+            // What is different, a line each with its bullet (1.11.1).
+            int lineTop = S(8);
+            foreach (string line in lines)
+            {
+                Font font = TimeLineFont();
+                int high = TimeLineHeight(line, font, noteWidth);
+                Label bullet = new Label();
+                bullet.Text = "•";
+                bullet.UseMnemonic = false;
+                bullet.Font = font;
+                bullet.ForeColor = Gold;
+                bullet.BackColor = Color.Transparent;
+                bullet.AutoSize = false;
+                bullet.Location = new Point(S(128), lineTop);
+                bullet.Size = new Size(S(12), high);
+                row.Controls.Add(bullet);
+                Label said = new Label();
+                said.Text = line;
+                said.UseMnemonic = false;
+                said.Font = font;
+                said.ForeColor = TextColor;
+                said.BackColor = Color.Transparent;
+                said.AutoSize = false;
+                said.Location = new Point(S(140), lineTop);
+                said.Size = new Size(noteWidth - S(12), high);
+                row.Controls.Add(said);
+                lineTop += high + S(3);
+            }
 
             // Which save it starts on.
             CheckBox unlocked = new CheckBox();
             unlocked.Text = Lang.T("Everything unlocked");
             unlocked.Font = new Font(Lang.Face, SF(8.5f));
             unlocked.AutoSize = true;
-            unlocked.Location = new Point(S(128), S(63));
+            unlocked.Location = new Point(S(128), TimeTickTop(old, row.Width));
             unlocked.FlatStyle = FlatStyle.Flat;
             unlocked.FlatAppearance.BorderColor = TickEdge;
             unlocked.Cursor = Cursors.Hand;

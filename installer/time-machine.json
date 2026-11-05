@@ -6,9 +6,30 @@
     {
       "version": "0.100.1",
       "date": "2026-10-18",
-      "note": "Shadow Weaving strikes for 1% of the target's maximum health (halved in 0.103.1). The old Demonology talents, with Summon Imp and Summon Felguard. No Heroic yet.",
-      "note_zh": "暗影之波按目标最大生命值的 1% 造成伤害（0.103.1 减半）。旧版恶魔学识天赋，有召唤小鬼和召唤恶魔卫士。还没有英雄难度。",
-      "note_ru": "Сплетение теней бьёт на 1% от максимального здоровья цели (вдвое меньше с 0.103.1). Старая ветка демонологии с призывом беса и стража Скверны. Героического режима ещё нет.",
+      "note": "Shaman totems have no cap per kind, Shadow Weaving strikes for 1% of maximum health, the old Demonology talents, and bosses have no raid mechanics yet.",
+      "note_zh": "萨满图腾每种没有数量上限，暗影之波按最大生命值的 1% 造成伤害，旧版恶魔学识天赋，首领还没有团队副本机制。",
+      "note_ru": "Тотемы шамана без предела, Сплетение теней бьёт на 1% от максимального здоровья, старая демонология, у боссов ещё нет рейдовых механик.",
+      "changes": [
+        "Shaman totems have no cap per kind (40 from 0.105.0, 30 today).",
+        "Shadow Weaving strikes for 1% of the target's maximum health (0.5% since 0.103.1).",
+        "The old Demonology talents, with Summon Imp and Summon Felguard (rebuilt in 0.104.0).",
+        "Bosses have none of their raid mechanics yet: no ground markers, towers or phases (from 0.106.0).",
+        "Ice Barrier and Power Word: Shield have no absorb cap (capped at maximum health in 0.134.0 and 0.140.0)."
+      ],
+      "changes_zh": [
+        "萨满图腾每种没有数量上限（0.105.0 起为 40 个，现在为 30 个）。",
+        "暗影之波按目标最大生命值的 1% 造成伤害（0.103.1 起为 0.5%）。",
+        "旧版恶魔学识天赋，有召唤小鬼和召唤恶魔卫士（0.104.0 重做）。",
+        "首领还没有团队机制：没有地面标记、塔和阶段（0.106.0 起才有）。",
+        "寒冰护体和真言术：盾的吸收量没有上限（0.134.0 和 0.140.0 起以最大生命值为上限）。"
+      ],
+      "changes_ru": [
+        "Число тотемов шамана одного вида не ограничено (40 с 0.105.0, сейчас 30).",
+        "Сплетение теней бьёт на 1% от максимального здоровья цели (0,5% с 0.103.1).",
+        "Старая ветка демонологии с призывом беса и стража Скверны (переделана в 0.104.0).",
+        "У боссов ещё нет рейдовых механик: ни меток на земле, ни башен, ни фаз (появились с 0.106.0).",
+        "У Ледяной преграды и Слова силы: Щит нет предела поглощения (ограничены максимальным здоровьем с 0.134.0 и 0.140.0)."
+      ],
       "addons": "current",
       "zip": [
         "https://download.survivorui.com/time-machine/time-machine-0.100.1.zip"
@@ -55,6 +76,21 @@
       "note": "Divine Shield can stay up forever, and stuns, roots, fears and polymorph never wear off when used over and over (fixed in 0.124.0).",
       "note_zh": "圣盾术可以永久保持，昏迷、定身、恐惧和变形术反复使用也不会消失（0.124.0 修复）。",
       "note_ru": "Божественный щит держится вечно, а оглушение, обездвиживание, страх и превращение не спадают при повторном применении (исправлено в 0.124.0).",
+      "changes": [
+        "Divine Shield can stay up forever, and stuns, roots, fears and polymorph never wear off when used over and over (fixed in 0.124.0).",
+        "Ice Barrier and Power Word: Shield have no absorb cap (capped at maximum health in 0.134.0 and 0.140.0).",
+        "Shaman totems cap at 40 per kind (30 today)."
+      ],
+      "changes_zh": [
+        "圣盾术可以永久保持，昏迷、定身、恐惧和变形术反复使用也不会消失（0.124.0 修复）。",
+        "寒冰护体和真言术：盾的吸收量没有上限（0.134.0 和 0.140.0 起以最大生命值为上限）。",
+        "萨满图腾每种最多 40 个（现在为 30 个）。"
+      ],
+      "changes_ru": [
+        "Божественный щит держится вечно, а оглушение, обездвиживание, страх и превращение не спадают при повторном применении (исправлено в 0.124.0).",
+        "У Ледяной преграды и Слова силы: Щит нет предела поглощения (ограничены максимальным здоровьем с 0.134.0 и 0.140.0).",
+        "Не больше 40 тотемов шамана одного вида (сейчас 30)."
+      ],
       "addons": "current",
       "zip": [
         "https://download.survivorui.com/time-machine/time-machine-0.123.0.zip"
