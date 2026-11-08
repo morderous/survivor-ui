@@ -144,7 +144,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.11.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.12.0.0")]
 
 namespace SurvivorInstaller
 {
@@ -654,11 +654,16 @@ namespace SurvivorInstaller
         //                recommended (the release, the beta, what's new),
         //                then the list's, installed from their authors'
         //                releases, and the ones put in by hand; each on or off.
-        static readonly string[] TabNames = { "Play", "Savegame", "Statistics", "Run History", "Addons", "Time Machine" };
-        const int PlayTab = 0, SaveTab = 1, StatsTab = 2, RunsTab = 3, AddonsTab = 4, TimeTab = 5;
+        //   Time Machine the game's old versions, each apart (1.11.0);
+        //   WoW Forever  morderous' addons for WoW Forever, on his Discord (1.12.0).
+        // WoW Forever second and in Forever's blue (Lucas, 1.12.0).
+        static readonly string[] TabNames = { "Play", "WoW Forever", "Savegame", "Statistics", "Run History", "Addons", "Time Machine" };
+        const int PlayTab = 0, ForeverTab = 1, SaveTab = 2, StatsTab = 3, RunsTab = 4, AddonsTab = 5, TimeTab = 6;
         // The tabs before 1.6.0, for the one kept open then (by its number).
         static readonly string[] OldTabNames = { "Play", "Survivor UI", "Savegame", "Statistics", "Run History", "Addons" };
         const int PageTop = 124, PageHeight = 432;
+        // Kept free right of the tabs for the pill of what waits (1.12.0).
+        const int PillRoom = 48;
         readonly List<Panel> pages = new List<Panel>();
         readonly List<Button> tabButtons = new List<Button>();
         readonly Panel tabMark = new Panel();
@@ -904,6 +909,12 @@ namespace SurvivorInstaller
 
             // The tabs along the top, the one open in gold over a gold line.
             int tabX = 16;
+            // 22 around the words, less when the tabs would not fit the window
+            // (the seventh, WoW Forever, 1.12.0), at least 12.
+            Font tabFont = new Font(Lang.Face, 10f, FontStyle.Bold);
+            int wordsWidth = 0;
+            foreach (string name in TabNames) wordsWidth += TextRenderer.MeasureText(Lang.T(name), tabFont).Width + 2;
+            int tabPad = Math.Max(10, Math.Min(22, (ClientSize.Width - 2 * tabX - wordsWidth - PillRoom) / TabNames.Length));
             for (int i = 0; i < TabNames.Length; i++)
             {
                 Button tab = new Button();
@@ -914,10 +925,10 @@ namespace SurvivorInstaller
                 tab.FlatAppearance.MouseDownBackColor = Panel;
                 tab.BackColor = Back;
                 tab.ForeColor = Muted;
-                tab.Font = new Font(Lang.Face, 10f, FontStyle.Bold);
+                tab.Font = tabFont;
                 tab.Cursor = Cursors.Hand;
                 // 22 around the words since the sixth tab (Time Machine, 1.11.0), 28 before.
-                int width = TextRenderer.MeasureText(tab.Text, tab.Font).Width + 22;
+                int width = TextRenderer.MeasureText(tab.Text, tab.Font).Width + tabPad;
                 tab.Location = new Point(tabX, 88);
                 tab.Size = new Size(width, 30);
                 int which = i;
@@ -937,6 +948,7 @@ namespace SurvivorInstaller
             SkinTabs();
 
             BuildPlayPage(NewPage());
+            BuildForeverPage(NewPage());
             BuildSavePage(NewPage());
             BuildStatsPage(NewPage());
             BuildRunsPage(NewPage());
@@ -2356,9 +2368,11 @@ namespace SurvivorInstaller
             // Made once the window is scaled: its place and size scaled here. Since
             // the sixth tab (1.11.0) it starts past the last tab when that one
             // reaches further, and takes what is left up to the right edge.
-            int pillLeft = Math.Max(S(538), tabButtons[tabButtons.Count - 1].Right + S(8));
+            // Since the seventh (1.12.0) it may be as narrow as PillRoom, the
+            // tabs leaving it that much.
+            int pillLeft = Math.Max(S(538), tabButtons[tabButtons.Count - 1].Right + S(6));
             alertPill.Location = new Point(pillLeft, S(89));
-            alertPill.Size = new Size(Math.Max(S(90), S(744) - pillLeft), S(28));
+            alertPill.Size = new Size(Math.Max(S(PillRoom - 6), S(744) - pillLeft), S(28));
             alertPill.BackColor = Color.Transparent;
             alertPill.Cursor = Cursors.Hand;
             alertPill.Visible = false;
@@ -2390,6 +2404,7 @@ namespace SurvivorInstaller
                         foreach (Button tab in tabButtons) tab.Invalidate();
                     }
                     SayWhatWaits();
+                    SayForever();
                 }
                 if (alertPill.Visible && Visible && WindowState != FormWindowState.Minimized)
                 {
@@ -2423,6 +2438,8 @@ namespace SurvivorInstaller
             };
             if (alerts.Count == 1 && !fits(size, words)) words = "\u2191  " + alerts[0].Key;
             while (size > 7f && !fits(size, words)) size -= 0.5f;
+            // Still too wide (1.12.0): the arrow and how many; the tip says what.
+            if (!fits(size, words)) { words = "↑ " + alerts.Count; size = 8.5f; }
             using (Font font = new Font(Lang.Face, SF(size), FontStyle.Bold))
             {
                 Rectangle shadow = inner;
@@ -2451,14 +2468,31 @@ namespace SurvivorInstaller
                     Rectangle r = self.ClientRectangle;
                     bool open = tabButtons.IndexOf(self) == currentTab;
                     ButtonRenderer.DrawParentBackground(g, r, self);
-                    if (open) Slice3(g, ArtAs("button-red", hot ? "hot" : null), r, 31, 31);
+                    int index = tabButtons.IndexOf(self);
+                    bool forever = index == ForeverTab;
+                    if (open && !forever) Slice3(g, ArtAs("button-red", hot ? "hot" : null), r, 31, 31);
                     else Slice3(g, ArtAs("button-stone", hot ? "hot" : null), r, 22, 20);
+                    // WoW Forever (1.12.0): the stone washed blue into gold
+                    // (Lucas), deeper when open, its words ice instead of gold.
+                    if (forever)
+                    {
+                        Rectangle inner = Rectangle.Inflate(r, -Math.Max(3, r.Height / 6), -Math.Max(3, r.Height / 6));
+                        int alpha = open ? 215 : hot ? 160 : 130;
+                        using (LinearGradientBrush wash = new LinearGradientBrush(new Rectangle(inner.X - 1, inner.Y, inner.Width + 2, inner.Height),
+                            Color.FromArgb(alpha, ForeverBlue), Color.FromArgb(alpha, ForeverGold), LinearGradientMode.Horizontal))
+                            g.FillRectangle(wash, inner);
+                        if (open)
+                            using (LinearGradientBrush rim = new LinearGradientBrush(new Rectangle(inner.X - 1, inner.Y, inner.Width + 2, inner.Height),
+                                ForeverIce, Gold, LinearGradientMode.Horizontal))
+                            using (Pen edge = new Pen(rim)) g.DrawRectangle(edge, inner.X, inner.Y, inner.Width - 1, inner.Height - 1);
+                    }
                     TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
                     Rectangle shadow = r;
                     shadow.Offset(1, 1);
                     TextRenderer.DrawText(g, self.Text, self.Font, shadow, Color.FromArgb(8, 6, 4), flags);
-                    TextRenderer.DrawText(g, self.Text, self.Font, r, open ? Gold : hot ? Color.FromArgb(252, 240, 200) : StoneText, flags);
-                    int index = tabButtons.IndexOf(self);
+                    Color words = forever ? (open || hot ? Color.White : Color.FromArgb(232, 240, 255))
+                        : open ? Gold : hot ? Color.FromArgb(252, 240, 200) : StoneText;
+                    TextRenderer.DrawText(g, self.Text, self.Font, r, words, flags);
                     bool waits = false;
                     foreach (KeyValuePair<string, Action> alert in alerts)
                         waits = waits || (index == AddonsTab && !alert.Key.StartsWith(Lang.T("Launcher ").Trim()) && !alert.Key.StartsWith(Lang.T("Game ").Trim()))
@@ -2525,6 +2559,7 @@ namespace SurvivorInstaller
             Button tab = tabButtons[index];
             tabMark.Location = new Point(tab.Left + S(10), tab.Bottom - S(2));
             tabMark.Size = new Size(tab.Width - S(20), S(3));
+            tabMark.BackColor = index == ForeverTab ? ForeverIce : Gold;
             SetSetting("tabName", TabNames[index]);
             if (index == SaveTab) ShowSaveTab();
             if (index == StatsTab) ShowStats();
@@ -2866,7 +2901,7 @@ namespace SurvivorInstaller
             discord.Size = new Size(200, 28);
             discord.ForeColor = Color.FromArgb(214, 220, 255);
             Wear(discord, "stone");
-            discord.BackColor = Color.FromArgb(88, 101, 242);
+            discord.BackColor = DiscordBlue;
             discord.Click += delegate { Open(GameDiscord); };
             tips.SetToolTip(discord, Lang.T("The game's own Discord server: news, help and the other players.\n") +
                 Lang.T("Survivor UI's thread is there too (Survivor UI tab)."));
@@ -3475,6 +3510,295 @@ namespace SurvivorInstaller
 
         static readonly Color FunRed = Color.FromArgb(240, 78, 64);
         static readonly Color FunFill = Color.FromArgb(52, 20, 17);
+
+        // --- WoW Forever (1.12.0) -------------------------------------------------
+
+        // morderous' own Discord: Forever Guides is made there and shared only
+        // there. For now the tab only takes the player to it.
+        const string ForeverDiscord = "https://discord.gg/esDBXBjnq";
+        static readonly Color DiscordBlue = Color.FromArgb(88, 101, 242);
+        // Forever's colours: blue into gold (Lucas), ice for words on dark.
+        static readonly Color ForeverBlue = Color.FromArgb(30, 100, 210);
+        static readonly Color ForeverGold = Color.FromArgb(214, 160, 30);
+        static readonly Color ForeverIce = Color.FromArgb(130, 200, 255);
+        static readonly Color ForeverNight = Color.FromArgb(9, 20, 42);
+
+        void BuildForeverPage(Panel page)
+        {
+            Section(page, Lang.T("WoW Forever"), 20, 10, 720);
+            Label note = Caption(page, Lang.T("Addons for WoW Forever, made by morderous, the maker of this launcher."), 20, 32);
+            note.Font = new Font(Lang.Face, 8f);
+
+            // The card in Forever's night, a bar of blue into gold at its left
+            // and along its top, its name in the same blend, FREE by it.
+            Canvas card = new Canvas();
+            card.Location = new Point(20, 60);
+            card.Size = new Size(720, 128);
+            card.BackColor = ForeverNight;
+            card.Paint += delegate (object sender, PaintEventArgs e)
+            {
+                Graphics g = e.Graphics;
+                g.ScaleTransform(ui, ui);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                using (LinearGradientBrush side = new LinearGradientBrush(new Rectangle(0, 0, 4, 129), ForeverBlue, ForeverGold, LinearGradientMode.Vertical))
+                    g.FillRectangle(side, 0, 0, 4, 128);
+                using (LinearGradientBrush top = new LinearGradientBrush(new Rectangle(0, 0, 721, 2), ForeverBlue, ForeverGold, LinearGradientMode.Horizontal))
+                    g.FillRectangle(top, 0, 0, 720, 2);
+                ForeverName(g, Lang.T("Forever Guides"), 16f, new PointF(14, 8), Lang.T("FREE"), Lang.T("In the making"));
+            };
+            Label what = new Label();
+            what.Text = Lang.T("A leveling guide addon for WoW Forever. ") +
+                Lang.T("It is shared only on my Discord, not in public: join to get it, follow its news and help shape it.");
+            what.UseMnemonic = false;
+            what.AutoSize = false;
+            what.Font = new Font(Lang.Face, 9f);
+            what.ForeColor = Color.FromArgb(226, 232, 244);
+            what.BackColor = Color.Transparent;
+            what.Location = new Point(16, 44);
+            what.Size = new Size(690, 40);
+            card.Controls.Add(what);
+            Button join = new Button();
+            Style(join, Lang.T("Join morderous' Discord"));
+            join.Font = new Font(Lang.Face, 9f, FontStyle.Bold);
+            join.Location = new Point(16, 88);
+            join.Size = new Size(220, 28);
+            join.ForeColor = Color.FromArgb(214, 220, 255);
+            Wear(join, "stone");
+            join.BackColor = DiscordBlue;
+            join.Click += delegate { Open(ForeverDiscord); };
+            tips.SetToolTip(join, ForeverDiscord);
+            card.Controls.Add(join);
+            page.Controls.Add(card);
+
+            Label more = Caption(page, Lang.T("More for WoW Forever will come to this tab."), 20, 198);
+            more.Font = new Font(Lang.Face, 8f);
+        }
+
+        // A Forever name at the given place (in the transform's units): its
+        // words in blue into gold over a dark shadow, then a gold FREE plate,
+        // then, when given, a small note in ice. GDI+ throughout, so the
+        // transform scales it all.
+        static void ForeverName(Graphics g, string name, float points, PointF at, string free, string note)
+        {
+            using (Font big = new Font(Lang.Face, points, FontStyle.Bold))
+            {
+                SizeF size = g.MeasureString(name, big, PointF.Empty, StringFormat.GenericTypographic);
+                RectangleF box = new RectangleF(at.X, at.Y, size.Width + 2, size.Height + 2);
+                using (Brush shadow = new SolidBrush(Color.FromArgb(200, 2, 4, 10)))
+                    g.DrawString(name, big, shadow, at.X + 1.5f, at.Y + 1.5f, StringFormat.GenericTypographic);
+                using (LinearGradientBrush blend = new LinearGradientBrush(box, ForeverIce, Color.FromArgb(255, 206, 70), LinearGradientMode.Horizontal))
+                    g.DrawString(name, big, blend, at.X, at.Y, StringFormat.GenericTypographic);
+                float x = at.X + size.Width + points * 0.6f;
+                if (!string.IsNullOrEmpty(free))
+                    using (Font tag = new Font(Lang.Face, Math.Max(8f, points * 0.5f), FontStyle.Bold))
+                    {
+                        SizeF words = g.MeasureString(free, tag, PointF.Empty, StringFormat.GenericTypographic);
+                        float h = words.Height + 6, w = words.Width + 14, y = at.Y + (size.Height - h) / 2 + 1;
+                        RectangleF plate = new RectangleF(x, y, w, h);
+                        using (GraphicsPath round = Rounded(plate, h / 2))
+                        {
+                            using (LinearGradientBrush fill = new LinearGradientBrush(plate, Color.FromArgb(255, 222, 96), Color.FromArgb(222, 150, 20), LinearGradientMode.Vertical))
+                                g.FillPath(fill, round);
+                            using (Pen rim = new Pen(Color.FromArgb(255, 244, 190), 1f)) g.DrawPath(rim, round);
+                        }
+                        using (Brush ink = new SolidBrush(Color.FromArgb(40, 22, 0)))
+                            g.DrawString(free, tag, ink, x + 7, y + 3, StringFormat.GenericTypographic);
+                        x += w + 10;
+                    }
+                if (!string.IsNullOrEmpty(note))
+                    using (Font small = new Font(Lang.Face, 8.5f, FontStyle.Bold))
+                    using (Brush ice = new SolidBrush(ForeverIce))
+                    {
+                        SizeF words = g.MeasureString(note, small, PointF.Empty, StringFormat.GenericTypographic);
+                        g.DrawString(note, small, ice, x, at.Y + (size.Height - words.Height) / 2 + 1, StringFormat.GenericTypographic);
+                    }
+            }
+        }
+
+        static GraphicsPath Rounded(RectangleF r, float radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            float d = Math.Min(radius * 2, Math.Min(r.Width, r.Height));
+            path.AddArc(r.X, r.Y, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        // The once-only call to morderous' Discord (1.12.0), in Forever's
+        // colours to be seen (Lucas): a band of blue into gold with WoW Forever,
+        // Forever Guides in the blend with FREE, the words, Join and Later;
+        // its edge breathes blue into gold. Yes on Join; the band moves it.
+        class ForeverBox : Form
+        {
+            readonly float k;
+            readonly int band = 50, width = 520, pad = 24;
+            readonly string lead, only, where;
+            readonly RectangleF leadAt, onlyAt, whereAt;
+            readonly System.Windows.Forms.Timer pulse = new System.Windows.Forms.Timer();
+            double phase;
+
+            public ForeverBox(MainForm owner)
+            {
+                k = owner.ui;
+                FormBorderStyle = FormBorderStyle.None;
+                StartPosition = FormStartPosition.CenterParent;
+                ShowInTaskbar = false;
+                BackColor = ForeverNight;
+                DoubleBuffered = true;
+                Text = Lang.T("Forever Guides");
+                if (owner.Icon != null) Icon = owner.Icon;
+                lead = Lang.T("A leveling guide addon for WoW Forever, made by morderous, who makes this launcher and Survivor UI.");
+                only = Lang.T("Shared only on my Discord, not in public.");
+                where = Lang.T("The new WoW Forever tab takes you there any time.");
+                float textWidth = width - 2 * pad, y = band + 66;
+                using (Bitmap scratch = new Bitmap(1, 1))
+                using (Graphics g = Graphics.FromImage(scratch))
+                using (Font body = new Font(Lang.Face, 10f))
+                using (Font bold = new Font(Lang.Face, 10.5f, FontStyle.Bold))
+                using (Font small = new Font(Lang.Face, 8.5f))
+                {
+                    float h = g.MeasureString(lead, body, (int)textWidth).Height;
+                    leadAt = new RectangleF(pad, y, textWidth, h + 2);
+                    y += h + 8;
+                    h = g.MeasureString(only, bold, (int)textWidth).Height;
+                    onlyAt = new RectangleF(pad, y, textWidth, h + 2);
+                    y += h + 6;
+                    h = g.MeasureString(where, small, (int)textWidth).Height;
+                    whereAt = new RectangleF(pad, y, textWidth, h + 2);
+                    y += h + 18;
+                }
+                int buttonsTop = (int)y, buttonHeight = 34;
+                ClientSize = new Size((int)(width * k), (int)((buttonsTop + buttonHeight + 20) * k));
+                Font = new Font(Lang.Face, 9.5f * k);
+
+                Button join = new Button();
+                Style(join, Lang.T("Join the Discord"));
+                join.Font = new Font(Lang.Face, 10.5f * k, FontStyle.Bold);
+                join.ForeColor = Color.White;
+                Wear(join, "stone");
+                join.BackColor = DiscordBlue;
+                join.DialogResult = DialogResult.Yes;
+                Button later = new Button();
+                Style(later, Lang.T("Later"));
+                later.Font = new Font(Lang.Face, 9.5f * k, FontStyle.Bold);
+                Wear(later, "stone");
+                later.DialogResult = DialogResult.No;
+                int joinWidth = Math.Max((int)(200 * k), TextRenderer.MeasureText(join.Text, join.Font).Width + (int)(40 * k));
+                int laterWidth = Math.Max((int)(100 * k), TextRenderer.MeasureText(later.Text, later.Font).Width + (int)(30 * k));
+                int right = ClientSize.Width - (int)(pad * k);
+                later.Bounds = new Rectangle(right - laterWidth, (int)(buttonsTop * k) + (int)(3 * k), laterWidth, (int)((buttonHeight - 6) * k));
+                join.Bounds = new Rectangle(later.Left - (int)(12 * k) - joinWidth, (int)(buttonsTop * k), joinWidth, (int)(buttonHeight * k));
+                Controls.Add(join);
+                Controls.Add(later);
+                AcceptButton = join;
+                CancelButton = later;
+                Paint += delegate (object sender, PaintEventArgs e) { PaintBox(e.Graphics); };
+                pulse.Interval = 50;
+                pulse.Tick += delegate { phase += 0.12; Invalidate(new Rectangle(0, 0, ClientSize.Width, (int)(band * k) + 4)); InvalidateEdge(); };
+                Shown += delegate { pulse.Start(); };
+                FormClosed += delegate { pulse.Stop(); pulse.Dispose(); };
+            }
+
+            void InvalidateEdge()
+            {
+                int t = (int)(4 * k) + 2;
+                Invalidate(new Rectangle(0, 0, t, ClientSize.Height));
+                Invalidate(new Rectangle(ClientSize.Width - t, 0, t, ClientSize.Height));
+                Invalidate(new Rectangle(0, ClientSize.Height - t, ClientSize.Width, t));
+            }
+
+            protected override CreateParams CreateParams
+            {
+                get
+                {
+                    CreateParams parameters = base.CreateParams;
+                    parameters.ClassStyle |= 0x20000;       // CS_DROPSHADOW
+                    return parameters;
+                }
+            }
+
+            protected override void WndProc(ref Message m)
+            {
+                base.WndProc(ref m);
+                if (m.Msg == 0x84 && m.Result == (IntPtr)1)
+                {
+                    long at = m.LParam.ToInt64();
+                    Point inside = PointToClient(new Point((short)(at & 0xFFFF), (short)((at >> 16) & 0xFFFF)));
+                    if (inside.Y < band * k) m.Result = (IntPtr)2;
+                }
+            }
+
+            void PaintBox(Graphics g)
+            {
+                g.ScaleTransform(k, k);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                float w = ClientSize.Width / k, h = ClientSize.Height / k;
+                using (LinearGradientBrush night = new LinearGradientBrush(new RectangleF(0, band, w, h - band + 1),
+                    Color.FromArgb(14, 30, 62), Color.FromArgb(8, 14, 30), LinearGradientMode.Vertical))
+                    g.FillRectangle(night, 0, band, w, h - band);
+                // A faint gold dawn at the bottom right.
+                using (GraphicsPath glow = new GraphicsPath())
+                {
+                    glow.AddEllipse(w * 0.45f, h * 0.45f, w * 0.9f, h * 0.9f);
+                    using (PathGradientBrush dawn = new PathGradientBrush(glow))
+                    {
+                        dawn.CenterColor = Color.FromArgb(46, 214, 160, 30);
+                        dawn.SurroundColors = new[] { Color.FromArgb(0, 214, 160, 30) };
+                        g.FillPath(dawn, glow);
+                    }
+                }
+                // The band: blue into gold, a sheen passing over it.
+                RectangleF top = new RectangleF(0, 0, w, band);
+                using (LinearGradientBrush blend = new LinearGradientBrush(new RectangleF(-1, 0, w + 2, band), ForeverBlue, ForeverGold, LinearGradientMode.Horizontal))
+                    g.FillRectangle(blend, top);
+                using (LinearGradientBrush shade = new LinearGradientBrush(new RectangleF(0, -1, w, band + 2),
+                    Color.FromArgb(40, 255, 255, 255), Color.FromArgb(90, 0, 0, 0), LinearGradientMode.Vertical))
+                    g.FillRectangle(shade, top);
+                float sweep = (float)((phase * 40) % (w + 240)) - 120;
+                using (LinearGradientBrush sheen = new LinearGradientBrush(new RectangleF(sweep - 60, 0, 120, band),
+                    Color.FromArgb(0, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Horizontal))
+                {
+                    ColorBlend stops = new ColorBlend();
+                    stops.Colors = new[] { Color.FromArgb(0, 255, 255, 255), Color.FromArgb(70, 255, 255, 255), Color.FromArgb(0, 255, 255, 255) };
+                    stops.Positions = new[] { 0f, 0.5f, 1f };
+                    sheen.InterpolationColors = stops;
+                    g.FillRectangle(sheen, new RectangleF(sweep - 60, 0, 120, band));
+                }
+                using (Font head = new Font(Lang.Face, 17f, FontStyle.Bold))
+                using (Brush shadow = new SolidBrush(Color.FromArgb(170, 4, 8, 20)))
+                using (Brush white = new SolidBrush(Color.White))
+                {
+                    string title = Lang.T("WoW Forever");
+                    float th = g.MeasureString(title, head, PointF.Empty, StringFormat.GenericTypographic).Height;
+                    g.DrawString(title, head, shadow, pad + 1.5f, (band - th) / 2 + 1.5f, StringFormat.GenericTypographic);
+                    g.DrawString(title, head, white, pad, (band - th) / 2, StringFormat.GenericTypographic);
+                }
+                using (Brush line = new SolidBrush(Color.FromArgb(4, 6, 12))) g.FillRectangle(line, 0, band, w, 1.5f);
+                ForeverName(g, Lang.T("Forever Guides"), 21f, new PointF(pad - 2, band + 18), Lang.T("FREE"), null);
+                using (Font body = new Font(Lang.Face, 10f))
+                using (Font bold = new Font(Lang.Face, 10.5f, FontStyle.Bold))
+                using (Font small = new Font(Lang.Face, 8.5f))
+                using (Brush light = new SolidBrush(Color.FromArgb(228, 234, 246)))
+                using (Brush gold = new SolidBrush(Color.FromArgb(255, 212, 90)))
+                using (Brush muted = new SolidBrush(Color.FromArgb(150, 176, 210)))
+                {
+                    g.DrawString(lead, body, light, leadAt);
+                    g.DrawString(only, bold, gold, onlyAt);
+                    g.DrawString(where, small, muted, whereAt);
+                }
+                // The edge: blue into gold, breathing.
+                int alpha = 150 + (int)(105 * (Math.Sin(phase) + 1) / 2);
+                using (LinearGradientBrush rim = new LinearGradientBrush(new RectangleF(-1, -1, w + 2, h + 2),
+                    Color.FromArgb(alpha, ForeverIce), Color.FromArgb(alpha, 255, 200, 60), LinearGradientMode.ForwardDiagonal))
+                using (Pen edge = new Pen(rim, 3f))
+                    g.DrawRectangle(edge, 1.5f, 1.5f, w - 3, h - 3);
+            }
+        }
 
         void BuildTimePage(Panel page)
         {
@@ -11260,6 +11584,23 @@ namespace SurvivorInstaller
             windowOpened = true;
             openedAt = DateTime.Now;
             ShowMirrorNote();
+        }
+
+        // Once, for whoever opens this launcher (1.12.0): morderous' Discord,
+        // where Forever Guides is made and shared. After the Updates box has
+        // had its turn, when nothing else is open or installing; either button
+        // counts as seen.
+        const string ForeverNoteKey = "foreverNote";
+
+        void SayForever()
+        {
+            if (Setting(ForeverNoteKey, null) != null || windowOpened || openedAt == DateTime.MinValue) return;
+            if (!Visible || WindowState == FormWindowState.Minimized || OwnedForms.Length > 0) return;
+            if (InstallsBusy() || selfUpdating || nextInstalls.Count > 0) return;
+            if (DateTime.Now - openedAt < TimeSpan.FromSeconds(3)) return;
+            SetSetting(ForeverNoteKey, "1");
+            using (ForeverBox box = new ForeverBox(this))
+                if (box.ShowDialog(this) == DialogResult.Yes) Open(ForeverDiscord);
         }
 
         void SayWhatWaits()
