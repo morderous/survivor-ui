@@ -263,6 +263,9 @@ local function Snapshot(phase)
 	end
 	record.build = SurvivorUI_BuildSnapshot and SurvivorUI_BuildSnapshot() or {}
 	record.gear = SurvivorUI_GearSnapshot and SurvivorUI_GearSnapshot() or nil
+	if SurvivorUI_ArmorSnapshot then
+		record.armor, record.armorSet = SurvivorUI_ArmorSnapshot()
+	end
 	record.loot = SurvivorUI_LootList and SurvivorUI_LootList(12) or {}
 	-- Its marks and each boss's, as the loot list's title has them (LootLog.lua).
 	record.marks = SurvivorUI_RunMarks and SurvivorUI_RunMarks() or nil
@@ -337,6 +340,9 @@ local function Unphotograph(moment)
 		moment.tracker.tip = nil
 	end
 	for _, piece in pairs(moment.gear or {}) do
+		piece.tip = nil
+	end
+	for _, piece in pairs(moment.armor or {}) do
 		piece.tip = nil
 	end
 	for _, item in pairs(moment.loot or {}) do
@@ -2837,6 +2843,15 @@ buildBox.gearTitle = Themed("text", Font(buildBox, 9, GOLD))
 buildBox.gearTitle:SetPoint("TOPLEFT", buildBox, "TOPLEFT", 7, -GEAR_TOP)
 buildBox.gearTitle:SetText(SurvivorUI_T("Jewelry"))
 buildBox.gear = {}
+-- The armor and the weapons under it, an icon a piece, and the set they make.
+buildBox.armorTitle = Themed("text", Font(buildBox, 9, GOLD))
+buildBox.armorTitle:SetText(SurvivorUI_T("Gear"))
+buildBox.armorSet = Font(buildBox, 9, WHITE)
+buildBox.armorSet:SetPoint("LEFT", buildBox.armorTitle, "RIGHT", 6, 0)
+buildBox.armor = {}
+-- A text's whole width, measured where no width cuts it.
+buildBox.measure = Font(buildBox, 9, WHITE)
+buildBox.measure:Hide()
 
 -- The columns shown, laid out from the right edge: { [key] = { right, width,
 -- divider } }, and the room left for the names.
@@ -2944,8 +2959,13 @@ local function GearLine(index)
 		line.wash = Flat(line, "BACKGROUND")
 		line.wash:SetAllPoints(line)
 		line.edges = Edges(line, "BORDER")
+		line.icon = line:CreateTexture(nil, "ARTWORK")
+		line.icon:SetWidth(GEAR_ROW - 5)
+		line.icon:SetHeight(GEAR_ROW - 5)
+		line.icon:SetPoint("LEFT", line, "LEFT", 2, 0)
+		line.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 		line.label = Font(line, 9, WHITE)
-		line.label:SetPoint("LEFT", line, "LEFT", 4, 0)
+		line.label:SetPoint("LEFT", line, "LEFT", GEAR_ROW, 0)
 		line.tags = Font(line, 9, WHITE, nil, "RIGHT")
 		line.tags:SetPoint("RIGHT", line, "RIGHT", -4, 0)
 		-- Its piece's tooltip, from the link kept.
@@ -2971,17 +2991,156 @@ local function GearLine(index)
 	return line
 end
 
--- What a piece gives beside its slot, a point or two smaller when it would
--- run into the slot's name (a legendary amulet gives much).
-local function FitTags(line, text)
+-- The jewelry lines' and the armor's drawing, in a table: the file is near
+-- Lua 5.0's 200 locals.
+local gearDraw = {}
+
+-- A text's whole width, however wide its string is let be.
+function gearDraw.Measure(text, size)
+	buildBox.measure:SetFont(SurvivorUI_FONT, size + FONT_BUMP, "OUTLINE")
+	buildBox.measure:SetText(text)
+	return buildBox.measure:GetStringWidth()
+end
+
+-- The piece's name and, beside it, what it gives, a point or two smaller when
+-- it would run into the name (a legendary amulet gives much); a long name cut
+-- to leave the bonuses some room (the tooltip has it whole).
+function gearDraw.FitLine(line, name, text)
+	local room = INNER - GEAR_ROW - 4
+	local tagsWide = math.min(gearDraw.Measure(text, 7), room * 0.45)
+	local nameWide = math.min(gearDraw.Measure(name, 9), room - tagsWide - 8)
+	line.label:SetText(name)
+	line.label:SetWidth(nameWide + 2)
 	line.tags:SetText(text)
-	local room = INNER - 8 - line.label:GetStringWidth() - 10
-	for size = 9, 6, -1 do
-		line.tags:SetFont(SurvivorUI_FONT, size + FONT_BUMP, "OUTLINE")
-		if line.tags:GetStringWidth() <= room then
-			break
+	local left = room - nameWide - 8
+	local size = 9
+	while size > 6 and gearDraw.Measure(text, size) > left do
+		size = size - 1
+	end
+	line.tags:SetFont(SurvivorUI_FONT, size + FONT_BUMP, "OUTLINE")
+	line.tags:SetWidth(math.min(gearDraw.Measure(text, size), left) + 2)
+end
+
+-- An icon of the armor, its quality around it and its tooltip.
+gearDraw.ICON = 22
+
+function gearDraw.ArmorIcon(index)
+	local icon = buildBox.armor[index]
+	if not icon then
+		icon = CreateFrame("Frame", nil, buildBox)
+		icon:SetWidth(gearDraw.ICON)
+		icon:SetHeight(gearDraw.ICON)
+		icon.edges = Edges(icon, "BORDER")
+		icon.art = icon:CreateTexture(nil, "ARTWORK")
+		icon.art:SetPoint("TOPLEFT", icon, "TOPLEFT", 1, -1)
+		icon.art:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -1, 1)
+		icon.art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		icon:EnableMouse(true)
+		icon:SetScript("OnEnter", function()
+			if ShowKept(this, this.tip, 2) then
+				return
+			end
+			Aside(this, 2)
+			if this.item then
+				GameTooltip:SetHyperlink(this.item)
+			else
+				local color = this.color or WHITE
+				GameTooltip:SetText(this.itemName or "", color[1], color[2], color[3])
+			end
+			GameTooltip:Show()
+		end)
+		icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
+		buildBox.armor[index] = icon
+	end
+	return icon
+end
+
+-- The set the armor makes: the start its pieces' names share the most (by
+-- words, or by characters in a language without spaces), and how many of the
+-- eight share it; nil below two.
+function gearDraw.SetOf(armor)
+	local counts, best, bestCount = {}, nil, 1
+	for _, piece in pairs(armor) do
+		local name = piece.slot and piece.slot < 16 and piece.name
+		if name then
+			local seen, starts = {}, {}
+			if string.find(name, " ", 1, true) then
+				for at in string.gfind(name, "() ") do
+					table.insert(starts, string.sub(name, 1, at - 1))
+				end
+			else
+				-- Where each character starts in UTF-8, past the first.
+				for at in string.gfind(name, "()[%z\1-\127\194-\244]") do
+					if at > 1 then
+						table.insert(starts, string.sub(name, 1, at - 1))
+					end
+				end
+			end
+			for _, start in pairs(starts) do
+				if not seen[start] then
+					seen[start] = true
+					counts[start] = (counts[start] or 0) + 1
+					local count = counts[start]
+					if count > bestCount or (count == bestCount and best and string.len(start) > string.len(best)) then
+						best, bestCount = start, count
+					end
+				end
+			end
 		end
 	end
+	if best and bestCount >= 2 then
+		return best, bestCount
+	end
+end
+
+function gearDraw.DrawArmor(run, top)
+	local armor = run.armor or {}
+	local count = table.getn(armor)
+	if count == 0 then
+		buildBox.armorTitle:Hide()
+		buildBox.armorSet:Hide()
+		HideAll(buildBox.armor, 1)
+		return top
+	end
+	buildBox.armorTitle:ClearAllPoints()
+	buildBox.armorTitle:SetPoint("TOPLEFT", buildBox, "TOPLEFT", 7, -top)
+	buildBox.armorTitle:Show()
+	-- The set as the tooltips said it; else as the names share it.
+	local kept = run.armorSet
+	local set, worn = gearDraw.SetOf(armor)
+	if kept and kept.name then
+		set, worn = kept.name, kept.count
+	end
+	buildBox.armorSet:SetText(set and set.."  "..worn.."/"..(kept and kept.of or 8) or "")
+	buildBox.armorSet:SetTextColor(0.85, 0.85, 0.88)
+	buildBox.armorSet:Show()
+	-- As large as the row lets them be; the weapons a little apart.
+	local size = math.min(gearDraw.ICON, math.floor((INNER - 4) / count) - 2)
+	local apart = count * (size + 2) + 4 <= INNER and 4 or 0
+	local x = 0
+	for index = 1, count do
+		local piece = armor[index]
+		local icon = gearDraw.ArmorIcon(index)
+		icon:SetWidth(size)
+		icon:SetHeight(size)
+		local color = piece.color or WHITE
+		local before = armor[index - 1]
+		if (piece.slot or 0) >= 16 and before and (before.slot or 0) < 16 then
+			x = x + apart
+		end
+		icon.item, icon.itemName, icon.tip, icon.color = piece.item, piece.name, piece.tip, color
+		icon.art:SetTexture(piece.icon or FLAT)
+		if piece.icon then
+			icon.art:SetVertexColor(1, 1, 1)
+		else
+			icon.art:SetVertexColor(color[1], color[2], color[3], 0.5)
+		end
+		Tint(icon.edges, color, 0.9)
+		At(icon, buildBox, 6 + x, -top - 14)
+		x = x + size + 2
+	end
+	HideAll(buildBox.armor, count + 1)
+	return top + 14 + size + 6
 end
 
 local GEAR_SLOT_NAMES = { "Neck", "Ring", "Ring", "Trinket", "Trinket" }
@@ -3083,24 +3242,32 @@ local function DrawBuild(run)
 		if piece.empty then
 			line.wash:SetVertexColor(0.5, 0.5, 0.55, 0.06)
 			Tint(line.edges, { 0.5, 0.5, 0.55 }, 0.15)
-			line.label:SetText(SurvivorUI_GearWords(piece.label or ""))
+			line.icon:SetTexture(FLAT)
+			line.icon:SetVertexColor(0.15, 0.15, 0.18, 0.8)
+			gearDraw.FitLine(line, SurvivorUI_GearWords(piece.label or ""), SurvivorUI_T("empty"))
 			line.label:SetTextColor(0.45, 0.45, 0.5)
-			FitTags(line, SurvivorUI_T("empty"))
 			line.tags:SetTextColor(0.4, 0.4, 0.45)
 		else
+			-- Its icon and its name in its quality's color, over a faint wash
+			-- of it (a run kept before v3.0.60 has no icon: the color there).
 			local color = piece.color or WHITE
 			line.color = color
-			line.wash:SetVertexColor(color[1], color[2], color[3], 0.45)
-			Tint(line.edges, color, 0.7)
-			line.label:SetText(SurvivorUI_GearWords(piece.label or ""))
-			line.label:SetTextColor(1, 1, 1)
-			FitTags(line, SurvivorUI_GearWords(piece.tags or "-"))
-			line.tags:SetTextColor(1, 1, 1)
+			line.wash:SetVertexColor(color[1], color[2], color[3], 0.1)
+			Tint(line.edges, color, 0.45)
+			line.icon:SetTexture(piece.icon or FLAT)
+			if piece.icon then
+				line.icon:SetVertexColor(1, 1, 1, 1)
+			else
+				line.icon:SetVertexColor(color[1], color[2], color[3], 0.6)
+			end
+			gearDraw.FitLine(line, piece.name or SurvivorUI_GearWords(piece.label or ""), SurvivorUI_GearWords(piece.tags or "-"))
+			line.label:SetTextColor(color[1], color[2], color[3])
+			line.tags:SetTextColor(0.85, 0.85, 0.88)
 		end
 		At(line, buildBox, 6, -GEAR_TOP - 15 - (index - 1) * GEAR_ROW)
 	end
 	HideAll(buildBox.gear, lines + 1)
-	return GEAR_TOP + 15 + lines * GEAR_ROW + 5
+	return gearDraw.DrawArmor(run, GEAR_TOP + 15 + lines * GEAR_ROW + 5)
 end
 
 ------------------------------------------------------------------------------

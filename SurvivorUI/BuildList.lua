@@ -2310,12 +2310,54 @@ function SurvivorUI_GearSnapshot()
 				tags = piece.tags ~= "" and piece.tags or "-",
 				color = { (tonumber(rr or "cc", 16) or 204) / 255, (tonumber(gg or "cc", 16) or 204) / 255, (tonumber(bb or "cc", 16) or 204) / 255 },
 				item = item, name = name, tip = tip,
+				icon = GetInventoryItemTexture and GetInventoryItemTexture("player", slot) or nil,
 			})
 		else
 			table.insert(gear, { label = label, empty = true })
 		end
 	end
 	return gear
+end
+
+-- The armor and the weapons worn, for the last runs too: they stay as they
+-- are through a run. One a piece worn, in the order of the character pane:
+-- { slot, icon, color, item, name, tip }; and the set they make, as their
+-- tooltips say it ("Field Marshal's (8/8)"): { name, count, of }, or nil.
+local ARMOR_SLOTS = { 1, 3, 15, 5, 9, 10, 6, 7, 8, 16, 17, 18 }
+function SurvivorUI_ArmorSnapshot()
+	local armor, set = {}, nil
+	if not GetInventoryItemLink then
+		return armor
+	end
+	for index = 1, table.getn(ARMOR_SLOTS) do
+		local slot = ARMOR_SLOTS[index]
+		local link = GetInventoryItemLink("player", slot)
+		local _, _, item = string.find(link or "", "|H(item:[%d:%-]+)|h")
+		if item then
+			local _, _, rr, gg, bb = string.find(link, "|c%x%x(%x%x)(%x%x)(%x%x)")
+			local _, _, name = string.find(link, "%[(.-)%]")
+			local tip
+			if SurvivorUI_ReadTooltip then
+				scan:SetOwner(WorldFrame, "ANCHOR_NONE")
+				scan:ClearLines()
+				scan:SetInventoryItem("player", slot)
+				tip = SurvivorUI_ReadTooltip(scan)
+				scan:Hide()
+			end
+			for _, line in pairs(slot < 16 and tip or {}) do
+				local _, _, setName, count, of = string.find(line.l or "", "^(.-) ?%((%d+)/(%d+)%)$")
+				if setName and setName ~= "" and not (set and set.count >= tonumber(count)) then
+					set = { name = setName, count = tonumber(count), of = tonumber(of) }
+				end
+			end
+			table.insert(armor, {
+				slot = slot, item = item, name = name, tip = tip,
+				icon = GetInventoryItemTexture and GetInventoryItemTexture("player", slot) or nil,
+				color = { (tonumber(rr or "ff", 16) or 255) / 255, (tonumber(gg or "ff", 16) or 255) / 255, (tonumber(bb or "ff", 16) or 255) / 255 },
+			})
+		end
+	end
+	return armor, set
 end
 
 function SurvivorUI_ToggleWorn()

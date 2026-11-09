@@ -8,8 +8,14 @@
 --   Levels   "Congratulations, you have reached level 12!" and the "You have
 --            gained +3% damage..." line that comes with each level (the XP
 --            bar and the run tracker show the level);
---   Banners  the horde's moves, a boss or a guardian coming or slain, the
---            run's title: the game's banners show them mid-screen;
+--   Banners  the horde's moves, an elite or a guardian coming, the run's
+--            title: the game's banners show them mid-screen;
+--   BossBanners  a boss coming or slain (jiminee, 2026-11-05): off, the
+--            game's own banner for it is written in the chat. The chat has
+--            no line for a boss slain, and a new boss's coming line comes
+--            before the game tells it is a boss (seen 2026-11-08): so from
+--            the game's banners (AZS_RegisterBannerHandler), by their kind;
+--            their "boss" says true for a guardian too;
 --   Yells    the bosses' lines;
 --   Combat   the Combat Log window, fed thirteen lines a second whether it is
 --            ever opened or not. SurvivorUI reads the fight from the game's
@@ -69,6 +75,32 @@ local function Hidden(event, frame)
 	end
 	return false
 end
+
+-- A boss's banner in the chat, in the color of the game's banner lines. Its
+-- coming only while the game's own line for it is kept out (Banners), so it
+-- is not there twice.
+local BOSS_KINDS = { boss = "coming", finalboss = "coming", bossdown = "slain" }
+
+local function OnBanner(banner)
+	local kind = banner and BOSS_KINDS[banner.kind]
+	if not kind or not banner.text or banner.text == "" or SurvivorUI_ChatFilter("BossBanners") then
+		return
+	end
+	if kind == "coming" and not SurvivorUI_ChatFilter("Banners") then
+		return
+	end
+	local color = ChatTypeInfo and ChatTypeInfo["RAID_BOSS_EMOTE"] or { r = 1, g = 0.87, b = 0 }
+	DEFAULT_CHAT_FRAME:AddMessage(banner.text, color.r, color.g, color.b)
+end
+
+local bannerHook = CreateFrame("Frame")
+bannerHook:RegisterEvent("PLAYER_ENTERING_WORLD")
+bannerHook:SetScript("OnEvent", function()
+	if not bannerHook.done and AZS_RegisterBannerHandler then
+		bannerHook.done = true
+		AZS_RegisterBannerHandler(OnBanner)
+	end
+end)
 
 -- Each chat window shows a line through the stock handler: a line kept away
 -- never reaches it, so it costs nothing more.

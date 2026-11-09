@@ -256,6 +256,17 @@ end
 -- class and spell are one piece: they join, under the name seen last.
 local function Unify(book)
 	local items = book.items
+	-- A piece kept with no name (its link read before the game had it):
+	-- an empty row with an icon. Gone.
+	local blank = {}
+	for base in pairs(items) do
+		if not string.find(base, "%S") then
+			table.insert(blank, base)
+		end
+	end
+	for _, base in pairs(blank) do
+		items[base] = nil
+	end
 	local renames = {}
 	for base, item in pairs(items) do
 		if item.spell and SurvivorUI_English then
@@ -402,8 +413,10 @@ end
 
 local function Record(slot, link)
 	local _, _, color, name = string.find(link, "|cff(%x%x%x%x%x%x).-%[(.-)%]")
-	if not name then
-		return
+	-- A link before the game has the piece's name ("[]"): not kept as a
+	-- piece with no name, and looked at again in two seconds.
+	if not name or not string.find(name, "%S") then
+		return nil, false
 	end
 	color = string.lower(color or "ffffff")
 	local base, rank = name, nil

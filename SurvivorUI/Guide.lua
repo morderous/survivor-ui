@@ -293,6 +293,248 @@ local OPEN_CARD = 72
 local COST_ROW = 16
 local SET_ROW, SET_TALL = 48, 61    -- a set's panel, and the PvP and Tier 0.5 ones' three lines
 local SET_CAPTION = 17              -- its name and zones, over the panel
+-- Jewels: written by bot\ferramentas\make_jewels_lua.py, not by hand.
+-- Read in the game's 0.142.0 (make_jewels_data.py). Rings and trinkets: name, icon, the game's line,
+-- whether it stops being offered near a most, and by rarity each pick's numbers, taken again and again
+-- at that rarity until the game stops offering it (10 shown where it never stops). Amulets: name, icon,
+-- rarity, who its {hits} are, every number's size by rank in hundredths (rank 1 = 100), and its lines
+-- with their numbers by rank. The class legendary amulets are left out.
+local JEWELS = {
+	ring = {
+		{ "Band of Accuria", "INV_Jewelry_Ring_15", "+{v}% damage", false, {
+			{ { v = "25.5" }, { v = "41.2" }, { v = "55.9" }, { v = "69.6" }, { v = "82.5" }, { v = "94.6" }, { v = "106.1" }, { v = "117" }, { v = "127.4" }, { v = "137.3" } },
+			{ { v = "35.7" }, { v = "57.7" }, { v = "78.3" }, { v = "97.4" }, { v = "115.5" }, { v = "132.5" }, { v = "148.6" }, { v = "163.8" }, { v = "178.3" }, { v = "192.2" } },
+			{ { v = "45.9" }, { v = "74.2" }, { v = "100.6" }, { v = "125.3" }, { v = "148.5" }, { v = "170.3" }, { v = "191" }, { v = "210.6" }, { v = "229.3" }, { v = "247.1" } },
+			{ { v = "61.2" }, { v = "99" }, { v = "134.2" }, { v = "167.1" }, { v = "198" }, { v = "227.1" }, { v = "254.7" }, { v = "280.8" }, { v = "305.7" }, { v = "329.4" } },
+			{ { v = "81.6" }, { v = "132" }, { v = "178.9" }, { v = "222.7" }, { v = "264" }, { v = "302.8" }, { v = "339.6" }, { v = "374.4" }, { v = "407.6" }, { v = "439.2" } },
+		} },
+		{ "Quick Strike Ring", "INV_Jewelry_Ring_07", "-{v}% cooldowns", false, {
+			{ { v = "13.5" }, { v = "21.8" }, { v = "29.6" }, { v = "36.9" }, { v = "43.7" }, { v = "50.1" }, { v = "56.2" }, { v = "61.9" }, { v = "67.4" }, { v = "72.7" } },
+			{ { v = "18.9" }, { v = "30.6" }, { v = "41.4" }, { v = "51.6" }, { v = "61.1" }, { v = "70.1" }, { v = "78.6" }, { v = "86.7" }, { v = "94.4" }, { v = "101.7" } },
+			{ { v = "24.3" }, { v = "39.3" }, { v = "53.3" }, { v = "66.3" }, { v = "78.6" }, { v = "90.2" }, { v = "101.1" }, { v = "111.5" }, { v = "121.4" }, { v = "130.8" } },
+			{ { v = "32.4" }, { v = "52.4" }, { v = "71" }, { v = "88.4" }, { v = "104.8" }, { v = "120.2" }, { v = "134.8" }, { v = "148.7" }, { v = "161.8" }, { v = "174.4" } },
+			{ { v = "43.2" }, { v = "69.9" }, { v = "94.7" }, { v = "117.9" }, { v = "139.7" }, { v = "160.3" }, { v = "179.8" }, { v = "198.2" }, { v = "215.8" }, { v = "232.5" } },
+		} },
+		{ "Heavy Dark Iron Ring", "INV_Jewelry_Ring_14", "+{v}% max health", false, {
+			{ { v = "25.3" }, { v = "37.5" }, { v = "46.9" }, { v = "54.3" }, { v = "60" }, { v = "64.7" }, { v = "68.7" }, { v = "72.4" }, { v = "75.7" }, { v = "78.7" } },
+			{ { v = "33.1" }, { v = "47.1" }, { v = "56.9" }, { v = "63.9" }, { v = "69.6" }, { v = "74.5" }, { v = "78.8" }, { v = "82.7" }, { v = "86.2" }, { v = "89.5" } },
+			{ { v = "39.9" }, { v = "54.6" }, { v = "64" }, { v = "71.2" }, { v = "77.1" }, { v = "82.2" }, { v = "86.8" }, { v = "90.9" }, { v = "94.7" }, { v = "98.1" } },
+			{ { v = "48.3" }, { v = "62.9" }, { v = "72.4" }, { v = "79.9" }, { v = "86.2" }, { v = "91.7" }, { v = "96.5" }, { v = "101" }, { v = "105.1" }, { v = "108.9" } },
+			{ { v = "57" }, { v = "71.2" }, { v = "81.2" }, { v = "89.2" }, { v = "95.9" }, { v = "101.8" }, { v = "107.1" }, { v = "112" }, { v = "116.4" }, { v = "120.5" } },
+		} },
+		{ "Master Dragonslayer's Ring", "INV_Jewelry_Ring_41", "+{v}% critical strike chance", false, {
+			{ { v = "6" }, { v = "9.7" }, { v = "13.2" }, { v = "16.4" }, { v = "19.4" }, { v = "22.3" }, { v = "25" }, { v = "27.5" }, { v = "30" }, { v = "32.3" } },
+			{ { v = "8.4" }, { v = "13.6" }, { v = "18.4" }, { v = "22.9" }, { v = "27.2" }, { v = "31.2" }, { v = "35" }, { v = "38.5" }, { v = "42" }, { v = "45.2" } },
+			{ { v = "10.8" }, { v = "17.5" }, { v = "23.7" }, { v = "29.5" }, { v = "34.9" }, { v = "40.1" }, { v = "44.9" }, { v = "49.6" }, { v = "53.9" }, { v = "58.1" } },
+			{ { v = "14.4" }, { v = "23.3" }, { v = "31.6" }, { v = "39.3" }, { v = "46.6" }, { v = "53.4" }, { v = "59.9" }, { v = "66.1" }, { v = "71.9" }, { v = "77.5" } },
+			{ { v = "19.2" }, { v = "31.1" }, { v = "42.1" }, { v = "52.4" }, { v = "62.1" }, { v = "71.2" }, { v = "79.9" }, { v = "88.1" }, { v = "95.9" }, { v = "103.3" } },
+		} },
+		{ "Archimtiros' Ring of Reckoning", "INV_Jewelry_Ring_40", "+{v}% damage reduction{max}, +{h}% max health", false, {
+			{ { h = "17.7", max = false, v = "4.4" }, { h = "26.2", max = false, v = "6.6" }, { h = "32.9", max = false, v = "8.2" }, { h = "38", max = false, v = "9.5" }, { h = "42", max = true, v = "10.5" }, { h = "45.3", max = true, v = "10.5" }, { h = "48.1", max = true, v = "10.5" }, { h = "50.7", max = true, v = "10.5" }, { h = "53", max = true, v = "10.5" }, { h = "55.1", max = true, v = "10.5" } },
+			{ { h = "23.2", max = false, v = "5.8" }, { h = "33", max = false, v = "8.2" }, { h = "39.8", max = false, v = "10" }, { h = "44.7", max = true, v = "10.5" }, { h = "48.7", max = true, v = "10.5" }, { h = "52.1", max = true, v = "10.5" }, { h = "55.1", max = true, v = "10.5" }, { h = "57.9", max = true, v = "10.5" }, { h = "60.3", max = true, v = "10.5" }, { h = "62.6", max = true, v = "10.5" } },
+			{ { h = "27.9", max = false, v = "7" }, { h = "38.2", max = false, v = "9.5" }, { h = "44.8", max = true, v = "10.5" }, { h = "49.8", max = true, v = "10.5" }, { h = "54", max = true, v = "10.5" }, { h = "57.5", max = true, v = "10.5" }, { h = "60.7", max = true, v = "10.5" }, { h = "63.6", max = true, v = "10.5" }, { h = "66.3", max = true, v = "10.5" }, { h = "68.7", max = true, v = "10.5" } },
+			{ { h = "33.8", max = false, v = "8.5" }, { h = "44", max = true, v = "10.5" }, { h = "50.7", max = true, v = "10.5" }, { h = "55.9", max = true, v = "10.5" }, { h = "60.3", max = true, v = "10.5" }, { h = "64.2", max = true, v = "10.5" }, { h = "67.6", max = true, v = "10.5" }, { h = "70.7", max = true, v = "10.5" }, { h = "73.5", max = true, v = "10.5" }, { h = "76.2", max = true, v = "10.5" } },
+			{ { h = "39.9", max = false, v = "10" }, { h = "49.9", max = true, v = "10.5" }, { h = "56.9", max = true, v = "10.5" }, { h = "62.4", max = true, v = "10.5" }, { h = "67.2", max = true, v = "10.5" }, { h = "71.3", max = true, v = "10.5" }, { h = "75", max = true, v = "10.5" }, { h = "78.4", max = true, v = "10.5" }, { h = "81.5", max = true, v = "10.5" }, { h = "84.3", max = true, v = "10.5" } },
+		} },
+		{ "Ring of the Devoured", "INV_Jewelry_Ring_AhnQiraj_05", "+{v} health per second", true, {
+			{ { v = "2.3" }, { v = "3" }, { v = "3.5" }, { v = "3.8" }, { v = "4.1" } },
+			{ { v = "3.2" }, { v = "3.8" }, { v = "4.1" } },
+			{ { v = "4.1" } },
+			{ { v = "4.5" } },
+			{ { v = "4.5" } },
+		} },
+		{ "Ring of Spell Power", "INV_Jewelry_Ring_38", "+{v}% area of effect", false, {
+			{ { v = "21" }, { v = "34" }, { v = "46" }, { v = "57.3" }, { v = "67.9" }, { v = "77.9" }, { v = "87.4" }, { v = "96.4" }, { v = "104.9" }, { v = "113" } },
+			{ { v = "29.4" }, { v = "47.5" }, { v = "64.4" }, { v = "80.3" }, { v = "95.1" }, { v = "109.1" }, { v = "122.3" }, { v = "134.9" }, { v = "146.9" }, { v = "158.3" } },
+			{ { v = "37.8" }, { v = "61.1" }, { v = "82.9" }, { v = "103.2" }, { v = "122.3" }, { v = "140.3" }, { v = "157.3" }, { v = "173.5" }, { v = "188.8" }, { v = "203.5" } },
+			{ { v = "50.4" }, { v = "81.5" }, { v = "110.5" }, { v = "137.6" }, { v = "163" }, { v = "187" }, { v = "209.7" }, { v = "231.3" }, { v = "251.8" }, { v = "271.3" } },
+			{ { v = "67.2" }, { v = "108.7" }, { v = "147.3" }, { v = "183.4" }, { v = "217.4" }, { v = "249.4" }, { v = "279.6" }, { v = "308.4" }, { v = "335.7" }, { v = "361.7" } },
+		} },
+		{ "Seal of the Damned", "INV_Jewelry_Ring_51Naxxramas", "Your damage over time spells tick {v}% faster", true, {
+			{ { v = "15" }, { v = "23.5" }, { v = "31.2" }, { v = "38" }, { v = "44.2" }, { v = "49.8" }, { v = "54.8" }, { v = "59.3" }, { v = "63.4" }, { v = "67.1" }, { v = "70.4" }, { v = "73.3" }, { v = "76" }, { v = "78.4" }, { v = "80.6" }, { v = "82.5" }, { v = "84.2" }, { v = "85.8" }, { v = "87.2" }, { v = "88.5" }, { v = "89.7" }, { v = "90.7" } },
+			{ { v = "21" }, { v = "32.1" }, { v = "41.6" }, { v = "49.8" }, { v = "56.8" }, { v = "62.8" }, { v = "68" }, { v = "72.5" }, { v = "76.4" }, { v = "79.7" }, { v = "82.5" }, { v = "85" }, { v = "87.1" }, { v = "88.9" }, { v = "90.4" } },
+			{ { v = "27" }, { v = "40.1" }, { v = "50.9" }, { v = "59.8" }, { v = "67" }, { v = "72.9" }, { v = "77.8" }, { v = "81.8" }, { v = "85.1" }, { v = "87.8" }, { v = "90" }, { v = "91.8" } },
+			{ { v = "36" }, { v = "51.4" }, { v = "63" }, { v = "71.9" }, { v = "78.6" }, { v = "83.8" }, { v = "87.7" }, { v = "90.6" } },
+			{ { v = "48" }, { v = "64.6" }, { v = "76" }, { v = "83.6" }, { v = "88.9" }, { v = "92.4" } },
+		} },
+		{ "Blooddrinker's Band", "INV_Jewelry_Ring_49Naxxramas", "{v}% of all damage dealt heals you", true, {
+			{ { v = "1.5" }, { v = "2" }, { v = "2.3" }, { v = "2.6" }, { v = "2.7" } },
+			{ { v = "2.1" }, { v = "2.5" }, { v = "2.7" } },
+			{ { v = "2.7" } },
+			{ { v = "3" } },
+			{ { v = "3" } },
+		} },
+	},
+	trinket = {
+		{ "Earthstrike", "Spell_Nature_AbolishMagic", "+{v}% damage", false, {
+			{ { v = "19.5" }, { v = "31.5" }, { v = "42.7" }, { v = "53.2" }, { v = "63.1" }, { v = "72.4" }, { v = "81.1" }, { v = "89.5" }, { v = "97.4" }, { v = "105" } },
+			{ { v = "27.3" }, { v = "44.2" }, { v = "59.8" }, { v = "74.5" }, { v = "88.3" }, { v = "101.3" }, { v = "113.6" }, { v = "125.3" }, { v = "136.4" }, { v = "146.9" } },
+			{ { v = "35.1" }, { v = "56.8" }, { v = "76.9" }, { v = "95.8" }, { v = "113.5" }, { v = "130.3" }, { v = "146.1" }, { v = "161.1" }, { v = "175.3" }, { v = "188.9" } },
+			{ { v = "46.8" }, { v = "75.7" }, { v = "102.6" }, { v = "127.7" }, { v = "151.4" }, { v = "173.7" }, { v = "194.7" }, { v = "214.7" }, { v = "233.8" }, { v = "251.9" } },
+			{ { v = "62.4" }, { v = "100.9" }, { v = "136.8" }, { v = "170.3" }, { v = "201.8" }, { v = "231.6" }, { v = "259.7" }, { v = "286.3" }, { v = "311.7" }, { v = "335.9" } },
+		} },
+		{ "Talisman of Ephemeral Power", "INV_Misc_StoneTablet_11", "-{v}% cooldowns", false, {
+			{ { v = "10.5" }, { v = "17" }, { v = "23" }, { v = "28.7" }, { v = "34" }, { v = "39" }, { v = "43.7" }, { v = "48.2" }, { v = "52.4" }, { v = "56.5" } },
+			{ { v = "14.7" }, { v = "23.8" }, { v = "32.2" }, { v = "40.1" }, { v = "47.5" }, { v = "54.5" }, { v = "61.2" }, { v = "67.5" }, { v = "73.4" }, { v = "79.1" } },
+			{ { v = "18.9" }, { v = "30.6" }, { v = "41.4" }, { v = "51.6" }, { v = "61.1" }, { v = "70.1" }, { v = "78.6" }, { v = "86.7" }, { v = "94.4" }, { v = "101.7" } },
+			{ { v = "25.2" }, { v = "40.8" }, { v = "55.2" }, { v = "68.8" }, { v = "81.5" }, { v = "93.5" }, { v = "104.9" }, { v = "115.6" }, { v = "125.9" }, { v = "135.6" } },
+			{ { v = "33.6" }, { v = "54.3" }, { v = "73.7" }, { v = "91.7" }, { v = "108.7" }, { v = "124.7" }, { v = "139.8" }, { v = "154.2" }, { v = "167.8" }, { v = "180.9" } },
+		} },
+		{ "Lifegiving Gem", "INV_Misc_Gem_Pearl_05", "+{v}% max health", false, {
+			{ { v = "20.2" }, { v = "30" }, { v = "37.5" }, { v = "43.4" }, { v = "48" }, { v = "51.7" }, { v = "55" }, { v = "57.9" }, { v = "60.5" }, { v = "62.9" } },
+			{ { v = "26.5" }, { v = "37.7" }, { v = "45.5" }, { v = "51.1" }, { v = "55.7" }, { v = "59.6" }, { v = "63" }, { v = "66.1" }, { v = "69" }, { v = "71.6" } },
+			{ { v = "31.9" }, { v = "43.7" }, { v = "51.2" }, { v = "56.9" }, { v = "61.7" }, { v = "65.8" }, { v = "69.4" }, { v = "72.7" }, { v = "75.7" }, { v = "78.5" } },
+			{ { v = "38.7" }, { v = "50.3" }, { v = "57.9" }, { v = "63.9" }, { v = "68.9" }, { v = "73.3" }, { v = "77.2" }, { v = "80.8" }, { v = "84.1" }, { v = "87.1" } },
+			{ { v = "45.6" }, { v = "57" }, { v = "65" }, { v = "71.4" }, { v = "76.8" }, { v = "81.5" }, { v = "85.7" }, { v = "89.6" }, { v = "93.1" }, { v = "96.4" } },
+		} },
+		{ "Hand of Justice", "INV_Jewelry_Talisman_01", "{v}% chance for a spell to cast twice", true, {
+			{ { v = "9" }, { v = "14.6" }, { v = "19.7" }, { v = "24.6" }, { v = "29.1" }, { v = "33.4" }, { v = "37.5" }, { v = "41.3" }, { v = "45" }, { v = "48.4" }, { v = "51.8" }, { v = "55" } },
+			{ { v = "12.6" }, { v = "20.4" }, { v = "27.6" }, { v = "34.4" }, { v = "40.8" }, { v = "46.8" }, { v = "52.4" }, { v = "57.8" } },
+			{ { v = "16.2" }, { v = "26.2" }, { v = "35.5" }, { v = "44.2" }, { v = "52.4" }, { v = "60" } },
+			{ { v = "21.6" }, { v = "34.9" }, { v = "47.3" }, { v = "59" } },
+			{ { v = "28.8" }, { v = "46.6" }, { v = "60" } },
+		} },
+		{ "Blackhand's Breadth", "INV_Misc_ArmorKit_09", "+{v}% critical strike damage", false, {
+			{ { v = "29.3" }, { v = "47.3" }, { v = "64.1" }, { v = "79.8" }, { v = "94.6" }, { v = "108.5" }, { v = "121.7" }, { v = "134.2" }, { v = "146.1" }, { v = "157.4" } },
+			{ { v = "41" }, { v = "66.2" }, { v = "89.8" }, { v = "111.8" }, { v = "132.5" }, { v = "152" }, { v = "170.4" }, { v = "187.9" }, { v = "204.6" }, { v = "220.4" } },
+			{ { v = "52.7" }, { v = "85.2" }, { v = "115.4" }, { v = "143.7" }, { v = "170.3" }, { v = "195.4" }, { v = "219.1" }, { v = "241.6" }, { v = "263" }, { v = "283.4" } },
+			{ { v = "70.2" }, { v = "113.5" }, { v = "153.9" }, { v = "191.6" }, { v = "227.1" }, { v = "260.5" }, { v = "292.1" }, { v = "322.1" }, { v = "350.7" }, { v = "377.9" } },
+			{ { v = "93.6" }, { v = "151.4" }, { v = "205.2" }, { v = "255.5" }, { v = "302.8" }, { v = "347.3" }, { v = "389.5" }, { v = "429.5" }, { v = "467.5" }, { v = "503.8" } },
+		} },
+		{ "Carrot on a Stick", "INV_Misc_Food_54", "+{v}% movement speed", true, {
+			{ { v = "12" }, { v = "17.6" }, { v = "22.1" }, { v = "25.7" }, { v = "28.5" }, { v = "30.8" }, { v = "32.7" }, { v = "34.1" }, { v = "35.3" }, { v = "36.2" } },
+			{ { v = "16.8" }, { v = "23.3" }, { v = "28" }, { v = "31.3" }, { v = "33.8" }, { v = "35.5" }, { v = "36.8" } },
+			{ { v = "21.6" }, { v = "28.2" }, { v = "32.5" }, { v = "35.2" }, { v = "36.9" } },
+			{ { v = "28.8" }, { v = "34.2" }, { v = "37" } },
+			{ { v = "38.4" } },
+		} },
+		{ "Gnomish Universal Remote", "INV_Misc_PocketWatch_01", "+{v}% pickup range", true, {
+			{ { v = "52.5" }, { v = "77" }, { v = "96.6" }, { v = "112.3" }, { v = "124.8" }, { v = "134.9" }, { v = "142.9" }, { v = "149.3" }, { v = "154.4" }, { v = "158.6" } },
+			{ { v = "73.5" }, { v = "101.9" }, { v = "122.4" }, { v = "137.1" }, { v = "147.7" }, { v = "155.4" }, { v = "160.9" } },
+			{ { v = "94.5" }, { v = "123.5" }, { v = "142" }, { v = "153.9" }, { v = "161.5" } },
+			{ { v = "126" }, { v = "149.5" }, { v = "161.8" } },
+			{ { v = "168" } },
+		} },
+		{ "Insignia of the Horde", "INV_Jewelry_TrinketPVP_02", "+{v}% experience", true, {
+			{ { v = "18" }, { v = "26.4" }, { v = "33.1" }, { v = "38.5" }, { v = "42.8" }, { v = "46.2" }, { v = "49" }, { v = "51.2" }, { v = "53" }, { v = "54.4" } },
+			{ { v = "25.2" }, { v = "34.9" }, { v = "42" }, { v = "47" }, { v = "50.6" }, { v = "53.3" }, { v = "55.2" } },
+			{ { v = "32.4" }, { v = "42.3" }, { v = "48.7" }, { v = "52.8" }, { v = "55.4" } },
+			{ { v = "43.2" }, { v = "51.3" }, { v = "55.5" } },
+			{ { v = "57.6" } },
+		} },
+		{ "Royal Seal of Eldre'Thalas", "INV_Jewelry_Talisman_10", "+{v}% gold", true, {
+			{ { v = "37.5" }, { v = "55" }, { v = "69" }, { v = "80.2" }, { v = "89.2" }, { v = "96.3" }, { v = "102.1" }, { v = "106.6" }, { v = "110.3" }, { v = "113.3" } },
+			{ { v = "52.5" }, { v = "72.8" }, { v = "87.4" }, { v = "97.9" }, { v = "105.5" }, { v = "111" }, { v = "114.9" } },
+			{ { v = "67.5" }, { v = "88.2" }, { v = "101.4" }, { v = "109.9" }, { v = "115.4" } },
+			{ { v = "90" }, { v = "106.8" }, { v = "115.5" } },
+			{ { v = "120" } },
+		} },
+		{ "Mark of the Chosen", "INV_Jewelry_Talisman_08", "+{v}% luck", true, {
+			{ { v = "22.5" }, { v = "33" }, { v = "41.4" }, { v = "48.1" }, { v = "53.5" }, { v = "57.8" }, { v = "61.2" }, { v = "64" }, { v = "66.2" }, { v = "68" } },
+			{ { v = "31.5" }, { v = "43.7" }, { v = "52.4" }, { v = "58.8" }, { v = "63.3" }, { v = "66.6" }, { v = "68.9" } },
+			{ { v = "40.5" }, { v = "52.9" }, { v = "60.9" }, { v = "66" }, { v = "69.2" } },
+			{ { v = "54" }, { v = "64.1" }, { v = "69.3" } },
+			{ { v = "72" } },
+		} },
+		{ "Onyxia Blood Talisman", "Spell_Shadow_LifeDrain", "Each kill heals {v} health", true, {
+			{ { v = "3" }, { v = "4" }, { v = "4.7" }, { v = "5.1" }, { v = "5.4" } },
+			{ { v = "4.2" }, { v = "5" }, { v = "5.5" } },
+			{ { v = "5.4" } },
+			{ { v = "6" } },
+			{ { v = "6" } },
+		} },
+		{ "Horn of the Warchief", "INV_Misc_Horn_01", "Your buffs are {v}% stronger", true, {
+			{ { v = "22.5" }, { v = "33" }, { v = "41.4" }, { v = "48.1" }, { v = "53.5" }, { v = "57.8" }, { v = "61.2" }, { v = "64" }, { v = "66.2" }, { v = "68" } },
+			{ { v = "31.5" }, { v = "43.7" }, { v = "52.4" }, { v = "58.8" }, { v = "63.3" }, { v = "66.6" }, { v = "68.9" } },
+			{ { v = "40.5" }, { v = "52.9" }, { v = "60.9" }, { v = "66" }, { v = "69.2" } },
+			{ { v = "54" }, { v = "64.1" }, { v = "69.3" } },
+			{ { v = "72" } },
+		} },
+		{ "Major Soulstone", "INV_Misc_Orb_04", "+{v} return to life at half health (2 at most)", true, {
+			{ { v = "1" } },
+			{ { v = "1" } },
+			{ { v = "1" } },
+			{ { v = "2" } },
+			{ { v = "2" } },
+		} },
+		{ "Star of Mystaria", "INV_Enchant_EssenceMagicLarge", "+{v}% max health, +{h}% damage reduction{max}", false, {
+			{ { h = "3.4", max = false, v = "21.1" }, { h = "5", max = false, v = "31.2" }, { h = "6.3", max = false, v = "39.1" }, { h = "7.2", max = false, v = "45.2" }, { h = "8", max = false, v = "50" }, { h = "8.6", max = false, v = "53.9" }, { h = "9.2", max = false, v = "57.3" }, { h = "9.6", max = false, v = "60.3" }, { h = "10.1", max = false, v = "63" }, { h = "10.5", max = false, v = "65.6" } },
+			{ { h = "4.4", max = false, v = "27.6" }, { h = "6.3", max = false, v = "39.2" }, { h = "7.6", max = false, v = "47.4" }, { h = "8.5", max = false, v = "53.3" }, { h = "9.3", max = false, v = "58" }, { h = "9.9", max = false, v = "62.1" }, { h = "10.5", max = false, v = "65.6" }, { h = "11", max = false, v = "68.9" }, { h = "11.5", max = false, v = "71.8" }, { h = "11.9", max = false, v = "74.6" } },
+			{ { h = "5.3", max = false, v = "33.2" }, { h = "7.3", max = false, v = "45.5" }, { h = "8.5", max = false, v = "53.4" }, { h = "9.5", max = false, v = "59.3" }, { h = "10.3", max = false, v = "64.2" }, { h = "11", max = false, v = "68.5" }, { h = "11.6", max = false, v = "72.3" }, { h = "12", max = true, v = "75.7" }, { h = "12", max = true, v = "78.9" }, { h = "12", max = true, v = "81.8" } },
+			{ { h = "6.4", max = false, v = "40.3" }, { h = "8.4", max = false, v = "52.4" }, { h = "9.7", max = false, v = "60.3" }, { h = "10.7", max = false, v = "66.6" }, { h = "11.5", max = false, v = "71.8" }, { h = "12", max = true, v = "76.4" }, { h = "12", max = true, v = "80.5" }, { h = "12", max = true, v = "84.2" }, { h = "12", max = true, v = "87.6" }, { h = "12", max = true, v = "90.7" } },
+			{ { h = "7.6", max = false, v = "47.5" }, { h = "9.5", max = false, v = "59.4" }, { h = "10.8", max = false, v = "67.7" }, { h = "11.9", max = false, v = "74.3" }, { h = "12", max = true, v = "80" }, { h = "12", max = true, v = "84.9" }, { h = "12", max = true, v = "89.3" }, { h = "12", max = true, v = "93.3" }, { h = "12", max = true, v = "97" }, { h = "12", max = true, v = "100.4" } },
+		} },
+	},
+	amulet = {
+		{ "Mark of Fordring", "INV_Jewelry_Talisman_07", 1, "", { 100, 160, 202, 231.4, 252, 266.4, 276.5, 283.5, 288.5, 291.9 }, {
+			{ "+{p} damage", { { p = "15%" }, { p = "24%" }, { p = "30.3%" }, { p = "34.7%" }, { p = "37.8%" }, { p = "40%" }, { p = "41.5%" }, { p = "42.5%" }, { p = "43.3%" }, { p = "43.8%" } } },
+		} },
+		{ "Talvash's Enhancing Necklace", "INV_Jewelry_Necklace_02", 1, "", { 100, 160, 202, 231.4, 252, 266.4, 276.5, 283.5, 288.5, 291.9 }, {
+			{ "-{p} cooldowns", { { p = "10%" }, { p = "16%" }, { p = "20.2%" }, { p = "23.1%" }, { p = "25.2%" }, { p = "26.6%" }, { p = "27.6%" }, { p = "28.4%" }, { p = "28.8%" }, { p = "29.2%" } } },
+		} },
+		{ "Pristine Enchanted South Seas Kelp", "INV_Jewelry_Necklace_26", 1, "", { 100, 160, 202, 231.4, 252, 266.4, 276.5, 283.5, 288.5, 291.9 }, {
+			{ "+{p} luck", { { p = "30%" }, { p = "48%" }, { p = "60.6%" }, { p = "69.4%" }, { p = "75.6%" }, { p = "79.9%" }, { p = "82.9%" }, { p = "85.1%" }, { p = "86.5%" }, { p = "87.6%" } } },
+			{ "+{p} gold", { { p = "25%" }, { p = "40%" }, { p = "50.5%" }, { p = "57.9%" }, { p = "63%" }, { p = "66.6%" }, { p = "69.1%" }, { p = "70.9%" }, { p = "72.1%" }, { p = "73%" } } },
+		} },
+		{ "Prestor's Talisman of Connivery", "INV_Jewelry_Necklace_17", 2, "", { 100, 150, 187.5, 215.6, 236.7, 252.5, 264.4, 273.3, 280, 285 }, {
+			{ "+{p} damage", { { p = "16%" }, { p = "24%" }, { p = "30%" }, { p = "34.5%" }, { p = "37.9%" }, { p = "40.4%" }, { p = "42.3%" }, { p = "43.7%" }, { p = "44.8%" }, { p = "45.6%" } } },
+			{ "+{p} critical strike", { { p = "4%" }, { p = "6%" }, { p = "7.5%" }, { p = "8.6%" }, { p = "9.5%" }, { p = "10.1%" }, { p = "10.6%" }, { p = "10.9%" }, { p = "11.2%" }, { p = "11.4%" } } },
+		} },
+		{ "Animated Chain Necklace", "INV_Jewelry_Necklace_01", 2, "", { 100, 150, 187.5, 215.6, 236.7, 252.5, 264.4, 273.3, 280, 285 }, {
+			{ "+{p} max health", { { p = "25%" }, { p = "37.5%" }, { p = "46.9%" }, { p = "53.9%" }, { p = "59.2%" }, { p = "63.1%" }, { p = "66.1%" }, { p = "68.3%" }, { p = "70%" }, { p = "71.2%" } } },
+			{ "+{p} damage reduction", { { p = "8%" }, { p = "12%" }, { p = "15%" }, { p = "17.3%" }, { p = "18.9%" }, { p = "20.2%" }, { p = "21.2%" }, { p = "21.9%" }, { p = "22.4%" }, { p = "22.8%" } } },
+		} },
+		{ "Woven Ivy Necklace", "INV_Misc_Herb_15", 2, "", { 100, 150, 187.5, 215.6, 236.7, 252.5, 264.4, 273.3, 280, 285 }, {
+			{ "+{v} health per second", { { v = "6" }, { v = "9" }, { v = "11.3" }, { v = "12.9" }, { v = "14.2" }, { v = "15.2" }, { v = "15.9" }, { v = "16.4" }, { v = "16.8" }, { v = "17.1" } } },
+			{ "+{p} max health", { { p = "12%" }, { p = "18%" }, { p = "22.5%" }, { p = "25.9%" }, { p = "28.4%" }, { p = "30.3%" }, { p = "31.7%" }, { p = "32.8%" }, { p = "33.6%" }, { p = "34.2%" } } },
+			{ "+{p} movement speed", { { p = "12%" }, { p = "18%" }, { p = "22.5%" }, { p = "25.9%" }, { p = "28.4%" }, { p = "30.3%" }, { p = "31.7%" }, { p = "32.8%" }, { p = "33.6%" }, { p = "34.2%" } } },
+		} },
+		{ "Amulet of the Darkmoon", "INV_Jewelry_Necklace_14", 2, "", { 100, 150, 187.5, 215.6, 236.7, 252.5, 264.4, 273.3, 280, 285 }, {
+			{ "-{p} cooldowns", { { p = "12%" }, { p = "18%" }, { p = "22.5%" }, { p = "25.9%" }, { p = "28.4%" }, { p = "30.3%" }, { p = "31.7%" }, { p = "32.8%" }, { p = "33.6%" }, { p = "34.2%" } } },
+			{ "+{p} movement speed", { { p = "8%" }, { p = "12%" }, { p = "15%" }, { p = "17.3%" }, { p = "18.9%" }, { p = "20.2%" }, { p = "21.2%" }, { p = "21.9%" }, { p = "22.4%" }, { p = "22.8%" } } },
+		} },
+		{ "Jeklik's Opaline Talisman", "INV_Jewelry_Necklace_03", 3, "", { 100, 135, 163.9, 187.7, 207.3, 223.6, 236.9, 248, 257.1, 264.6 }, {
+			{ "Heals you for {p} of all damage dealt", { { p = "3%" }, { p = "4.1%" }, { p = "4.9%" }, { p = "5.6%" }, { p = "6.2%" }, { p = "6.7%" }, { p = "7.1%" }, { p = "7.4%" }, { p = "7.7%" }, { p = "7.9%" } } },
+			{ "Each kill heals {v} health", { { v = "1" }, { v = "1.4" }, { v = "1.6" }, { v = "1.9" }, { v = "2.1" }, { v = "2.2" }, { v = "2.4" }, { v = "2.5" }, { v = "2.6" }, { v = "2.6" } } },
+		} },
+		{ "The Eye of Hakkar", "INV_Jewelry_Necklace_22", 3, "Your critical hits", { 100, 135, 163.9, 187.7, 207.3, 223.6, 236.9, 248, 257.1, 264.6 }, {
+			{ "+{p} critical strike", { { p = "4.8%" }, { p = "6.5%" }, { p = "7.9%" }, { p = "9%" }, { p = "10%" }, { p = "10.7%" }, { p = "11.4%" }, { p = "11.9%" }, { p = "12.3%" }, { p = "12.7%" } } },
+			{ "{hits} burn and bleed for {frac} more over {dur} sec", { { dur = "4", frac = "80%" }, { dur = "4", frac = "108%" }, { dur = "4", frac = "131.1%" }, { dur = "4", frac = "150.2%" }, { dur = "4", frac = "165.9%" }, { dur = "4", frac = "178.9%" }, { dur = "4", frac = "189.6%" }, { dur = "4", frac = "198.4%" }, { dur = "4", frac = "205.7%" }, { dur = "4", frac = "211.7%" } } },
+		} },
+		{ "Medallion of Steadfast Might", "INV_Jewelry_Amulet_03", 3, "", { 100, 135, 163.9, 187.7, 207.3, 223.6, 236.9, 248, 257.1, 264.6 }, {
+			{ "+{p} damage reduction", { { p = "10%" }, { p = "13.5%" }, { p = "16.4%" }, { p = "18.8%" }, { p = "20.7%" }, { p = "22.4%" }, { p = "23.7%" }, { p = "24.8%" }, { p = "25.7%" }, { p = "26.5%" } } },
+			{ "+{p} max health", { { p = "15%" }, { p = "20.3%" }, { p = "24.6%" }, { p = "28.2%" }, { p = "31.1%" }, { p = "33.5%" }, { p = "35.5%" }, { p = "37.2%" }, { p = "38.6%" }, { p = "39.7%" } } },
+			{ "Melee attackers take {p} of the damage they deal", { { p = "100%" }, { p = "135%" }, { p = "163.9%" }, { p = "187.7%" }, { p = "207.3%" }, { p = "223.6%" }, { p = "236.9%" }, { p = "248%" }, { p = "257.1%" }, { p = "264.6%" } } },
+		} },
+		{ "Choker of Enlightenment", "INV_Jewelry_Necklace_10", 4, "Your hits", { 100, 135, 163.9, 187.7, 207.3, 223.6, 236.9, 248, 257.1, 264.6 }, {
+			{ "{hits} leap to 1 more enemy for {frac}", { { frac = "30%" }, { frac = "40.5%" }, { frac = "49.2%" }, { frac = "56.3%" }, { frac = "62.2%" }, { frac = "67.1%" }, { frac = "71.1%" }, { frac = "74.4%" }, { frac = "77.1%" }, { frac = "79.4%" } } },
+		} },
+		{ "Amulet of Vek'nilash", "INV_Jewelry_Necklace_AhnQiraj_01", 4, "", { 100, 125, 146.9, 166, 182.8, 197.4, 210.2, 221.5, 231.3, 239.9 }, {
+			{ "{who}: +{n} target", { { n = "1" }, { n = "1" }, { n = "1" }, { n = "1" }, { n = "1" }, { n = "1" }, { n = "2" }, { n = "2" }, { n = "2" }, { n = "2" } } },
+			{ "+{p} damage", { { p = "5%" }, { p = "6.3%" }, { p = "7.3%" }, { p = "8.3%" }, { p = "9.1%" }, { p = "9.9%" }, { p = "10.5%" }, { p = "11.1%" }, { p = "11.6%" }, { p = "12%" } } },
+		} },
+		{ "Pendant of the Fallen Dragon", "INV_Jewelry_Necklace_12", 4, "", { 100, 125, 146.9, 166, 182.8, 197.4, 210.2, 221.5, 231.3, 239.9 }, {
+			{ "A killing blow leaves you at {heal} health instead, once every {cd} sec", { { cd = "60", heal = "50%" }, { cd = "60", heal = "50%" }, { cd = "60", heal = "50%" }, { cd = "60", heal = "50%" }, { cd = "60", heal = "50%" }, { cd = "60", heal = "50%" }, { cd = "60", heal = "50%" }, { cd = "60", heal = "50%" }, { cd = "60", heal = "50%" }, { cd = "60", heal = "50%" } } },
+			{ "+{p} max health", { { p = "20%" }, { p = "25%" }, { p = "29.4%" }, { p = "33.2%" }, { p = "36.6%" }, { p = "39.5%" }, { p = "42%" }, { p = "44.3%" }, { p = "46.3%" }, { p = "48%" } } },
+			{ "+{v} health per second", { { v = "5" }, { v = "6.3" }, { v = "7.3" }, { v = "8.3" }, { v = "9.1" }, { v = "9.9" }, { v = "10.5" }, { v = "11.1" }, { v = "11.6" }, { v = "12" } } },
+		} },
+		{ "Malice Stone Pendant", "INV_Jewelry_Necklace_29Naxxramas", 4, "", { 100, 125, 146.9, 166, 182.8, 197.4, 210.2, 221.5, 231.3, 239.9 }, {
+			{ "{p} chance for a spell to cast twice", { { p = "20%" }, { p = "25%" }, { p = "29.4%" }, { p = "33.2%" }, { p = "36.6%" }, { p = "39.5%" }, { p = "42%" }, { p = "44.3%" }, { p = "46.3%" }, { p = "48%" } } },
+			{ "-{p} cooldowns", { { p = "8%" }, { p = "10%" }, { p = "11.8%" }, { p = "13.3%" }, { p = "14.6%" }, { p = "15.8%" }, { p = "16.8%" }, { p = "17.7%" }, { p = "18.5%" }, { p = "19.2%" } } },
+		} },
+		{ "Onyxia Tooth Pendant", "INV_Jewelry_Necklace_09", 5, "Your critical hits", { 100, 125, 146.9, 166, 182.8, 197.4, 210.2, 221.5, 231.3, 239.9 }, {
+			{ "+{p} critical strike", { { p = "4%" }, { p = "5%" }, { p = "5.9%" }, { p = "6.6%" }, { p = "7.3%" }, { p = "7.9%" }, { p = "8.4%" }, { p = "8.9%" }, { p = "9.3%" }, { p = "9.6%" } } },
+			{ "+{p} critical strike damage", { { p = "19.5%" }, { p = "24.4%" }, { p = "28.6%" }, { p = "32.4%" }, { p = "35.6%" }, { p = "38.5%" }, { p = "41%" }, { p = "43.2%" }, { p = "45.1%" }, { p = "46.8%" } } },
+			{ "{hits} splash {frac} on enemies within {radius} yd", { { frac = "30%", radius = "5" }, { frac = "37.5%", radius = "5" }, { frac = "44.1%", radius = "5" }, { frac = "49.8%", radius = "5" }, { frac = "54.8%", radius = "5" }, { frac = "59.2%", radius = "5" }, { frac = "63.1%", radius = "5" }, { frac = "66.4%", radius = "5" }, { frac = "69.4%", radius = "5" }, { frac = "72%", radius = "5" } } },
+		} },
+		{ "Choker of the Fire Lord", "INV_Jewelry_Amulet_05", 5, "", { 100, 125, 146.9, 166, 182.8, 197.4, 210.2, 221.5, 231.3, 239.9 }, {
+			{ "Enemies you kill explode for {frac} of their max health", { { frac = "15%" }, { frac = "18.8%" }, { frac = "22%" }, { frac = "24.9%" }, { frac = "27.4%" }, { frac = "29.6%" }, { frac = "31.5%" }, { frac = "33.2%" }, { frac = "34.7%" }, { frac = "36%" } } },
+		} },
+	},
+}
+JEWELS.who = "Your spells"  -- the {who} of an amulet's line
+-- End of the jewels.
+
 -- A panel tinted in its own color: thin edge, the ground a dark shade of it.
 local TINTED = { bgFile = FLAT, edgeFile = FLAT, edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 } }
 -- The game's font templates, as the pages name them: size, color.
@@ -2243,6 +2485,309 @@ local function BuildSets(page)
 end
 
 ------------------------------------------------------------------------------
+-- Jewels (JEWELS, read in the game by make_jewels_data.py): nothing in them is
+-- rolled. The rarity sets a ring's or trinket's numbers; each time it is
+-- taken again it adds less, and near its most the game stops offering it. An
+-- amulet has one rarity, and taken again all its numbers grow toward 3 times.
+
+-- The page's numbers and helpers in one table: the file is near Lua 5.0's 200 locals.
+local Jewel = {}
+Jewel.KINDS = { { SurvivorUI_T("Rings"), "ring" }, { SurvivorUI_T("Trinkets"), "trinket" }, { SurvivorUI_T("Amulets"), "amulet" } }
+-- An item tooltip's name colors, Common to Legendary.
+Jewel.QUALITY = { { 1, 1, 1 }, { 0.12, 1, 0 }, { 0, 0.44, 0.87 }, { 0.64, 0.21, 0.93 }, { 1, 0.5, 0 } }
+Jewel.ROW = 29
+Jewel.ICON = 24
+Jewel.ROWS = 16           -- the most a kind has: the amulets
+Jewel.PICK = 52          -- a ring's or trinket's six: 1 to 5 picks, its most
+Jewel.RANK = 64          -- an amulet's four: ranks 2, 3, 5 and 10
+Jewel.RANKS = { 2, 3, 5, 10 }
+Jewel.TIP_RANKS = { 1, 2, 3, 5, 10 }
+
+-- A jewel's line in the game's words, its numbers in.
+function Jewel.Filled(template, fields, hits)
+	return (string.gsub(SurvivorUI_T(template), "{(%a+)}", function(key)
+		if key == "max" then
+			return fields.max and SurvivorUI_T(" (max)") or ""
+		elseif key == "hits" then
+			return SurvivorUI_T(hits)
+		elseif key == "who" then
+			return SurvivorUI_T(JEWELS.who)
+		end
+		return fields[key]
+	end))
+end
+
+-- Parts joined on one line, as many as fit the room, "..." for the rest.
+function Jewel.OneLine(text, parts, room)
+	local shown = parts[1]
+	text:SetText(shown)
+	for index = 2, table.getn(parts) do
+		local more = shown..", "..parts[index]
+		text:SetText(more)
+		if text:GetStringWidth() > room then
+			text:SetText(shown.." ...")
+			return
+		end
+		shown = more
+	end
+end
+
+-- A pick's number as its cell has it: the line's first number, "%" when the
+-- line has it after the number.
+function Jewel.PickNumber(entry, fields)
+	if string.find(entry[3], "{v}%", 1, true) then
+		return fields.v.."%"
+	end
+	return fields.v
+end
+
+function Jewel.Tip()
+	local entry, page = this.entry, this.page
+	GameTooltip:SetOwner(this, "ANCHOR_NONE")
+	GameTooltip:ClearAllPoints()
+	GameTooltip:SetPoint("TOPLEFT", this, "BOTTOMLEFT", 0, -2)
+	if page.kind == 3 then
+		local tint = Jewel.QUALITY[entry[3]]
+		GameTooltip:SetText(SurvivorUI_Native(entry[1]), tint[1], tint[2], tint[3])
+		GameTooltip:AddLine(SurvivorUI_T(RARITIES[entry[3]][1]), 0.7, 0.7, 0.7)
+		for each = 1, table.getn(Jewel.TIP_RANKS) do
+			local rank = Jewel.TIP_RANKS[each]
+			GameTooltip:AddLine(" ")
+			GameTooltip:AddLine(SurvivorUI_TF("Rank {1}", rank), 1, 0.82, 0)
+			for line = 1, table.getn(entry[6]) do
+				local words = entry[6][line]
+				GameTooltip:AddLine(Jewel.Filled(words[1], words[2][rank], entry[4]), 1, 1, 1, 1)
+			end
+		end
+		GameTooltip:AddLine(" ")
+		GameTooltip:AddLine(SurvivorUI_T("Taken again while worn: one rank more. Every number grows toward 3 times its first."), 0.7, 0.7, 0.7, 1)
+	else
+		local tint = Jewel.QUALITY[page.rarity]
+		local picks = entry[5][page.rarity]
+		GameTooltip:SetText(SurvivorUI_Native(entry[1]), tint[1], tint[2], tint[3])
+		GameTooltip:AddLine(SurvivorUI_TF("Taken at {1} each time", SurvivorUI_T(RARITIES[page.rarity][1])), 0.7, 0.7, 0.7)
+		-- A long climb (the Seal of the Damned's 22 at Common): its first 8, "...", its last.
+		local count = table.getn(picks)
+		for pick = 1, count do
+			if count <= 10 or pick <= 8 or pick == count then
+				GameTooltip:AddDoubleLine(SurvivorUI_TF("Pick {1}", pick), Jewel.Filled(entry[3], picks[pick]), 1, 0.82, 0, 1, 1, 1)
+			elseif pick == 9 then
+				GameTooltip:AddLine("...", 1, 0.82, 0)
+			end
+		end
+		GameTooltip:AddLine(" ")
+		if entry[4] then
+			GameTooltip:AddLine(SurvivorUI_T("After its last pick here, the game stops offering it."), 0.7, 0.7, 0.7, 1)
+		else
+			GameTooltip:AddLine(SurvivorUI_T("No most: it is offered again and again, each pick adding a little less."), 0.7, 0.7, 0.7, 1)
+		end
+	end
+	GameTooltip:Show()
+	SolidTip()
+end
+
+local function BuildJewels(page)
+	page.kind, page.rarity = 1, 5
+	Title(page, SurvivorUI_T("Jewels: nothing is rolled"))
+	Para(page, SurvivorUI_T("A jewel's rarity sets its numbers. Taken again, it adds less each time."), 1)
+	local kinds, grades = {}, {}
+	local x = 0
+	for index = 1, 3 do
+		local chip = SetButton(page, x, page.y, 78, CHIP_HEIGHT)
+		chip.text:SetText(SurvivorUI_T(Jewel.KINDS[index][1]))
+		chip.index = index
+		chip:SetScript("OnClick", function()
+			page.kind = this.index
+			page.Draw()
+		end)
+		kinds[index] = chip
+		x = x + 82
+	end
+	x = x + 10
+	local wide = math.floor((PAGE_WIDTH - x - 4 * 4) / 5)
+	for index = 1, 5 do
+		local grade = SetButton(page, x + (index - 1) * (wide + 4), page.y, wide, CHIP_HEIGHT)
+		grade.text:SetText(SurvivorUI_T(RARITIES[index][1]))
+		grade.index = index
+		grade:SetScript("OnClick", function()
+			page.rarity = this.index
+			page.Draw()
+		end)
+		grades[index] = grade
+	end
+	page.y = page.y - CHIP_HEIGHT - 8
+	-- The columns' names over them, right-aligned to the page's edge.
+	local heads = {}
+	for index = 1, 6 do
+		local head = Text(page, "GameFontNormal", SMALL)
+		head:SetJustifyH("CENTER")
+		heads[index] = head
+	end
+	page.what = Text(page, "GameFontNormal", SMALL)
+	page.what:SetPoint("TOPLEFT", page, "TOPLEFT", 2, page.y)
+	local top = page.y
+	page.y = page.y - 16
+	local rows = {}
+	for index = 1, Jewel.ROWS do
+		local row = CreateFrame("Button", nil, page)
+		row.noHoverOutline = true
+		row.page = page
+		row:SetWidth(PAGE_WIDTH)
+		row:SetHeight(Jewel.ROW)
+		row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y - (index - 1) * Jewel.ROW)
+		row.stripe = row:CreateTexture(nil, "BACKGROUND")
+		row.stripe:SetTexture(FLAT)
+		row.stripe:SetAllPoints(row)
+		row.stripe:SetVertexColor(1, 1, 1, math.mod(index, 2) == 1 and 0.04 or 0)
+		row:SetHighlightTexture(HIGHLIGHT, "ADD")
+		row.icon = row:CreateTexture(nil, "ARTWORK")
+		row.icon:SetWidth(Jewel.ICON)
+		row.icon:SetHeight(Jewel.ICON)
+		row.icon:SetPoint("LEFT", row, "LEFT", 2, 0)
+		row.name = Text(row, "GameFontNormal", SMALL + 1)
+		row.name:SetPoint("TOPLEFT", row, "TOPLEFT", Jewel.ICON + 7, -2)
+		ItemName(row.name, SMALL + 1)
+		row.line = Text(row, "GameFontHighlight", SMALL - 1)
+		row.line:SetPoint("TOPLEFT", row, "TOPLEFT", Jewel.ICON + 7, -16)
+		row.cells = {}
+		for each = 1, 6 do
+			local cell = Text(row, "GameFontHighlight", SMALL)
+			cell:SetJustifyH("CENTER")
+			row.cells[each] = cell
+		end
+		row:SetScript("OnEnter", Jewel.Tip)
+		row:SetScript("OnLeave", CloseTip)
+		rows[index] = row
+	end
+
+	function page.Draw()
+		local amulets = page.kind == 3
+		for index = 1, 3 do
+			local chip = kinds[index]
+			Chosen(chip, index == page.kind)
+			if index == page.kind then
+				chip.fill:SetVertexColor(1, 0.82, 0, 1)
+				Paint(chip.text, { 0.08, 0.07, 0.05 })
+			else
+				chip.fill:SetVertexColor(1, 0.82, 0, 0.08)
+				Paint(chip.text, { 0.6, 0.6, 0.6 })
+			end
+		end
+		for index = 1, 5 do
+			local grade = grades[index]
+			local tint = Jewel.QUALITY[index]
+			if amulets then
+				grade:Hide()
+			else
+				grade:Show()
+				Chosen(grade, index == page.rarity)
+				if index == page.rarity then
+					grade.fill:SetVertexColor(tint[1], tint[2], tint[3], 1)
+					Paint(grade.text, Fore(tint))
+				else
+					grade.fill:SetVertexColor(tint[1] * 0.3, tint[2] * 0.3, tint[3] * 0.3, 1)
+					Paint(grade.text, tint)
+				end
+			end
+		end
+		local columns, width = 6, Jewel.PICK
+		if amulets then
+			columns, width = 4, Jewel.RANK
+		end
+		local left = PAGE_WIDTH - columns * width
+		for index = 1, 6 do
+			local head = heads[index]
+			if index > columns then
+				head:Hide()
+			else
+				head:Show()
+				head:ClearAllPoints()
+				head:SetPoint("TOPLEFT", page, "TOPLEFT", left + (index - 1) * width, top)
+				head:SetWidth(width)
+				if amulets then
+					head:SetText(SurvivorUI_TF("Rank {1}", Jewel.RANKS[index]))
+				elseif index == 6 then
+					head:SetText(SurvivorUI_T("Most"))
+				else
+					head:SetText(SurvivorUI_TF("{1}x", index))
+				end
+			end
+		end
+		if amulets then
+			page.what:SetText(SurvivorUI_T("Each number's size by rank"))
+		else
+			page.what:SetText(SurvivorUI_T("Taken this many times"))
+		end
+		page.what:ClearAllPoints()
+		page.what:SetPoint("TOPRIGHT", page, "TOPLEFT", left - 6, top)
+		local list = JEWELS[Jewel.KINDS[page.kind][2]]
+		for index = 1, Jewel.ROWS do
+			local row, entry = rows[index], list[index]
+			if not entry then
+				row:Hide()
+			else
+				row:Show()
+				row.entry = entry
+				row.icon:SetTexture("Interface\\Icons\\"..entry[2])
+				row.name:SetText(SurvivorUI_Native(entry[1]))
+				local room = left - Jewel.ICON - 12
+				local cells = row.cells
+				if amulets then
+					Paint(row.name, Jewel.QUALITY[entry[3]])
+					local parts = {}
+					for line = 1, table.getn(entry[6]) do
+						local words = entry[6][line]
+						parts[line] = Jewel.Filled(words[1], words[2][1], entry[4])
+					end
+					Jewel.OneLine(row.line, parts, room)
+					for each = 1, 6 do
+						local cell = cells[each]
+						cell:ClearAllPoints()
+						if each > 4 then
+							cell:Hide()
+						else
+							cell:Show()
+							cell:SetPoint("LEFT", row, "LEFT", left + (each - 1) * width, 0)
+							cell:SetWidth(width)
+							cell:SetText(string.format("x%.2f", entry[5][Jewel.RANKS[each]] / 100))
+							Paint(cell, each == 4 and YELLOW or { 1, 1, 1 })
+						end
+					end
+				else
+					Paint(row.name, Jewel.QUALITY[page.rarity])
+					local picks = entry[5][page.rarity]
+					Jewel.OneLine(row.line, { Jewel.Filled(entry[3], picks[1]) }, room)
+					for each = 1, 6 do
+						local cell = cells[each]
+						cell:ClearAllPoints()
+						cell:Show()
+						cell:SetPoint("LEFT", row, "LEFT", left + (each - 1) * width, 0)
+						cell:SetWidth(width)
+						local count = table.getn(picks)
+						if each == 6 then
+							if entry[4] then
+								cell:SetText(Jewel.PickNumber(entry, picks[count]))
+								Paint(cell, YELLOW)
+							else
+								cell:SetText(SurvivorUI_T("no cap"))
+								Paint(cell, GREY)
+							end
+						elseif each <= count then
+							cell:SetText(Jewel.PickNumber(entry, picks[each]))
+							Paint(cell, { 1, 1, 1 })
+						else
+							cell:SetText("-")
+							Paint(cell, GREY)
+						end
+					end
+				end
+				Paint(row.line, { 0.75, 0.75, 0.75 })
+			end
+		end
+	end
+end
+
+------------------------------------------------------------------------------
 -- The window: the pages' names down its left, as the options' tabs.
 
 local PAGES = {
@@ -2256,6 +2801,7 @@ local PAGES = {
 	{ "Speed", "reach", BuildReach },
 	{ "Marks", "marks", BuildMarks },
 	{ "Sets", "sets", BuildSets },
+	{ "Jewels", "jewels", BuildJewels },
 }
 
 local divider = window:CreateTexture(nil, "ARTWORK")

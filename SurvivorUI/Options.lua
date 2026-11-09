@@ -9373,7 +9373,8 @@ Kit.Chips(page, {
 Kit.Section(page, "Kept out of the chat", "What a run fills the chat with, kept away, in every language; the alerts stay: a new spell, an upgrade's news, the run's end. New lines only.")
 Kit.Chips(page, {
 	{ "Level-ups", OnUnlessOff("chatFilterLevels"), Flip("chatFilterLevels"), "\"You have reached level 12\" and its gains: the XP bar shows the level." },
-	{ "Banners", OnUnlessOff("chatFilterBanners"), Flip("chatFilterBanners"), "The horde's moves, a boss or a guardian coming or slain, shown mid-screen by the game. Keep them in the chat if the game's Show Banners is off." },
+	{ "Banners", OnUnlessOff("chatFilterBanners"), Flip("chatFilterBanners"), "The horde's moves, an elite or a guardian coming, shown mid-screen by the game. Keep them in the chat if the game's Show Banners is off." },
+	{ "Boss banners", OnUnlessOff("chatFilterBossBanners"), Flip("chatFilterBossBanners"), "A boss coming or slain. Off, the game's banner for it is written in the chat, the other banners kept out or not." },
 	{ "Boss yells", OnUnlessOff("chatFilterYells"), Flip("chatFilterYells"), "\"Hogger yells: Grrr... fresh meat!\"" },
 	{ "Loot", OnUnlessOff("chatFilterLoot"), Flip("chatFilterLoot"), "While the loot list is on: the list has it." },
 	{ "Combat Log", OnUnlessOff("chatFilterCombat"), Flip("chatFilterCombat"), "The Combat Log window, fed 13 lines a second, opened or not; SurvivorUI reads the fight from the game's own events, never from it." },
@@ -10767,6 +10768,11 @@ do
 					SurvivorPlatesDB = SurvivorPlatesDB or {}
 					SurvivorPlatesDB.insideDebuffs = SurvivorPlatesDB.insideDebuffs == false
 				end, "Small icons of the debuffs on a guardian or a boss, left to right inside its bar; an elite's while it is your target or under the mouse. Off: over your target's plate, as on the others." },
+			{ "Crowd control", function() return not (SurvivorPlatesDB and SurvivorPlatesDB.ccMark == false) end,
+				function()
+					SurvivorPlatesDB = SurvivorPlatesDB or {}
+					SurvivorPlatesDB.ccMark = SurvivorPlatesDB.ccMark == false
+				end, "\"CC\" right of the bar while an enemy is stunned, rooted, slowed or feared, when Vs Controlled and the PvP set hit it harder. The game tells it for your target, the enemy under the mouse, guardians and bosses." },
 		}
 		if SurvivorPlates_LayoutThere and SurvivorPlates_LayoutThere() then
 			table.insert(looks, { "Overlapping", function() return SurvivorPlates_Overlapping() end,

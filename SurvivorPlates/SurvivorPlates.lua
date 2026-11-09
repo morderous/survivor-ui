@@ -785,6 +785,133 @@ local function UpdatePlateDebuffs(overlay, isTarget, settings)
 	end
 end
 
+-- Crowd control (Cheef, 2026-11-06): an enemy stunned, rooted, slowed or
+-- feared, which the game's "Vs Controlled" damage and the PvP set's bonus
+-- hit harder. The game puts each on the enemy as a debuff (read in its
+-- 0.141): known by its icon, or on a guardian's and a boss's by the spell
+-- the game names. Like the debuffs, only where the client tells them: your
+-- target, the enemy under the mouse, every guardian and boss.
+local CC_ICONS = {
+	-- Stuns.
+	spell_holy_sealofmight = true, ability_rogue_kidneyshot = true, ability_gouge = true, ability_warstomp = true,
+	ability_thunderbolt = true, spell_frost_stun = true, ability_coldblood = true,
+	-- Roots and freezes.
+	spell_nature_stranglevines = true, spell_frost_frostnova = true, spell_frost_chainsofice = true,
+	-- Slows.
+	spell_frost_frostbolt02 = true, spell_frost_frostshock = true, spell_frost_glacier = true,
+	spell_frost_freezingbreath = true, ability_rogue_trip = true,
+	-- Fears.
+	spell_shadow_psychicscream = true, spell_shadow_possession = true, spell_shadow_deathcoil = true,
+}
+-- AZS_GetDebuffs names a spell by its id (Frost Nova 122, seen 2026-11-08)
+-- and its name.
+local CC_SPELLS = {
+	[853] = true, [408] = true, [1776] = true, [20549] = true, [339] = true, [122] = true, [5116] = true,
+	[8056] = true, [116] = true, [120] = true, [13810] = true, [5782] = true, [8122] = true, [6789] = true,
+	["hammer of justice"] = true, ["kidney shot"] = true, ["gouge"] = true, ["war stomp"] = true,
+	["entangling roots"] = true, ["frost nova"] = true, ["concussive shot"] = true, ["frost shock"] = true,
+	["frostbolt"] = true, ["cone of cold"] = true, ["frost trap aura"] = true, ["fear"] = true,
+	["psychic scream"] = true, ["death coil"] = true,
+}
+local CC_COLOR = { 0.45, 0.82, 1 }
+local CC_EVERY = 0.2
+
+-- The icons the game gives those spells, as Survivor UI's meter has them
+-- (SurvivorUI_MeterIcon, from the build's buttons once the spell is picked),
+-- looked at every few seconds: a debuff wears its spell's icon.
+local ccIconsAt = -10
+local function LearnIcons()
+	if not SurvivorUI_MeterIcon or GetTime() - ccIconsAt < 5 then
+		return
+	end
+	ccIconsAt = GetTime()
+	for name in pairs(CC_SPELLS) do
+		if type(name) == "string" then
+			local title = string.gsub(name, "(%a)(%a*)", function(a, b) return string.upper(a)..b end)
+			local ok, icon = pcall(SurvivorUI_MeterIcon, title)
+			if ok and icon then
+				local _, _, file = string.find(string.lower(tostring(icon)), "([^\\]+)$")
+				if file and file ~= "inv_misc_questionmark" then
+					CC_ICONS[file] = true
+				end
+			end
+		end
+	end
+end
+
+local function IsCC(icon, spell, name)
+	LearnIcons()
+	if (spell and CC_SPELLS[tonumber(spell) or 0]) or (name and CC_SPELLS[string.lower(SurvivorUI_English and SurvivorUI_English(tostring(name)) or tostring(name))]) then
+		return true
+	end
+	if not icon then
+		return false
+	end
+	local _, _, file = string.find(string.lower(tostring(icon)), "([^\\]+)$")
+	return file and CC_ICONS[file] or false
+end
+
+local function Controlled(overlay, isTarget)
+	if overlay.kind ~= "elite" and INSIDE_KINDS[overlay.kind] and overlay.unit and overlay.claimName == overlay.lastName and AZS_GetDebuffs then
+		local ok, list = pcall(AZS_GetDebuffs, tonumber(overlay.unit) or overlay.unit)
+		if ok and type(list) == "table" then
+			for index = 1, table.getn(list) do
+				if IsCC(list[index].icon, list[index].spell, list[index].name) then
+					return true
+				end
+			end
+			return false
+		end
+	end
+	local token
+	if isTarget then
+		token = "target"
+	elseif UnitExists("mouseover") and UnitName("mouseover") == overlay.lastName then
+		token = "mouseover"
+	end
+	if not token then
+		return false
+	end
+	for index = 1, 16 do
+		local texture = UnitDebuff(token, index)
+		if not texture then
+			return false
+		end
+		if IsCC(texture) then
+			return true
+		end
+	end
+	return false
+end
+
+local function UpdateCC(overlay, isTarget, settings)
+	if settings.ccMark == false or FRIEND_KINDS[overlay.kind] then
+		if overlay.ccShown then
+			overlay.ccShown = nil
+			overlay.cc:Hide()
+		end
+		return
+	end
+	local now = GetTime()
+	if overlay.ccAt and now - overlay.ccAt < CC_EVERY then
+		return
+	end
+	overlay.ccAt = now
+	local on = Controlled(overlay, isTarget)
+	if on then
+		local size = math.max(7, math.floor(overlay.style.share * settings.scale + FONT_BUMP + 0.5))
+		if overlay.ccSize ~= size then
+			overlay.ccSize = size
+			overlay.cc:SetFont(SurvivorUI_FONT or FONT, size, "OUTLINE")
+			overlay.cc:SetText(SurvivorUI_T and SurvivorUI_T("CC") or "CC")
+		end
+		overlay.cc:Show()
+	else
+		overlay.cc:Hide()
+	end
+	overlay.ccShown = on or nil
+end
+
 -- A friend's plate, told by the color the client gives its stock bar: green
 -- for a friendly creature (seen 2026-10-20: the warlock's demons, 0 1 0; the
 -- enemies 1 0 0), blue for a friendly player.
@@ -924,6 +1051,7 @@ local function Update(overlay, settings, hasTarget, now)
 		end
 	end
 	UpdatePlateDebuffs(overlay, isTarget, settings)
+	UpdateCC(overlay, isTarget, settings)
 end
 
 local function IsNameplate(frame)
@@ -1008,6 +1136,11 @@ local function SkinPlate(plate)
 	overlay.mark = overlay.bar:CreateTexture(nil, "OVERLAY")
 	overlay.mark:SetPoint("RIGHT", overlay.bar, "LEFT", -3, 0)
 	overlay.mark:Hide()
+	-- "CC" right of the bar while the enemy is stunned, rooted, slowed or feared.
+	overlay.cc = overlay.bar:CreateFontString(nil, "OVERLAY")
+	overlay.cc:SetPoint("LEFT", overlay.bar, "RIGHT", 3, 0)
+	overlay.cc:SetTextColor(CC_COLOR[1], CC_COLOR[2], CC_COLOR[3])
+	overlay.cc:Hide()
 
 	overlay.shown, overlay.edge, overlay.fade, overlay.claimAt = true, "none", 1, 0
 	Dress(overlay, "normal")
@@ -1466,6 +1599,7 @@ function SurvivorPlates_Defaults()
 	settings.names = true
 	settings.targetPlate = false
 	settings.insideDebuffs = nil
+	settings.ccMark = nil
 	settings.clickThrough = true
 	settings.keysAllowed = nil
 	settings.scale = 1

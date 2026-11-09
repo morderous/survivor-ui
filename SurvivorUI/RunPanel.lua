@@ -75,6 +75,9 @@ local run = {}
 local critBest, critStats, critColor, critSeen = {}, {}, {}, 0
 local critBestAt = {}           -- [ability] = the run second its best was set
 local hitStats = {}             -- [ability] = { last, sum, count }, normal hits only
+-- A pet's line told by its blows (Cheef, 2026-11-06): the Felhunter's swings,
+-- its Consume Magic... as the combat log names them, before they join the pet.
+local petParts = {}             -- [pet] = { [blow] = { sum, count, crits } }
 
 -- The run's clock: a pause stops it.
 local function RunNow()
@@ -85,6 +88,7 @@ local function ResetCrits()
 	critBest, critStats, critColor, critSeen = {}, {}, {}, 0
 	critBestAt = {}
 	hitStats = {}
+	petParts = {}
 	if SurvivorUI_ResetCritRecord then
 		SurvivorUI_ResetCritRecord()
 	end
@@ -199,6 +203,19 @@ local function English(name)
 	return SurvivorUI_English and SurvivorUI_English(name) or name
 end
 
+-- A name without case, spaces or marks: the build list has "Multi Shot",
+-- the combat log and the meter "Multi-Shot".
+-- A name with no Latin letters (one the addon could not put in English) is
+-- kept whole, so two of them never match as "".
+local function Compact(name)
+	local lower = string.lower(name or "")
+	local compact = string.gsub(lower, "[^%a]", "")
+	if compact == "" then
+		return lower
+	end
+	return compact
+end
+
 local function MeterLine(ability)
 	ability = English(ability)
 	if not AZS_GetMeter then
@@ -211,7 +228,7 @@ local function MeterLine(ability)
 	local names = ability == "Melee" and MELEE_NAMES or { ability }
 	for index = 1, table.getn(lines) do
 		for n = 1, table.getn(names) do
-			if English(lines[index].name) == names[n] then
+			if Compact(English(lines[index].name)) == Compact(names[n]) then
 				return lines[index], total
 			end
 		end
@@ -701,6 +718,14 @@ local function SpellEntry(ability)
 			return entry
 		end
 	end
+	-- "Multi-Shot" is "multi_shot": the key without its marks.
+	local want = Compact(ability)
+	for index = 1, table.getn(AZS_SPELLS) do
+		local entry = AZS_SPELLS[index]
+		if Compact(Field(entry, "key", 1)) == want then
+			return entry
+		end
+	end
 end
 
 local function Seconds1(value)
@@ -725,6 +750,21 @@ local function CardOf(row, kept)
 	-- The meter's line by its name in the game's language; the crits by the
 	-- combat log's, in English.
 	local ability = English(row.ability)
+	-- The combat log's own spelling of it: "Multi Shot" in the build list
+	-- is "Multi-Shot" there.
+	if ability and not (critStats[ability] or hitStats[ability]) then
+		local want = Compact(ability)
+		for name in pairs(critStats) do
+			if Compact(name) == want then
+				ability = name
+			end
+		end
+		for name in pairs(hitStats) do
+			if Compact(name) == want then
+				ability = name
+			end
+		end
+	end
 	local stats = ability and critStats[ability]
 	local hits = ability and hitStats[ability]
 	-- Its line in the game's damage meter, where the game shares it.
@@ -792,6 +832,25 @@ local function CardOf(row, kept)
 		Add("row", SurvivorUI_T("Per second"), Short(Num(meter.dps)))
 		if Num(meter.proc) == 1 then
 			Add("row", SurvivorUI_T("A talent's or amulet's own"), SurvivorUI_T("proc"))
+		end
+	end
+	-- A pet's blows, the run's (not a stretch of the meter now's): what each
+	-- dealt and its part of the pet's, most first.
+	local parts = ability and not slice and petParts[English(ability)]
+	if parts then
+		local list, whole = {}, 0
+		for blow, part in pairs(parts) do
+			table.insert(list, { blow = blow, part = part })
+			whole = whole + part.sum
+		end
+		if table.getn(list) > 1 and whole > 0 then
+			table.sort(list, function(a, b) return a.part.sum > b.part.sum end)
+			Add("head", SurvivorUI_T("By blow"), "")
+			for index = 1, table.getn(list) do
+				local entry = list[index]
+				local label = entry.blow == "Melee" and SurvivorUI_T("Melee") or SurvivorUI_Native(entry.blow)
+				Add("row", label, Short(entry.part.sum).."  "..math.floor(entry.part.sum / whole * 100 + 0.5).."%")
+			end
 		end
 	end
 	-- A racial with no damage of its own: no empty crits and hits.
@@ -1573,6 +1632,33 @@ local function RecordHit(ability, amount)
 	end
 end
 
+-- A pet's blow, kept under its pet: "Felhunter's Consume Magic" as Consume
+-- Magic, "Felhunter hits" as Melee. name is the line it joins (SourceOf).
+local function NotePart(name, ability, amount, crit)
+	amount = tonumber(amount)
+	if not (name and ability and amount) then
+		return
+	end
+	name = English(name)
+	if not (SurvivorUI_IsPet and SurvivorUI_IsPet(name)) and not (SurvivorUI_MeterPetLine and SurvivorUI_MeterPetLine(name)) then
+		return
+	end
+	local _, _, owner, spell = string.find(ability, "^(.-)'s (.+)$")
+	local blow = spell and English(spell) or English(ability)
+	if not spell and (blow == name or (SurvivorUI_IsPet and SurvivorUI_IsPet(blow))) then
+		blow = "Melee"
+	end
+	local parts = petParts[name] or {}
+	petParts[name] = parts
+	local part = parts[blow] or { sum = 0, count = 0, crits = 0 }
+	parts[blow] = part
+	part.sum = part.sum + amount
+	part.count = part.count + 1
+	if crit then
+		part.crits = part.crits + 1
+	end
+end
+
 ------------------------------------------------------------------------------
 -- A demon's spell the hero holds too (the Infernal's Hellfire and the
 -- hero's): the combat log writes both the same, by the hero's own event. The
@@ -1720,6 +1806,7 @@ local function Hit(message)
 	end
 	local name = SurvivorUI_SourceOf and SurvivorUI_SourceOf(ability, message) or ability
 	if not Nameless(name, message, amount, false) and not Hold(name, amount, false) then
+		NotePart(name, ability, amount, false)
 		RecordHit(name, amount)
 	end
 end
@@ -1759,6 +1846,7 @@ local function Crit(message)
 	end
 	local name = SurvivorUI_SourceOf and SurvivorUI_SourceOf(ability, message) or ability
 	if not Nameless(name, message, amount, true) and not Hold(name, amount, true) then
+		NotePart(name, ability, amount, true)
 		RecordCrit(name, amount)
 	end
 end

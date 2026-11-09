@@ -38,7 +38,7 @@ Both are flat and dark, in the manner of EllesmereUI and Plater. They are writte
 | `/sui meter now` | Meter now: on or off |
 | `/sui bosses` | Boss bars: on or off |
 | `/sui bosses elites` | Adds every elite to the boss bars |
-| `/sui guide` | The Guide: how Luck, Damage, Crit, Haste and Speed really work, and what marks and sets give |
+| `/sui guide` | The Guide: how Luck, Damage, Crit, Haste and Speed really work, and what marks, sets and jewels give |
 | `/sui tally` | Kills and gold line under the minimap, or the Default box |
 | `/sui pace` | Kill pace, the orb by the run tracker's clock: on or off |
 | `/sui pace class` | Kill pace against this class's runs only, or every class's (the default) |
@@ -163,7 +163,7 @@ Commands:
 | `/sui run reset` | Clears the crits in the damage meter's cards; the run's numbers stay |
 | `/sui bosses` | Switches the boss bars on or off (off for a new install from v3.0.53) |
 | `/sui bosses elites` | Lists every elite in the boss bars too |
-| `/sui guide` | Opens the Guide: how Luck, Damage, Crit, Haste and Speed really work, and what marks and sets give |
+| `/sui guide` | Opens the Guide: how Luck, Damage, Crit, Haste and Speed really work, and what marks, sets and jewels give |
 | `/sui tally` | Switches between the kills and gold line (the default) and the Default box |
 
 ### Healing and boss damage
@@ -229,6 +229,32 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 ## Changes
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
+
+### v3.0.60, 2026-11-08
+
+The Guide's new Jewels page, your gear in Run History, boss banners in the chat, a pet's blows and crowd control on the plates. And two hotfixes.
+
+#### New
+
+**Guide**
+- **Jewels page:** every ring, trinket and amulet, read from the game itself. Nothing in a jewel is rolled: its rarity sets its numbers. Pick Rings or Trinkets and a rarity to see the total after 1 to 5 picks of the same jewel, and its most: the last pick before the game stops offering it, or "no cap". Hover a row for every pick. Amulets show what each gives and how its numbers grow with each rank, toward 3 times the first. Names and lines in the game's own language.
+
+**Run History**
+- **Your gear:** each run's Build shows its jewels with their icons, names in their quality's color and what they give, and under them a Gear row: your set as the game names it ("Field Marshal's 8/8") and the icons of your armor and weapon, each with its tooltip. For runs from this version on; older runs keep how they looked.
+
+**Chat**
+- **Boss banners:** a new chip in Chat > Kept out of the chat. Turn it off to keep a boss's banners (it comes, it falls) in the chat while the noisy ones (guardians, elites, packs) stay out.
+
+**Damage meter**
+- **By blow:** a pet's card (in the meter, This Run and Run History) shows each of its blows with its damage and share, biggest first: a Felhunter's Shadow Bite, Consume Magic and melee.
+
+**Survivor Plates**
+- **Crowd control:** a blue "CC" to the right of an enemy's bar while it is stunned, rooted, slowed or feared, handy with the PvP set's bonus. The game tells it for your target, the enemy under your mouse, guardians and bosses. On or off in Nameplates > Look (Crowd control).
+
+#### Hotfixes
+
+- **Jewelry Collection:** a line with only an icon and no name could show up after picking jewels again. Pieces are no longer saved before the game has their name, and the empty lines already saved are gone.
+- **Run History:** Multi-Shot's card came empty (Crit 0, none seen), as the build list writes it "Multi Shot". The two names now meet, so its crits and hits show. Runs saved before keep the empty card.
 
 ### Azeroth SurvivorUI Launcher 1.12.0, 2026-11-08
 
