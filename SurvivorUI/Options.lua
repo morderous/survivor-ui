@@ -4296,7 +4296,7 @@ do
 	-- The tags: the row on or off by the switch on the section's line; each
 	-- side a row; the tags' Centered and Compact under them.
 	do
-		Kit.Section(tab, "Difficulty and affixes", "The tags under the zone's name. At the left the run's difficulty: N or the Heroic level (in words, Normal or Heroic II), and endless mode's symbol once the run goes on past its end. At the right the week's affixes, a Heroic run's from III (one) and V (two), each by its symbol or its name. Under the mouse, each in full; an affix with what it does. Off: that side away. The switch puts the whole row away.")
+		Kit.Section(tab, "Difficulty and affixes", "The tags under the zone's name. At the left the run's difficulty: N or the Heroic level (in words, Normal or Heroic II), Hyper Mode's symbol (two arrows) when it is on, and endless mode's symbol once the run goes on past its end. At the right the week's affixes, a Heroic run's from III (one) and V (two), each by its symbol or its name. Under the mouse, each in full; an affix with what it does. Off: that side away. The switch puts the whole row away.")
 		Kit.Switch(tab, left + width - 62, tab.y + 20, OnUnlessOff("trackerTags"), Flip("trackerTags"))
 		TR.Row("Difficulty", { { "short", "Short" }, { "words", "Words" }, { "off", "Off" } }, TR.DifficultyLook, TR.SetDifficultyLook,
 			nil, TR.TagsOn)
@@ -4521,7 +4521,7 @@ end
 -- Kill pace: the orb by the run tracker's clock (Pace.lua).
 
 page = pages.pace
-Header(page, "Kill pace", "An orb right of the run tracker's clock: how fast the enemies die now, against your own runs on the same zone and modifiers at the same minute. Hover it for the numbers.")
+Header(page, "Kill pace", "An orb right of the run tracker's clock: how fast the enemies die now, against your own runs on the same zone and modifiers at the same minute (a Hyper Mode run only against Hyper ones). Hover it for the numbers.")
 PanelHead(page, OnUnlessOff("pace"), Call("SurvivorUI_TogglePace"))
 
 Subheader(page, "Compared with")
@@ -9941,10 +9941,10 @@ do
 
 	-- The Dial's own tags: shown or off, always short (no room for words in
 	-- the circle); the Run tracker tab's looks stay the Classic lines'.
-	Kit.Section(tab, "Difficulty and affixes", "The tags over the clock, together in the middle and always short: the difficulty (N, or the Heroic level's numeral), endless mode's symbol, the week's affixes by their symbols. Under the mouse, each in full. The Dial's own: the Run tracker tab sets the Classic lines'.")
+	Kit.Section(tab, "Difficulty and affixes", "The tags over the clock, together in the middle and always short: the difficulty (N, or the Heroic level's numeral), Hyper Mode's symbol, endless mode's symbol, the week's affixes by their symbols. Under the mouse, each in full. The Dial's own: the Run tracker tab sets the Classic lines'.")
 	Kit.Chips(tab, {
 		{ "Difficulty", OnUnlessOff("trackerDialDifficulty"), Flip("trackerDialDifficulty"),
-			"The run's difficulty, and endless mode's symbol once the run goes on past its end. Off: away from the Tracker Ring." },
+			"The run's difficulty, Hyper Mode's symbol when it is on, and endless mode's symbol once the run goes on past its end. Off: away from the Tracker Ring." },
 		{ "Affixes", OnUnlessOff("trackerDialAffixes"), Flip("trackerDialAffixes"),
 			"The week's affixes, a Heroic run's from III (one) and V (two). Off: away from the Tracker Ring." },
 	})

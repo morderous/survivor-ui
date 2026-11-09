@@ -128,9 +128,42 @@ function SurvivorUI_HeroicShort(level)
 	return HEROIC_NUMERALS[level] or tostring(level)
 end
 
+-- Hyper Mode (the game's 0.143), on any difficulty: the bosses at half their
+-- minute, the final one at 8, 9 or 10 minutes against 16, 18 or 20. The game
+-- sends addons no word of it, only the run's length, already halved
+-- (AZS_ZONE.len, in seconds, as the bosses' seconds and the endless wait):
+-- a run of 12 minutes or less is a Hyper one. A field of its own, should the
+-- game ever send one (hyper), comes first. zone: AZS_ZONE, or a copy of it.
+local HYPER_LONGEST = 720
+function SurvivorUI_IsHyper(zone)
+	zone = zone or AZS_ZONE
+	if not zone then
+		return false
+	end
+	if zone.hyper ~= nil then
+		return tonumber(zone.hyper) == 1
+	end
+	local length = tonumber(zone.len)
+	if not (length and length > 0) and zone == AZS_ZONE and AZS_RUN then
+		-- Or the final boss's second, on the run's line (also halved).
+		length = tonumber(AZS_RUN.fin)
+	end
+	return length ~= nil and length > 0 and length <= HYPER_LONGEST
+end
+
+-- The difficulty in words, with Hyper Mode when it is on: "Heroic III +
+-- Hyper", "Normal + Hyper", or as SurvivorUI_HeroicName.
+function SurvivorUI_DifficultyName(level, hyper)
+	if hyper then
+		return SurvivorUI_TF("{1} + Hyper", SurvivorUI_HeroicName(level))
+	end
+	return SurvivorUI_HeroicName(level)
+end
+
 -- The runs it is held against: the same zone and difficulty. A normal run
 -- keeps the normal Run Options' key, so the runs from before the game's
--- 0.121 still count; each Heroic level is a key of its own.
+-- 0.121 still count; each Heroic level is a key of its own, and a Hyper
+-- run's (the game's 0.143) another, its difficulty's with ":hyper".
 local NORMAL_MODS = "100 100 100 100"
 local function RunKey()
 	if not (AZS_ZONE and AZS_ZONE.zone) then
@@ -139,6 +172,7 @@ local function RunKey()
 	local heroic = tonumber(AZS_ZONE.heroic)
 	if heroic then
 		return AZS_ZONE.zone..":"..(heroic > 0 and ("heroic "..heroic) or NORMAL_MODS)
+			..(SurvivorUI_IsHyper() and ":hyper" or "")
 	end
 	return AZS_ZONE.zone..":"..(AZS_ZONE.mods or "")
 end
@@ -803,7 +837,7 @@ frame:SetScript("OnEnter", function()
 	if heroic then
 		GameTooltip:AddLine(" ")
 		GameTooltip:AddDoubleLine(SurvivorUI_T("Difficulty  |cff8a8a92(held against runs with the same)|r"),
-			SurvivorUI_HeroicName(heroic), 1, 0.82, 0, heroic > 0 and 1 or 0.62, heroic > 0 and 0.58 or 0.62, heroic > 0 and 0.25 or 0.66)
+			SurvivorUI_DifficultyName(heroic, SurvivorUI_IsHyper()), 1, 0.82, 0, heroic > 0 and 1 or 0.62, heroic > 0 and 0.58 or 0.62, heroic > 0 and 0.25 or 0.66)
 	elseif index > 0 then
 		GameTooltip:AddLine(" ")
 		GameTooltip:AddLine(SurvivorUI_T("Modifiers  |cff8a8a92(held against runs with the same)|r"), 1, 0.82, 0)

@@ -100,7 +100,8 @@ local C = {
 	bossName = { 0.85, 0.76, 1.00 }, finalName = { 1.00, 0.75, 0.50 },
 	ahead = { 1.00, 0.85, 0.25 },
 	-- The tags, as the tracker's own (Tracker.lua's TAG_COLORS).
-	tag = { normal = { 0.62, 0.62, 0.66 }, heroic = { 1.00, 0.48, 0.18 }, endless = { 0.82, 0.50, 1.00 }, affix = { 1.00, 0.35, 0.29 } },
+	tag = { normal = { 0.62, 0.62, 0.66 }, heroic = { 1.00, 0.48, 0.18 }, endless = { 0.82, 0.50, 1.00 }, affix = { 1.00, 0.35, 0.29 },
+		hyper = { 0.36, 0.84, 1.00 } },
 }
 
 local S = { marks = {}, tiles = {}, full = {}, nbMost = 0 }   -- the dial's pieces and what it saw
@@ -347,7 +348,8 @@ S.tagRow:SetWidth(160)
 S.tagRow:SetHeight(13)
 S.tagRow:SetPoint("CENTER", hub, "CENTER", 0, 34)
 if SurvivorUI_NewTag then
-	S.tags = { difficulty = SurvivorUI_NewTag(S.tagRow), endless = SurvivorUI_NewTag(S.tagRow), affixes = {} }
+	S.tags = { difficulty = SurvivorUI_NewTag(S.tagRow), hyper = SurvivorUI_NewTag(S.tagRow), endless = SurvivorUI_NewTag(S.tagRow),
+		affixes = {} }
 end
 
 -- The elites alive, at the top right: a green diamond and the count.
@@ -838,6 +840,7 @@ local function Read(game, phase)
 	end
 	M.length, M.endless = length, Num(game.endl) == 1
 	M.heroic = zone.heroic
+	M.hyper = SurvivorUI_IsHyper and SurvivorUI_IsHyper(zone) or nil
 	-- The bosses: the next to come, the one alive, the second the last came.
 	local schedule = AZS_SCHEDULE or {}
 	M.schedule, M.next, M.up, M.prevAt = schedule, nil, nil, 0
@@ -1072,6 +1075,13 @@ local function Tags()
 			or tostring(heroic), heroic > 0 and "heroic" or "normal") })
 	else
 		tags.difficulty:Hide()
+	end
+	-- Hyper Mode (the game's 0.143): its two arrows after the difficulty.
+	if shown and M.hyper then
+		tags.hyper.tip = SurvivorUI_T("Hyper Mode")
+		table.insert(row, { tags.hyper, PaintTag(tags.hyper, nil, "hyper", ART.."Hyper") })
+	else
+		tags.hyper:Hide()
 	end
 	if shown and M.endless then
 		tags.endless.tip = SurvivorUI_T("Endless")

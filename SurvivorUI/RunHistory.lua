@@ -224,6 +224,8 @@ local function Snapshot(phase)
 		-- From the game's 0.121, the run's Heroic level (0 the normal one), and
 		-- its affixes by name (Affixes.lua).
 		heroic = tonumber(zone.heroic),
+		-- From the game's 0.143, Hyper Mode (true; nil without it).
+		hyper = SurvivorUI_IsHyper and SurvivorUI_IsHyper() or nil,
 		affixes = SurvivorUI_RunAffixNames and SurvivorUI_RunAffixNames() or nil,
 		time = seconds,
 		level = Num(run.lvl),
@@ -1087,7 +1089,7 @@ pick.ENDS = {
 }
 
 -- A run's line: how it ended (an endless one as Endless), the class and level
--- reached, the map.
+-- reached, the map, and Hyper in blue for a Hyper Mode run (the game's 0.143).
 function pick.Line(run)
 	local final = run.endless or run
 	local ending = pick.ENDS[run.endless and "endless" or run.result] or pick.ENDS.dead
@@ -1097,6 +1099,7 @@ function pick.Line(run)
 	end
 	return pick.Hex(ending[2])..ending[1]..",|r "..pick.Hex({ r, g, b })..(run.class or "?").." "..Num(final.level).."|r"
 		.." |cff9a9aa2-|r "..pick.Hex({ 0.40, 1.00, 0.42 })..pick.Short(run.zone).."|r"
+		..(run.hyper and ("  |cff5cd6ff"..SurvivorUI_T("Hyper").."|r") or "")
 		..(run.party and ("  |cff8fc3ffParty "..table.getn(run.party).."|r") or "")
 end
 
@@ -2065,6 +2068,13 @@ for index = 1, 4 do
 			GameTooltip:Show()
 			return
 		end
+		-- Hyper Mode's chip (the game's 0.143).
+		if this.hyper then
+			GameTooltip:SetText(SurvivorUI_T("Hyper Mode"), 0.36, 0.84, 1)
+			GameTooltip:AddLine(SurvivorUI_T("Bosses came at half their minute, and mobs grew stronger twice as fast."), 1, 1, 1, 1)
+			GameTooltip:Show()
+			return
+		end
 		if this.heroic then
 			GameTooltip:SetText(SurvivorUI_T("Difficulty"), 1, 0.82, 0)
 			GameTooltip:AddLine(SurvivorUI_T("The run's Heroic level, I to V, or Normal."), 1, 1, 1, 1)
@@ -2093,31 +2103,38 @@ local function PaintChip(chip, name, value, color)
 	return width
 end
 
-local function DrawMods(label, heroic, affixes)
+local function DrawMods(label, heroic, affixes, hyper)
 	for _, chip in pairs(modChips) do
 		chip:Hide()
-		chip.heroic, chip.affix = nil, nil
+		chip.heroic, chip.affix, chip.hyper = nil, nil, nil
 	end
 	-- A run from the game's 0.121 on: its Heroic level, a chip in orange for
-	-- a Heroic one, grey for the normal one; then its affixes, a red chip
-	-- each, all in the middle under the badges.
+	-- a Heroic one, grey for the normal one; Hyper Mode's in blue after it
+	-- (the game's 0.143); then its affixes, a red chip each, all in the
+	-- middle under the badges.
 	if heroic then
 		local color = heroic > 0 and { 1.00, 0.58, 0.25 } or { 0.62, 0.62, 0.66 }
 		modChips[1].heroic = true
 		local widths = { PaintChip(modChips[1], SurvivorUI_T("Difficulty"), SurvivorUI_HeroicName(heroic), color) }
 		local total = widths[1]
+		if hyper then
+			modChips[2].hyper = true
+			widths[2] = PaintChip(modChips[2], "", SurvivorUI_T("Hyper"), { 0.36, 0.84, 1.00 })
+			total = total + widths[2] + 4
+		end
+		local first = table.getn(widths)
 		affixes = affixes or {}
-		for each = 1, math.min(table.getn(affixes), table.getn(modChips) - 1) do
-			local chip = modChips[each + 1]
+		for each = 1, math.min(table.getn(affixes), table.getn(modChips) - first) do
+			local chip = modChips[first + each]
 			chip.affix = affixes[each]
-			widths[each + 1] = PaintChip(chip, "", SurvivorUI_T(affixes[each]), AFFIX_COLOR)
-			total = total + widths[each + 1] + 4
+			widths[first + each] = PaintChip(chip, "", SurvivorUI_T(affixes[each]), AFFIX_COLOR)
+			total = total + widths[first + each] + 4
 		end
 		local x = -math.floor(total / 2 + 0.5)
 		for each = 1, table.getn(widths) do
 			local chip = modChips[each]
 			chip.name:ClearAllPoints()
-			if chip.affix then
+			if chip.affix or chip.hyper then
 				chip.value:ClearAllPoints()
 				chip.value:SetPoint("CENTER", chip, "CENTER", 0, 0)
 			else
@@ -2370,7 +2387,8 @@ local function DrawTracker(shot, result)
 	y = y - 15
 	local after, any = x, false
 	if tracker.tags then
-		after, any = SurvivorUI_TagRow(tracker.tags, tracker, shot.heroic, shot.endless, shot.affixes, x, -6, y - 1)
+		after, any = SurvivorUI_TagRow(tracker.tags, tracker, shot.heroic, shot.endless, shot.affixes, x, -6, y - 1, nil, nil,
+			shot.hyper)
 	end
 	tracker.state:SetText(table.concat(parts, "  "))
 	tracker.state:SetJustifyH("LEFT")
@@ -2735,6 +2753,8 @@ local function DrawRun(run, base)
 	-- on the same map (an endless one by its end), "NEW BEST" where it beat
 	-- them all. The rates only between runs of 2 minutes or more, so a short
 	-- one does not win them by its few seconds; the damage taken not at all.
+	-- A Hyper run (the game's 0.143) only against Hyper runs, the others
+	-- against the others: its clock runs twice as fast.
 	local best = {}
 	local function Value(x, key)
 		local time = Num(x.time)
@@ -2750,7 +2770,7 @@ local function DrawRun(run, base)
 	local earlier = {}
 	for _, other in pairs(History()) do
 		if other.classKey == run.classKey and other.zone == run.zone and Num(other.at) < Num(run.at)
-			and other ~= base and other.endless ~= run then
+			and other ~= base and other.endless ~= run and (other.hyper == true) == (run.hyper == true) then
 			table.insert(earlier, other.endless or other)
 		end
 	end
@@ -4133,7 +4153,7 @@ local function DrawHeader(run, final, moment)
 			table.insert(affixes, run.tracker.affixes[each].name)
 		end
 	end
-	DrawMods(run.mods, run.heroic, affixes)
+	DrawMods(run.mods, run.heroic, affixes, run.hyper)
 end
 
 -- The panels in their four columns, the window's height to hold them.

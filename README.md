@@ -230,6 +230,23 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.63, 2026-11-09
+
+Ready for the game's Hyper Mode: a Hyper run says so, and is held only against other Hyper runs.
+
+#### New
+
+**Hyper Mode (the game's 0.143)**
+- **A tag of its own:** a blue tag with two arrows stands after the difficulty in the Run tracker, the Tracker Ring and Run History's copy of the tracker ("Hyper" in words). The game tells addons nothing of the mode but the run's length, already halved, so that is where the addon reads it.
+- **Run History:** a Hyper run keeps its mark, a blue "Hyper" chip after its difficulty, and "Hyper" on its line in the run picker and in the note by the minimap. Its personal bests (NEW BEST) are held only against other Hyper runs, since its clock runs twice as fast.
+- **Kill pace:** a Hyper run is held only against your Hyper runs on the same zone and difficulty.
+- **Tooltips:** the Run tracker's and the Kill pace's say "Heroic III + Hyper".
+- **Guide:** the Marks page says Hyper Mode pays the same marks.
+- The boss marks, the run's length and the time to the next boss already come from the game, so they show Hyper's minutes as they are.
+
+**Launcher 1.12.1**
+- **Run History tab:** a Hyper run shows "· Hyper" after its zone and difficulty, and "Heroic V + Hyper" over its numbers.
+
 ### v3.0.62, 2026-11-09
 
 The Guide's Jewels page shows the average pick past the first, and a performance monitor shows what slows the game.

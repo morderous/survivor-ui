@@ -144,7 +144,7 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Azeroth SurvivorUI Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Survivor UI")]
-[assembly: System.Reflection.AssemblyVersion("1.12.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.12.1.0")]
 
 namespace SurvivorInstaller
 {
@@ -7535,9 +7535,11 @@ namespace SurvivorInstaller
                 row.ForeColor = run.Archived ? Gold : Muted;
                 row.SubItems.Add(run.Str("hero"), TextColor, Panel, runList.Font);
                 row.SubItems.Add(run.Str("class"), ClassColor(run.Str("classKey")), Panel, runList.Font);
-                // A Heroic run (the game's 0.121) says its level after the zone: "· H III".
+                // A Heroic run (the game's 0.121) says its level after the zone: "· H III";
+                // a Hyper Mode one (the game's 0.143) "· Hyper" after it.
                 int heroic = (int)run.Num("heroic");
-                row.SubItems.Add(run.Str("zone") + (heroic > 0 ? Lang.T("  \u00b7 H ") + Numeral(heroic) : ""), TextColor, Panel, runList.Font);
+                row.SubItems.Add(run.Str("zone") + (heroic > 0 ? Lang.T("  \u00b7 H ") + Numeral(heroic) : "")
+                    + (run.Flag("hyper") ? Lang.T("  \u00b7 Hyper") : ""), TextColor, Panel, runList.Font);
                 Dictionary<object, object> endless = run.Table("endless");
                 if (endless != null)
                 {
@@ -7759,10 +7761,13 @@ namespace SurvivorInstaller
                 Txt(g, hero, title, new Point(x, 6), ClassColor(run.Str("classKey")), TextOnly);
                 x += MeasureW(g, hero, title, TextOnly) + 10;
                 // The run's difficulty: its Heroic level from the game's 0.121, else
-                // its Run Options before it, unless normal.
+                // its Run Options before it, unless normal; Hyper Mode (the game's
+                // 0.143) with it, "Heroic V + Hyper".
                 int level = (int)run.Num("heroic");
+                bool hyper = run.Flag("hyper");
                 string affixes = AffixNames(run);
-                string mods = level > 0 ? Lang.T("Heroic ") + Numeral(level) + (affixes != "" ? " (" + affixes + ")" : "") : run.Str("mods");
+                string mods = level > 0 ? Lang.T("Heroic ") + Numeral(level) + (hyper ? " + " + Lang.T("Hyper") : "")
+                    + (affixes != "" ? " (" + affixes + ")" : "") : hyper ? Lang.T("Hyper") : run.Str("mods");
                 string who = Lang.T("Level ") + (int)view.Num("level") + " " + run.Str("race") + " " + run.Str("class") + "  ·  " + run.Str("zone") +
                     (mods != "" && mods != "normal" ? "  ·  " + mods : "");
                 Txt(g, who, BaseFont, new Rectangle(x, 9, width - x - 190, 18), Muted, TextOnly | TextFormatFlags.EndEllipsis);
@@ -12659,6 +12664,13 @@ namespace SurvivorInstaller
         public Dictionary<object, object> Table(string key)
         {
             return Field(Data, key) as Dictionary<object, object>;
+        }
+
+        // A field kept as true (Survivor UI writes nil for false).
+        public bool Flag(string key)
+        {
+            object value = Field(Data, key);
+            return value is bool && (bool)value;
         }
     }
 

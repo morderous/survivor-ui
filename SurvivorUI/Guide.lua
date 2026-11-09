@@ -2067,7 +2067,7 @@ local function BuildMarks(page)
 	Para(page, SurvivorUI_T("Marks are what bosses pay you, and what your gear's stars cost."), 1)
 	local width = math.floor((PAGE_WIDTH - 2 * CARD_GAP) / 3)
 	local steps = {
-		{ SurvivorUI_T("1. Earn"), SurvivorUI_T("Bosses pay marks when they fall. A piece you already own pays marks instead. Heroic pays more.") },
+		{ SurvivorUI_T("1. Earn"), SurvivorUI_T("Bosses pay marks when they fall. A piece you already own pays marks instead. Heroic pays more; Hyper Mode the same.") },
 		{ SurvivorUI_T("2. Keep"), SurvivorUI_T("Marks stay with the class that earned them. Each class saves its own.") },
 		{ SurvivorUI_T("3. Spend"), SurvivorUI_T("In the Armory, each piece goes up one star at a time, up to 5.") },
 	}

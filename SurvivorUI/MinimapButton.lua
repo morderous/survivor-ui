@@ -973,9 +973,10 @@ function SurvivorUI_HistoryNotice(force, look)
 	if notice.look then
 		SurvivorUI_SetResultBadge(notice.look, kind, nil)
 	end
-	-- "Elwynn Forest 20:50 - ENDLESS": the zone green, the time white, the result its color.
-	notice.line:SetText(string.format("|cff4dff70%s|r  |cffffffff%s|r  -  |cff%02x%02x%02x%s|r",
-		run.zone or "", MinSec(seconds),
+	-- "Elwynn Forest 20:50 - ENDLESS": the zone green, the time white, the result its color;
+	-- a Hyper Mode run's (the game's 0.143) with Hyper in blue after the time.
+	notice.line:SetText(string.format("|cff4dff70%s|r  |cffffffff%s|r%s  -  |cff%02x%02x%02x%s|r",
+		run.zone or "", MinSec(seconds), run.hyper and ("  |cff5cd6ff"..SurvivorUI_T("Hyper").."|r") or "",
 		math.floor(color[1] * 255), math.floor(color[2] * 255), math.floor(color[3] * 255), RESULT_WORDS[kind]))
 	notice:SetWidth(math.max(notice.title:GetStringWidth() + 24, notice.line:GetStringWidth() + 16))
 	-- Beside Run History's button, apart from the line they make.

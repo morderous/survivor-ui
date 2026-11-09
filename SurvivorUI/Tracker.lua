@@ -347,10 +347,14 @@ local TAG_COLORS = {
 	heroic  = { 1.00, 0.48, 0.18 },
 	endless = { 0.82, 0.50, 1.00 },
 	affix   = { 1.00, 0.35, 0.29 },
+	hyper   = { 0.36, 0.84, 1.00 },
 }
 
 local TAG_SYMBOL = 9               -- a symbol's size in its tag
 local ENDLESS_SYMBOL = "Interface\\AddOns\\SurvivorUI\\Art\\Endless"
+-- Hyper Mode's (the game's 0.143), in electric blue beside the difficulty:
+-- two arrows, as on a fast-forward button.
+local HYPER_SYMBOL = "Interface\\AddOns\\SurvivorUI\\Art\\Hyper"
 
 function SurvivorUI_NewTag(parent)
 	local tag = CreateFrame("Frame", nil, parent)
@@ -415,12 +419,28 @@ end
 -- TagList paints them, not placed yet: { tag, width } first to last, how
 -- many stand at the left, and how wide all of them stand side by side (the
 -- tracker's Compact line places them itself, after the zone's name).
-local function TagList(tags, frame, heroic, endless, affixes, short)
+-- A tag made as the row's difficulty tag is, in its face and size: a
+-- piece's own font (EditCard.lua) dresses only what stands as it is worn,
+-- and these come later (the run's affixes, Hyper Mode's).
+local function LateTag(tags, frame)
+	local tag = SurvivorUI_NewTag(frame)
+	local model = tags.difficulty.text
+	local face, size, flags = model:GetFont()
+	if face and size then
+		tag.text:SetFont(face, size, flags)
+		tag.text.suiBase, tag.text.suiPath, tag.text.suiSize = model.suiBase, model.suiPath, model.suiSize
+	end
+	return tag
+end
+
+-- hyper: Hyper Mode on (the game's 0.143), its tag after the difficulty's.
+local function TagList(tags, frame, heroic, endless, affixes, short, hyper)
 	local words = not short and SurvivorUIDB and SurvivorUIDB.trackerTagWords == true
 	local named = not short and SurvivorUIDB and SurvivorUIDB.trackerAffixWords == true
-	-- Either side put away (Off): the difficulty and endless mode, the affixes.
+	-- Either side put away (Off): the difficulty with endless mode and Hyper
+	-- Mode, the affixes.
 	if SurvivorUIDB and SurvivorUIDB.trackerDifficulty == false then
-		heroic, endless = nil, nil
+		heroic, endless, hyper = nil, nil, nil
 	end
 	if SurvivorUIDB and SurvivorUIDB.trackerAffixes == false then
 		affixes = nil
@@ -435,6 +455,14 @@ local function TagList(tags, frame, heroic, endless, affixes, short)
 	else
 		tags.difficulty:Hide()
 	end
+	if hyper then
+		tags.hyper = tags.hyper or LateTag(tags, frame)
+		tags.hyper.tip = SurvivorUI_T("Hyper Mode")
+		table.insert(row, { tag = tags.hyper, width = PaintTag(tags.hyper, words and SurvivorUI_T("Hyper") or nil,
+			"hyper", not words and HYPER_SYMBOL or nil) })
+	elseif tags.hyper then
+		tags.hyper:Hide()
+	end
 	if endless then
 		tags.endless.tip = SurvivorUI_T("Endless")
 		table.insert(row, { tag = tags.endless, width = PaintTag(tags.endless, words and SurvivorUI_T("Endless") or nil,
@@ -448,16 +476,7 @@ local function TagList(tags, frame, heroic, endless, affixes, short)
 	for index = 1, count do
 		local tag = tags.affixes[index]
 		if not tag then
-			tag = SurvivorUI_NewTag(frame)
-			-- In the face and size the row's difficulty tag wears: a piece's own
-			-- font (EditCard.lua) dresses only what stands as it is worn, and
-			-- these come later, with the run's affixes.
-			local model = tags.difficulty.text
-			local face, size, flags = model:GetFont()
-			if face and size then
-				tag.text:SetFont(face, size, flags)
-				tag.text.suiBase, tag.text.suiPath, tag.text.suiSize = model.suiBase, model.suiPath, model.suiSize
-			end
+			tag = LateTag(tags, frame)
 			if SurvivorUI_AffixTip then
 				SurvivorUI_AffixTip(tag)
 			end
@@ -478,8 +497,8 @@ local function TagList(tags, frame, heroic, endless, affixes, short)
 	return row, leftCount, wide
 end
 
-function SurvivorUI_TagRow(tags, frame, heroic, endless, affixes, left, right, y, centered, short)
-	local row, leftCount, wide = TagList(tags, frame, heroic, endless, affixes, short)
+function SurvivorUI_TagRow(tags, frame, heroic, endless, affixes, left, right, y, centered, short, hyper)
+	local row, leftCount, wide = TagList(tags, frame, heroic, endless, affixes, short, hyper)
 	local total = table.getn(row)
 	local x = left
 	if centered or (SurvivorUIDB and SurvivorUIDB.trackerTagsCentered == true) then
@@ -885,12 +904,13 @@ local function DrawTags(game, zone, y, state, side)
 	head.state:Show()
 	local x, any
 	if side == "center" then
-		x, any = SurvivorUI_TagRow(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes, 0, 0, y - 1)
+		x, any = SurvivorUI_TagRow(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes, 0, 0, y - 1, nil, nil,
+			SurvivorUI_IsHyper(zone))
 	else
 		-- Line up Left or Right (the options, Run tracker: Title): all the
 		-- tags together at that end, first to last; how the run stands after
 		-- them, or before them at the right.
-		local row, _, wide = TagList(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes)
+		local row, _, wide = TagList(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes, nil, SurvivorUI_IsHyper(zone))
 		local total = table.getn(row)
 		any = total > 0
 		x = side == "right" and WIDTH - wide or 0
@@ -956,7 +976,7 @@ end
 -- under it comes back.
 local function DrawCompact(game, zone, zoneName, y, state, side, apart)
 	local affixes = SurvivorUI_RunAffixes and SurvivorUI_RunAffixes() or nil
-	local row, _, wide = TagList(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes)
+	local row, _, wide = TagList(head.tags, head, zone.heroic, Num(game.endl) == 1, affixes, nil, SurvivorUI_IsHyper(zone))
 	local total = table.getn(row)
 	local tagsWide = total > 0 and wide + 5 or 0
 	apart = apart and total > 0
@@ -1303,6 +1323,7 @@ function SurvivorUI_TrackerSnapshot()
 	local shot = {
 		zone = zoneName, phase = phase, lives = Num(game.lives), seconds = seconds, length = length,
 		endless = Num(game.endl) == 1 or nil, heroic = tonumber(zone.heroic),
+		hyper = SurvivorUI_IsHyper({ hyper = zone.hyper, len = length }) or nil,
 		slots = math.max(BOSS_SLOTS, Num(zone.bt), table.getn(schedule)),
 		bosses = {},
 	}
@@ -1505,13 +1526,14 @@ head:SetScript("OnEnter", function()
 	if tonumber(zone.diff) and tonumber(zone.diff) ~= 1 then
 		Pair(SurvivorUI_T("Zone difficulty"), "x"..zone.diff)
 	end
-	-- A Heroic level (the game's 0.121) is worth a line, the normal one not;
-	-- before it, the Run Options: "100 100 100 100" is a normal run, anything
-	-- else is worth a line.
+	-- A Heroic level (the game's 0.121) is worth a line, the normal one not
+	-- unless in Hyper Mode (the game's 0.143); before it, the Run Options:
+	-- "100 100 100 100" is a normal run, anything else is worth a line.
 	local heroic = tonumber(zone.heroic)
 	if heroic then
-		if heroic > 0 then
-			Pair(SurvivorUI_T("Difficulty"), SurvivorUI_HeroicName(heroic))
+		local hyper = SurvivorUI_IsHyper(zone)
+		if heroic > 0 or hyper then
+			Pair(SurvivorUI_T("Difficulty"), SurvivorUI_DifficultyName(heroic, hyper))
 		end
 	elseif zone.mods then
 		local index = 0
