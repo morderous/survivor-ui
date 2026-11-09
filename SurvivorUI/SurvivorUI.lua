@@ -4212,6 +4212,10 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		if SurvivorUI_CenterRow then
 			SurvivorUI_CenterRow()
 		end
+	elseif command == "perf" then
+		if SurvivorUI_TogglePerf then
+			SurvivorUI_TogglePerf(argument)
+		end
 	elseif msg == "damage" then
 		SurvivorUI_ToggleDamage()
 	elseif msg == "damage side" then
@@ -4235,6 +4239,7 @@ SlashCmdList["SURVIVORUI"] = function(msg)
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui sample  shows a sample of every combat number as set"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui guardians  shows or hides the guardians' list; /sui guardians north  points its arrows north up; /sui guardians bar  makes it a bar in the run tracker"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui guide  opens the Guide: how Luck, Damage and Crit really work"))
+		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui perf  opens the performance monitor: the time, calls and garbage of every addon's scripts, and the slow frames; /sui perf off stops it"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui pins  prints what the minimap's cache and lair pins read"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui collection  the Jewelry Collection: every amulet, ring and trinket found, and what is left to find; /sui collection reset  forgets it all"))
 		DEFAULT_CHAT_FRAME:AddMessage(SurvivorUI_T("Survivor UI: /sui chat 10  sets the chat text size, 8 to 18 (default 10)"))

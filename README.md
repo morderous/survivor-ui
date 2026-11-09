@@ -230,6 +230,18 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.62, 2026-11-09
+
+The Guide's Jewels page shows the average pick past the first, and a performance monitor shows what slows the game.
+
+#### New
+
+**Guide**
+- **Jewels page, picks in groups:** Rings and Trinkets show the first pick, then what one pick adds on average for picks 2 to 4, 5 to 8 and 9 to 14, then the most. A jewel the game stops offering says how many times it comes instead, and one with a soft cap says where it slows down. Hover a row for every pick, one by one.
+
+**Performance monitor**
+- **/sui perf:** a window with the frame rate, the worst frames and how much of each frame goes to addons, then the time, calls and memory garbage of every addon's scripts, by addon, by event and in the frames that ran slow. Report saves it all; `/sui perf off` stops it.
+
 ### v3.0.61, 2026-11-09
 
 A tidier Run History, a column for each subject, and the Guide's Jewels page showing what each pick adds.
