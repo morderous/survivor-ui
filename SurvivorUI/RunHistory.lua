@@ -612,8 +612,9 @@ end)
 
 ------------------------------------------------------------------------------
 -- The window: the run's header (the map, how it ended, the hero), then the
--- panels in four columns: the run tracker and the run's numbers; the build
--- with its jewelry, and the damage; Biggest Crits and the loot; the hero's
+-- panels in four columns, a subject each: the run (the tracker, its numbers,
+-- the loot); the hero (the build with its jewelry and gear, the talents); the
+-- damage (Damage Done, Biggest Crits, what felled the hero); the hero's
 -- numbers (Stats).
 
 local PAD, GAP = 10, 8            -- the window's margin, and between two panels
@@ -3260,7 +3261,10 @@ local function DrawBuild(run)
 			else
 				line.icon:SetVertexColor(color[1], color[2], color[3], 0.6)
 			end
-			gearDraw.FitLine(line, piece.name or SurvivorUI_GearWords(piece.label or ""), SurvivorUI_GearWords(piece.tags or "-"))
+			-- Its slot and rank ("Ring  I", "Trinket  III"), as the build list
+			-- reads (Lucas, 2026-11-08: "fica mais organizado"); its name is in
+			-- its tooltip.
+			gearDraw.FitLine(line, SurvivorUI_GearWords(piece.label or piece.name or ""), SurvivorUI_GearWords(piece.tags or "-"))
 			line.label:SetTextColor(color[1], color[2], color[3])
 			line.tags:SetTextColor(0.85, 0.85, 0.88)
 		end
@@ -3333,7 +3337,7 @@ local function SourceBar(index)
 		bar.value:SetPoint("RIGHT", bar, "RIGHT", -AMOUNT_RIGHT, 0)
 		bar.share = Font(bar, 8, { 0.85, 0.85, 0.85 }, nil, "RIGHT")
 		bar.share:SetPoint("RIGHT", bar, "RIGHT", -3, 0)
-		CardRow(bar, 2)
+		CardRow(bar, 3)
 		damageBox.rows[index] = bar
 	end
 	return bar
@@ -3547,11 +3551,11 @@ local function LootRow(index)
 		-- Its tooltip: the link kept, else its name and quality.
 		row:EnableMouse(true)
 		row:SetScript("OnEnter", function()
-			if ShowKept(this, this.tip, 3) then
+			if ShowKept(this, this.tip, 1) then
 				return
 			end
 			local link = this.item or (SurvivorUI_KnownItem and SurvivorUI_KnownItem(this.itemName))
-			Aside(this, 3)
+			Aside(this, 1)
 			if link then
 				GameTooltip:SetHyperlink(link)
 			else
@@ -3570,9 +3574,48 @@ local function LootRow(index)
 	return row
 end
 
+-- A long loot list held to its first four (Lucas, 2026-11-09: the loot in
+-- the first column, a run with much of it would stretch the window): a row
+-- "+N more" under them, the rest in its tooltip, each in its quality's color
+-- with its count and when it dropped. Up to five, all shown.
+lootBox.SHOWN = 4
+function lootBox.More()
+	local more = lootBox.more
+	if more then
+		return more
+	end
+	more = CreateFrame("Frame", nil, lootBox)
+	more:SetWidth(INNER)
+	more:SetHeight(ROW)
+	more.text = Font(more, 10, MUTED)
+	more.text:SetPoint("LEFT", more, "LEFT", 5, 0)
+	more:EnableMouse(true)
+	more:SetScript("OnEnter", function()
+		Aside(this, 1)
+		GameTooltip:SetText(SurvivorUI_T("Loot"), 1, 0.82, 0)
+		for index = this.from, table.getn(this.items) do
+			local item = this.items[index]
+			local color = HexColor(item.color)
+			local name = item.name or "?"
+			if item.count and item.count > 1 then
+				name = name.."  x"..item.count
+			end
+			GameTooltip:AddDoubleLine(name, item.at and Clock(item.at) or "", color[1], color[2], color[3], 0.88, 0.88, 0.88)
+		end
+		GameTooltip:Show()
+	end)
+	more:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	lootBox.more = more
+	return more
+end
+
 local function DrawLoot(run)
 	local loot = run.loot or {}
-	for index = 1, table.getn(loot) do
+	local shown = table.getn(loot)
+	if shown > lootBox.SHOWN + 1 then
+		shown = lootBox.SHOWN
+	end
+	for index = 1, shown do
 		local item = loot[index]
 		local row = LootRow(index)
 		local color = HexColor(item.color)
@@ -3598,7 +3641,18 @@ local function DrawLoot(run)
 		row.at:SetText(item.at and Clock(item.at) or "")
 		At(row, lootBox, 6, -TOP - (index - 1) * ROW)
 	end
-	HideRows(lootBox, table.getn(loot) + 1)
+	HideRows(lootBox, shown + 1)
+	local lines = shown
+	if shown < table.getn(loot) then
+		local more = lootBox.More()
+		more.items, more.from = loot, shown + 1
+		more.text:SetText(SurvivorUI_TF("+{1} more", table.getn(loot) - shown))
+		At(more, lootBox, 6, -TOP - shown * ROW)
+		more:Show()
+		lines = shown + 1
+	elseif lootBox.more then
+		lootBox.more:Hide()
+	end
 	local marks = run.marks
 	lootBox.note:SetText(marks and SurvivorUI_TF("Marks: {1}", Amount(Num(marks.total))) or "")
 	lootBox.marks.kept = marks
@@ -3608,8 +3662,8 @@ local function DrawLoot(run)
 	else
 		lootBox.marks:Hide()
 	end
-	local height = Nothing(lootBox, table.getn(loot) == 0 and "Nothing dropped." or nil)
-	return math.max(height, TOP + table.getn(loot) * ROW + 6)
+	local height = Nothing(lootBox, table.getn(loot) == 0 and SurvivorUI_T("Nothing dropped.") or nil)
+	return math.max(height, TOP + lines * ROW + 6)
 end
 
 ------------------------------------------------------------------------------
@@ -4084,8 +4138,9 @@ end
 
 -- The panels in their four columns, the window's height to hold them.
 local function DrawPanels(moment, base)
-	-- The run tracker and the run's numbers; the build and the damage; the
-	-- crits and the loot; the hero's numbers.
+	-- The run: its tracker, its numbers, its loot. The hero: the build and
+	-- the talents. The damage: done, the biggest crits, what felled the hero.
+	-- The hero's numbers.
 	local first = HEADER
 	local left = first
 	if moment.tracker then
@@ -4094,10 +4149,15 @@ local function DrawPanels(moment, base)
 		tracker:Hide()
 	end
 	left = Stack(runBox, 1, left, DrawRun(moment, base))
+	left = Stack(lootBox, 1, left, DrawLoot(moment))
 	local middle = Stack(buildBox, 2, first, DrawBuild(moment))
-	middle = Stack(damageBox, 2, middle, DrawDamage(moment))
-	local right = Stack(critBox, 3, first, DrawCrits(moment))
-	right = Stack(lootBox, 3, right, DrawLoot(moment))
+	if moment.picks then
+		middle = Stack(talentBox, 2, middle, DrawTalents(moment))
+	else
+		talentBox:Hide()
+	end
+	local right = Stack(damageBox, 3, first, DrawDamage(moment))
+	right = Stack(critBox, 3, right, DrawCrits(moment))
 	-- What felled the hero, on a fall kept since v3.0.9.
 	if moment.death and moment.result == "dead" then
 		right = Stack(fallen.box, 3, right, DrawFallen(moment))
@@ -4106,11 +4166,6 @@ local function DrawPanels(moment, base)
 	end
 	-- The hero's numbers, a column of their own.
 	local fourth = Stack(statsPanel.box, 4, first, statsPanel.Draw(moment))
-	if moment.picks then
-		fourth = Stack(talentBox, 4, fourth, DrawTalents(moment))
-	else
-		talentBox:Hide()
-	end
 	window:SetHeight(math.max(left, middle, right, fourth) - GAP + PAD + FOOTER)
 end
 

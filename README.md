@@ -230,6 +230,24 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.61, 2026-11-09
+
+A tidier Run History, a column for each subject, and the Guide's Jewels page showing what each pick adds.
+
+#### New
+
+**Run History**
+- **A column for each subject:** the run (its tracker, its numbers and the loot), your hero (the build with its jewelry and gear, then the talents), the damage (Damage Done, Biggest Crits and, on a fall, what felled you) and the stats. The window is shorter and the columns more even.
+- **Jewelry by slot and rank again:** each line reads Neck I, Ring I, Trinket III, with its icon, its quality's color and what it gives; the jewel's name is in its tooltip.
+- **A long loot list held short:** past five items, the loot shows the first four and a "+N more" line; hover it for the rest, each in its quality's color with its count and when it dropped.
+
+**Guide**
+- **Jewels page, what each pick adds:** Rings and Trinkets now show, pick by pick, what that pick adds over the one before (+22.5%, +10.5%, +8.4%...), the most still the total at the last pick, in yellow. Hover a row for each pick with the game's own line. Amulets show Rank 1, Rank 5 and Rank 10, then the amulet's icon: hover it for the amulet at its cap, 3 times its first numbers. A short note under them says how an amulet grows: it never changes rarity, and taking the one you wear again ranks it up, a bit less each time, toward 3 times.
+
+#### Hotfixes
+
+- **Run History:** "Nothing dropped." now speaks Chinese and Russian.
+
 ### v3.0.60, 2026-11-08
 
 The Guide's new Jewels page, your gear in Run History, boss banners in the chat, a pet's blows and crowd control on the plates. And two hotfixes.
