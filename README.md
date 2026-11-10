@@ -230,6 +230,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.65, 2026-11-10
+
+A hotfix for combat text when thousands of hits land at once.
+
+#### Hotfixes
+
+- **Combat text** no longer freezes the game when thousands of hits land at once: each hit now costs the same small amount, however many come together.
+
 ### v3.0.64, 2026-11-09
 
 The Guide's Luck page made over as a ladder of bars, and a hoard comes only from a guardian.

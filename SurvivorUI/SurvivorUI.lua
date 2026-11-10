@@ -665,6 +665,22 @@ function SurvivorUI_SourceOf(name, line)
 	return name
 end
 
+-- The same line asked about again in the same frame (the combat numbers, the
+-- new best crit's check and Biggest Crits each ask): the answer kept, as a
+-- swarm's lines come by the thousand.
+do
+	local Answer, asked = SurvivorUI_SourceOf, {}
+	function SurvivorUI_SourceOf(name, line)
+		local now = GetTime()
+		if line and asked.line == line and asked.name == name and asked.at == now then
+			return asked.answer
+		end
+		local answer = Answer(name, line)
+		asked.line, asked.name, asked.at, asked.answer = line, name, now, answer
+		return answer
+	end
+end
+
 -- Each ability's biggest crit this run, and the run's biggest, kept in one
 -- place for Biggest Crits (RunPanel.lua) and the combat numbers:
 -- SurvivorUI_NoteCrit(amount, line) says whether a crit beats its ability's
@@ -2684,6 +2700,11 @@ local damageTexts = {}
 local damageLive = 0
 
 local function DamageText()
+	-- All of them showing: none to give, without looking (a swarm's hits come
+	-- by the thousand).
+	if damageLive >= DAMAGE_MAX then
+		return nil
+	end
 	for index = 1, table.getn(damageTexts) do
 		if not damageTexts[index].live then
 			return damageTexts[index]
@@ -3003,7 +3024,9 @@ end
 
 -- Hits close together (a swarm's, an area spell's, a tenth or two apart) add
 -- up, as chosen for each kind, in the number just shown from the same source:
--- their sum, and how many (x3), so a column reads instead of piling up.
+-- their sum, and how many (x3), so a column reads instead of piling up. The
+-- number's text is set once a frame (the update below), not once a hit: a
+-- swarm adds up thousands of hits a second (Buncha's, 2026-11-10).
 local ADD_UP = { dealt = "ctAddDealt", crit = "ctAddCrits", heal = "ctAddHeals", taken = "ctMergeTaken" }
 local lastOf = {}               -- [kind, crit, periodic and source] = the number shown last
 
@@ -3029,7 +3052,7 @@ local function AddUp(key, kind, amount)
 	end
 	text.sum = text.sum + value
 	text.count = text.count + 1
-	text:SetText(Label(kind, text.sum, text.count))
+	text.relabel = kind
 	return true
 end
 
@@ -3048,7 +3071,7 @@ local function SpawnSide(kind, amount, crit, periodic, source)
 	if not text then
 		return
 	end
-	text.sum, text.count, text.addKey = tonumber(amount) or 0, 1, key
+	text.sum, text.count, text.addKey, text.relabel = tonumber(amount) or 0, 1, key, nil
 	lastOf[key] = text
 	local column = SIDE_COLUMNS[kind]
 	local startX, startY = ColumnAt(kind)
@@ -3099,46 +3122,153 @@ end
 -- place in the world over the enemy, kept where it fell. A line of the combat
 -- log finds its hit by the target, the amount and the crit; the hits wait a
 -- second for it. Nil on a game without the feed: the plates, as before.
+--
+-- A swarm's hits come by the thousand in one frame, each with its line
+-- (Buncha's, 2026-11-10: the game stopped responding). Each line looking
+-- through every hit of the last second made a frame's work grow as the square
+-- of its hits, so the hits are kept twice: in a ring, oldest first, to let
+-- them go after their second; and by amount and crit, in short lists, oldest
+-- first too, where a line finds its hit among the few of its own amount,
+-- looking at so many at most. The feed is read once a frame (and again for a
+-- line whose hit is not there yet), and the hits' tables are given out again,
+-- so a swarm leaves no garbage behind.
 local HitAnchor
 do
-	local hitCursor
-	local hitsWaiting = {}
+	local hitCursor, readAt
+	local feed = {
+		ring = {}, first = 1, last = 0,     -- the hits, oldest first
+		byAmount = {},                      -- [amount, -1 - amount for a crit] = { head, tail, open, hits }
+		spare = {}, spareLists = {},        -- tables to give out again
+		KEEP = 1,                           -- seconds a hit waits for its line
+		MOST = 4096,                        -- hits kept at most
+		LOOK = 32,                          -- hits a line looks at, at most
+		READS = 16,                         -- reads of 256 hits a frame, at most
+	}
 
-	local function ReadHits()
-		local result = AZS_GetCombatTextEvents(hitCursor, 256)
-		if not result then
-			hitCursor = nil
-			return
-		end
-		hitCursor = result.cursor
-		local now = GetTime()
-		local events = result.events or {}
-		for index = 1, table.getn(events) do
-			local hit = events[index]
-			if hit.kind == "damage" and hit.anchorId then
-				table.insert(hitsWaiting, { at = now, id = hit.anchorId, name = hit.targetName, amount = hit.amount, crit = hit.critical,
-					ability = hit.abilityName, meter = hit.meterSource, source = hit.sourceId })
+	local function Key(amount, crit)
+		return crit and -1 - amount or amount
+	end
+
+	-- The oldest hit let go, from its list too: it is the oldest there.
+	local function DropOldest()
+		local hit = feed.ring[feed.first]
+		feed.ring[feed.first] = nil
+		feed.first = feed.first + 1
+		local list = feed.byAmount[hit.key]
+		if list then
+			list[list.head] = nil
+			list.head = list.head + 1
+			if list.head > list.tail then
+				feed.byAmount[hit.key] = nil
+				table.insert(feed.spareLists, list)
 			end
 		end
-		while hitsWaiting[1] and now - hitsWaiting[1].at > 1 do
-			table.remove(hitsWaiting, 1)
+		table.insert(feed.spare, hit)
+	end
+
+	local function ReadHits()
+		local now = GetTime()
+		readAt = now
+		for _ = 1, feed.READS do
+			local result = AZS_GetCombatTextEvents(hitCursor, 256)
+			if not result then
+				hitCursor = nil
+				break
+			end
+			hitCursor = result.cursor
+			local events = result.events or {}
+			local count = table.getn(events)
+			for index = 1, count do
+				local one = events[index]
+				local amount = tonumber(one.amount)
+				if one.kind == "damage" and one.anchorId and amount then
+					local hit = table.remove(feed.spare) or {}
+					hit.at, hit.id, hit.name, hit.amount, hit.crit = now, one.anchorId, one.targetName, amount, one.critical
+					hit.ability, hit.meter, hit.source, hit.held = one.abilityName, one.meterSource, one.sourceId, nil
+					hit.key = Key(amount, hit.crit)
+					feed.last = feed.last + 1
+					feed.ring[feed.last] = hit
+					local list = feed.byAmount[hit.key]
+					if not list then
+						list = table.remove(feed.spareLists) or {}
+						list.head, list.tail, list.open = 1, 0, 1
+						feed.byAmount[hit.key] = list
+					end
+					list.tail = list.tail + 1
+					list[list.tail] = hit
+				end
+			end
+			if count < 256 then
+				break
+			end
+		end
+		while feed.first <= feed.last and (now - feed.ring[feed.first].at > feed.KEEP
+			or feed.last - feed.first >= feed.MOST) do
+			DropOldest()
 		end
 	end
 
-	HitAnchor = function(target, amount, crit)
-		if not AZS_GetCombatTextEvents then
+	-- Read once a frame (GetTime holds for the frame).
+	local function Fresh()
+		if readAt ~= GetTime() then
+			ReadHits()
+		end
+	end
+
+	-- The first hit of its amount and crit on that target not yet held.
+	local function Anchor(target, amount, crit)
+		local list = feed.byAmount[Key(amount, crit)]
+		if not list then
 			return nil
 		end
-		ReadHits()
-		amount = tonumber(amount)
-		for index = 1, table.getn(hitsWaiting) do
-			local hit = hitsWaiting[index]
-			if not hit.held and hit.name == target and hit.amount == amount and (not hit.crit) == (not crit) then
+		-- Hits held at the front stay held: passed once.
+		if list.open < list.head then
+			list.open = list.head
+		end
+		while list.open <= list.tail and list[list.open].held do
+			list.open = list.open + 1
+		end
+		local stop = math.min(list.tail, list.open + feed.LOOK - 1)
+		for index = list.open, stop do
+			local hit = list[index]
+			if not hit.held and hit.name == target then
 				hit.held = true
 				return hit.id
 			end
 		end
 		return nil
+	end
+
+	-- The last hit of its amount and crit, that spell's when there is one.
+	local function Last(amount, crit, name)
+		local list = feed.byAmount[Key(amount, crit)]
+		if not list then
+			return nil
+		end
+		local found
+		local stop = math.max(list.head, list.tail - feed.LOOK + 1)
+		for index = list.tail, stop, -1 do
+			local hit = list[index]
+			if hit.ability == name then
+				return hit
+			end
+			found = found or hit
+		end
+		return found
+	end
+
+	HitAnchor = function(target, amount, crit)
+		amount = tonumber(amount)
+		if not (AZS_GetCombatTextEvents and amount) then
+			return nil
+		end
+		Fresh()
+		local id = Anchor(target, amount, crit)
+		if not id then
+			ReadHits()
+			id = Anchor(target, amount, crit)
+		end
+		return id
 	end
 
 	-- The meter's line for a line of the combat log, when it is not the spell the
@@ -3154,18 +3284,12 @@ do
 		if not amount then
 			return nil
 		end
-		ReadHits()
+		Fresh()
 		local crit = string.find(line, " crit", 1, true) ~= nil
-		local found
-		for index = table.getn(hitsWaiting), 1, -1 do
-			local hit = hitsWaiting[index]
-			if hit.amount == amount and (not hit.crit) == (not crit) then
-				found = found or hit
-				if hit.ability == name then
-					found = hit
-					break
-				end
-			end
+		local found = Last(amount, crit, name)
+		if not found then
+			ReadHits()
+			found = Last(amount, crit, name)
 		end
 		local meter = found and found.meter and SurvivorUI_English(found.meter)
 		-- A pet's hit on the meter's Pets, that pet on a line of its own
@@ -3239,7 +3363,7 @@ local function SpawnDamage(target, amount, crit, periodic, source)
 		return
 	end
 	text.side = nil
-	text.addKey = nil
+	text.addKey, text.relabel = nil, nil
 	text.anchor = target and HitAnchor(target, amount, crit) or nil
 	text.away, text.offX, text.offY, text.far = nil, nil, nil, nil
 	amount = Amount(amount)
@@ -3321,6 +3445,10 @@ damageLayer:SetScript("OnUpdate", function()
 		if text.live then
 			text.age = text.age + arg1
 			local t = text.age / text.life
+			if text.relabel then
+				text:SetText(Label(text.relabel, text.sum, text.count))
+				text.relabel = nil
+			end
 			if text.crit and not text.popped and text.age >= CRIT_POP_TIME then
 				text.popped = true
 				Face(text, CRIT_SIZE * CritScale(), "THICKOUTLINE")
