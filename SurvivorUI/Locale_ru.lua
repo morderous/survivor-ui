@@ -360,7 +360,7 @@ SurvivorUI_WORDS.ru = {
 	["Amulet: Pristine Enchanted South Seas Kelp"] = "Амулет: Безупречная зачарованная водоросль южных морей",
 	["Gear with +luck"] = "Экипировка с +удачей",
 	["Jewelry gives more stats the better its quality and the higher its rank."] = "Украшения дают больше характеристик, чем выше их качество и ранг.",
-	["Guardian hoards and bosses: |cff59e68c+25%|r native luck on their jewelry."] = "Сокровища стражей и боссы: |cff59e68c+25%|r собственной удачи на их украшениях.",
+	["Guardian hoards: |cff59e68c+25%|r native luck on their jewelry."] = "Сокровища стражей: |cff59e68c+25%|r собственной удачи на их украшениях.",
 
 	-- The Level Up! button (LevelUp.lua).
 	["1 level waiting"] = "Уровней в ожидании: 1",
@@ -790,7 +790,7 @@ SurvivorUI_WORDS.ru = {
 	["Pick Survivor UI or SurvivorUI Classic. The other one runs from the next time the game starts."] = "Выберите Survivor UI или SurvivorUI Classic. Другой интерфейс заработает со следующего запуска игры.",
 	["Survivor UI: /sui meter  switches between SurvivorUI's damage meter, with the crits, and Default"] = "Survivor UI: /sui meter  переключает счётчик урона SurvivorUI (с критами) и стандартный",
 
-	-- The Guide (Guide.lua): the bag of marbles, the boxes, the wall. A tick is
+	-- The Guide (Guide.lua): the Luck ladder, the boxes, the wall. A tick is
 	-- тик, a DoT ПУ, a DoT's copy копия, the game's own words for the rest.
 	["{1}: {2}"] = "{1}: {2}",
 	["(page {1} of {2})"] = "(страница {1} из {2})",
@@ -826,18 +826,17 @@ SurvivorUI_WORDS.ru = {
 	["Marks"] = "Знаки",
 	["Sets"] = "Комплекты",
 	["Reduction"] = "Снижение",
-	["Luck: the bag of marbles"] = "Удача: мешок с шариками",
-	["Every card the game shows you comes out of a big bag of marbles. The game reaches in without looking, pulls out one marble, and its color is the card's rarity."] = "Каждая карта, которую показывает игра, достаётся из большого мешка с шариками. Игра не глядя запускает туда руку, вытаскивает один шарик, и его цвет — это редкость карты.",
-	["Luck never takes a marble out. It pours new ones in, and the shinier the marble, the faster it multiplies!"] = "Удача никогда не вынимает шарики. Она подсыпает новые, и чем ярче шарик, тем быстрее их прибавляется!",
-	["What's in the bag"] = "Что в мешке",
-	["|cffffd100m|r is your magic number: 1 + Luck + Level"] = "|cffffd100m|r — ваше волшебное число: 1 + удача + уровень",
-	["Out of 100 cards"] = "Из 100 карт",
-	["|cffffd100Three cards, three pulls.|r Every card is pulled on its own."] = "|cffffd100Три карты — три вытягивания.|r Каждая карта тянется отдельно.",
-	["|cffffd100Level|r gives 1% a level, up to 30%. |cffffd100Luck has no top!|r"] = "|cffffd100Уровень|r даёт 1% за уровень, до 30%. |cffffd100У удачи нет предела!|r",
-	["|cffffd100Amulets are shinier:|r they pull with m + 0.5."] = "|cffffd100Амулеты ярче:|r они тянутся с m + 0.5.",
-	["|cffffd100A guardian or boss hoard cache|r has 25% more Luck (m + 0.25)."] = "|cffffd100Сокровищница стража или босса|r даёт на 25% больше удачи (m + 0.25).",
-	["%.0f marbles in the bag, %.0f of them orange."] = "Шариков в мешке: %.0f, из них оранжевых: %.0f.",
-	["A legendary among 3 cards: |cffffd100%.1f%%|r"] = "Легендарное среди 3 карт: |cffffd100%.1f%%|r",
+	["Luck: better cards"] = "Удача: лучшие карты",
+	["Each bar is 100 cards, at level 30 and up. More Luck, more color."] = "Каждая полоса — 100 карт, с 30-го уровня и выше. Больше удачи — больше цвета.",
+	["Chances of\nat least 1\nin 3 choices"] = "Шанс:\nхотя бы 1\nиз 3",
+	["Your Luck"] = "Ваша удача",
+	["You {1}"] = "Вы {1}",
+	["|cffffd100Level|r counts as 1% Luck a level, up to 30%. |cffffd100Luck has no cap.|r"] = "|cffffd100Уровень|r считается как 1% удачи за уровень, до 30%. |cffffd100У удачи нет предела.|r",
+	["|cffffd100Amulets|r roll with +50% Luck. |cffffd100A guardian's hoard|r adds +25%."] = "|cffffd100Амулеты|r выпадают с +50% удачи. |cffffd100Сокровищница стража|r добавляет +25%.",
+	["How Luck works"] = "Как работает удача",
+	["Each of the 3 cards rolls its color on its own."] = "Каждая из 3 карт получает свой цвет отдельно.",
+	["Luck never removes Commons: it adds more of every other color, and the rarer the color, the more it adds."] = "Удача не убирает обычные карты: она добавляет все остальные цвета, и чем реже цвет, тем больше добавляет.",
+	["That is why Legendary grows fastest: {1} a card at +0% Luck, {2} at +100%, {3} at +300%."] = "Поэтому легендарные растут быстрее всех: {1} на карту при +0% удачи, {2} при +100%, {3} при +300%.",
 	["Increases all your damage by %d%% for %d sec."] = "Увеличивает весь ваш урон на %d%% на %d сек.",
 	["Cooldown: %d sec."] = "Восстановление: %d сек.",
 	["Numbers at rank 1."] = "Числа на ранге 1.",

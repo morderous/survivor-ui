@@ -208,8 +208,8 @@ end
 -- m = 1 + luck + the level's 1% (30% at most), the weights are Common 60,
 -- Uncommon 25m, Rare 10m^2, Epic 4m^3, Legendary m^4, each card rolled on
 -- its own. Rings and trinkets roll as the cards do; amulets with half again
--- (m + 0.5); the jewelry of a guardian's hoard or a boss with 0.25 more,
--- a bought cache's without.
+-- (m + 0.5); the jewelry of a guardian's hoard with 0.25 more, a bought
+-- cache's without (a boss gives no hoard: read again in the 0.143 exe).
 
 local RARITIES = {
 	{ name = "Common", color = { 0.62, 0.62, 0.62 } },
@@ -416,12 +416,13 @@ card.jewelry:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -2)
 card.jewelry:SetWidth(CARD_WIDTH - 20)
 card.jewelry:SetText(SurvivorUI_T("Jewelry gives more stats the better its quality and the higher its rank."))
 
--- The hoards' own luck (the game adds 0.25 to a guardian's hoard's and a
--- boss's jewelry rolls, none to a bought cache's), a warning of its own.
+-- The hoards' own luck (the game adds 0.25 to a guardian's hoard's jewelry
+-- rolls, none to a bought cache's; a boss gives no hoard), a warning of its
+-- own.
 card.hoard = CardText(9, WARNING[1], WARNING[2], WARNING[3])
 card.hoard:SetPoint("TOPLEFT", card.jewelry, "BOTTOMLEFT", 0, -8)
 card.hoard:SetWidth(CARD_WIDTH - 20)
-card.hoard:SetText(SurvivorUI_T("Guardian hoards and bosses: |cff59e68c+25%|r native luck on their jewelry."))
+card.hoard:SetText(SurvivorUI_T("Guardian hoards: |cff59e68c+25%|r native luck on their jewelry."))
 
 local function Percent(value)
 	return string.format("%.1f%%", value * 100)

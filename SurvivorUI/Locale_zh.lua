@@ -357,7 +357,7 @@ SurvivorUI_WORDS.zh = {
 	["Amulet: Pristine Enchanted South Seas Kelp"] = "项链：原始的附魔南海海带",
 	["Gear with +luck"] = "带有+幸运的装备",
 	["Jewelry gives more stats the better its quality and the higher its rank."] = "首饰的品质越高、等级越高，提供的属性越多。",
-	["Guardian hoards and bosses: |cff59e68c+25%|r native luck on their jewelry."] = "守护者宝藏和首领：它们的首饰自带|cff59e68c+25%|r幸运。",
+	["Guardian hoards: |cff59e68c+25%|r native luck on their jewelry."] = "守护者宝藏：其首饰自带|cff59e68c+25%|r幸运。",
 
 	-- The Level Up! button (LevelUp.lua).
 	["1 level waiting"] = "1次升级待选",
@@ -787,7 +787,7 @@ SurvivorUI_WORDS.zh = {
 	["Pick Survivor UI or SurvivorUI Classic. The other one runs from the next time the game starts."] = "选择 Survivor UI 或 SurvivorUI Classic。另一个将在下次启动游戏时运行。",
 	["Survivor UI: /sui meter  switches between SurvivorUI's damage meter, with the crits, and Default"] = "Survivor UI：/sui meter  在SurvivorUI的伤害统计（含暴击）和默认之间切换",
 
-	-- The Guide (Guide.lua): the bag of marbles, the boxes, the wall. A tick is
+	-- The Guide (Guide.lua): the Luck ladder, the boxes, the wall. A tick is
 	-- 跳, a DoT's copy 层, the game's own words for the rest.
 	["{1}: {2}"] = "{1}：{2}",
 	["(page {1} of {2})"] = "（第{1}页，共{2}页）",
@@ -823,18 +823,17 @@ SurvivorUI_WORDS.zh = {
 	["Marks"] = "印记",
 	["Sets"] = "套装",
 	["Reduction"] = "伤害减免",
-	["Luck: the bag of marbles"] = "幸运：一袋弹珠",
-	["Every card the game shows you comes out of a big bag of marbles. The game reaches in without looking, pulls out one marble, and its color is the card's rarity."] = "游戏给你的每张卡牌，都来自一大袋弹珠。游戏闭着眼伸手摸出一颗，弹珠的颜色就是这张卡牌的稀有度。",
-	["Luck never takes a marble out. It pours new ones in, and the shinier the marble, the faster it multiplies!"] = "幸运从不拿走弹珠，只会倒入新的。弹珠越闪亮，增加得越快！",
-	["What's in the bag"] = "袋子里有什么",
-	["|cffffd100m|r is your magic number: 1 + Luck + Level"] = "|cffffd100m|r 是你的魔法数字：1 + 幸运 + 等级",
-	["Out of 100 cards"] = "每100张卡牌",
-	["|cffffd100Three cards, three pulls.|r Every card is pulled on its own."] = "|cffffd100三张卡牌，摸三次。|r每张卡牌都单独摸取。",
-	["|cffffd100Level|r gives 1% a level, up to 30%. |cffffd100Luck has no top!|r"] = "|cffffd100等级|r每级提供1%，最多30%。|cffffd100幸运没有上限！|r",
-	["|cffffd100Amulets are shinier:|r they pull with m + 0.5."] = "|cffffd100项链更闪亮：|r摸取时按 m + 0.5 计算。",
-	["|cffffd100A guardian or boss hoard cache|r has 25% more Luck (m + 0.25)."] = "|cffffd100守护者或首领的宝藏宝箱|r多25%幸运（m + 0.25）。",
-	["%.0f marbles in the bag, %.0f of them orange."] = "袋子里有%.0f颗弹珠，其中%.0f颗是橙色。",
-	["A legendary among 3 cards: |cffffd100%.1f%%|r"] = "3张卡牌中出现传说：|cffffd100%.1f%%|r",
+	["Luck: better cards"] = "幸运：更好的卡牌",
+	["Each bar is 100 cards, at level 30 and up. More Luck, more color."] = "每条横条代表100张卡牌，按30级及以上计算。幸运越高，颜色越多。",
+	["Chances of\nat least 1\nin 3 choices"] = "3个选项中\n至少1张\n的几率",
+	["Your Luck"] = "你的幸运",
+	["You {1}"] = "你 {1}",
+	["|cffffd100Level|r counts as 1% Luck a level, up to 30%. |cffffd100Luck has no cap.|r"] = "|cffffd100等级|r每级算作1%幸运，最多30%。|cffffd100幸运没有上限。|r",
+	["|cffffd100Amulets|r roll with +50% Luck. |cffffd100A guardian's hoard|r adds +25%."] = "|cffffd100项链|r判定时额外+50%幸运。|cffffd100守护者的宝藏|r额外+25%。",
+	["How Luck works"] = "幸运如何运作",
+	["Each of the 3 cards rolls its color on its own."] = "3张卡牌各自单独判定颜色。",
+	["Luck never removes Commons: it adds more of every other color, and the rarer the color, the more it adds."] = "幸运从不减少普通卡牌：它会增加其他每种颜色，颜色越稀有，增加得越多。",
+	["That is why Legendary grows fastest: {1} a card at +0% Luck, {2} at +100%, {3} at +300%."] = "所以传说增长最快：+0%幸运时每张{1}，+100%时{2}，+300%时{3}。",
 	["Increases all your damage by %d%% for %d sec."] = "你造成的所有伤害提高%d%%，持续%d秒。",
 	["Cooldown: %d sec."] = "冷却：%d秒。",
 	["Numbers at rank 1."] = "以上为等级1的数值。",

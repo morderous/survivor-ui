@@ -82,16 +82,19 @@ local ORANGE = { 1, 0.5, 0.15 }
 local GREY = { 0.55, 0.55, 0.55 }
 -- Common to Legendary, as CardOdds gives them.
 local RARITIES = {
-	{ "Common", { 0.62, 0.62, 0.62 }, "60" },
-	{ "Uncommon", { 0.12, 1, 0 }, "25 x m" },
-	{ "Rare", { 0.2, 0.55, 1 }, "10 x m x m" },
-	{ "Epic", { 0.64, 0.21, 0.93 }, "4 x m x m x m" },
-	{ "Legendary", { 1, 0.5, 0 }, "1 x m x m x m x m" },
+	{ "Common", { 0.62, 0.62, 0.62 } },
+	{ "Uncommon", { 0.12, 1, 0 } },
+	{ "Rare", { 0.2, 0.55, 1 } },
+	{ "Epic", { 0.64, 0.21, 0.93 } },
+	{ "Legendary", { 1, 0.5, 0 } },
 }
-local GRID, GRID_MARBLE = 10, 15
-local BAG_HEIGHT = 190
-local BAG_WIDTH = 442
-local COUNT_AT, PERCENT_AT = 320, 416  -- the bag's columns
+-- The Luck page's ladder: a bar of 100 cards for each step of Luck, at level 30
+-- and up, and the hero's own row among them. The first bar's y (lower when the
+-- right column's title takes more lines), a bar's room, the Luck's column on the
+-- left and, past a line, a legendary among 3 cards.
+local LADDER = { top = 62, row = 32, label = 80, pick = 60, steps = { 0, 0.3, 0.6, 1, 2, 3 } }
+LADDER.bar = PAGE_WIDTH - 8 - (16 + LADDER.label) - 20 - LADDER.pick - 6
+LADDER.split = 4 + 16 + LADDER.label + LADDER.bar + 10   -- the line, from the ladder's left
 -- Each with who has it, and its first rank's numbers in the exe: %, seconds, cooldown.
 local BUFFS = {
 	{ "Battle Shout", "Interface\\Icons\\Ability_Warrior_BattleShout", "Warrior spell", 40, 8, 16 },
@@ -795,6 +798,7 @@ local function Title(page, text)
 	title:SetPoint("TOPLEFT", page, "TOPLEFT", 0, page.y)
 	title:SetText(text)
 	page.y = page.y - 26
+	return title
 end
 
 local function Tip(page, text, lines)
@@ -940,7 +944,7 @@ end
 ------------------------------------------------------------------------------
 -- Luck.
 
--- A hundred marbles out of the shares, the largest remainders getting the rest.
+-- A hundred cards out of the shares, the largest remainders getting the rest.
 local function Hundred(odds)
 	local counts, rest, total = {}, {}, 0
 	for index = 1, 5 do
@@ -963,90 +967,189 @@ local function Hundred(odds)
 	return counts
 end
 
-local function BuildLuck(page)
-	Title(page, SurvivorUI_T("Luck: the bag of marbles"))
-	Para(page, SurvivorUI_T("Every card the game shows you comes out of a big bag of marbles. The game reaches in without looking, pulls out one marble, and its color is the card's rarity."), 2)
-	Para(page, SurvivorUI_T("Luck never takes a marble out. It pours new ones in, and the shinier the marble, the faster it multiplies!"), 2)
-	local top = page.y
-	local bag = Box(page, SurvivorUI_T("What's in the bag"), nil, 0, top, BAG_WIDTH, BAG_HEIGHT)
-	Words(bag, 10, -28, BAG_WIDTH - 20, SurvivorUI_T("|cffffd100m|r is your magic number: 1 + Luck + Level"))
-	page.magic = Words(bag, 10, -44, BAG_WIDTH - 20, "")
-	local rows, widest = {}, 0
-	for index = 1, table.getn(RARITIES) do
+-- A card's legendary at a Luck, level 30 and up, as the page writes a share.
+function LADDER.Legendary(luck)
+	local odds = CardOdds(1.3 + luck)
+	return string.format("%.0f%%", odds[5] * 100)
+end
+
+-- The page's "?": the rule in words, the weights left out (2026-11-09: "m x m x m
+-- x m" read as nothing). Luck grows a rarity's weight by m once for Uncommon, up
+-- to four times for Legendary, Common's never: the rarer, the faster.
+function LADDER.Tip()
+	GameTooltip:SetOwner(this, "ANCHOR_NONE")
+	GameTooltip:ClearAllPoints()
+	GameTooltip:SetPoint("TOPLEFT", this, "BOTTOMLEFT", 0, -4)
+	GameTooltip:SetText(SurvivorUI_T("How Luck works"))
+	GameTooltip:AddLine(SurvivorUI_T("Each of the 3 cards rolls its color on its own."), 1, 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_T("Luck never removes Commons: it adds more of every other color, and the rarer the color, the more it adds."),
+		1, 1, 1, 1)
+	GameTooltip:AddLine(SurvivorUI_TF("That is why Legendary grows fastest: {1} a card at +0% Luck, {2} at +100%, {3} at +300%.",
+		LADDER.Legendary(0), LADDER.Legendary(1), LADDER.Legendary(3)), 1, 1, 1, 1)
+	GameTooltip:Show()
+	SolidTip()
+end
+
+-- The five colors in a line over the bars, or over the whole ladder when they
+-- are wider than the bars' side (a language's longer words).
+function LADDER.Legend(ladder)
+	local names, wide = {}, -14
+	for index = 1, 5 do
 		local rarity = RARITIES[index]
-		local y = -64 - (index - 1) * 16
-		local marble = bag:CreateTexture(nil, "ARTWORK")
-		marble:SetTexture(MARBLE)
-		marble:SetVertexColor(rarity[2][1], rarity[2][2], rarity[2][3])
-		marble:SetWidth(13)
-		marble:SetHeight(13)
-		marble:SetPoint("TOPLEFT", bag, "TOPLEFT", 10, y)
-		local name = Words(bag, 28, y, 100, SurvivorUI_T(rarity[1]), TEXT, rarity[2])
-		widest = math.max(widest, name:GetStringWidth())
-		local formula = Words(bag, 118, y, 120, rarity[3], SMALL + 1, { 0.8, 0.8, 0.8 })
-		local count = Text(bag, "GameFontHighlight", TEXT)
-		count:SetPoint("TOPRIGHT", bag, "TOPLEFT", COUNT_AT, y)
-		local percent = Text(bag, "GameFontHighlight", TEXT)
-		percent:SetPoint("TOPRIGHT", bag, "TOPLEFT", PERCENT_AT, y)
-		Paint(percent, rarity[2])
-		rows[index] = { count = count, percent = percent, formula = formula, y = y }
+		local name = Text(ladder, "GameFontHighlight", TEXT)
+		name:SetText(SurvivorUI_T(rarity[1]))
+		Paint(name, rarity[2])
+		names[index] = name
+		wide = wide + 15 + name:GetStringWidth() + 14
 	end
-	-- The formulas past the longest name (a language's longer words).
-	if 28 + widest + 8 > 118 then
-		for index = 1, table.getn(rows) do
-			rows[index].formula:ClearAllPoints()
-			rows[index].formula:SetPoint("TOPLEFT", bag, "TOPLEFT", 28 + widest + 8, rows[index].y)
+	local x = math.floor((PAGE_WIDTH - wide) / 2)
+	if wide <= LADDER.split - 12 then
+		x = math.floor((LADDER.split - wide) / 2)
+	end
+	for index = 1, 5 do
+		local color = RARITIES[index][2]
+		local marble = ladder:CreateTexture(nil, "ARTWORK")
+		marble:SetTexture(MARBLE)
+		marble:SetVertexColor(color[1], color[2], color[3])
+		marble:SetWidth(12)
+		marble:SetHeight(12)
+		marble:SetPoint("TOPLEFT", ladder, "TOPLEFT", x, -11)
+		names[index]:SetPoint("LEFT", marble, "RIGHT", 4, 0)
+		x = x + 15 + names[index]:GetStringWidth() + 14
+	end
+end
+
+-- A row of the ladder: its Luck, a bar of 100 cards in the five colors, a
+-- legendary among 3 cards. The hero's row is framed in gold.
+function LADDER.Row(ladder, mine)
+	local row
+	if mine then
+		row = Tinted(ladder, YELLOW, 4, 0, PAGE_WIDTH - 8, LADDER.row - 2)
+	else
+		row = CreateFrame("Frame", nil, ladder)
+		row:SetWidth(PAGE_WIDTH - 8)
+		row:SetHeight(LADDER.row - 2)
+	end
+	row.luck = Text(row, mine and "GameFontNormal" or "GameFontHighlight", TEXT)
+	row.luck:SetPoint("RIGHT", row, "LEFT", 6 + LADDER.label, 0)
+	row.parts = {}
+	for index = 1, 5 do
+		local color = RARITIES[index][2]
+		local part = row:CreateTexture(nil, "ARTWORK")
+		part:SetTexture(FLAT)
+		part:SetVertexColor(color[1], color[2], color[3])
+		part:SetHeight(22)
+		-- The count dark on the light colors, white on Rare's and Epic's.
+		part.count = Text(row, "GameFontHighlight", TEXT)
+		part.count:SetPoint("CENTER", part, "CENTER", 0, 0)
+		part.count:SetShadowOffset(0, 0)
+		if index ~= 3 and index ~= 4 then
+			part.count:SetTextColor(0.08, 0.08, 0.08)
 		end
+		row.parts[index] = part
 	end
-	page.total = Words(bag, 10, -148, BAG_WIDTH - 20, "")
-	page.three = Words(bag, 10, -166, BAG_WIDTH - 20, "")
-	local hundred = Box(page, SurvivorUI_T("Out of 100 cards"), nil, BAG_WIDTH + 8, top, PAGE_WIDTH - BAG_WIDTH - 8, BAG_HEIGHT)
-	local marbles = {}
-	local left = math.floor((PAGE_WIDTH - BAG_WIDTH - 8 - GRID * GRID_MARBLE) / 2)
-	for index = 1, GRID * GRID do
-		local marble = hundred:CreateTexture(nil, "ARTWORK")
-		marble:SetTexture(MARBLE)
-		marble:SetWidth(GRID_MARBLE - 1)
-		marble:SetHeight(GRID_MARBLE - 1)
-		marble:SetPoint("TOPLEFT", hundred, "TOPLEFT", left + math.mod(index - 1, GRID) * GRID_MARBLE,
-			-28 - math.floor((index - 1) / GRID) * GRID_MARBLE)
-		marbles[index] = marble
+	row.pick = Text(row, "GameFontHighlight", TEXT + 3)
+	row.pick:SetPoint("CENTER", row, "LEFT", 16 + LADDER.label + LADDER.bar + 20 + LADDER.pick / 2, 0)
+	Paint(row.pick, RARITIES[5][2])
+	return row
+end
+
+-- A row's numbers for a Luck, at level 30 and up (m = 1.3 + Luck). A count
+-- shows on its color from 5 cards.
+function LADDER.Fill(row, luck, label)
+	local odds = CardOdds(1.3 + luck)
+	local counts = Hundred(odds)
+	row.luck:SetText(label)
+	local done, x = 0, 16 + LADDER.label
+	for index = 1, 5 do
+		local part = row.parts[index]
+		local left = math.floor(done * LADDER.bar / 100 + 0.5)
+		done = done + counts[index]
+		local width = math.floor(done * LADDER.bar / 100 + 0.5) - left
+		if width > 0 then
+			part:ClearAllPoints()
+			part:SetPoint("LEFT", row, "LEFT", x + left, 0)
+			part:SetWidth(width)
+			part:Show()
+		else
+			part:Hide()
+		end
+		part.count:SetText(counts[index] >= 5 and tostring(counts[index]) or "")
 	end
-	page.y = top - BAG_HEIGHT - 26
-	local luck = Try(page, 8, page.y, 180, SurvivorUI_T("Luck"), 0, 3, 0.05, Signed, function(value) try.luck = value end)
-	local level = Try(page, 212, page.y, 180, SurvivorUI_T("Level"), 1, 120, 1, function(value) return tostring(value) end,
-		function(value) try.level = value end)
-	MyHero(page, 412, page.y + 4)
+	local none = 1 - odds[5]
+	row.pick:SetText(string.format("%.0f%%", (1 - none * none * none) * 100))
+end
+
+local function BuildLuck(page)
+	local title = Title(page, SurvivorUI_T("Luck: better cards"))
+	local why = Tinted(page, YELLOW, 0, 0, 18, 18)
+	why:ClearAllPoints()
+	why:SetPoint("LEFT", title, "RIGHT", 8, 0)
+	why:EnableMouse(true)
+	why:SetScript("OnEnter", LADDER.Tip)
+	why:SetScript("OnLeave", CloseTip)
+	local mark = Text(why, "GameFontNormal", TEXT)
+	mark:SetPoint("CENTER", why, "CENTER", 0, 0)
+	mark:SetText("?")
+	Para(page, SurvivorUI_T("Each bar is 100 cards, at level 30 and up. More Luck, more color."), 1)
+	local top = page.y
+	local ladder = Box(page, "", nil, 0, top, PAGE_WIDTH, 1)
+	LADDER.Legend(ladder)
+	local column = Words(ladder, LADDER.split + 6, -30, PAGE_WIDTH - LADDER.split - 12,
+		SurvivorUI_T("Chances of\nat least 1\nin 3 choices"), SMALL - 1, GREY)
+	column:SetJustifyH("CENTER")
+	LADDER.top = math.max(62, 30 + math.ceil(column:GetHeight()) + 8)
+	local height = LADDER.top + 7 * LADDER.row + 6
+	ladder:SetHeight(height)
+	column = Words(ladder, 10, -(LADDER.top - 18), LADDER.label, SurvivorUI_T("Luck"), SMALL, GREY)
+	column:SetJustifyH("RIGHT")
+	-- The line between the bars and their chances, under the colors.
+	local split = ladder:CreateTexture(nil, "ARTWORK")
+	split:SetTexture(FLAT)
+	split:SetVertexColor(GREY[1], GREY[2], GREY[3], 0.8)
+	split:SetWidth(2)
+	split:SetPoint("TOP", ladder, "TOPLEFT", LADDER.split, -28)
+	split:SetPoint("BOTTOM", ladder, "BOTTOMLEFT", LADDER.split, 6)
+	local rows = {}
+	for index = 1, 6 do
+		local step = LADDER.steps[index]
+		rows[index] = LADDER.Row(ladder)
+		LADDER.Fill(rows[index], step, Signed(step))
+	end
+	local mine = LADDER.Row(ladder, true)
+	page.y = top - height - 26
+	local luck = Try(page, 8, page.y, 360, SurvivorUI_T("Your Luck"), 0, 3, 0.05, Signed, function(value) try.luck = value end)
+	MyHero(page, 400, page.y + 4)
 	page.y = page.y - 34
-	Tip(page, SurvivorUI_T("|cffffd100Three cards, three pulls.|r Every card is pulled on its own."))
-	Tip(page, SurvivorUI_T("|cffffd100Level|r gives 1% a level, up to 30%. |cffffd100Luck has no top!|r"))
-	Tip(page, SurvivorUI_T("|cffffd100Amulets are shinier:|r they pull with m + 0.5."))
-	Tip(page, SurvivorUI_T("|cffffd100A guardian or boss hoard cache|r has 25% more Luck (m + 0.25)."))
+	Tip(page, SurvivorUI_T("|cffffd100Level|r counts as 1% Luck a level, up to 30%. |cffffd100Luck has no cap.|r"))
+	Tip(page, SurvivorUI_T("|cffffd100Amulets|r roll with +50% Luck. |cffffd100A guardian's hoard|r adds +25%."))
+
+	-- The hero's row in its place on the ladder, over a step of the same Luck.
+	local function Place(row, slot)
+		row:ClearAllPoints()
+		row:SetPoint("TOPLEFT", ladder, "TOPLEFT", 4, -LADDER.top - slot * LADDER.row)
+		row:Show()
+	end
 
 	function page.Draw()
-		local part = math.min(try.level * 0.01, 0.3)
-		local m = 1 + try.luck + part
-		local odds, weights = CardOdds(m)
 		luck.Read(try.luck)
-		level.Read(try.level)
-		page.magic:SetText(string.format("1 + %.2f + %.2f = "..GOLD.."%.2f|r", try.luck, part, m))
-		local total = 0
-		for index = 1, 5 do
-			total = total + weights[index]
-			rows[index].count:SetText(string.format("%.0f", weights[index]))
-			rows[index].percent:SetText(string.format("%.1f%%", odds[index] * 100))
-		end
-		page.total:SetText(string.format(SurvivorUI_T("%.0f marbles in the bag, %.0f of them orange."), total, weights[5]))
-		local none = 1 - odds[5]
-		page.three:SetText(string.format(SurvivorUI_T("A legendary among 3 cards: |cffffd100%.1f%%|r"), (1 - none * none * none) * 100))
-		local counts = Hundred(odds)
-		local at = 0
-		for index = 5, 1, -1 do
-			local color = RARITIES[index][2]
-			for each = 1, counts[index] do
-				at = at + 1
-				marbles[at]:SetVertexColor(color[1], color[2], color[3])
+		LADDER.Fill(mine, try.luck, SurvivorUI_TF("You {1}", Signed(try.luck)))
+		local slot, placed = 0, false
+		for index = 1, 6 do
+			local step = LADDER.steps[index]
+			if not placed and try.luck <= step + 0.001 then
+				Place(mine, slot)
+				slot, placed = slot + 1, true
 			end
+			if math.abs(try.luck - step) < 0.001 then
+				rows[index]:Hide()
+			else
+				Place(rows[index], slot)
+				slot = slot + 1
+			end
+		end
+		if not placed then
+			Place(mine, slot)
 		end
 	end
 end
@@ -2908,7 +3011,7 @@ end
 -- The window: the pages' names down its left, as the options' tabs.
 
 local PAGES = {
-	{ "Luck", "luck", BuildLuck },
+	{ "Luck", "luckladder", BuildLuck },  -- a new key: the page made over (2026-11-09) shows as unread
 	{ "Damage", "damage", BuildDamage },
 	{ "Crit", "crit", BuildCrit },
 	{ "Haste", "haste", BuildHaste },

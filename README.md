@@ -230,6 +230,19 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.64, 2026-11-09
+
+The Guide's Luck page made over as a ladder of bars, and a hoard comes only from a guardian.
+
+#### New
+
+**Guide**
+- **Luck page, a ladder of bars:** "Luck: better cards" is now a ladder of bars, 100 cards for each step of Luck (+0% to +300%, at level 30 and up), with your own row in gold. Move it with the slider, or with My hero for the Luck you have now. Past a line, a column gives your chances of at least 1 Legendary in a level-up's 3 choices. The "?" by the title tells how Luck works, in words. The page is new, so its tab shows as unread again.
+
+#### Hotfixes
+
+- **Hoards:** the Guide and the jewelry card of the XP bar no longer say bosses give a hoard: only guardians do.
+
 ### v3.0.63, 2026-11-09
 
 Ready for the game's Hyper Mode: a Hyper run says so, and is held only against other Hyper runs.
