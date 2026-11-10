@@ -230,6 +230,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.67, 2026-11-10
+
+A hotfix for the performance monitor while SurvivorUI Classic is the one in use.
+
+#### Hotfixes
+
+- **Performance monitor:** `/sui perf` shows its numbers again while SurvivorUI Classic is the one in use; its window showed "FPS {1}" in their place.
+
 ### v3.0.66, 2026-11-10
 
 A hotfix for combat text in the biggest swarms.

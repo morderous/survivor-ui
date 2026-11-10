@@ -45,11 +45,17 @@ local function T(text)
 	return SurvivorUI_T and SurvivorUI_T(text) or text
 end
 
+-- Its values put in place even without SurvivorUI_TF (Survivor UI standing
+-- aside for SurvivorUI Classic: the window showed "FPS {1}").
 local function TF(text, a, b, c, d, e)
 	if SurvivorUI_TF then
 		return SurvivorUI_TF(text, a, b, c, d, e)
 	end
-	return text
+	local values = { a, b, c, d, e }
+	return (string.gsub(text, "{(%d)}", function(index)
+		local value = values[tonumber(index)]
+		return value ~= nil and tostring(value) or ""
+	end))
 end
 
 -- Where a frame was made: "SurvivorUI", "Meter.lua:123", from the stack.
