@@ -230,6 +230,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.66, 2026-11-10
+
+A hotfix for combat text in the biggest swarms.
+
+#### Hotfixes
+
+- **Combat text** stays light in the biggest swarms: past 200 hits in one frame, the rest add up in one number with no icon, and only a crit that could be a new best is looked at, so the addon's share of a frame no longer grows with the swarm.
+
 ### v3.0.65, 2026-11-10
 
 A hotfix for combat text when thousands of hits land at once.

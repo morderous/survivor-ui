@@ -688,6 +688,9 @@ end
 -- the same answers to each that asks about the same line at the same moment,
 -- whichever asks first.
 local critBestBy, critTop = {}, nil
+-- A swarm's lines past a frame's share (SurvivorUI_Overflow): the count of
+-- each handler's lines this frame, and the smallest of the best crits.
+local storm = { count = {} }
 local noted, notedAt, notedRecord, notedTop
 
 -- The ability a crit's line names, as Biggest Crits names it.
@@ -728,6 +731,7 @@ function SurvivorUI_NoteCrit(amount, line)
 		record = best ~= nil and amount > best
 		if not best or amount > best then
 			critBestBy[ability] = amount
+			storm.fresh = nil
 		end
 	end
 	local top = critTop ~= nil and amount > critTop
@@ -739,7 +743,21 @@ function SurvivorUI_NoteCrit(amount, line)
 end
 
 function SurvivorUI_ResetCritRecord()
-	critBestBy, critTop = {}, nil
+	critBestBy, critTop, storm.fresh = {}, nil, nil
+end
+
+-- The smallest of the abilities' best crits this run: a crit under it beats
+-- none of them (the combat numbers past a frame's share of lines).
+function SurvivorUI_CritFloor()
+	if not storm.fresh then
+		storm.floor, storm.fresh = nil, true
+		for _, best in pairs(critBestBy) do
+			if not storm.floor or best < storm.floor then
+				storm.floor = best
+			end
+		end
+	end
+	return storm.floor or 0
 end
 
 -- The addon's own color, worn by its menus, its cards and its marks: the
@@ -3924,6 +3942,65 @@ function SurvivorUI_ToggleHealNumbers()
 	ct.ctHeals = not ct.ctHeals
 end
 
+-- A swarm sends tens of thousands of hits a second (Buncha's, 2026-11-10: the
+-- game at 0.1 fps in endless, the numbers still on). Past so many lines in one
+-- frame, the rest of that frame's lines are read the cheap way, so a frame's
+-- work stops growing with the swarm.
+SurvivorUI_LINES_A_FRAME = 200
+
+-- True for a line past the frame's share of the handler named.
+function SurvivorUI_Overflow(key)
+	local now = GetTime()
+	local one = storm.count[key]
+	if not one then
+		one = { at = now, n = 0 }
+		storm.count[key] = one
+	elseif one.at ~= now then
+		one.at, one.n = now, 0
+	end
+	one.n = one.n + 1
+	return one.n > SurvivorUI_LINES_A_FRAME
+end
+
+-- A line past the frame's share: its amount and whether a crit or a tick, by
+-- plain finds. A crit that could be an ability's best goes on the whole way
+-- (true); the rest adds up beside the hero in one number of its kind, with no
+-- source and no icon, and over the enemies is left out (48 show at most).
+function storm.Rest(line)
+	-- A plain find, then the number read where it starts: a pattern tried at
+	-- every place of the line costs more.
+	local at, amount = string.find(line, " for ", 1, true), nil
+	if at then
+		_, _, amount = string.find(line, "^(%d+)", at + 5)
+	end
+	local crit, periodic, key = false, false, "dealt"
+	if amount then
+		crit = string.find(line, " crit", 1, true) ~= nil
+	else
+		_, _, amount = string.find(line, " suffers (%d+) ")
+		if not (amount and string.find(line, " from your ", 1, true)) then
+			return false
+		end
+		periodic, key = true, "dealt~"
+	end
+	amount = tonumber(amount)
+	if crit and amount > SurvivorUI_CritFloor() then
+		return true
+	end
+	if not SideOn() then
+		return false
+	end
+	-- The number SpawnSide makes for no source, by its key made once here (a
+	-- key put together for each of thousands of hits would cost).
+	if crit then
+		key = CT().ctCritColumn and "crit!" or "dealt!"
+	end
+	if not AddUp(key, key == "crit!" and "crit" or "dealt", amount) and not (periodic and not CT().ctPeriodic) then
+		SpawnSide("dealt", amount, crit, periodic)
+	end
+	return false
+end
+
 local damageEvents = CreateFrame("Frame")
 damageEvents:SetScript("OnEvent", function()
 	if not Settings().damageText then
@@ -3939,6 +4016,9 @@ damageEvents:SetScript("OnEvent", function()
 				SpawnSide("heal", math.floor(amount + 0.5), arg1 == "HEAL_CRIT", arg1 == "PERIODIC_HEAL")
 			end
 		end
+		return
+	end
+	if SurvivorUI_Overflow("numbers") and not storm.Rest(arg1 or "") then
 		return
 	end
 	local target, amount, crit, periodic, source = ParseDamage(arg1 or "")
