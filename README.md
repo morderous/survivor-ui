@@ -230,6 +230,14 @@ If OmniCC is installed, Survivor UI leaves the cooldown numbers to it.
 
 Newest first. The version is also in each addon's `.toc`, so it shows in the game's addon list.
 
+### v3.0.68, 2026-11-13
+
+A hotfix for the Jewelry Collection.
+
+#### Hotfixes
+
+- **Jewelry Collection:** a class amulet with no spell in its name, such as Winter's Embrace or The Legionlord's Medallion, now sits with its own class's amulets and no longer shows among the common amulets or to other classes. The ones already found move on their own; one the collection cannot place comes back the next time you wear it.
+
 ### v3.0.67, 2026-11-10
 
 A hotfix for the performance monitor while SurvivorUI Classic is the one in use.

@@ -74,6 +74,51 @@ local function SpellClass(spell)
 	return spell and spellClass[Plain(spell)]
 end
 
+-- A legendary amulet the codex does not list is a class's own. Most are named
+-- "Amulet: Spell"; a few carry no spell in their name ("Winter's Embrace"),
+-- and tell it in their lines alone.
+local function CodexNeck(base)
+	local codex = SurvivorUI_JEWELRY and SurvivorUI_JEWELRY.Neck
+	if not codex then
+		return true
+	end
+	for index = 1, table.getn(codex) do
+		if Plain(codex[index][1]) == Plain(base) then
+			return true
+		end
+	end
+	return false
+end
+
+-- A text as its words alone, a space around each: "Frost Shock's hits" has
+-- " frost shock " in it, "surrender" no " rend ".
+local function Words(text)
+	local words = string.gsub(string.lower(text or ""), "[^%a]+", " ")
+	return " "..words.." "
+end
+
+-- The spell these lines speak of: the longest name found, among one class's
+-- spells or every class's. Nil when they name none.
+local function SpellIn(lines, class)
+	local best, bestLength = nil, 0
+	for owner, spells in pairs(CLASS_SPELLS) do
+		if not class or owner == class then
+			for index = 1, table.getn(spells) do
+				local words = Words(spells[index])
+				if string.len(words) > bestLength then
+					for each = 1, table.getn(lines) do
+						if string.find(Words(lines[each]), words, 1, true) then
+							best, bestLength = spells[index], string.len(words)
+							break
+						end
+					end
+				end
+			end
+		end
+	end
+	return best
+end
+
 -- A piece written in an earlier book (by character, or by class in v2.8)
 -- joins the one book.
 local function MergeItem(book, base, old)
@@ -309,6 +354,20 @@ local function Unify(book)
 	for _, item in pairs(items) do
 		Canon(item)
 	end
+	-- A class's amulet kept as a common one (before v3.0.68, one with no spell
+	-- in its name): its lines name its spell, and so its class. One whose
+	-- lines name none waits, shown to no class, until it is worn again.
+	for base, item in pairs(items) do
+		if not item.spell and item.slot == "Neck" and item.quality == 5 and not CodexNeck(base) then
+			local lines = {}
+			for each = 1, table.getn(item.stats or {}) do
+				table.insert(lines, item.stats[each].pattern or "")
+			end
+			local spell = SpellIn(lines)
+			item.spell = spell or base
+			item.class = spell and SpellClass(spell) or item.class or "NONE"
+		end
+	end
 end
 
 local unified = false
@@ -446,11 +505,20 @@ local function Record(slot, link)
 	end
 	item.ranks[rank] = true
 	local _, _, spell = string.find(base, ": (.+)$")
+	local nameless = false
 	if spell and quality == 5 and SLOTS[slot] == "Neck" then
 		item.spell = spell
 		-- It shows to its spell's class only (the finder's, for a spell the
 		-- list does not know).
 		item.class = SpellClass(spell) or ClassName()
+	elseif quality == 5 and SLOTS[slot] == "Neck" and not CodexNeck(base) then
+		-- A class's amulet with no spell in its name: this class's, by its
+		-- own name until its lines tell the spell (below).
+		nameless = true
+		if not item.spell or item.class ~= ClassName() then
+			item.spell = base
+		end
+		item.class = ClassName()
 	end
 
 	scan:SetOwner(WorldFrame, "ANCHOR_NONE")
@@ -467,6 +535,14 @@ local function Record(slot, link)
 	end
 	if not read then
 		return base, false
+	end
+	if nameless then
+		local lines = {}
+		for index = 2, scan:NumLines() do
+			local line = getglobal("SurvivorUIJewelryScanTextLeft"..index)
+			table.insert(lines, EnglishLine(line and line:GetText()) or "")
+		end
+		item.spell = SpellIn(lines, ClassName()) or item.spell
 	end
 	for index = 2, scan:NumLines() do
 		local line = getglobal("SurvivorUIJewelryScanTextLeft"..index)
@@ -1163,10 +1239,24 @@ function panel.Draw()
 	local spells = CLASS_SPELLS[class] or {}
 	local total, found = 0, 0
 	if table.getn(spells) > 0 then
-		local wornLegendary = 0
+		-- One for a spell the list does not have is one more there is to find.
+		local wornLegendary, listed = 0, table.getn(spells)
+		spells = {}
+		for index = 1, listed do
+			spells[index] = CLASS_SPELLS[class][index]
+		end
+		local inList = {}
+		for index = 1, listed do
+			inList[Plain(spells[index])] = true
+		end
 		for index = 1, table.getn(legendary) do
 			if wornNow[legendary[index].base] then
 				wornLegendary = 1
+			end
+			local key = Plain(legendary[index].item.spell)
+			if not inList[key] then
+				inList[key] = true
+				table.insert(spells, legendary[index].item.spell)
 			end
 		end
 		-- The one worn now first, then by spell.
