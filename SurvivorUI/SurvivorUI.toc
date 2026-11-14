@@ -46,6 +46,7 @@ WorldMarks.lua
 LootLog.lua
 ChatFilter.lua
 Chat.lua
+Banners.lua
 Cursor.lua
 BuildList.lua
 JewelryData.lua
