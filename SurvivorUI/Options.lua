@@ -285,6 +285,7 @@ local TABS = {
 	{ key = "minimap", label = "Minimap", color = { 0.55, 0.82, 0.40 } },
 	{ key = "mapbuttons", label = "Minimap buttons", color = { 0.45, 0.88, 0.66 } },
 	{ key = "chat", label = "Chat", color = { 0.60, 0.80, 0.95 } },
+	{ key = "banners", label = "Banners", color = { 1.00, 0.72, 0.35 } },
 	{ key = "tooltips", label = "Tooltips", color = { 0.90, 0.86, 0.62 } },
 	{ key = "plates", label = "Nameplates", color = { 0.70, 0.55, 1.00 } },
 	{ key = "marks", label = "Raid marks", color = { 0.95, 0.60, 0.50 } },
@@ -1505,7 +1506,7 @@ end
 -- { value, name, and as wanted font (the item written in it), color, note (a
 -- muted word on its right) }; get() the value chosen, set(value) on a pick.
 -- Values match without regard to case; the first item when none does.
-local function Dropdown(page, label, Items, get, set, width)
+local function Dropdown(page, label, Items, get, set, width, usable)
 	local color = page.color
 	width = width or 220
 	local holder = CreateFrame("Frame", nil, page)
@@ -1546,9 +1547,17 @@ local function Dropdown(page, label, Items, get, set, width)
 		return a == b
 	end
 
-	button:SetScript("OnEnter", function() this:SetBackdropBorderColor(color[1], color[2], color[3], 1) end)
+	button:SetScript("OnEnter", function()
+		if not usable or usable() then
+			this:SetBackdropBorderColor(color[1], color[2], color[3], 1)
+		end
+	end)
 	button:SetScript("OnLeave", function() this:SetBackdropBorderColor(0.3, 0.3, 0.35, 1) end)
 	button:SetScript("OnClick", function()
+		-- A dependent selector remains visible but cannot open while unavailable.
+		if usable and not usable() then
+			return
+		end
 		if menu:IsShown() then
 			menu:Hide()
 			return
@@ -1598,6 +1607,10 @@ local function Dropdown(page, label, Items, get, set, width)
 	end)
 
 	function holder:Refresh()
+		local enabled = not usable or usable()
+		-- Dim the whole selector and close its menu when its dependency is on.
+		self:SetAlpha(enabled and 1 or 0.4)
+		if not enabled then menu:Hide() end
 		local list = Items()
 		local chosen = get()
 		local shown = list[1]
@@ -1626,16 +1639,19 @@ end
 -- A font, picked from a list where each face is written in itself (EditCard's
 -- SurvivorUI_FontList, the addon's default first). get() and set(path), nil
 -- for the default.
-local function FontPicker(page, label, get, set)
+local function FontPicker(page, label, get, set, usable, defaultValue)
 	Dropdown(page, label, function()
 		local list, faces = {}, SurvivorUI_FontList and SurvivorUI_FontList(true) or {}
 		for index = 1, table.getn(faces) do
 			local face = faces[index]
-			table.insert(list, { value = face.path, name = face.name,
-				font = face.path or SurvivorUI_DEFAULT_FONT or SurvivorUI_FONT })
+			-- A nil path is the addon's built-in default face. Give it an explicit
+			-- value when requested so it cannot be mistaken for Global font.
+			local path = face.path or defaultValue
+			table.insert(list, { value = path, name = face.name,
+				font = path or SurvivorUI_DEFAULT_FONT or SurvivorUI_FONT })
 		end
 		return list
-	end, get, set)
+	end, get, set, nil, usable)
 end
 
 ------------------------------------------------------------------------------
@@ -1646,14 +1662,22 @@ Header(page, "Global", "Settings for the whole addon: its font, its color and it
 Subheader(page, "Font")
 FontPicker(page, "Global font",
 	function() return SurvivorUI_GlobalFont and SurvivorUI_GlobalFont() end,
-	function(path) if SurvivorUI_SetGlobalFont then SurvivorUI_SetGlobalFont(path) end end)
+	function(path)
+		if SurvivorUI_SetGlobalFont then SurvivorUI_SetGlobalFont(path) end
+		-- Banners using Global font should update alongside the other addon text.
+		if SurvivorUI_BannersRefresh then SurvivorUI_BannersRefresh() end
+	end)
 Note(page, "Changes every text of the addon at once. A piece given a font of its own, on its card in move mode, keeps that one.")
 Note(page, "Playing in English? Any font works. With the game in Chinese or Japanese, the addon switches by itself to Noto Sans SC, a font that has those letters: the other fonts don't, and the game mixes them up with English letters and numbers."):SetTextColor(1, 0.35, 0.35)
 Check(page, "One font everywhere", FeatureOn("fonts"), FeatureToggle("fonts"), "the game's windows too, after a reload")
 page.y = page.y - 6
 Button(page, "Every font back to default", 200, 0, Asked("Every font back to default?",
 	"The global font the game's again, and every piece's own font and text size gone.", "Back to default",
-	function() if SurvivorUI_ResetFonts then SurvivorUI_ResetFonts() end end))
+	function()
+		if SurvivorUI_ResetFonts then SurvivorUI_ResetFonts() end
+		-- Keep currently visible banners in sync when all fonts are reset.
+		if SurvivorUI_BannersRefresh then SurvivorUI_BannersRefresh() end
+	end))
 page.y = page.y - 28
 
 Subheader(page, "Color")
@@ -9379,6 +9403,266 @@ Kit.Chips(page, {
 	{ "Loot", OnUnlessOff("chatFilterLoot"), Flip("chatFilterLoot"), "While the loot list is on: the list has it." },
 	{ "Combat Log", OnUnlessOff("chatFilterCombat"), Flip("chatFilterCombat"), "The Combat Log window, fed 13 lines a second, opened or not; SurvivorUI reads the fight from the game's own events, never from it." },
 })
+
+------------------------------------------------------------------------------
+-- Banners.
+-- This page is separate from Chat: chatFilterBanners remains a chat filter.
+-- Controls SurvivorUI's replacement for the game's default banners.
+-- added by jiminee
+page = pages.banners
+
+-- Banner-specific option translations live in Locale_zh_Options.lua.
+-- Keeping them there avoids runtime dictionary patches inside this module.
+
+-- Refresh both the in-game banners and their options-page live preview.
+-- The preview is registered as a normal Kit widget, so it also refreshes
+-- whenever the options window refreshes all of its controls.
+local function RefreshBanners()
+	if SurvivorUI_BannersRefresh then
+		SurvivorUI_BannersRefresh()
+	end
+	if page.preview then
+		page.preview:Refresh()
+	end
+end
+
+-- Resolve the preview's face exactly as Banners.lua does, including the
+-- addon's language-aware fallback for a saved font that lacks required glyphs.
+local function BannerPreviewFont()
+	local preferred
+	if DB().bannersUseGlobalFont ~= false then
+		preferred = SurvivorUI_GlobalFont and SurvivorUI_GlobalFont()
+	else
+		preferred = DB().bannersFont or (SurvivorUI_GlobalFont and SurvivorUI_GlobalFont())
+	end
+
+	if SurvivorUI_BannerFontFor then
+		return SurvivorUI_BannerFontFor(preferred)
+	end
+	if SurvivorUI_FontFor then
+		return SurvivorUI_FontFor(preferred)
+	end
+	return preferred or SurvivorUI_FONT or SurvivorUI_DEFAULT_FONT or "Fonts\\FRIZQT__.TTF"
+end
+
+-- Banners.lua owns the small set of translated sample phrases. The fallback
+-- keeps the preview usable if that module is not loaded for any reason.
+local function BannerSampleText(key, fallback)
+	if SurvivorUI_BannerText then
+		return SurvivorUI_BannerText(key)
+	end
+	return fallback
+end
+
+-- Draw a sample using the actual banner font, size, colors and layout choices.
+-- Category switches decide which sample messages are available to the preview.
+function Paint.Banners(self)
+	self:Begin()
+
+	-- The master switch changes the preview to an explicit disabled state.
+	if DB().customBanners ~= true then
+		self:Word(SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF", 11, "OUTLINE",
+			MUTED[1], MUTED[2], MUTED[3], "Custom banners are off")
+			:SetPoint("CENTER", self, "CENTER", 0, 0)
+		return
+	end
+
+	-- Keep the preview's sample messages aligned with the enabled categories.
+	local samples = {}
+	if DB().bannersBoss ~= false then
+		table.insert(samples, { BannerSampleText("The boss has appeared!", "The boss has appeared!"), 1, 0.25, 0.18 })
+	end
+	if DB().bannersGuardian ~= false then
+		table.insert(samples, { BannerSampleText("Guardian defeated!", "Guardian defeated!"), 1, 0.78, 0.22 })
+	end
+	if DB().bannersAchievement ~= false then
+		table.insert(samples, { BannerSampleText("Achievement unlocked!", "Achievement unlocked!"), 0.35, 1, 0.55 })
+	end
+	if DB().bannersLoot ~= false then
+		table.insert(samples, { BannerSampleText("A cache has been discovered!", "A cache has been discovered!"), 1, 0.9, 0.55 })
+	end
+	if DB().bannersParty ~= false then
+		table.insert(samples, { BannerSampleText("A party member has been revived!", "A party member has been revived!"), 1, 0.9, 0.55 })
+	end
+
+	-- If every category is off, explain why no banner sample is drawn.
+	if table.getn(samples) == 0 then
+		self:Word(SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF", 10, "OUTLINE",
+			MUTED[1], MUTED[2], MUTED[3], "All banner categories are off")
+			:SetPoint("CENTER", self, "CENTER", 0, 0)
+		return
+	end
+
+	-- Match Banners.lua's 16-point template and saved text-size adjustment.
+	local step = tonumber(DB().bannersTextSize) or 0
+	step = math.max(-4, math.min(8, math.floor(step + 0.5)))
+	local font = BannerPreviewFont()
+	local size = math.max(6, 16 + step)
+	local layout = DB().bannersLayout or "single"
+	-- Accept the previous saved value during the transition to the new name.
+	if layout == "center" then
+		layout = "single"
+	end
+	local hold = DB().bannersHold or 6
+
+	-- Single shows one representative message; Stack matches the four live slots.
+	local count = layout == "stack" and math.min(4, table.getn(samples)) or 1
+	local first = layout == "stack" and math.floor((table.getn(samples) - count) / 2) + 1
+		or math.floor((table.getn(samples) + 1) / 2)
+	local index
+	for index = 1, count do
+		local sample = samples[first + index - 1]
+		-- Match the live banner frames' 26-pixel vertical spacing.
+		local offset = (index - (count + 1) / 2) * 26
+		self:Word(font, size, "OUTLINE", sample[2], sample[3], sample[4], sample[1])
+			:SetPoint("CENTER", self, "CENTER", 0, offset)
+	end
+
+	-- Duration is not animated in the static mock-up, so show its live value.
+	self:Word(SurvivorUI_FONT or "Fonts\\FRIZQT__.TTF", 8, "",
+		MUTED[1], MUTED[2], MUTED[3],
+		SurvivorUI_OTF and SurvivorUI_OTF("Duration: {1} sec", hold)
+			or ("Duration: " .. tostring(hold) .. " sec"))
+		:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -8, 6)
+end
+
+Kit.Head(page, { line = "Custom on-screen banners: their font, size, layout, duration and categories.",
+	isOn = function() return DB().customBanners == true end,
+	toggle = function()
+		DB().customBanners = not (DB().customBanners == true)
+		RefreshBanners()
+	end })
+
+-- The page header above is the master custom-banner on/off switch.
+
+-- Show the live sample immediately below the master On/Off switch.
+Kit.Preview(page, 112, Paint.Banners)
+
+-- Choose whether banners follow Global settings or use their own font.
+Kit.Section(page, "Font", "Use the Global font or choose a separate font for banners.")
+Check(page, "Use Global Font",
+	function() return DB().bannersUseGlobalFont ~= false end,
+	function()
+		DB().bannersUseGlobalFont = not (DB().bannersUseGlobalFont ~= false)
+		RefreshBanners()
+	end,
+	"When checked, banners use the font selected in Global settings.")
+
+-- Keep the local choice saved even while the Global font is being used.
+local BANNER_DEFAULT_FONT = SurvivorUI_DEFAULT_FONT or "Fonts\\FRIZQT__.TTF"
+FontPicker(page, "Banner font",
+	function()
+		-- While Global Font is enabled, show the currently selected Global face
+		-- in this dropdown too, even though the selector itself is disabled.
+		if DB().bannersUseGlobalFont ~= false then
+			return (SurvivorUI_GlobalFont and SurvivorUI_GlobalFont())
+				or SurvivorUI_FONT or BANNER_DEFAULT_FONT
+		end
+		-- Otherwise show the saved local face, or the same Global fallback
+		-- that Banners.lua uses when no banner-specific font has been selected.
+		return DB().bannersFont
+			or (SurvivorUI_GlobalFont and SurvivorUI_GlobalFont())
+			or SurvivorUI_DEFAULT_FONT
+			or SurvivorUI_FONT
+			or BANNER_DEFAULT_FONT
+	end,
+	function(path)
+		DB().bannersFont = path or BANNER_DEFAULT_FONT
+		RefreshBanners()
+	end,
+	function() return DB().bannersUseGlobalFont == false end,
+	BANNER_DEFAULT_FONT)
+
+-- Explain that the saved choice is retained when a language needs another face.
+Note(page, "Playing in English? Any font works. With the game in Chinese or Japanese, the addon switches by itself to Noto Sans SC, a font that has those letters: the other fonts don't, and the game mixes them up with English letters and numbers."):SetTextColor(1, 0.35, 0.35)
+
+-- Adjust banner text size one step at a time; zero keeps the normal size.
+-- The stepper refreshes the options widgets, including the Live Preview.
+Kit.Stepper(page, "Text size", -4, 8, 1,
+	function() return tonumber(DB().bannersTextSize) or 0 end,
+	function(value)
+		-- Save the selected size; nil represents the normal/default size.
+		DB().bannersTextSize = value ~= 0 and value or nil
+
+		-- Refresh the actual banners and their Live Preview.
+		RefreshBanners()
+	end,
+	function(value)
+		-- Show a clear label for the normal size and signed adjustments.
+		return value == 0 and "normal" or ((value > 0 and "+" or "") .. value)
+	end)
+
+-- Choose whether banners appear one at a time or in a vertical stack.
+-- Single shows one banner near the top; Stack shows multiple banners together.
+Kit.Section(page, "Banner layout", "Single: one banner shown near the top. Stack: multiple banners shown at once in a vertical column.")
+Kit.Segments(page, { { "single", "Single" }, { "stack", "Stack" } },
+	function()
+		-- Treat any legacy saved value as the new Single choice.
+		local layout = DB().bannersLayout
+		return layout == "center" and "single" or layout or "single"
+	end,
+	function(value)
+		DB().bannersLayout = value ~= "single" and value or nil
+		RefreshBanners()
+	end)
+
+-- Set how long each banner remains visible.
+Kit.Section(page, "Banner duration", "How long each banner stays on screen.")
+Kit.Stepper(page, "Hold time", 2, 15, 1,
+	function() return DB().bannersHold or 6 end,
+	function(value)
+		DB().bannersHold = value ~= 6 and value or nil
+		RefreshBanners()
+	end,
+	"%d sec")
+
+-- Choose which banner categories are displayed.
+Kit.Section(page, "Banner categories", "Choose which kinds of banners to display.")
+Kit.Chips(page, {
+	-- Boss arrival and defeat messages.
+	{ "Bosses", OnUnlessOff("bannersBoss"),
+		function()
+			DB().bannersBoss = DB().bannersBoss == false
+			RefreshBanners()
+		end,
+		"Boss arrival and defeat banners." },
+
+	-- Guardian defeat messages.
+	{ "Guardians", OnUnlessOff("bannersGuardian"),
+		function()
+			DB().bannersGuardian = DB().bannersGuardian == false
+			RefreshBanners()
+		end,
+		"Guardian arrival and defeat banners." },
+
+	-- Achievement and unlock messages.
+	{ "Achievements", OnUnlessOff("bannersAchievement"),
+		function()
+			DB().bannersAchievement = DB().bannersAchievement == false
+			RefreshBanners()
+		end,
+		"Achievement and unlock banners." },
+
+	-- Loot and cache-related messages.
+	{ "Loot", OnUnlessOff("bannersLoot"),
+		function()
+			DB().bannersLoot = DB().bannersLoot == false
+			RefreshBanners()
+		end,
+		"Loot and cache-related banners." },
+
+	-- Party member downed and revived messages.
+	{ "Party events", OnUnlessOff("bannersParty"),
+		function()
+			DB().bannersParty = DB().bannersParty == false
+			RefreshBanners()
+		end,
+		"Party downed, friend downed and revived banners." },
+})
+
+-- end of custom; added by jiminee
+------------------------------------------------------------------------------
+
 
 ------------------------------------------------------------------------------
 -- Experimental (a group of its own, Lucas, 2026-11-04): what is tried out

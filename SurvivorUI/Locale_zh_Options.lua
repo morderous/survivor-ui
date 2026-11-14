@@ -1228,4 +1228,31 @@ SurvivorUI_OPTION_WORDS.zh = {
 
 	-- The rest of the window: what only shows as it is used.
 	["Coin"] = "硬币",
+
+	-- Custom Banners options (Options.lua).
+	["Custom on-screen banners: their font, size, layout, duration and categories."] = "自定义屏幕横幅：字体、大小、布局、显示时长和类别。",
+	["Custom banners are off"] = "自定义横幅已关闭",
+	["All banner categories are off"] = "所有横幅类别均已关闭",
+	["Duration: {1} sec"] = "显示时长：{1}秒",
+	["Use Global Font"] = "使用全局字体",
+	["When checked, banners use the font selected in Global settings."] = "勾选后，横幅将使用“全局”设置中选择的字体。",
+	["Banner font"] = "横幅字体",
+	["If your saved font lacks the current language's letters, Survivor UI uses another available compatible font without changing your saved choice."] = "如果已保存的字体不支持当前语言，Survivor UI 会在有可用兼容字体时自动切换，但不会更改你的字体选择。",
+	["Banner layout"] = "横幅布局",
+	["Single"] = "单条",
+	["Single: one banner shown near the top. Stack: multiple banners shown at once in a vertical column."] = "单条：每次在屏幕上方显示一条横幅。堆叠：同时垂直显示多条横幅。",
+	["Center: one banner centered near the top. Stack: multiple banners shown at once in a vertical column."] = "居中：单条横幅显示在屏幕上方中央。堆叠：多条横幅同时垂直排列显示。",
+	["Stack"] = "堆叠",
+	["Banner duration"] = "横幅显示时长",
+	["How long each banner stays on screen."] = "每条横幅在屏幕上显示的时间。",
+	["Hold time"] = "显示时间",
+	["Banner categories"] = "横幅类别",
+	["Choose which kinds of banners to display."] = "选择要显示的横幅类型。",
+	["Boss arrival and defeat banners."] = "首领出现和被击败时显示的横幅。",
+	["Guardian arrival and defeat banners."] = "守护者出现和被击败时显示的横幅。",
+	["Achievements"] = "成就",
+	["Achievement and unlock banners."] = "成就和解锁提示横幅。",
+	["Loot and cache-related banners."] = "战利品和宝箱相关横幅。",
+	["Party events"] = "队伍事件",
+	["Party downed, friend downed and revived banners."] = "玩家倒地、队友倒地和复活时显示的横幅。"
 }
